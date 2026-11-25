@@ -451,7 +451,9 @@ export function createRequestFeedback(
         });
       }
       if (state.connection !== "connected") {
-        return identified(shipped.connection());
+        return identified(
+          shipped.connection(state.connection === "client-outdated"),
+        );
       }
       if (
         state.progress && state.progress.code !== "working" &&

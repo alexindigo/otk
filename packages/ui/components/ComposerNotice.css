@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-composer-notice {
   background: var(--otk-surface-2);
-  padding: var(--space-3) var(--space-4);
+  padding-block: var(--space-3);
+  padding-inline: var(--composer-content-inset, var(--space-4));
   font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
   color: var(--otk-fg-2);
 }

@@ -215,6 +215,7 @@ export function createSidecars(
           },
         }
         : {
+          reload: options.connection?.reload,
           afterRender: options.connection?.afterRender,
           policy: options.connection?.policy,
           requests: {

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectTree } from "./project-tree.ts";
-import { DEFAULT_PROJECT_AGEING, rollupStatus } from "@otk/protocol";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+} from "./entity-state.ts";
+import { DEFAULT_PROJECT_AGEING, entityKey, rollupStatus } from "@otk/protocol";
 export { ROLLUP_PRIORITY, rollupStatus } from "@otk/protocol";
 import type {
   InboxBaseline,
@@ -390,6 +394,8 @@ export interface InboxState {
 }
 export interface InboxChanges {
   baseline: boolean;
+  /** Changed single-state keys; no client re-aggregation. */
+  entities?: readonly string[];
   /** Known facts for sessions newly in the view, not new events. */
   admitted?: boolean;
   projects: readonly string[];
@@ -400,6 +406,8 @@ export interface InboxChanges {
 export interface InboxModel {
   stop(): void;
   state: InboxState;
+  /** Presentation view of the entity replica: receipt times and transitions. */
+  readonly entities: EntityStateStore;
   subscribe(listener: (state: InboxState) => void): () => void;
   observeChanges(listener: (changes: InboxChanges) => void): () => void;
   receive(frame: ServerFrame): void;
@@ -423,6 +431,8 @@ export function createInbox(
   report: (error: unknown) => void = (error) =>
     console.error("Visit bookkeeping failed after successful action", error),
   currentEpoch?: () => number,
+  /** Client arrival of a request identity (the request-lifetime owner). */
+  arrival?: (id: string) => number | undefined,
 ): InboxModel {
   // Accepted metadata is invocation-current, like ClientIndex. Framework state
   // publishes a dependency clock; deferred binding cannot govern reduced facts.
@@ -437,6 +447,11 @@ export function createInbox(
     },
   };
   const clock = factory({ revision: 0 });
+  const entityStates = createEntityStateStore({
+    read: () => current.inbox.entities,
+    factory,
+    arrival,
+  });
   const state: InboxState = {
     get ready() {
       void clock.state.revision;
@@ -476,11 +491,15 @@ export function createInbox(
       ...(value.inbox.supervision
         ? { supervision: { ...value.inbox.supervision } }
         : {}),
+      ...(value.inbox.entities
+        ? { entities: { ...value.inbox.entities } }
+        : {}),
     };
     current.ready = true;
     clock.update((draft) => {
       draft.revision++;
     });
+    entityStates.observe("all", "historical");
     publish({
       baseline: true,
       projects: [],
@@ -536,6 +555,13 @@ export function createInbox(
   };
   const apply = (draft: InboxSnapshot, op: InboxOp) => {
     switch (op.op) {
+      case "entity.upsert":
+        (draft.entities ??= {})[entityKey(op.value.kind, op.value.id)] =
+          op.value;
+        break;
+      case "entity.remove":
+        if (draft.entities) delete draft.entities[op.key];
+        break;
       case "project.upsert": {
         const at = draft.projects.findIndex((p) =>
           p.directory === op.project.directory
@@ -592,8 +618,10 @@ export function createInbox(
       recoveryController?.abort();
       recoveryController = undefined;
       recovering = undefined;
+      entityStates.stop();
     },
     state,
+    entities: entityStates,
     subscribe: (listener) => clock.subscribe(() => listener(state)),
     observeChanges(listener) {
       listeners.add(listener);
@@ -683,10 +711,18 @@ export function createInbox(
         clock.update((draft) => {
           draft.revision++;
         });
-        const projects = new Set<string>(), sessions = new Set<string>();
+        const projects = new Set<string>(),
+          sessions = new Set<string>(),
+          entities = new Set<string>();
         let tasks = false, discovery = false;
         for (const op of frame.ops) {
           switch (op.op) {
+            case "entity.upsert":
+              entities.add(entityKey(op.value.kind, op.value.id));
+              break;
+            case "entity.remove":
+              entities.add(op.key);
+              break;
             case "project.upsert":
               projects.add(op.project.directory);
               break;
@@ -715,8 +751,16 @@ export function createInbox(
             }
           }
         }
+        if (entities.size) {
+          // Newly admitted facts are known state, never a live transition.
+          entityStates.observe(
+            [...entities],
+            frame.admitted ? "historical" : "live",
+          );
+        }
         publish({
           baseline: false,
+          ...(entities.size ? { entities: [...entities] } : {}),
           ...(frame.admitted ? { admitted: true } : {}),
           projects: [...projects],
           sessions: [...sessions],

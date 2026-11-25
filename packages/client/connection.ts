@@ -36,6 +36,7 @@ export type ConnectionState =
   | "reconnecting"
   | "login required"
   | "setup required"
+  | "client outdated"
   | "protocol mismatch";
 export interface ConnectionSink {
   defaults?(value: PublicDefaults): void;
@@ -48,6 +49,8 @@ export interface ConnectionSink {
   frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
+  /** Application-owned lossless reload; the transport never reloads the page. */
+  reload?(): void;
   /** Application-supplied policy before this server returns its own authority. */
   policy?: ClientRequestPolicy;
   /** UI adapters acknowledge accepted state after its render opportunity. */
@@ -419,10 +422,33 @@ export class SidecarConnection {
     }
   }
   #protocolMismatch(): void {
-    this.stop();
+    // Retire transport, not captured mutation/input custody. Reload owns that.
+    this.#stopped = true;
+    this.#retire();
+    this.requests.clientOutdated();
+    const action = this.options.reload
+      ? {
+        label: "Reload",
+        run: () => {
+          try {
+            this.options.reload!();
+          } catch (cause) {
+            console.error("Reload checkpoint diagnostic", cause);
+            this.sink.status("client outdated", undefined, undefined, {
+              kind: "info",
+              text:
+                "OTK was updated. Your work could not be saved for Reload; this page has not reloaded. Finish pending file reads or free browser tab storage, then try again.",
+              action,
+            });
+          }
+        },
+      }
+      : undefined;
     this.sink.status(
-      "protocol mismatch",
-      "Reload after updating the client and sidecar together.",
+      "client outdated",
+      undefined,
+      undefined,
+      { kind: "info", text: "OTK was updated", action },
     );
   }
   async login(input: { username: string; password: string }): Promise<void> {

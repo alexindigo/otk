@@ -287,7 +287,10 @@ export class V2SessionScale {
         ? native.directory
         : background;
       const title = `Scale session ${String(index).padStart(4, "0")}`;
-      const parentID = index >= 10 && index < 40
+      // Catalog qualification owns 251 human tasks, not helper-only groups.
+      const parentID = options.files
+        ? undefined
+        : index >= 10 && index < 40
         ? `ses_scale${String(index - 1).padStart(6, "0")}`
         : index === 5
         ? "ses_scale000004"

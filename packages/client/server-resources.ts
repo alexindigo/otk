@@ -625,6 +625,7 @@ export function createServerResources(o: {
         factory,
         o.error,
         () => sidecars.connection(id).viewEpoch,
+        (request) => sidecars.connection(id).attention.arrival(request),
       );
       inboxes.set(id, model);
       const current = model;

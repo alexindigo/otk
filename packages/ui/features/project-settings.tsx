@@ -8,8 +8,10 @@ import { selection } from "../components/selection.ts";
 import SelectionContent from "../components/SelectionContent.tsx";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
 import "./project-settings.css" with { type: "text" };
+import { retainForReload } from "../state/reload.tsx";
 
 export interface ProjectSettingsInput {
+  key?: string;
   name: string;
   editor: ProjectEditor;
 }
@@ -27,6 +29,28 @@ export function registerProjectSettings(dialogs: DialogRegistry): void {
 }
 function ProjectSettingsPage(props: DialogProps<ProjectSettingsInput>) {
   const editor = props.input.editor;
+  if (props.input.key) {
+    retainForReload(
+      `project-settings:${props.input.key}`,
+      {
+        snapshot: () => {
+          if (editor.state.reading) {
+            throw new Error(
+              "Wait for the project image to finish reading before reloading",
+            );
+          }
+          return editor.state.dirty ? editor.state.values : undefined;
+        },
+        restore(value) {
+          if (!value) return;
+          for (const field of editor.state.fields) {
+            const saved = (value as Record<string, string>)[field];
+            if (saved !== undefined) editor.edit(field, saved);
+          }
+        },
+      },
+    );
+  }
   let iconInput!: HTMLInputElement;
   onCleanup(() => editor.dispose());
   const has = (field: import("@otk/protocol").ProjectEditField) =>

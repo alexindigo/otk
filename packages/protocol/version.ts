@@ -1,3 +1,3 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-export const PROTOCOL_VERSION = 20 as const;
+export const PROTOCOL_VERSION = 21 as const;
 export const SIDECAR_VERSION = "0.1.0-beta.2" as const;

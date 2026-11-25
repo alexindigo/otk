@@ -4,6 +4,34 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { activity, collapsed, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-family" });
+test("sessions.helper-only-group-has-no-task-tab", {
+  tag: ["@sessions", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  const child = "tstv1-family-0", root = "tstv1-otk";
+  const { entries } = await state.observe<
+    { entries: { id: string; directory: string }[] }
+  >();
+  const directory = entries.find((entry) => entry.id === child)!.directory;
+  const helperOnly = await state.product("tasks.create", {
+    directory,
+    name: "Legacy helper-only group",
+    sessions: [child],
+  });
+  expect(helperOnly.sessions).toEqual([child]);
+  await page.goto(`${state.url}/#/local/${root}/${child}`);
+  await expect(page.locator(`[data-tab=${root}]`)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.locator(`[data-tab=${JSON.stringify(helperOnly.id)}]`))
+    .toHaveCount(0);
+  await expect(page.locator(`[data-tab=${child}]`)).toHaveCount(0);
+  await expect(page.locator(`[data-crumb=${child}]`)).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+});
+
 test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   tag: ["@sessions", "@attention", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
@@ -90,6 +118,7 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   });
   await page.goto(state.url);
   // 2.47: an explicit checkout/attention target retains its helper identity.
+  // 2.67: that exact helper view lives in its human root's tab, never its own.
   // The repository's default and explicit parent link still resolve the root.
   await page.locator(
     `.otk-project-row[data-project=${
@@ -98,33 +127,35 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   ).click();
   await expect(page).toHaveURL(new RegExp(`${child}$`));
   await page.goto(`${state.url}/#/local/${root}/${child}`);
-  await visibleOnScreen(tab(child));
+  await visibleOnScreen(tab(root));
   await page.reload();
   await collapsed(page);
-  await visibleOnScreen(tab(child));
-  await expect(tab(child).locator(".otk-status-light")).toHaveAttribute(
+  await visibleOnScreen(tab(root));
+  await expect(tab(root).locator(".otk-status-light")).toHaveAttribute(
     "data-state",
     "working",
   );
   await activity(state, child, "freeze");
-  await expect(tab(child).locator(".otk-status-light")).toHaveAttribute(
+  await expect(tab(root).locator(".otk-status-light")).toHaveAttribute(
     "data-state",
     "blocked",
   );
   await page.reload();
   await collapsed(page);
-  await visibleOnScreen(tab(child));
+  await visibleOnScreen(tab(root));
   await activity(state, child, "release");
-  await expect(tab(child).locator(".otk-status-light")).toHaveAttribute(
+  await expect(tab(root).locator(".otk-status-light")).toHaveAttribute(
     "data-state",
     "finished",
   );
   await page.reload();
-  await visibleOnScreen(tab(child));
-  await tab(child).click();
-  await expect(page).toHaveURL(new RegExp(`${root}/${child}$`));
-  await orientation(child, child, "Moved child");
-  await expect(tab(root)).toHaveCount(0);
+  await visibleOnScreen(tab(root));
+  await tab(root).click();
+  await expect(page).toHaveURL(new RegExp(`${root}$`));
+  await orientation(task.id, root, "Execution");
+  await page.goto(`${state.url}/#/local/${root}/${child}`);
+  await orientation(root, child, "Moved child");
+  await expect(tab(child)).toHaveCount(0);
   const parentLink = page.getByRole("link", { name: "Execution", exact: true });
   await expect(parentLink).toHaveAttribute("href", `#/local/${root}`);
   await expect(tab(task.id)).toHaveCount(0);
@@ -137,12 +168,13 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   await capture("repo", task.id, "tstv1-family-1", "Local sibling");
   await page.getByRole("button", { name: "Prev", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${root}/${child}$`));
-  await orientation(child, child, "Moved child");
+  await orientation(root, child, "Moved child");
   await parentLink.click();
   await expect(page).toHaveURL(new RegExp(`${root}$`));
+  await orientation(task.id, root, "Execution");
   await page.goto(`${state.url}/#/local/${root}/${child}`);
-  await orientation(child, child, "Moved child");
-  await capture("local", child, child, "Moved child");
+  await orientation(root, child, "Moved child");
+  await capture("local", root, child, "Moved child");
   await page.locator(".otk-settings-entry").click();
   const toggle = page.getByRole("checkbox", {
     name: "Tasks follow their parent across projects",
@@ -198,7 +230,7 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   await orientation(task.id, child, "Moved child");
   await capture("follow", task.id, child, "Moved child");
   await state.product("prefs.set", { key: "tasksFollowParent", value: false });
-  await visibleOnScreen(tab(child));
-  await orientation(child, child, "Moved child");
-  await expect(tab(root)).toHaveCount(0);
+  await visibleOnScreen(tab(root));
+  await orientation(root, child, "Moved child");
+  await expect(tab(child)).toHaveCount(0);
 });

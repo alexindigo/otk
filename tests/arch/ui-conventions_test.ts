@@ -5,7 +5,7 @@ import { duration, humanDuration } from "../../packages/client/format.ts";
 import { runningWorkElapsed } from "../../packages/client/live-work.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
-import { rules } from "./styles.ts";
+import { rules, selectorAlternatives } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
@@ -15,6 +15,105 @@ import {
   codeSeparatorErrors,
   styleBoundaryErrors,
 } from "./style-boundaries.ts";
+
+Deno.test("UI convention: framed composer rows borrow their owner's inline inset", async () => {
+  const errors = (css: string, rows: readonly string[], owner: string) =>
+    rules(css).flatMap((rule) =>
+      selectorAlternatives(rule.selector).some((selector) =>
+          rows.some((row) => selector.endsWith(`.${row}`))
+        )
+        ? [...rule.declarations].filter(([prop, value]) =>
+          /^(padding|padding-inline(?:-start|-end)?|padding-left|padding-right)$/
+            .test(prop) &&
+          value !== "0" && value !== "0px" &&
+          (prop === "padding" ||
+            !(value === `var(${owner})` || value.startsWith(`var(${owner},`)))
+        ).map(([prop]) => `${rule.selector}: independent ${prop}`)
+        : []
+    );
+  const read = (name: string) =>
+    Deno.readTextFile(`packages/ui/components/${name}.css`);
+  for (
+    const [file, rows, owner] of [
+      [
+        "ComposerTakeovers",
+        ["otk-composer-activity"],
+        "--composer-content-inset",
+      ],
+      ["Prompt", ["otk-prompt"], "--composer-content-inset"],
+      ["ComposerNotice", ["otk-composer-notice"], "--composer-content-inset"],
+      ["TakeoverHeader", ["otk-takeover-header"], "--surface-slot-inset"],
+      ["ActivityGroup", ["otk-record-group-heading"], "--tree-content-inset"],
+      [
+        "RevertGroup",
+        ["otk-revert-label", "otk-revert-heading-content"],
+        "--tree-content-inset",
+      ],
+      ["surface/Surface", [
+        "otk-surface-title",
+        "otk-surface-body",
+        "otk-surface-actions",
+      ], "--surface-slot-inset"],
+    ] as const
+  ) {
+    assertEquals(errors(await read(file), rows, owner), [], file);
+  }
+  const dock = rules(await read("ComposerTakeovers"));
+  const owners = [...await productionSources()].filter(([path]) =>
+    path.endsWith(".css")
+  ).flatMap(([path, css]) =>
+    rules(css).filter((rule) =>
+      rule.declarations.has("--composer-content-inset")
+    ).map((rule) => `${path}:${rule.selector}`)
+  );
+  assertEquals(owners, [
+    "packages/ui/components/ComposerTakeovers.css:.otk-composer-dock",
+  ]);
+  assertEquals(
+    dock.find((r) => r.selector === ".otk-composer-dock")?.declarations.get(
+      "--composer-content-inset",
+    ),
+    "var(--space-4)",
+  );
+  assertEquals(
+    dock.find((r) => r.selector === ".otk-composer-activity")?.declarations.get(
+      "padding-inline",
+    ),
+    "var(--composer-content-inset)",
+  );
+  const row = ["aligned-row"];
+  assertEquals(
+    errors(".aligned-row { padding-inline: var(--owner); }", row, "--owner"),
+    [],
+  );
+  assertEquals(
+    errors(".aligned-row { padding-block: var(--space-3); }", row, "--owner"),
+    [],
+  );
+  assertEquals(errors(".aligned-row { padding: 0; }", row, "--owner"), []);
+  for (
+    const declaration of [
+      "padding: 0 var(--space-4)",
+      "padding-inline: var(--space-4)",
+      "padding-left: 20px",
+      "padding-inline-end: 1em",
+      "padding-inline: var(--owner-bypass)",
+    ]
+  ) {
+    assert(
+      errors(`:is(.aligned-row, .another) { ${declaration}; }`, row, "--owner")
+        .length > 0,
+      declaration,
+    );
+  }
+});
+
+Deno.test("UI convention: informational connection actions keep the shared feedback row", async () => {
+  const source = await Deno.readTextFile(
+    "packages/ui/components/ConnectionStatus.tsx",
+  );
+  assert(source.includes("subgrid={props.subgrid && !!feedback().failure}"));
+});
 
 Deno.test("UI convention: syntax enhancement cannot publish user-action failures in source", async () => {
   const failures = (text: string) =>

@@ -52,6 +52,8 @@ export function clearDraft(draft: Draft): Draft {
 
 /** Browser-lifetime drafts, keyed by server and session, never session content. */
 export interface Drafts {
+  snapshot(): unknown;
+  restore(value: unknown): void;
   readonly reverts: DraftReverts;
   get(key: string): Draft;
   /** Invocation-current, non-creating read without framework publication tracking. */
@@ -96,6 +98,27 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
     writer: (key) => writer(key, true),
   });
   return {
+    snapshot: () => {
+      if (
+        [...values.values()].some(({ draft }) =>
+          draft.chips.some((chip) => chip.pending)
+        )
+      ) {
+        throw new Error(
+          "Wait for attachments to finish reading before reloading",
+        );
+      }
+      return {
+        drafts: [...values].map(([key, value]) => [key, value.draft]),
+        reverts: reverts.snapshot(),
+      };
+    },
+    restore(value) {
+      const snapshot = value as { drafts: [string, Draft][]; reverts: unknown };
+      for (const [key, draft] of snapshot.drafts) values.set(key, { draft });
+      reverts.restore(snapshot.reverts);
+      changed();
+    },
     reverts,
     get,
     current,

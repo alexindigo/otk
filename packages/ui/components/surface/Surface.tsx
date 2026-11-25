@@ -5,7 +5,7 @@ import { type Element, Show } from "solid-js";
 
 /** Internal boundary and flow owner. Only overlay specialisations use this. */
 export default function Surface(props: {
-  density?: "menu";
+  density?: "menu" | "composer";
   layout?: "fill" | "popover" | "dialog";
   fullHeight?: boolean;
   signal?: "success" | "error" | "attention";
@@ -19,6 +19,7 @@ export default function Surface(props: {
     <div
       class={["otk-surface", {
         "otk-surface-menu": props.density === "menu",
+        "otk-surface-composer": props.density === "composer",
         "is-fill": props.layout === "fill" || props.layout === "dialog",
         "is-dialog": props.layout === "dialog",
         "is-popover": props.layout === "popover",

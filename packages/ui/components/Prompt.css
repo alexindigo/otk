@@ -2,7 +2,8 @@
 .otk-prompt {
   --prompt-input-min-height: calc(48 * var(--otk-unit));
   --prompt-input-max-height: calc(240 * var(--otk-unit));
-  padding: var(--space-3) var(--space-4) var(--space-2);
+  padding-block: var(--space-3) var(--space-2);
+  padding-inline: var(--composer-content-inset, var(--space-4));
 }
 .otk-prompt > label {
   position: absolute;

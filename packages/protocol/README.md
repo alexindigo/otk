@@ -1,5 +1,24 @@
 # @otk/protocol
 
+## Compatibility and deployments
+
+`PROTOCOL_VERSION` changes only for incompatible wire changes. New optional
+fields and ignorable additive messages do not require a bump while existing
+consumers retain their contract. The optional entity map and ignored entity
+operations in 4b785f13 did not require its 20-to-21 bump; 21 remains unchanged.
+
+An incompatible hello receives
+`{t:"error",code:"protocol",reason:"client-outdated",
+protocol,build}` before a
+normal WebSocket close. `build` identifies the serving OTK release
+(`SIDECAR_VERSION`). The `error`/`protocol` discriminator remains stable for
+already-open older clients. They enter their existing protocol-mismatch path
+instead of network retry. New clients retain input custody and expose
+`OTK was updated` with an application-owned Reload action. Reload checkpoints
+feature-owned unsaved state in tab-local session storage before navigation;
+storage refusal leaves the page and work intact. Restored mutation identities
+resume their original receipt, never become a new send.
+
 `ascendingID(prefix)` owns time-ordered record identities: twelve hexadecimal
 time/counter characters followed by fourteen base62 random characters. Browser
 pending sends and both native prompt fallbacks share this owner and encoding,
@@ -143,6 +162,16 @@ Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
 `revision=from+ops.length`. The inbox owner alone reduces `InboxOp`; the session
 index owner alone reduces `IndexOp`. Gaps retain last-good metadata and acquire
 a complete baseline rather than inventing missing state.
+
+Protocol 21 adds the per-user `InboxSnapshot.entities` map, keyed by
+`entityKey(kind, id)`, and `entity.upsert` / `entity.remove` inbox operations.
+`EntityState` separates a session's own state from task, checkout, project,
+archive and global rollups. Counts retain unseen independently of the winning
+state. Session evidence carries work, effective inputs, scoped descendants and
+optional body-free request identities. Only the client request-lifetime owner
+supplies `arrivedAt`, in its local clock domain, for per-request presentation
+grace; server evidence does not invent that clock. Legacy projections remain
+during migration.
 
 The inbox's per-user `supervision` map and keyed `supervision` operations
 publish `needsYou | working | finishedUnseen | none`, with the proven terminal

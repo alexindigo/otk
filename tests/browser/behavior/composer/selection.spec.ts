@@ -385,15 +385,33 @@ test.describe("applied choices", () => {
     await expect(page.locator(".otk-variant-picker > button")).toHaveClass(
       /is-applied/,
     );
+    const retained = await Promise.all(
+      ["agent", "model", "variant"].map(async (kind) => {
+        const trigger = page.locator(`.otk-${kind}-picker > button`);
+        return {
+          kind,
+          label: await trigger.getAttribute("aria-label"),
+          applied: await trigger.evaluate((element) =>
+            element.classList.contains("is-applied")
+          ),
+        };
+      }),
+    );
     await page.reload();
     await expect(page.locator(".otk-variant-picker > button")).toHaveAttribute(
       "aria-label",
-      "Variant: High",
+      "Variant: High, agent default",
     );
-    for (const kind of ["agent", "model", "variant"]) {
-      await expect(page.locator(`.otk-${kind}-picker > button`)).not
-        .toHaveClass(/is-applied/);
+    for (const { kind, label, applied } of retained) {
+      const trigger = page.locator(`.otk-${kind}-picker > button`);
+      await expect(trigger).toHaveAttribute("aria-label", label!);
+      if (applied) await expect(trigger).toHaveClass(/is-applied/);
+      else await expect(trigger).not.toHaveClass(/is-applied/);
     }
+    await openPicker(page, "variant");
+    await expect(page.locator('.otk-variant-picker [data-picker-key=""]'))
+      .toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Escape");
     await pick(page, "variant", "low");
     await queue(state, "Explicit low arrived.");
     await prompt(page).fill("P6-EXPLICIT");

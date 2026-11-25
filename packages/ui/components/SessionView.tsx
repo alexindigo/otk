@@ -90,6 +90,7 @@ import {
 import { TranscriptContext } from "../features/transcript-context.tsx";
 import { contextTarget } from "./context-target.ts";
 import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
+import { activityRecord } from "./activity-record.ts";
 /** Acquisition status for the host's fixed status slot, never the message flow. */
 export function transcriptStatus(input: {
   loading?: boolean;
@@ -217,8 +218,8 @@ export default function SessionView(props: {
       revision={(child) => child.revision}
       outgoing={group().direction === "outgoing"}
       outgoingItem={(child) => child.direction === "outgoing"}
-      render={(child) => (
-        <Show when={child().count} fallback={one(child().members[0])}>
+      render={(child) =>
+        activityRecord(child, one, () => (
           <ActivityGroup
             group={child()}
             onOpenChild={props.onOpenChild}
@@ -228,17 +229,14 @@ export default function SessionView(props: {
                 items={child().members}
                 key={(key) => key}
                 scope={child().key}
-                control={(control) =>
-                  recordWindow(child().key, control)}
-                revision={(key) =>
-                  projection().repliesByID[key]?.revision ?? 0}
+                control={(control) => recordWindow(child().key, control)}
+                revision={(key) => projection().repliesByID[key]?.revision ?? 0}
                 outgoing={child().direction === "outgoing"}
                 render={(key) => one(key())}
               />
             )}
           />
-        </Show>
-      )}
+        ))}
     />
   );
   const renderGroup = (key: string, one: (key: string) => Element) => (

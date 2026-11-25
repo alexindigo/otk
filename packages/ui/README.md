@@ -1,5 +1,16 @@
 # @otk/ui
 
+Connection skew borrows the shared ConnectionBadge/FeedbackStatus presentation:
+quiet `OTK was updated` copy, the neutral retry shape and an owner-provided
+Reload action, without failure Details or Server settings substitution. Shell
+composes the client's tab checkpoint before startup and provides its reload
+registration port. Feature adapters contribute their own unsaved
+task/project/theme input; they never inspect another component's DOM. Prompt
+editor buffers, rename input, server-addition input, attention drafts and
+pending sends stay with their existing client owners. Normal browser reload uses
+the same checkpoint boundary; a failed checkpoint prevents the owned Reload and
+requests browser unload protection.
+
 Local sends use ordinary Message, not a receipt bubble. Its transcript-owned
 `send` input supplies pending/committed/failed state. Pending metadata borrows
 ChromeMeta and the shared ActivityIndicator; failures borrow FeedbackStatus and
@@ -693,8 +704,14 @@ transactions. Native server/path fields and rendering remain in the dialog;
 unmount disposes its owner so late operations cannot navigate from retired UI.
 
 `takeovers.register({ id, capability, component })` supplies composer attention
-owners. `ComposerTakeovers` mounts capability-available components; they read
-session state from context and construct their own UI. Optional feature-owned
+owners. `ComposerTakeovers` owns `--composer-content-inset` for the destination/
+live-work row, Prompt, joined notices and takeover Surface slots. Rows borrow
+that value rather than choosing horizontal padding. The unpainted header and
+notice frame retain the same border track as the framed composer. Standalone
+Prompt/notices keep their default inset; unrelated Surfaces keep their density.
+RevertGroup borrows Tree/ActivityGroup's tracks without adding an inset.
+`ComposerTakeovers` mounts capability-available components; they read session
+state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft and intrinsic track survive the takeover. Runtime
 chrome uses structural tracks: helper presence uses a reserved control-height
@@ -1621,12 +1638,13 @@ surface installs grace timers. `presentedOnScreen` keeps reserving the request
 for its one presentation throughout grace.
 
 Connection health uses `ConnectionLight` and its own connected, connecting,
-reconnecting, disconnected and error states. Its pure `connectionState`
+reconnecting, updated, disconnected and error states. Its pure `connectionState`
 projection requires both the serving transport and agent link to be connected
-for green; authentication/setup/protocol failures and reported errors are red.
-Four `connection-*` theme slots paint quiet discs/rings, independently of
-session attention lamps. The flat, steady health disc/ring stays distinct from
-the glossy working marble and its breathing halo, even though both use green.
+for green; authentication/setup failures and reported errors are red. Version
+skew uses the neutral updated state and the owner-supplied Reload action. Four
+`connection-*` theme slots paint quiet discs/rings, independently of session
+attention lamps. The flat, steady health disc/ring stays distinct from the
+glossy working marble and its breathing halo, even though both use green.
 Sidebar column/rail, legacy server listing and Settings use this same component;
 reduced colours exposes connection-owned glyphs and descriptions.
 `ActivityIndicator` owns the neutral tool/thinking spinner, without a session

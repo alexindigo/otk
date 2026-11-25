@@ -44,7 +44,11 @@ export interface OperationState {
   owner?: string;
   facts?: import("@otk/protocol").FailureFacts;
   phase: "sending" | RequestPhase | "succeeded" | "failed" | "released";
-  connection: "connected" | "reconnecting" | "authentication-required";
+  connection:
+    | "connected"
+    | "reconnecting"
+    | "authentication-required"
+    | "client-outdated";
   seq: number;
   progress?: RequestProgress;
   error?: PublicFailure;
@@ -109,7 +113,10 @@ const active = (state: OperationState) =>
 
 /** One long-lived sidecar owner. It never turns elapsed time into a result. */
 export class RequestTracker {
-  readonly clientID: string;
+  #clientID: string;
+  get clientID(): string {
+    return this.#clientID;
+  }
   #pending = new Map<string, Pending>();
   #listeners = new Set<() => void>();
   #window?: RequestWindow;
@@ -127,7 +134,7 @@ export class RequestTracker {
     const saved = loaded && typeof loaded === "object"
       ? loaded as Partial<RememberedRequests>
       : undefined;
-    this.clientID = options.clientID ??
+    this.#clientID = options.clientID ??
       (saved?.version === 1 && saved.server === (options.server ?? "")
         ? saved.clientID
         : undefined) ??
@@ -192,6 +199,62 @@ export class RequestTracker {
       });
     } catch (cause) {
       this.options.diagnostic?.(cause);
+    }
+  }
+  /** Explicit tab reload custody only. The normal metadata store stays payload-free. */
+  snapshot(): unknown {
+    return {
+      server: this.options.server ?? "",
+      clientID: this.clientID,
+      operations: [...this.#pending.values()].filter((item) =>
+        item.state.phase !== "released" &&
+        !item.state.method.startsWith("bootstrap.")
+      ).map(({ state, params, canonical, principal, submitted }) => ({
+        state,
+        params,
+        canonical,
+        principal,
+        submitted,
+      })),
+    };
+  }
+  restore(value: unknown): void {
+    const checkpoint = value as {
+      server: string;
+      clientID: string;
+      operations: Pick<
+        Pending,
+        "state" | "params" | "canonical" | "principal" | "submitted"
+      >[];
+    };
+    if (checkpoint.server !== (this.options.server ?? "")) {
+      throw new Error("Reload request custody belongs to another server");
+    }
+    // The tab checkpoint is self-contained even if the separate metadata write
+    // was refused. Identity may be adopted only before this tracker has work.
+    if (checkpoint.clientID !== this.clientID) {
+      if (this.#pending.size || this.#connected) {
+        throw new Error("Cannot replace active request custody");
+      }
+      this.#clientID = checkpoint.clientID;
+    }
+    for (
+      const saved of checkpoint.operations
+    ) {
+      if (saved.state.ref.clientID !== this.clientID) {
+        throw new Error("Reload request custody belongs to another tab");
+      }
+      const item = this.#pending.get(saved.state.ref.key) ??
+        this.#create({ ...saved.state, connection: "reconnecting" });
+      item.state = { ...saved.state, connection: "reconnecting" };
+      item.params = saved.params;
+      item.canonical = saved.canonical;
+      item.principal = saved.principal;
+      item.submitted = saved.submitted;
+      if (saved.state.phase === "failed" && saved.state.error) {
+        item.settled = true;
+        item.reject(new RequestFailure(saved.state.error));
+      }
     }
   }
   #publish(item: Pending): void {
@@ -745,6 +808,14 @@ export class RequestTracker {
     for (const item of this.#pending.values()) {
       if (active(item.state)) {
         this.connectionFor(item.state.ref.key, "authentication-required");
+      }
+    }
+  }
+  clientOutdated(): void {
+    this.#connected = false;
+    for (const item of this.#pending.values()) {
+      if (active(item.state)) {
+        this.connectionFor(item.state.ref.key, "client-outdated");
       }
     }
   }
