@@ -97,7 +97,10 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await expect(page.locator(".otk-composer-dock [role=alert]")).toHaveCount(0);
   // A new draft returns the control to Send without settling the shell RPC.
   await expect(composerSend(page)).toHaveAccessibleName("Send");
-  await expectPrimaryBlocked(composerSend(page), "Sending");
+  await expectPrimaryBlocked(
+    composerSend(page),
+    "Previous message still sending",
+  );
   const completedRun = page.locator(shellRun(state, "completed")).filter({
     hasText: "long-shell-finished",
   });

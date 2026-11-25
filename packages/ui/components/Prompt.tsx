@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Prompt.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
-import {
-  createEffect,
-  createSignal,
-  For,
-  onCleanup,
-  onSettled,
-  Show,
-} from "solid-js";
+import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import {
   type DraftChange,
   editDraft,
@@ -28,22 +21,14 @@ import { useSessionPorts } from "../registries/session.tsx";
 import { SendIcon, StopIcon } from "./ChromeIcons.tsx";
 import {
   actionFeedback,
-  canStop,
   composerLabel,
-  composerMode,
-  createFailurePresenter,
-  createPrimaryAction,
-  createSubmissionIntent,
+  type ComposerSource,
+  createComposerAction,
   effectiveSelection,
   type Feedback,
-  promptUnavailable,
-  sendDiagnostic,
-  stopUnavailable,
 } from "@otk/client";
-import { randomID } from "@otk/protocol";
-import ComposerNotice from "./ComposerNotice.tsx";
+import ComposerNotice, { ComposerActionNotice } from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
-import type { PromptChoices } from "../registries/prompt.ts";
 import { ModelLabel, PromptSetting, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
 import PrimaryAction from "./PrimaryAction.tsx";
@@ -54,27 +39,16 @@ const INTERRUPT_WINDOW_MS = 5000;
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
   const session = useSessionPorts();
-  const intent = createSubmissionIntent<PromptProps["value"]>({
-    capture: (value) => value,
-    presenter: createFailurePresenter(),
-    target: () => session.failureTarget?.(),
-    unavailable: () => unavailable(),
-    recovery: () =>
-      "Resolve the stated Send reason, then send the retained draft",
-    // Only the exact refusal still on display ends; a newer outcome stays.
-    retire: (id) => {
-      if (session?.feedback?.current()?.diagnosticID === id) {
-        session.feedback.clear();
-      } else if (feedback()?.diagnosticID === id) setFeedback(undefined);
-    },
-  });
-  const [revision, setRevision] = createSignal(0);
-  onCleanup(intent.subscribe(() => setRevision(revision() + 1)));
-  const pending = () => {
-    revision();
-    return intent.state.pending;
-  };
+  const pending = () => primaryState().sending;
   const [feedback, setFeedback] = createSignal<Feedback>(),
+    [lastRefusal, setRefusal] = createSignal<
+      {
+        reason: string;
+        source: ComposerSource;
+      } | undefined
+    >(undefined, {
+      equals: (a, b) => a?.reason === b?.reason && a?.source === b?.source,
+    }),
     [armed, setArmed] = createSignal(false),
     [caret, setCaret] = createSignal(0);
   let active = true, input!: HTMLTextAreaElement;
@@ -153,7 +127,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       ctx.focus();
     }
   });
-  const facts = () => ({
+  const facts = (draft: PromptProps["value"]) => ({
     active,
     suspended: !!props.suspended,
     connected: props.connected,
@@ -161,26 +135,11 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       features.map((feature) => feature.enabled?.()).find((value) =>
         value !== undefined
       ) ?? ctx.supports("prompt"),
-    content: hasDraftContent(props.value),
-    chips: props.value.chips,
+    stopSupported: ctx.supports("prompt"),
+    content: hasDraftContent(draft),
+    chips: draft.chips,
+    ...props.activity(),
   });
-  const unavailable = () => promptUnavailable(facts());
-  const composerReady = () =>
-    promptUnavailable({ ...facts(), content: true, chips: [] }) === undefined;
-  const submit = async () => {
-    intent.require();
-    session?.feedback?.clear();
-    setFeedback(undefined);
-    // Feature readiness follows this input's references, not every catalog.
-    await ctx.ready();
-    intent.require();
-    const draft = change((current) => current);
-    for (const feature of features) {
-      if (await feature.beforeSubmit?.(draft)) return;
-    }
-    intent.require();
-    return draft;
-  };
   const performSend = async (
     draft: PromptProps["value"],
     activation: string,
@@ -198,10 +157,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
     if (!handled) {
-      await send({ parts, mode: draft.mode, selection }, {
-        ...ports.commands.context(),
-        draftSend,
-      });
+      await props.onSubmit(parts, draft.mode, selection, draftSend);
     }
     for (const feature of features) {
       try {
@@ -211,40 +167,40 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
-  const submitInput = async (source: "enter" | "button") => {
-    const activation = randomID();
-    sendDiagnostic("activation", { activation, state: source });
-    try {
-      await intent.submit(submit, (draft) => {
-        sendDiagnostic("admitted", { activation });
-        return performSend(draft, activation);
-      });
-    } catch (cause) {
-      sendDiagnostic("refused", { activation });
-      // Every activation route publishes through the same session-owned sink.
-      // Keyboard dispatch must not borrow a navigation/global error handler.
-      ctx.fail(cause);
-    }
-  };
-  const mode = () =>
-    composerMode({
-      ...props.activity(),
-      blank: !hasDraftContent(props.value) && !props.value.chips.length,
-    });
-  const stopReason = () =>
-    stopUnavailable({ ...facts(), supported: ctx.supports("prompt") });
-  const primary = createPrimaryAction({
-    mode,
-    label: () => composerLabel(mode()),
-    unavailable: () => mode() === "stop" ? stopReason() : unavailable(),
-    pending: () => mode() === "send" ? pending() : !!props.activity().stopping,
-    pendingReason: (mode) => mode === "stop" ? "Stopping" : "Sending",
-    run: (_input, mode) =>
-      mode === "stop"
-        ? ports.commands.run("session.interrupt").then(() => {})
-        : submitInput("button"),
+  const primary = createComposerAction({
+    facts,
+    draft: () => props.value,
+    local: (draft) => {
+      for (const feature of features) {
+        const command = feature.localCommand?.(draft);
+        if (command) return command;
+      }
+    },
+    prepare: ctx.ready,
+    send: performSend,
+    stop: props.onStop,
+    refuse: (reason, _source, recheckAs) => {
+      if (active) setRefusal({ reason, source: recheckAs });
+    },
+    begin: () => {
+      setRefusal(undefined);
+      session?.feedback?.clear();
+      setFeedback(undefined);
+    },
   });
+  const activate = (source: ComposerSource) =>
+    primary.activate(source).catch(ctx.fail);
   const primaryState = bindPrimaryAction(primary);
+  const refusal = () => {
+    const last = lastRefusal();
+    if (!last) return;
+    primaryState(); // The pending reservation is an external owner signal.
+    if (primary.verdict(last.source).reason === last.reason) return last.reason;
+  };
+  createEffect(refusal, (reason, previous) => {
+    props.onActivationNotice?.(reason);
+    if (!reason && previous) setRefusal(undefined);
+  });
   ownedCommand(ports, {
     id: "prompt.focus",
     title: "Focus prompt",
@@ -252,39 +208,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     enabled: () => !props.suspended,
     run: () => ctx.focus(),
   });
-  const send = ownedCommand(ports, {
-    id: "prompt.send",
-    title: "Send prompt",
-    category: "Prompt",
-    arguments: {
-      type: "object",
-      properties: {
-        parts: { type: "array" },
-        mode: { type: "string", enum: ["normal", "shell"] },
-        selection: { type: "object" },
-      },
-    },
-    enabled: composerReady,
-    run: (
-      context,
-      args: {
-        parts: import("@otk/protocol").PromptPart[];
-        mode: PromptProps["value"]["mode"];
-        selection: PromptChoices;
-      },
-    ) =>
-      props.onSubmit(args.parts, args.mode, args.selection, context.draftSend),
-  });
   ownedCommand(ports, {
     id: "prompt.submit",
     title: "Send prompt",
     category: "Prompt",
-    // While the composer can send, Enter stays the Send key: the primary owner
-    // refuses an empty, blocked or pending draft instead of the key editing it.
-    enabled: composerReady,
-    // Input commands can prepare while a captured send is still settling.
-    // The submission intent, not this input route, admits the next effect.
-    run: () => mode() === "send" ? submitInput("enter") : undefined,
+    // Keymap owns routing, not admission: even a refused Enter is consumed.
+    run: () => activate("enter"),
   });
   ownedCommand(ports, {
     id: "prompt.newline",
@@ -309,20 +238,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
     title: "Interrupt session",
     category: "Session",
-    enabled: () =>
-      !props.activity().stopping && stopReason() === undefined &&
-      canStop(props.activity()),
+    enabled: () => primary.verdict("interrupt").available,
     run: async (_context, args?: { confirm?: boolean }) => {
-      if (!args?.confirm) return await props.onStop();
+      if (!args?.confirm) return await activate("interrupt");
       if (Date.now() < deadline) {
         deadline = 0;
         clearTimeout(timer);
         setArmed(false);
-        try {
-          await props.onStop();
-        } catch (error) {
-          ctx.fail(error);
-        }
+        await activate("interrupt");
       } else {
         deadline = Date.now() + INTERRUPT_WINDOW_MS;
         setArmed(true);
@@ -407,16 +330,21 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           ctx.acceptFiles(Array.from(event.dataTransfer?.files || []))
         );
       }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (mode() === "send") void primary.invoke().catch(ctx.fail);
-      }}
+      onSubmit={(event) => event.preventDefault()}
     >
-      <Show when={!session?.feedback && (pending() || feedback())}>
+      <Show when={!props.onActivationNotice && refusal()}>
+        {(reason) => (
+          <ComposerNotice>
+            <ComposerActionNotice text={reason()} />
+          </ComposerNotice>
+        )}
+      </Show>
+      <Show
+        when={!refusal() && !session?.feedback && (pending() || feedback())}
+      >
         <ComposerNotice>
           <OperationFeedback
-            feedback={feedback() ??
-              { kind: "pending", text: "Sending prompt..." }}
+            feedback={feedback() ?? { kind: "pending", text: "Sending" }}
           />
         </ComposerNotice>
       </Show>
@@ -447,6 +375,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
         onClick={(event) => setCaret(event.currentTarget.selectionStart)}
         onInput={(event) => {
+          setRefusal(undefined);
           setCaret(event.currentTarget.selectionStart);
           const value = event.currentTarget.value;
           change((current) => editDraft(current, value));
@@ -492,7 +421,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         </Show>
         <div class="otk-prompt-send-slot">
           <PrimaryAction
-            type={primaryState().mode === "stop" ? "button" : "submit"}
             state={primaryState()}
             class="otk-primary otk-send-button"
             title={primaryState().mode === "stop"
@@ -503,7 +431,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
                 ? "Stop and return the message to the composer"
                 : "Stop the response")
               : undefined}
-            onInvoke={() => void primary.invoke().catch(ctx.fail)}
+            onInvoke={() => void activate("button")}
           >
             {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
           </PrimaryAction>

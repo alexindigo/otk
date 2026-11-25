@@ -962,8 +962,9 @@ export default function Shell(
                               forkNote={forkNotes.get(draftKey())}
                               onDismissForkNote={() =>
                                 forkNotes.dismiss(draftKey())}
-                              connected={selectedSidecar()?.status ===
-                                "connected"}
+                              connected={resources.linked(
+                                session.state.selection!.sidecarId,
+                              )}
                               onOlder={() => commands.run("session.older")}
                               onRetry={() => commands.run("session.retry")}
                               onDraft={drafts.writer(draftKey())}

@@ -6,10 +6,16 @@ function check(prompt: string, actions: string): string[] {
     ...(prompt.match(/<PrimaryAction\b/g)?.length === 1
       ? []
       : ["primary count"]),
-    ...(prompt.includes("composerMode(") &&
+    ...(prompt.includes("createComposerAction(") &&
         !/label:\s*\(\)\s*=>\s*"(?:Send|Stop)"/.test(prompt)
       ? []
       : ["mode owner"]),
+    ...(prompt.includes('activate("enter")') &&
+        prompt.includes('activate("button")') &&
+        !/composerReady|prompt\.send["']|createSubmissionIntent|composerMode\(/
+          .test(prompt)
+      ? []
+      : ["activation owner"]),
     ...(/\.entry\([^;]*?\)\?*\.status/.test(actions) ? ["run owner"] : []),
   ];
 }
@@ -25,6 +31,6 @@ Deno.test("the composer borrows mode and session execution from their owners", a
       "<PrimaryAction/><PrimaryAction/>",
       "const busy = resources.entry(id)?.status;",
     ),
-    ["primary count", "mode owner", "run owner"],
+    ["primary count", "mode owner", "activation owner", "run owner"],
   );
 });

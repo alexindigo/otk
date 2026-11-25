@@ -40,7 +40,7 @@ import SavedBranches, {
   SavedBranchNotice,
 } from "./SavedBranches.tsx";
 import { ForkFact } from "./ForkNote.tsx";
-import ComposerNotice from "./ComposerNotice.tsx";
+import ComposerNotice, { ComposerActionNotice } from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import PaneState from "./PaneState.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
@@ -176,6 +176,7 @@ export default function SessionView(props: {
     )
   );
   let noticeControl: { focus(): void } | undefined;
+  const [activationNotice, setActivationNotice] = createSignal<string>();
   const revealLifetime = new AbortController();
   onCleanup(() => revealLifetime.abort());
   const highlightLease = createMemo(() =>
@@ -328,7 +329,8 @@ export default function SessionView(props: {
     !!props.branchHistory?.state.recovery &&
     (!rollbackState().record || !!rollbackState().dismissed);
   const noticed = () =>
-    !!props.forkNote || !!feedback() || !!props.draftRecoveries?.length ||
+    !!props.forkNote || !!feedback() || !!activationNotice() ||
+    !!props.draftRecoveries?.length ||
     !!props.branchHistory?.state.permanence ||
     copyRecovery() ||
     !!props.branchHistory?.state.choice ||
@@ -355,7 +357,14 @@ export default function SessionView(props: {
           </>
         )}
       </Show>
-      <Show when={feedback()}>
+      <Show when={activationNotice()}>
+        {(text) => <ComposerActionNotice text={text()} />}
+      </Show>
+      <Show
+        when={feedback()?.kind !== "pending" || !activationNotice()
+          ? feedback()
+          : undefined}
+      >
         {(value) => (
           <OperationFeedback
             feedback={value()}
@@ -1135,6 +1144,7 @@ export default function SessionView(props: {
                       captureSend={props.captureSend}
                       onSubmit={props.onPrompt}
                       onStop={props.onStop}
+                      onActivationNotice={setActivationNotice}
                     />
                   </div>
                 </div>

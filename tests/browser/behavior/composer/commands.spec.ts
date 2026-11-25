@@ -183,7 +183,7 @@ for (const origin of ["keyboard", "button"] as const) {
       });
 
       // A trailing space keeps autocomplete out of Enter's path. This must
-      // reach prompt.submit and its beforeSubmit hook, not a picker shortcut.
+      // reach the composer activation owner, not a picker shortcut.
       await input.fill("/prompt.shell.enter ");
       await expect(page.locator(".otk-autocomplete")).toHaveCount(0);
       await input.press("Enter");
@@ -194,10 +194,13 @@ for (const origin of ["keyboard", "button"] as const) {
 
       await input.fill(newer);
       await expect(send).toHaveAccessibleName("Send");
-      await expectPrimaryBlocked(send, "Sending");
+      await expectPrimaryBlocked(send, "Previous message still sending");
       await input.press("Enter");
       await expect(input).toHaveValue(newer);
-      await expect(send).toHaveAttribute("aria-description", "Sending");
+      await expect(send).toHaveAttribute(
+        "aria-description",
+        "Previous message still sending",
+      );
       expect(
         await send.evaluate((node, original) => node === original, original),
       )
@@ -281,7 +284,10 @@ test.describe("long command", () => {
         .toHaveCount(0);
       // A new draft returns the control to Send without settling the command RPC.
       await expect(composerSend(page)).toHaveAccessibleName("Send");
-      await expectPrimaryBlocked(composerSend(page), "Sending");
+      await expectPrimaryBlocked(
+        composerSend(page),
+        "Previous message still sending",
+      );
       await state.release(held.gate);
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
         "Long slash finished.",

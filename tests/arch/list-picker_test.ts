@@ -39,23 +39,30 @@ export function lifetimeErrors(text: string): string[] {
     return ["picker row owner remains mounted after close"];
   });
 }
-export function readinessErrors(source: string): string[] {
+export function readinessErrors(source: string, owner = "submit"): string[] {
   const parsed = new Source(source);
   const bodies = parsed.all.flatMap((node) => {
-    if (node.type === "FunctionDeclaration" && node.id?.name === "submit") {
+    if (node.type === "FunctionDeclaration" && node.id?.name === owner) {
       return [node.body];
     }
     if (
       node.type === "VariableDeclarator" && node.id.type === "Identifier" &&
-      node.id.name === "submit" &&
+      node.id.name === owner &&
       node.init?.type === "ArrowFunctionExpression" &&
       node.init.body.type === "BlockStatement"
     ) return [node.init.body];
+    if (node.type === "ObjectMethod" && parsed.name(node.key) === owner) {
+      return [node.body];
+    }
     return [];
   });
   if (bodies.length !== 1) return ["submission requires one unambiguous owner"];
   let ready = false, read = false;
-  for (const statement of bodies[0].body) {
+  for (
+    const statement of bodies[0].body.flatMap((entry) =>
+      entry.type === "TryStatement" ? entry.block.body : [entry]
+    )
+  ) {
     if (
       statement.type === "ExpressionStatement" &&
       statement.expression.type === "AwaitExpression"
@@ -64,12 +71,19 @@ export function readinessErrors(source: string): string[] {
       if (
         (call.type === "CallExpression" ||
           call.type === "OptionalCallExpression") &&
-        parsed.name(call.callee)?.endsWith(".ready")
+        /\.(ready|prepare)$/.test(parsed.name(call.callee) ?? "")
       ) ready = true;
     }
     if (
       [...nodes(statement)].some((node) =>
-        node.type === "CallExpression" && parsed.name(node.callee) === "change"
+        node.type === "CallExpression" &&
+        (owner === "submit"
+          ? parsed.name(node.callee) === "change"
+          : statement.type === "VariableDeclaration" &&
+            statement.declarations.some((entry) =>
+              entry.id.type === "Identifier" && entry.id.name === "draft"
+            ) &&
+            parsed.name(node.callee) === "options.draft")
       )
     ) {
       if (!ready) {
@@ -138,11 +152,14 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
     prompt.includes("feature.submit?.(draft, parts, selection, draftSend)"),
   );
   assert(
-    /send\(\{ parts, mode: draft\.mode, selection \}, \{[^}]*\bdraftSend,/.test(
+    /props\.onSubmit\(parts, draft\.mode, selection, draftSend\)/.test(
       prompt,
     ),
   );
-  assertEquals(readinessErrors(prompt), []);
+  const composer = await Deno.readTextFile(
+    new URL("packages/client/primary-action.ts", root),
+  );
+  assertEquals(readinessErrors(composer, "activate"), []);
   const picker = await Deno.readTextFile(
     new URL("packages/ui/components/ListPicker.tsx", root),
   );
