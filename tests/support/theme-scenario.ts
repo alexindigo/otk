@@ -689,6 +689,13 @@ export async function themeScenario() {
               turns: { upsert: {}, remove: Object.keys(previousDigest.turns) },
               deleted: null,
             });
+            // Publish the same native request keys served by the inventory;
+            // the inbox owner decides whether the takeover may present them.
+            const caps = f.app.backend.capabilities;
+            const [permissions, questions] = await Promise.all([
+              caps.permissions!.listPermissions(corpus.sessionID),
+              caps.questions!.listQuestions(corpus.sessionID),
+            ]);
             f.update(corpus.sessionID, {
               status: contentState === "streaming" || contentState === "queued"
                 ? "busy"
@@ -702,6 +709,9 @@ export async function themeScenario() {
                   next: 1793736006000,
                 }
                 : undefined,
+            }, {
+              permissions: permissions.map(({ id }) => id),
+              inputs: questions.map(({ id }) => id),
             });
             if (contentState.startsWith("usage-")) {
               if (!usageSeeded) {
