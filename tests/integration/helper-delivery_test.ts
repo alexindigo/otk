@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type { InboxBaseline } from "@otk/protocol";
+import { entityKey, type InboxBaseline } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { startNative } from "../support/native-fixture.ts";
 import { nativeKind } from "../support/native.ts";
@@ -44,21 +44,26 @@ Deno.test("parent-received foreground helper outcome retires unseen without open
     await ws.connect();
     const inbox = async () =>
       (await ws.rpc<InboxBaseline>("inbox.get", {})).inbox;
+    const childKey = entityKey("session", child.id);
     const settled = await waitFor(
       inbox,
       (value) =>
-        (value.supervision?.[child.id]?.terminal ?? 0) > 0 &&
-        value.supervision?.[child.id]?.unseen === false,
+        (value.entities?.[childKey]?.terminal ?? 0) > 0 &&
+        value.entities?.[childKey]?.counts.unseen === 0,
       30000,
     );
-    assertEquals(settled.supervision![child.id].state, "none");
-    assertEquals(settled.supervision![child.id].outcome, "succeeded");
+    const entity = settled.entities![childKey];
+    assertEquals(entity.state, "none");
+    assertEquals(entity.outcome, "succeeded");
     assertEquals(settled.seen[child.id], undefined);
     // The helper's actual outcome history survives acknowledgement.
     assertEquals(
       settled.finishes[child.id],
-      settled.supervision![child.id].terminal,
+      entity.terminal,
     );
-    assertEquals(settled.supervision?.[parent.id]?.unseen, true);
+    assertEquals(
+      settled.entities?.[entityKey("session", parent.id)]?.counts.unseen,
+      1,
+    );
     await app.stop();
   }));
