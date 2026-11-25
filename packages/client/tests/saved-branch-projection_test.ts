@@ -44,7 +44,7 @@ function branch(summary?: Derived<UsageSummary>): SavedBranch {
     created: 1,
     bytes: 1,
     pending: false,
-    replaced: true,
+    committedAt: 11,
     session: {
       id: "s",
       title: "Saved",

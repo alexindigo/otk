@@ -20,6 +20,8 @@ import type {
   Message,
   MessagePage,
   MessagePolicy,
+  RevertCommit,
+  RevertCommitCapability,
   TranscriptInvalidation,
 } from "@otk/protocol";
 import { errorTag, type V2Client, V2MissingSession } from "./client.ts";
@@ -281,6 +283,10 @@ export class Transcript {
   >();
   #finished = new Map<string, Map<string, { start?: number; at?: number }>>();
   #boundaries = new Map<string, string>();
+  #revertCommits = new Map<string, RevertCommit>();
+  readonly revertCommit: RevertCommitCapability = {
+    latest: (id) => this.#revertCommits.get(id),
+  };
   /** Kinds of observed queued inbox items, by session and inbox ID. */
   #queued = new Map<string, Map<string, string>>();
   #tasks = new Set<Promise<unknown>>();
@@ -1452,7 +1458,7 @@ export class Transcript {
     const summaries = this.options.summaries?.(id, turns) ?? {};
     return {
       sessionID: id,
-      session,
+      session: { ...session, revertCommitted: this.revertCommit.latest(id) },
       items,
       from,
       clock,
@@ -1801,7 +1807,10 @@ export class Transcript {
           version: this.replay.version(id),
           from: capture.from,
           clock: sealed.clock,
-          session,
+          session: {
+            ...session,
+            revertCommitted: this.revertCommit.latest(id),
+          },
           items,
           older,
           helpers: {},
@@ -1958,6 +1967,7 @@ export class Transcript {
         clock: sealed.clock,
         session: {
           ...presentation,
+          revertCommitted: this.revertCommit.latest(id),
           ...(owner.notices
             ? {
               notices: owner.notices.map((notice) => ({
@@ -2499,6 +2509,18 @@ export class Transcript {
       this.requests.cutoff(id, null);
     }
   }
+  #confirmRevert(id: string, event: V2Event): void {
+    const boundaryID = text(event.data.to), at = event.created;
+    if (!boundaryID || at === undefined) return;
+    const latest = this.revertCommit.latest(id);
+    if (
+      latest && (at < latest.at ||
+        (at === latest.at && boundaryID === latest.boundaryID))
+    ) return;
+    const fact = { boundaryID, at };
+    this.#revertCommits.set(id, fact);
+    this.#publish(id, { op: "session.revert.committed", ...fact });
+  }
   async #sequence(
     id: string,
     messageID?: string,
@@ -2531,6 +2553,7 @@ export class Transcript {
     });
   }
   async deleted(id: string): Promise<void> {
+    this.#revertCommits.delete(id);
     this.#anchors.delete(id);
     this.#watermarks.delete(id);
     await this.requests.remove(id);
@@ -2676,6 +2699,10 @@ export class Transcript {
     ) {
       // A canonical native checkpoint already contains this durable fact.
       // Delayed stream starts must not regress a repaired terminal record.
+      // A body checkpoint does not carry the native revert commit's cause.
+      if (event.type === "session.revert.committed") {
+        this.#confirmRevert(id, event);
+      }
       return;
     }
     if (
@@ -2755,6 +2782,9 @@ export class Transcript {
         event.type,
         text(record(revert).messageID),
       );
+      if (event.type === "session.revert.committed") {
+        this.#confirmRevert(id, event);
+      }
       this.#boundary(
         id,
         revert,
@@ -3637,6 +3667,7 @@ export class Transcript {
     this.#checking = false;
     await this.colors?.stop();
     this.#lifetime.abort();
+    this.#revertCommits.clear();
     this.#watermarks.clear();
     this.#anchors.clear();
     await this.requests.close();

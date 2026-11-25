@@ -14,6 +14,7 @@ import type {
   Message,
   PermissionRequest,
   QuestionRequest,
+  RevertCommit,
   RevertInfo,
   Todo,
 } from "@otk/protocol";
@@ -26,6 +27,7 @@ export interface ContentState {
   todos: Todo[];
   diffs: FileDiff[];
   revert: RevertInfo | null;
+  revertCommitted?: RevertCommit;
   error?: string;
   errorState?: SessionErrorState;
   recovering?: {
@@ -305,6 +307,10 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
         }
         : null,
     };
+  }
+  if (op.op === "session.revert.committed") {
+    const { boundaryID, at } = op;
+    return { ...state, revertCommitted: { boundaryID, at } };
   }
   if (op.op === "permission.upsert") {
     const permissions = [...state.permissions];

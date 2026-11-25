@@ -3,7 +3,11 @@ import { assert, assertEquals } from "@std/assert";
 import * as client from "@otk/client";
 import type { ContentSession, RevertInfo } from "@otk/protocol";
 
-export function revertFixture() {
+export function revertFixture(
+  branchHistory?: Parameters<
+    typeof client.createSessionRevert
+  >[0]["branchHistory"],
+) {
   const state: client.SessionState = {
     selection: { sidecarId: "local", sessionID: "a" },
     content: client.emptyContent(),
@@ -17,6 +21,7 @@ export function revertFixture() {
   const calls: unknown[] = [];
   let result = Promise.resolve({ id: "a" } as ContentSession);
   const owner = client.createSessionRevert({
+    branchHistory,
     drafts: client.createDrafts(),
     status: { working: () => false, subscribe: () => () => {} },
     session: {
@@ -53,6 +58,27 @@ export function revertFixture() {
     },
   };
 }
+Deno.test("an absent stage closes a saved copy without consulting loaded messages", () => {
+  const settlements: string[] = [];
+  const branches: client.SavedBranch[] = [];
+  const history = {
+    state: {
+      branches,
+      pending: false,
+    },
+    prepare: () => Promise.resolve(),
+    stageEnded: () => settlements.push("unconfirmed"),
+    committed: () => settlements.push("replaced"),
+  };
+  const f = revertFixture(history);
+  f.state.content.revert = { boundaryID: "p", messageIDs: ["p"], files: [] };
+  f.change("a");
+  branches.push({ pending: true } as client.SavedBranch);
+  f.state.content.revert = null;
+  f.change("a");
+  assertEquals(settlements, ["unconfirmed"]);
+  f.owner.dispose();
+});
 Deno.test("revert owner serializes intents without optimistic content and retires old selection results", async () => {
   const f = revertFixture(), held = Promise.withResolvers<ContentSession>();
   f.result(held.promise);

@@ -1,9 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal, For } from "solid-js";
-import { elapsed, presentFailure } from "@otk/client";
+import { createSignal, For, onSettled } from "solid-js";
+import {
+  createEntityStateStore,
+  createLiveWork,
+  elapsed,
+  presentedEntity,
+  presentFailure,
+} from "@otk/client";
 import TimeText from "../../components/TimeText.tsx";
-import { DEFAULT_PREFS, type ToolCall, type UserMessage } from "@otk/protocol";
+import {
+  DEFAULT_PREFS,
+  entityKey,
+  type EntityState,
+  type ToolCall,
+  type UserMessage,
+} from "@otk/protocol";
 import { useUiRegistries } from "../../registries/context.tsx";
+import { useCommandPorts } from "../../keyboard/context.tsx";
 import Message from "../../components/Message.tsx";
 import ToolLine from "../../components/ToolLine.tsx";
 import Todo from "../../components/Todo.tsx";
@@ -11,6 +24,7 @@ import Clock from "../../components/Clock.tsx";
 import ChromeMeta from "../../components/ChromeMeta.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "../../components/Tree.tsx";
 import StatusLight from "../../components/StatusLight.tsx";
+import Subagents from "../../components/Subagents.tsx";
 import { UnknownPart } from "../../components/parts/UnknownPart.tsx";
 import "../../components/RightPanel.css" with { type: "text" };
 import { registerTextPart } from "../../components/parts/TextPart.tsx";
@@ -22,9 +36,84 @@ import { registerWebSearchTool } from "../../components/tools/WebSearchTool.tsx"
 import { registerGenericTool } from "../../components/tools/GenericTool.tsx";
 const at = Date.parse("2026-11-20T01:23:00.107-08:00");
 
+function SubagentTimes() {
+  const { commands } = useCommandPorts();
+  onSettled(() =>
+    commands.register({
+      id: "time-units.open-helper",
+      title: "Open subagent",
+      category: "Probe",
+      run: () => {},
+    })
+  );
+  const running = [
+    ["Explore: find time formatters", 174_700],
+    ["Junior: rewrite format.ts", 4_939_100],
+    ["Review: check the plan", 97_500_000],
+  ] as const;
+  const blocked = "Grunt: collect build logs",
+    unknown = "Scout: list call sites";
+  const ids = [...running.map(([id]) => id), blocked, unknown];
+  const counts = { working: 0, blocked: 0, finished: 0, unseen: 0 };
+  const state = Object.fromEntries(ids.map((id, i): [string, EntityState] => {
+    const run = running[i];
+    return [entityKey("session", id), {
+      ...presentedEntity(
+        "session",
+        id,
+        run ? "working" : id === blocked ? "blocked" : "none",
+      ),
+      evidence: {
+        helper: run ? "running" : id === blocked ? "needsYou" : "notReturned",
+        work: !!run,
+        permissions: 0,
+        questions: 0,
+        descendants: counts,
+        run: run && { startedAt: at - run[1] },
+        waitingSince: id === blocked ? at - 47_300 : undefined,
+      },
+    }];
+  }));
+  const entities = createEntityStateStore({ read: () => state });
+  const owner = createLiveWork({
+    items: () =>
+      running.map(([id]) => ({
+        id: `helper/${id}`,
+        kind: "helper",
+        label: id,
+        title: id,
+        sessionID: id,
+      })),
+    stopHelper: () => () => Promise.resolve(),
+  });
+  return (
+    <section class="style-panel">
+      <h2>Subagents list</h2>
+      <Subagents
+        entities={entities}
+        helpers={{
+          ids,
+          counts: { running: running.length, needsYou: 1, notReturned: 1 },
+        }}
+        current={running[1][0]}
+        owner={owner}
+        title={(id) => id}
+        openAction={(id) =>
+          commands.control("time-units.open-helper", undefined, {
+            target: { label: id },
+            shown: () => true,
+            unshown: "The subagent did not open.",
+            recovery: "Choose the subagent again",
+          })}
+      />
+    </section>
+  );
+}
+
 /** Controlled inputs go through the same owners as app data, not copied markup. */
 export default function UiConventions() {
   const surface = new URL(location.href).searchParams.get("surface");
+  if (surface === "subagents") return <SubagentTimes />;
   const registries = useUiRegistries();
   registerTextPart(registries.parts);
   for (

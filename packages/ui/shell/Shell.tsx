@@ -292,6 +292,19 @@ export default function Shell(
           ? info()?.archived
           : undefined),
     archive: actions.archive,
+    savedCopies: (target) => branchHistory.finished(target).length,
+    openSavedCopies: (target) => {
+      const newest = branchHistory.finished(target)[0];
+      if (!newest) return;
+      const selected = session.state.selection;
+      if (
+        (selected?.sidecarId !== target.sidecarId ||
+          selected.sessionID !== target.sessionID) &&
+        !navigation.navigate(target)
+      ) return;
+      branchHistory.select(target);
+      branchHistory.open(newest.id);
+    },
     available: (target) =>
       actions.eligibility(target).live &&
       resources.connected(target.sidecarId) &&

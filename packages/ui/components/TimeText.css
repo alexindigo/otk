@@ -3,3 +3,26 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.otk-time-value {
+  color: var(--otk-fg);
+  font-weight: 400;
+}
+.otk-time-unit {
+  display: inline-grid;
+  justify-items: start;
+  margin-inline-start: .12em;
+  color: var(--otk-fg);
+  font-weight: 600;
+}
+.otk-time-unit > *,
+.otk-time-part:not(:has(~ .otk-time-part)) > .otk-time-unit::after {
+  grid-area: 1 / 1;
+}
+/* Reserve the widest unit's width at the end of each value. */
+.otk-time-part:not(:has(~ .otk-time-part)) > .otk-time-unit::after {
+  content: "m" / "";
+  visibility: hidden;
+}
+.otk-time-unit:is([data-unit="h"], [data-unit="d"]) {
+  color: var(--otk-accent-text);
+}

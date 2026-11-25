@@ -216,10 +216,13 @@ Deno.test("project projections keep stored order, freeze inactive visits and exp
   });
   const idle = entry("s");
   // Empty non-template directories retain policy metadata but no longer qualify as rows.
-  assertEquals(inboxProjects([idle], inbox, 120_000).map((p) => p.directory), [
-    "/p",
-  ]);
-  assertEquals(inboxProjects([idle], inbox, 120_000)[0].visit?.text, "1m");
+  const rows = inboxProjects([idle], inbox, 120_000);
+  assertEquals(rows.map((p) => p.directory), ["/p"]);
+  assertEquals(rows[0].visit?.text, "1m");
+  assert(
+    !("visitText" in rows[0]),
+    "Project rows only expose structured visits",
+  );
   for (
     const active of [entry("s", "busy"), {
       ...entry("s"),

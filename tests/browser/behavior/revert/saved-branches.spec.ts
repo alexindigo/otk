@@ -4,7 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, scrollTranscript } from "../../pages/transcript.ts";
 import { chips, messages, pendingChips, upload } from "../../pages/composer.ts";
-import { pick, rightClick } from "../../pages/menus.ts";
+import { contextMenu, dismiss, pick, rightClick } from "../../pages/menus.ts";
 import type { Locator, Page } from "@playwright/test";
 
 const plainReason =
@@ -119,8 +119,8 @@ test("revert.saved-branch-survives-send-and-reload", {
       m.info.id === oldPrompt.info.id
     ),
   ).toBe(false);
-  await page.getByRole("button", { name: /Saved earlier branches/ })
-    .click();
+  await rightClick(page, ".otk-messages");
+  await pick(page, "Saved conversation copies (1)");
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
     exact: true,
@@ -166,7 +166,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   };
   await expect(saved).toBeVisible();
   await expect(saved).toContainText(
-    "This earlier branch was replaced; you can read it and reuse its prompts",
+    "You can read this copy and reuse its prompts.",
   );
   await expect(saved).toContainText("Files are not restored");
   await expect(saved).toContainText("The saved earlier reply.");
@@ -201,8 +201,11 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("Saved prompt: Keep this exact prompt");
   await expect(saved).not.toContainText("saved prompt:");
   await page.reload();
-  await page.getByRole("button", { name: /Saved earlier branches/ })
-    .click();
+  await expect(page.locator(".otk-messages")).toContainText(
+    "The replacement reply.",
+  );
+  await rightClick(page, ".otk-messages");
+  await pick(page, "Saved conversation copies (1)");
   await expect(saved).toContainText("The saved earlier reply.");
   await expect(saved).toContainText("New draft to keep");
   // The saved reader starts at the top after reload. Acquire its nested
@@ -228,8 +231,13 @@ test("revert.saved-branch-survives-send-and-reload", {
   await saved.getByRole("button", { name: "Delete saved branch", exact: true })
     .click();
   await expect(saved).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Saved earlier branches/ }))
-    .toHaveCount(0);
+  await rightClick(page, ".otk-messages");
+  await expect(
+    contextMenu(page).getByRole("menuitem", {
+      name: /Saved conversation copies/,
+    }),
+  ).toHaveCount(0);
+  await dismiss(page);
   await expect(page.locator(".otk-messages")).toContainText(
     "The replacement reply.",
   );
@@ -290,7 +298,7 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
   await expect(input).toHaveValue("Current edited draft");
   await page.reload();
   await rightClick(page, ".otk-messages");
-  await pick(page, "Saved earlier branches");
+  await pick(page, "Saved conversation copies (1)");
   const saved = page.getByRole("region", {
     name: "Saved earlier branch",
     exact: true,

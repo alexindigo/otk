@@ -7,7 +7,7 @@ import { opencodeV1SessionID as ids } from "./ids.ts";
 import {
   nativeMetadata as metadata,
   runningDirectories,
-  terminalProjection,
+  sessionProjection,
   terminalSessions,
 } from "./db-hints.ts";
 import { promptEvidenceSQL } from "./records.ts";
@@ -118,7 +118,9 @@ export class DigestNativeDb {
   catalog(after: string, limit: number): SessionMetadata[] {
     this.observe?.("catalog");
     return this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE id>? ORDER BY id LIMIT ?`,
+      `SELECT ${
+        sessionProjection(this.db)
+      } FROM session s WHERE id>? ORDER BY id LIMIT ?`,
     ).all(after, limit).map(metadata);
   }
   /** Ownership proofs read the API's current identities, not an older paged list. */
@@ -144,7 +146,7 @@ export class DigestNativeDb {
       values.push(before.updated, before.id);
     }
     const rows = this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE ${
+      `SELECT ${sessionProjection(this.db)} FROM session s WHERE ${
         filters.join(" AND ")
       } ORDER BY time_updated DESC,id DESC LIMIT ?`,
     ).all(...values, limit).map(metadata);
@@ -173,7 +175,9 @@ export class DigestNativeDb {
     limit: number,
   ): SessionMetadata[] {
     const rows = this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?`,
+      `SELECT ${
+        sessionProjection(this.db)
+      } FROM session s WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?`,
     ).all(
       JSON.stringify(directories),
       before?.updated ?? null,
@@ -187,8 +191,8 @@ export class DigestNativeDb {
   lookup(sessions: readonly string[]): SessionMetadata[] {
     this.observe?.("identity");
     return this.db.prepare(
-      `SELECT s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived,${
-        terminalProjection("s")
+      `SELECT ${
+        sessionProjection(this.db)
       } FROM session s JOIN json_each(?) wanted ON wanted.value=s.id ORDER BY s.id`,
     ).all(JSON.stringify(sessions.map(ids.decode))).map(metadata);
   }

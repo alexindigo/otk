@@ -28,6 +28,7 @@ const project = (
   ...extra,
 });
 const root = project("atmosphera", {
+  visit: age(0, 480_000),
   topology: {
     repoID: "atmosphera",
     canonicalRoot: "/projects/atmosphera",
@@ -82,9 +83,10 @@ export default function SidebarRows() {
             availability: "removed",
             annotation: "removed",
           }),
-          project("ndash"),
-          project("aerial-lock"),
-          project("airgraph"),
+          project("ndash", { visit: age(0, 15 * 3_600_000) }),
+          project("aerial-lock", { visit: age(0, 52 * 60_000) }),
+          project("airgraph", { visit: age(0, 52 * 3_600_000) }),
+          project("communico", { visit: age(0, 0) }),
           project("inactive", { inactive: true, group: "inactive" }),
           project("discovered", { source: "template", group: "discovered" }),
         ]}

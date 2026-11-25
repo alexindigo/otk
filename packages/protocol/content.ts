@@ -462,10 +462,16 @@ export interface ContentSession {
   archived: boolean;
   selection?: PromptSelection;
   revert?: RevertInfo;
+  revertCommitted?: RevertCommit;
   error?: string;
   errorState?: SessionErrorState;
   /** Optional read failures that do not invalidate the session or transcript. */
   notices?: import("./requests.ts").PublicFailure[];
+}
+/** Native confirmation, not a deduction from a missing stage or message. */
+export interface RevertCommit {
+  boundaryID: string;
+  at: number;
 }
 export interface RevertedPrompt {
   messageID: string;
@@ -530,6 +536,7 @@ export type ContentOp =
     files: RevertInfo["files"];
     prompt?: HistoryEntry;
   }
+  | ({ op: "session.revert.committed" } & RevertCommit)
   | {
     op: "message.upsert";
     message:

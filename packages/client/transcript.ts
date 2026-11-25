@@ -826,6 +826,8 @@ export function createTranscript(
         let content: ContentState = attach({
           ...contentMetadata(draft.content),
           revert: info.revert || null,
+          revertCommitted: info.revertCommitted ??
+            draft.content.revertCommitted,
           error: info.error,
           errorState: info.errorState,
           recovering: [...recoveringPrefix, ...page.recovering],

@@ -116,6 +116,9 @@ export type { ResourcesCapability } from "./capabilities/resources.ts";
 export type { PermissionsCapability } from "./capabilities/permissions.ts";
 export type { QuestionsCapability } from "./capabilities/questions.ts";
 export type { FormsCapability } from "./capabilities/forms.ts";
-export type { RevertCapability } from "./capabilities/revert.ts";
+export type {
+  RevertCapability,
+  RevertCommitCapability,
+} from "./capabilities/revert.ts";
 export type { RestoreCapability } from "./capabilities/restore.ts";
 export type { SessionActionsCapability } from "./capabilities/session-actions.ts";

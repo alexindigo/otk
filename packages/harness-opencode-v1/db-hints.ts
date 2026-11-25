@@ -36,6 +36,7 @@ export function nativeMetadata(row: Record<string, unknown>): SessionMetadata {
     directory: String(row.directory),
     projectID: String(row.project_id),
     title: String(row.title),
+    ...(row.agent == null ? {} : { agent: String(row.agent) }),
     timeCreated: Number(row.time_created),
     timeUpdated: Number(row.time_updated),
     archived: row.time_archived != null,
@@ -49,6 +50,19 @@ export function nativeMetadata(row: Record<string, unknown>): SessionMetadata {
   };
 }
 
+/** Older V1 databases do not record an agent on the session. */
+export function sessionProjection(db: DatabaseSync): string {
+  const agent =
+    db.prepare("PRAGMA table_info(session)").all().some((row) =>
+        row.name === "agent"
+      )
+      ? "s.agent"
+      : "NULL AS agent";
+  return `s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived,${agent},${
+    terminalProjection("s")
+  }`;
+}
+
 /** Bounded positive terminal inventory, never bodies or unfinished candidates. */
 export function terminalSessions(
   db: DatabaseSync,
@@ -56,8 +70,8 @@ export function terminalSessions(
   limit: number,
 ): SessionMetadata[] {
   return db.prepare(
-    `SELECT * FROM (SELECT s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived,${
-      terminalProjection("s") + "," + outcomeProjection("s")
+    `SELECT * FROM (SELECT ${sessionProjection(db)},${
+      outcomeProjection("s")
     } FROM session s WHERE s.id>?) WHERE terminal>0 ORDER BY id LIMIT ?`,
   ).all(after ? ids.decode(after) : "", limit).map((row) => ({
     ...nativeMetadata(row),

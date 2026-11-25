@@ -39,7 +39,7 @@ export interface SavedBranch {
   prompts: { messageID: string; entry: HistoryEntry }[];
   drafts: { label: string; value: Draft }[];
   pending: boolean;
-  replaced: boolean;
+  committedAt?: number;
   /** Measured localStorage UTF-16 bytes, including its key. */
   bytes: number;
 }
@@ -81,7 +81,10 @@ export interface BranchHistory {
   keepWithoutCopy(): void;
   sendAnyway(): Promise<void>;
   cancelSend(target?: Selection): void;
-  settled(target: Selection, restored?: boolean): Promise<void>;
+  stageEnded(target: Selection): void;
+  committed(target: Selection, boundaryID: string, at: number): void;
+  restored(target: Selection): void;
+  finished(target: Selection): readonly SavedBranch[];
   open(id?: string): void;
   reuse(branchID: string, draft: Draft, label: string): void;
   choose(saved: boolean): void;
@@ -97,6 +100,7 @@ interface CaptureDrafts {
 }
 type StoredBranch = Omit<SavedBranch, "drafts"> & {
   schema: 1;
+  replaced?: boolean; // Legacy inference, never read as evidence.
   drafts: StoredDraft[];
 };
 const root = "otk.branch-history.v1/";
@@ -114,6 +118,9 @@ export function savedBranchMatches(
     record.messageIDs.every((id) =>
       branch.messages.some((message) => message.id === id)
     );
+}
+export function isReplaced(branch: SavedBranch): boolean {
+  return branch.committedAt !== undefined;
 }
 function storedDraft(label: string, value: Draft): StoredDraft {
   return {
@@ -179,8 +186,10 @@ function decode(raw: string): SavedBranch {
         },
       }
       : value.session;
+  const { replaced: _legacy, committedAt, ...branch } = value;
   return {
-    ...value,
+    ...branch,
+    ...(Number.isFinite(committedAt) ? { committedAt } : {}),
     session,
     drafts: value.drafts.map((d) => ({
       label: branchDraftLabel(d.label),
@@ -747,7 +756,6 @@ export function createBranchHistory(options: {
         prompts,
         drafts: [],
         pending: !drafts.restored,
-        replaced: false,
         bytes: 0,
       };
       retain(
@@ -893,6 +901,14 @@ export function createBranchHistory(options: {
         : undefined;
     },
     subscribe: (listener) => store.subscribe(listener),
+    finished(t) {
+      try {
+        const branches = same(selected, t) ? store.state.branches : load(t);
+        return branches.filter((branch) => !branch.pending);
+      } catch {
+        return []; // The owner already reported the storage failure.
+      }
+    },
     select(target) {
       if (target && same(selected, target)) return;
       selected = target && { ...target };
@@ -1063,34 +1079,55 @@ export function createBranchHistory(options: {
       if (selected) await allowSend({ ...selected }, true);
     },
     cancelSend,
-    async settled(t, restored = false) {
-      if (
-        sends.has(draftKey(t)) &&
-        (restored || !(await options.session(t)).revert)
-      ) cancelSend(t);
+    stageEnded(t) {
+      try {
+        for (const branch of load(t)) {
+          if (!branch.pending) continue;
+          branch.pending = false;
+          save(t, branch, true);
+        }
+      } catch { /* Storage failures are published by the archive owner. */ }
+    },
+    committed(t, boundaryID, at) {
+      if (sends.get(draftKey(t))?.record.boundaryID === boundaryID) {
+        cancelSend(t);
+      }
+      try {
+        const branch = load(t).find((b) => b.boundary === boundaryID);
+        if (
+          !branch || isReplaced(branch) ||
+          (branch.session.revertCommitted?.at ?? -Infinity) >= at
+        ) return;
+        branch.pending = false;
+        branch.committedAt = at;
+        save(t, branch, true);
+      } catch {
+        /* A native fact cannot roll back the user's admitted action. */
+      }
+    },
+    restored(t) {
+      cancelSend(t);
       if (!supportsHistory(t)) return;
       const previous = captures.get(draftKey(t));
       const retained = records.get(draftKey(t));
-      if (restored) {
-        previous?.controller.abort();
-        captures.delete(draftKey(t));
-        clearFailure(t);
-        clearRecovery(t);
-        if (same(selected, t)) {
-          store.update((s) => {
-            s.pending = false;
-            s.error = undefined;
-          });
-        }
+      previous?.controller.abort();
+      captures.delete(draftKey(t));
+      clearFailure(t);
+      clearRecovery(t);
+      if (same(selected, t)) {
+        store.update((s) => {
+          s.pending = false;
+          s.error = undefined;
+        });
       }
       // Bookkeeping after native dispatch must never make an admitted send look
       // unsent. The complete pre-action archive already remains durable.
       try {
-        let branch = load(t).find((b) => b.pending);
+        const branch = load(t).find((b) => b.pending);
         if (!branch) {
           const transaction = options.drafts.reverts.get(draftKey(t));
           const record = retained?.record;
-          if (restored && record) {
+          if (record) {
             const current = cloneDraft(options.drafts.current(draftKey(t)));
             const drafts = retained.drafts;
             // Restore retires the old stage, not the promised draft/archive copy.
@@ -1106,28 +1143,17 @@ export function createBranchHistory(options: {
           }
           return;
         }
-        if (!restored && (await options.session(t)).revert) return;
-        // Merge bookkeeping into the current stored copy, including any drafts
-        // retained by reuse/choose while the session read was pending.
-        branch = load(t).find((b) => b.id === branch!.id);
-        if (!branch) {
-          refresh(t);
-          return;
-        }
-        if (restored) {
-          retain(
-            branch,
-            branchDraftLabels.beforeRestore,
-            options.drafts.current(draftKey(t)),
-          );
-        }
+        retain(
+          branch,
+          branchDraftLabels.beforeRestore,
+          options.drafts.current(draftKey(t)),
+        );
         branch.pending = false;
-        branch.replaced = !restored;
         if (!save(t, branch, true)) return;
         const transaction = options.drafts.reverts.get(draftKey(t));
         const original = branch.drafts[0]?.value;
         if (
-          restored && transaction?.edited && original && same(selected, t) &&
+          transaction?.edited && original && same(selected, t) &&
           !sameDraft(options.drafts.current(draftKey(t)), original)
         ) {
           store.update((s) => {

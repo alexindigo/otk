@@ -3,9 +3,11 @@ import "./SavedBranches.css" with { type: "text" };
 import { clockTitle } from "./Clock.tsx";
 import { createMemo, For, Show } from "solid-js";
 import {
+  age,
   branchDraftLabels,
   type BranchHistory,
   errorFeedback,
+  isReplaced,
   savedBranchProjection,
   savedPromptDraft,
 } from "@otk/client";
@@ -19,6 +21,7 @@ import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import FittedActions from "./FittedActions.tsx";
+import TimeText from "./TimeText.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
 export function RevertSendChoice(
   props: { owner: BranchHistory },
@@ -69,7 +72,6 @@ export function SavedBranchNotice(
     failureVisible?: boolean;
     recoveryVisible?: boolean;
     statusVisible?: boolean;
-    navigationVisible?: boolean;
   },
 ) {
   const state = () => props.owner.state;
@@ -97,22 +99,6 @@ export function SavedBranchNotice(
         <ComposerNoticeRow icon={RevertIcon} role="status">
           Saving the earlier conversation...
         </ComposerNoticeRow>
-      </Show>
-      <Show
-        when={props.navigationVisible !== false &&
-          state().branches.find((branch) => !branch.pending && branch.replaced)}
-      >
-        {(branch) => (
-          <ComposerNoticeRow icon={RevertIcon}>
-            <button
-              type="button"
-              class="otk-pill"
-              onClick={() => props.owner.open(branch().id)}
-            >
-              Saved earlier branches
-            </button>
-          </ComposerNoticeRow>
-        )}
       </Show>
       <Show when={state().choice}>
         {(choice) => (
@@ -178,6 +164,12 @@ export default function SavedBranches(
 ) {
   const branch = () =>
     props.owner.state.branches.find((b) => b.id === props.owner.state.opened);
+  const committed = createMemo(() => {
+    const saved = branch();
+    return saved && isReplaced(saved)
+      ? age(saved.committedAt!, Date.now())
+      : undefined;
+  });
   const projection = createMemo(() =>
     savedBranchProjection(branch(), props.prefs.showCost)
   );
@@ -228,12 +220,22 @@ export default function SavedBranches(
             >
               <div class="otk-saved-header">
                 <p>
-                  {saved().replaced
-                    ? "This earlier branch was replaced; you can read it and reuse its prompts."
-                    : "This is a saved earlier branch; you can read it and reuse its prompts."}
-                  {" "}
-                  It is not live native history. Replaced messages cannot be
-                  restored to native history. Files are not restored.
+                  <Show
+                    when={committed()}
+                    fallback="Saved before a revert, not replaced"
+                  >
+                    {(time) => (
+                      <>
+                        Replaced when a revert was committed{" "}
+                        <TimeText time={time()} />
+                        {time().word ? "" : " ago"}
+                      </>
+                    )}
+                  </Show>
+                </p>
+                <p>
+                  You can read this copy and reuse its prompts. Files are not
+                  restored.
                 </p>
                 <p>
                   Saved in this browser {clockTitle(saved().created)}{" "}

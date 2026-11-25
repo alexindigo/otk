@@ -99,7 +99,11 @@ export function createSessionRevert(options: {
     & Partial<
       Pick<
         BranchHistory,
-        "subscribe" | "settled" | "preservationWarning" | "retryCopy"
+        | "subscribe"
+        | "stageEnded"
+        | "committed"
+        | "preservationWarning"
+        | "retryCopy"
       >
     >;
   storage?: Pick<Storage, "getItem" | "setItem"> | null;
@@ -119,6 +123,8 @@ export function createSessionRevert(options: {
     return t ? `${t.sidecarId}/${t.sessionID}` : "";
   };
   let key = identity(), generation = 0, pending = false, alive = true;
+  let observedCommit: import("@otk/protocol").RevertCommit | undefined;
+  let closedStage = false;
   let operation: AbortController | undefined;
   const settlements = new Map<string, Promise<void>>();
   const flow = () => flows.get(key) ?? { phase: "idle" as const };
@@ -260,26 +266,48 @@ export function createSessionRevert(options: {
     if (next !== key) {
       reset();
       key = next;
+      observedCommit = undefined;
+      closedStage = false;
       publish();
     }
-    if (!alive || pending) return;
+    if (!alive) return;
     const target = options.session.state.selection;
-    const record = options.session.state.content.revert;
     if (!target) return;
+    const { revert: record, revertCommitted: fact } =
+      options.session.state.content;
+    if (
+      fact && (fact.boundaryID !== observedCommit?.boundaryID ||
+        fact.at !== observedCommit?.at)
+    ) {
+      observedCommit = fact;
+      options.branchHistory?.committed?.(target, fact.boundaryID, fact.at);
+    }
+    if (pending) return;
+    const candidate = options.branchHistory?.state;
+    const history = !candidate?.target ||
+        candidate.target.sidecarId === target.sidecarId &&
+          candidate.target.sessionID === target.sessionID
+      ? candidate
+      : undefined;
     if (!record) {
       if (
-        flow().record && options.session.state.continuity === "ready" &&
+        options.session.state.continuity === "ready" &&
         !options.session.state.loading
       ) {
-        const restored = options.session.state.content.messages.some((m) =>
-          m.id === flow().record?.boundaryID
-        );
-        flows.set(key, { phase: "idle" });
-        publish();
-        void options.branchHistory?.settled?.(target, restored).catch(() => {});
+        if (flow().record) {
+          flows.set(key, { phase: "idle" });
+          publish();
+        }
+        if (
+          !closedStage && history?.branches.some((branch) => branch.pending)
+        ) {
+          closedStage = true;
+          options.branchHistory?.stageEnded?.(target);
+        }
       }
       return;
     }
+    closedStage = false;
     if (flow().record?.boundaryID !== record.boundaryID) {
       update((state) => {
         state.record = record;
@@ -295,12 +323,6 @@ export function createSessionRevert(options: {
       });
     }
     const copy = savedCopy(record);
-    const candidate = options.branchHistory?.state;
-    const history = !candidate?.target ||
-        candidate.target.sidecarId === target.sidecarId &&
-          candidate.target.sessionID === target.sessionID
-      ? candidate
-      : undefined;
     if (history?.recovery?.boundaryID === record.boundaryID && !copy) {
       update((state) => {
         state.phase = history.pending ? "saving" : "failed";
