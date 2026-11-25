@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState } from "./state.ts";
+import type {
+  EntityState,
+  HelperDisposition,
+  TaskHelpers,
+} from "@otk/protocol";
+import { age, elapsed, metaList, type TimeText } from "./format.ts";
 
 export interface RunningWork {
   id: string;
@@ -54,4 +60,56 @@ export function runningWorkLabel(items: readonly RunningWork[]): string {
   }).join(", ");
 }
 
-/** Compact elapsed clock for live-work rows; the view supplies the live clock. */
+/** Display order and vocabulary shared by every form of the same counts. */
+export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
+  kind: HelperDisposition;
+  title: string;
+  count: number;
+  phrase: string;
+}[] {
+  return ([
+    {
+      kind: "running",
+      title: "Running",
+      count: counts.running,
+      phrase: "running",
+    },
+    {
+      kind: "needsYou",
+      title: "Needs you",
+      count: counts.needsYou,
+      phrase: counts.needsYou === 1 ? "needs you" : "need you",
+    },
+    {
+      kind: "notReturned",
+      title: "Not returned",
+      count: counts.notReturned,
+      phrase: "not returned",
+    },
+  ] as const).filter(({ count }) => count > 0);
+}
+
+/** One vocabulary for the pill and its accessible name, from published counts. */
+export function helperCountsLabel(
+  counts: TaskHelpers["counts"],
+  form: "visible" | "spoken" = "visible",
+): string {
+  const items = helperCountParts(counts).map(({ count, phrase }) =>
+    `${count} ${phrase}`
+  );
+  return form === "spoken" ? items.join(", ") : metaList(items);
+}
+
+/** Execution elapsed takes precedence over an age from the terminal. */
+export function helperClock(
+  entity: EntityState | undefined,
+  now: number,
+): { time: TimeText; ago: boolean } | undefined {
+  const run = entity?.evidence?.run, terminal = entity?.terminal;
+  if (run) {
+    return { time: elapsed((run.endedAt ?? now) - run.startedAt), ago: false };
+  }
+  if (terminal === undefined) return;
+  const time = age(terminal, now);
+  return { time, ago: !time.word };
+}

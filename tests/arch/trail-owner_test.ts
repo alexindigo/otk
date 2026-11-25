@@ -132,7 +132,8 @@ Deno.test("D67 ancestry and D66 subagents have separate owners", async () => {
   const subagents = await Deno.readTextFile(
     "packages/ui/components/Subagents.tsx",
   );
-  assert(subagents.includes("taskHelpers("));
+  assert(subagents.includes("props.helpers"));
+  assert(subagents.includes("helperDisposition("));
   const composer = await Deno.readTextFile(
     "packages/ui/components/ComposerTakeovers.tsx",
   );

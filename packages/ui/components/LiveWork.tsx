@@ -21,24 +21,23 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 const absent = createEntityStateStore({ read: () => undefined });
 
 /** Shell work only. D67's sub-session inventory has one separate Menu view. */
-export default function LiveWork(props: { items: readonly RunningWork[] }) {
+export default function LiveWork(props: { shells: readonly RunningWork[] }) {
   const session = useOptionalSessionPorts();
   const entities = () => session?.entities?.() ?? absent;
   const lampKey = () =>
     session?.workEntityKey?.() ??
       entityKey("session", session?.sessionID() ?? "");
-  const shells = () => props.items.filter((item) => item.kind === "shell");
   const [now, setNow] = createSignal(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
   const stop = () => clearInterval(timer);
   onCleanup(stop);
   return (
-    <Show when={shells().length}>
+    <Show when={props.shells.length}>
       <Popover
         class="otk-live-work"
         triggerClass="otk-live-work-trigger"
         label="Running shells"
-        triggerLabel={`Running work: ${runningWorkLabel(shells())}`}
+        triggerLabel={`Running work: ${runningWorkLabel(props.shells)}`}
         title="Running shells"
         size="content"
         onOpen={() => {
@@ -51,7 +50,7 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
           <LiveCount
             entities={entities()}
             lampKey={lampKey()}
-            label={runningWorkLabel(shells())}
+            label={runningWorkLabel(props.shells)}
           />
         }
       >
@@ -60,7 +59,7 @@ export default function LiveWork(props: { items: readonly RunningWork[] }) {
           role="list"
           aria-label="Running shells"
         >
-          <For each={shells()} keyed={(item) => item.id}>
+          <For each={props.shells} keyed={(item) => item.id}>
             {(item) => (
               <div
                 class="otk-live-work-item"

@@ -23,12 +23,12 @@ test.describe("task tabs", () => {
           "true",
         );
         await expect(
-          page.getByRole("button", { name: "Subagents", exact: true }),
-        ).toHaveText("1 subagent");
+          page.getByRole("button", { name: /^Subagents:/ }),
+        ).toHaveAccessibleName("Subagents: 1 running");
       };
       await assertTask();
       await expect(page.locator(`[data-crumb="${helper}"]`)).toHaveCount(0);
-      await page.getByRole("button", { name: "Subagents", exact: true })
+      await page.getByRole("button", { name: /^Subagents:/ })
         .click();
       await page.locator(`[data-subagent="${helper}"] .otk-subagent-name`)
         .click();
@@ -78,8 +78,8 @@ test.describe("task tabs", () => {
         "page",
       );
       await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Subagents", exact: true }))
-        .toHaveText("2 subagents");
+      await expect(page.getByRole("button", { name: /^Subagents:/ }))
+        .toHaveAccessibleName("Subagents: 2 running");
       await expect(page.locator(".otk-context-meter")).toHaveAttribute(
         "data-tokens",
         "2670",
@@ -167,7 +167,7 @@ test.describe("task tabs", () => {
       await expect(page.locator(
         "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
       )).toHaveCount(0);
-      await page.getByRole("button", { name: "Subagents", exact: true })
+      await page.getByRole("button", { name: /^Subagents:/ })
         .click();
       await expect(page.locator("[data-subagent]")).toHaveCount(2);
       const finishes = await state.product("sessions.finishes", {});
@@ -238,8 +238,7 @@ test.describe("task tabs", () => {
     await page.setViewportSize({ width: 900, height: 1000 });
     await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-chain-8`);
     const chip = page.getByRole("button", {
-      name: "Subagents",
-      exact: true,
+      name: /^Subagents:/,
     });
     await expect(chip).toBeVisible();
     await expect(page.locator("[data-crumb]:visible")).toHaveCount(10);

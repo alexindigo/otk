@@ -9,6 +9,7 @@ test.use({ profile: "contract-sessions-default" });
 test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   tag: ["@composer", "@sessions", "@contracts", "@isolated"],
 }, async ({ isolatedState: state, page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   const taskName =
     "Sticky selected task: review the destination before sending a message to the intended conversation";
   const task = await state.product("tasks.create", {
@@ -21,7 +22,7 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   const target = page.locator(".otk-composer-target");
   const work = page.locator(".otk-composer-activity .otk-subagents-trigger");
   await expect(target).toContainText(taskName);
-  await expect(work).toContainText("1 subagent");
+  await expect(work).toHaveAccessibleName("Subagents: 1 running");
   await expect(page.locator(`[data-tab="${task.id}"]`)).toHaveAttribute(
     "aria-selected",
     "true",
@@ -88,6 +89,8 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
     });
   }
   await page.setViewportSize({ width: 800, height: 800 });
+  await state.product("layout.patch", { leftWidth: 200, rightWidth: 280 });
+  await expect(page.locator(".otk-project-inbox")).toHaveCSS("width", "200px");
   expect((await geometry()).truncated).toBe(true);
   await activity(state, "tstv1-urgent-child", "release");
   // Ending execution is not delivery. The finished helper remains until its
@@ -150,9 +153,10 @@ test("composer.header-and-input-share-content-edges-at-every-size", {
           "data-otk-theme",
           theme,
         );
-        await expect(page.locator(".otk-subagents-trigger")).toContainText(
-          "1 subagent",
-        );
+        await expect(page.locator(".otk-subagents-trigger"))
+          .toHaveAccessibleName(
+            "Subagents: 1 running",
+          );
         const measure = () =>
           page.locator(".otk-composer-dock").evaluate((dock) => {
             const box = (selector: string) =>

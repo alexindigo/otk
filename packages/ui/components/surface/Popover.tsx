@@ -49,7 +49,7 @@ export default function Popover(props: {
     "name" | "aria-describedby" | "aria-invalid"
   >;
   title?: string;
-  size?: "wide" | "content";
+  size?: "wide" | "content" | "fit";
   density?: "menu";
   class?: string;
   dismissOnAction?: boolean;
@@ -306,6 +306,7 @@ export default function Popover(props: {
             class={["otk-popover-panel", {
               "otk-popover-wide": props.size === "wide",
               "otk-popover-content": props.size === "content",
+              "otk-popover-fit": props.size === "fit",
               "otk-popover-point": !!point() && !point()!.width &&
                 !point()!.height,
             }]}

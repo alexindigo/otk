@@ -13,6 +13,9 @@ export {
 } from "./entity-facts.ts";
 export {
   createLiveWork,
+  helperClock,
+  helperCountParts,
+  helperCountsLabel,
   type LiveWorkOwner,
   type RunningWork,
   runningWorkLabel,

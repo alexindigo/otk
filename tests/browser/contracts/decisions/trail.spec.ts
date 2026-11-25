@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { cssLength } from "../../pages/css-length.ts";
+import { subagents } from "../../pages/crumbs.ts";
 import { viewByUrl } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-tab-groups" });
@@ -50,15 +51,15 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
     await page.setViewportSize({ width: 900, height: 1000 });
     await expect.poll(ids).toEqual([root]);
     await shot("main-narrow", name);
-    const control = page.getByRole("button", {
-      name: "Subagents",
-      exact: true,
-    });
-    await expect(control).toHaveText("4 subagents");
-    await expect(control.locator(".otk-status-light")).toHaveAttribute(
-      "data-state",
-      "blocked",
+    const control = subagents(page);
+    await expect(control).toHaveAccessibleName(
+      "Subagents: 2 running, 1 needs you, 1 not returned",
     );
+    await expect(control.locator(".otk-live-count.is-full .otk-status-light"))
+      .toHaveAttribute(
+        "data-state",
+        "blocked",
+      );
     await control.click();
     const menu = page.getByRole("menu", { name: "Subagents", exact: true });
     await expect(menu.locator("[data-subagent]")).toHaveCount(4);
@@ -104,7 +105,9 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
       await menu.locator(`[data-subagent="${id}"] .otk-subagent-name`).click();
       await expect(page).toHaveURL(new RegExp(`${id}$`));
       await expect.poll(async () => (await ids()).at(-1)).toBe(id);
-      await expect(control).toHaveText("4 subagents");
+      await expect(control).toHaveAccessibleName(
+        "Subagents: 2 running, 1 needs you, 1 not returned",
+      );
       await control.click();
     }
     await menu.locator(`[data-subagent="${child}"] .otk-subagent-name`).click();
@@ -149,7 +152,7 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
   // A selected delivered helper stays in ancestry but never enters the D66 set.
   await viewByUrl(state, page, "tstv1-trail-cont-0");
   await expect.poll(ids).toEqual([root, "tstv1-trail-cont-0"]);
-  await page.getByRole("button", { name: "Subagents", exact: true }).click();
+  await subagents(page).click();
   await expect(page.locator('[data-subagent="tstv1-trail-cont-0"]'))
     .toHaveCount(0);
 });

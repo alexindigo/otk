@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { taskHelpers } from "@otk/client";
 import "./ComposerTakeovers.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
@@ -26,13 +25,17 @@ export default function ComposerTakeovers(
   const { takeovers, composerDocks } = useUiRegistries(),
     session = useSessionPorts();
   const { commands } = useCommandPorts();
-  const work = createMemo(() => session.workItems?.() ?? []);
+  const shells = createMemo(() =>
+    (session.workItems?.() ?? []).filter((item) => item.kind === "shell")
+  );
   const title = (id: string) =>
     session.entry(id)?.title ?? "Session unavailable";
-  const helpers = () => {
-    const store = session.entities?.();
-    return store && taskHelpers(store, session.trail?.()?.task);
-  };
+  const trail = () => session.trail?.();
+  const entities = () => session.entities?.();
+  const task = createMemo(() => {
+    const store = entities(), key = trail()?.task;
+    return key && !store?.isStale ? store?.get(key) : undefined;
+  });
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -48,8 +51,7 @@ export default function ComposerTakeovers(
   return (
     <ComposerProvider available={hasComposer}>
       <Show
-        when={hasComposer() || active() || work().length ||
-          helpers()?.ids.length}
+        when={hasComposer() || active() || shells().length || task()?.helpers?.ids.length}
       >
         <div
           class="otk-composer-dock"
@@ -78,22 +80,20 @@ export default function ComposerTakeovers(
                 </ChromeMeta>
               </span>
               <span class="otk-composer-live-slot">
-                <Show when={session.trail?.()}>
-                  {(trail) => (
-                    <Subagents
-                      trail={trail()}
-                      entities={session.entities?.()}
-                      owner={session.liveWork}
-                      title={title}
-                      openAction={(id) =>
-                        sessionSelectionControl(commands, {
-                          sidecarId: session.failureTarget?.().sidecarId ?? "",
-                          sessionID: id,
-                        }, title(id))}
-                    />
-                  )}
-                </Show>
-                <LiveWork items={work()} />
+                <Subagents
+                  helpers={task()?.helpers}
+                  taskKey={trail()?.task}
+                  current={session.sessionID()}
+                  entities={entities()}
+                  owner={session.liveWork}
+                  title={title}
+                  openAction={(id) =>
+                    sessionSelectionControl(commands, {
+                      sidecarId: session.failureTarget?.().sidecarId ?? "",
+                      sessionID: id,
+                    }, title(id))}
+                />
+                <LiveWork shells={shells()} />
               </span>
             </div>
           </div>

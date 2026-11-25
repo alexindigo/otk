@@ -1,0 +1,169 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { expect } from "../../fixtures/evidence.ts";
+import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { openSession } from "../../fixtures/wire.ts";
+
+test.use({ profile: "contract-sessions-hierarchy" });
+const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
+const main = "tstv1-otk";
+const pillText = "2 running · 1 needs you · 3 not returned";
+const rowsInOrder = [0, 1, 2, 6, 4, 3].map((n) => `tstv1-disp-${n}`);
+
+const openTask = async (
+  state: Parameters<typeof openSession>[0],
+  page: Parameters<typeof openSession>[1],
+) => {
+  const task = await state.product("tasks.create", {
+    directory: state.directory,
+    name: "One task across checkouts",
+    sessions: [main],
+  });
+  for (const sessionID of [main, "tstv1-blocked"]) {
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "release",
+      sessionID,
+    });
+  }
+  await openSession(state, page, main);
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+    target: "helper-dispositions",
+  });
+  return task;
+};
+
+test(
+  "composer.subagents-pill-shows-per-state-counts",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const task = await openTask(state, page);
+    const pill = page.getByRole("button", {
+      name: "Subagents: 2 running, 1 needs you, 3 not returned",
+    });
+    await expect(pill).toHaveText(pillText, { useInnerText: true });
+    const tab = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
+    const lamp = pill.locator(".otk-status-light:visible");
+    await expect(tab).toHaveAttribute("data-state", "blocked");
+    await expect(lamp).toHaveAttribute("data-state", "blocked");
+    const paint = (node: Element) => getComputedStyle(node).backgroundImage;
+    expect(await lamp.evaluate(paint)).toEqual(await tab.evaluate(paint));
+  },
+);
+
+test(
+  "composer.subagents-dropdown-groups-align-and-keep-titles",
+  tags,
+  async ({ isolatedState: state, page }, info) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await state.product("prefs.set", { key: "notify.toast", value: false });
+    await state.product("prefs.set", { key: "textSize", value: "125" });
+    await state.product("prefs.set", { key: "theme", value: "otk-dark" });
+    await openTask(state, page);
+    // The supplied terminals are seconds old. Read these same clocks two
+    // minutes later to exercise a numeric age and the fixed suffix slot.
+    await page.clock.setFixedTime(new Date(Date.now() + 120_000));
+    await page.locator(".otk-subagents-trigger").click();
+    const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+    await expect(menu.locator(".otk-subagent-heading")).toHaveText([
+      "Running 2",
+      "Needs you 1",
+      "Not returned 3",
+    ]);
+    const rows = menu.locator("[data-subagent]");
+    await expect(rows).toHaveCount(rowsInOrder.length);
+    await expect.poll(() =>
+      rows.evaluateAll((items) =>
+        items.map((row) => row.getAttribute("data-subagent"))
+      )
+    ).toEqual(rowsInOrder);
+    for (const [index, id] of rowsInOrder.entries()) {
+      await expect(
+        menu.locator(`[data-subagent="${id}"]`).getByRole("menuitem", {
+          name: /^Stop /,
+        }),
+      ).toHaveCount(index < 2 ? 1 : 0);
+    }
+    const time = (n: number) =>
+      menu.locator(`[data-subagent="tstv1-disp-${n}"] .otk-subagent-time`);
+    await expect(time(4)).toHaveText(/^2m ago$/);
+    await expect(time(4).locator("time")).toHaveAttribute(
+      "datetime",
+      /^\d{4}-/,
+    );
+    await expect(time(3)).toHaveText(/^3m 56s$/);
+    await expect(time(3).locator("time")).toHaveAttribute("datetime", /^PT/);
+    await expect(time(2)).toHaveText("Time unknown");
+    const facts: unknown[] = [];
+    for (
+      const [theme, label] of [["otk-dark", "dark"], ["otk-light", "linen"], [
+        "otk-light-stone",
+        "stone",
+      ]]
+    ) {
+      await expect(page.locator("html")).toHaveCSS("--otk-scale", "1.25");
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      const positions = await rows.evaluateAll((rows) =>
+        rows.map((row) => {
+          const title = row.querySelector<HTMLElement>(
+            ".otk-subagent-name .otk-control-label",
+          )!;
+          const time = row.querySelector(".otk-subagent-time")!
+            .getBoundingClientRect();
+          const cell = row.querySelector(".otk-subagent-stop")!;
+          const stop = cell.querySelector("button");
+          const svg = stop?.querySelector("svg")?.getBoundingClientRect();
+          const stopBox = stop?.getBoundingClientRect();
+          const gaps = stopBox && svg
+            ? [
+              svg.top - stopBox.top,
+              stopBox.bottom - svg.bottom,
+              svg.left - stopBox.left,
+              stopBox.right - svg.right,
+            ]
+            : undefined;
+          return {
+            timeRight: time.right,
+            stopLeft: cell.getBoundingClientRect().left,
+            gaps,
+            title: title.getAttribute("title"),
+            truncated: title.scrollWidth > title.clientWidth,
+          };
+        })
+      );
+      for (const [index, pos] of positions.entries()) {
+        const context = `${label}/${rowsInOrder[index]}`;
+        expect.soft(Math.abs(pos.timeRight - positions[0].timeRight), context)
+          .toBeLessThanOrEqual(.5);
+        expect.soft(Math.abs(pos.stopLeft - positions[0].stopLeft), context)
+          .toBeLessThanOrEqual(.5);
+        expect.soft(pos.truncated, context).toBe(false);
+        expect.soft(pos.title, context).toBe(
+          `Disposition helper ${Number(rowsInOrder[index].at(-1)) + 1}`,
+        );
+        if (index < 2) {
+          expect(pos.gaps, context).toBeDefined();
+          expect.soft(Math.max(...pos.gaps!) - Math.min(...pos.gaps!), context)
+            .toBeLessThanOrEqual(1);
+        }
+      }
+      facts.push({ theme, positions });
+      await page.mouse.move(0, 0);
+      await page.screenshot({
+        path: info.outputPath(`subagents-dropdown-${label}.png`),
+        fullPage: true,
+        animations: "allow",
+      });
+    }
+    await info.attach("subagents-geometry", {
+      body: JSON.stringify(facts, null, 2),
+      contentType: "application/json",
+    });
+  },
+);
