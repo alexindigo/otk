@@ -178,6 +178,25 @@ export class V2Pending {
       },
     };
   }
+  /** Publish from retained authority when a session's recipient route changes. */
+  publishOwner(sessionID: string): void {
+    for (const { request } of this.#permissions.values()) {
+      if (request.sessionID === sessionID) {
+        this.changed(sessionID, { op: "permission.upsert", request });
+      }
+    }
+    for (const { request, question } of this.#forms.values()) {
+      if (
+        request.owner.kind === "session" &&
+        request.owner.sessionID === sessionID
+      ) {
+        this.changed(sessionID, { op: "form.upsert", request });
+        if (question) {
+          this.changed(sessionID, { op: "question.upsert", request: question });
+        }
+      }
+    }
+  }
   async #shellDetail(
     pending: {
       request: PermissionRequest;

@@ -9,6 +9,7 @@ import { bounded, tempDir, test } from "../../../tests/support/resources.ts";
 async function fixture() {
   const root = await tempDir("dispatch-lag-"), settings = cfg();
   const index = new SessionIndex(), calls: string[] = [], events: string[] = [];
+  const permissionPublications: { id: string; ancestors: string[] }[] = [];
   const native = {
     id: "ses_dispatch",
     title: "Initial",
@@ -91,7 +92,11 @@ async function fixture() {
     connection() {},
     indexReset() {},
     indexRemove: (id) => index.remove(id),
-    content() {},
+    content(id, op) {
+      if (op.op === "permission.upsert") {
+        permissionPublications.push({ id, ancestors: index.ancestors(id) });
+      }
+    },
     invalidate() {},
     bootstrapComplete() {},
     indexUpsert: (entry) => {
@@ -129,6 +134,7 @@ async function fixture() {
     index,
     calls,
     events,
+    permissionPublications,
     native,
     diagnostics,
     send,
@@ -382,6 +388,37 @@ test("V2 pending attention follows topology learned outside native-event metadat
     assertEquals(f.index.getMetadata(parent.id)?.attention.childPermissions, 0);
     assertEquals(f.index.getMetadata(child.id)?.attention.permissions, 1);
   } finally {
+    await f.close();
+  }
+});
+
+test("V2 pending permission waits for its native owner's routing topology", async () => {
+  const f = await fixture();
+  const release = Promise.withResolvers<void>();
+  try {
+    const child = f.index.getMetadata("opcv2-ses_dispatch")!;
+    const parent = { ...child, id: "opcv2-ses_parent", title: "Parent" };
+    f.index.upsertMetadata(parent);
+    f.index.remove(child.id);
+    f.hold(release.promise);
+    f.send({
+      type: "permission.asked",
+      location: { directory: child.directory },
+      data: {
+        sessionID: "ses_dispatch",
+        id: "per_early",
+        action: "read",
+        resources: ["README.md"],
+      },
+    });
+    await until(() => f.events.includes("permission.asked"));
+    assertEquals(f.permissionPublications, []);
+    f.index.upsertMetadata({ ...child, parentID: parent.id });
+    assertEquals(f.permissionPublications, [
+      { id: child.id, ancestors: [parent.id] },
+    ]);
+  } finally {
+    release.resolve();
     await f.close();
   }
 });
