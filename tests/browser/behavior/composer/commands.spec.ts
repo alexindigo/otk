@@ -17,7 +17,8 @@ import {
 test.use({ profile: "composer-commands" });
 test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   tag: ["@composer", "@isolated"],
-}, async ({ isolatedState: state, page }) => {
+}, async ({ isolatedState: state, page }, info) => {
+  const frames = await wire(page);
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Commands",
   });
@@ -40,7 +41,29 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
       hasText: "COMMAND-FIXTURE inline args",
     }),
   ).toContainText("continued arguments");
-  await expect(prompt(page)).toHaveValue("");
+  if (state.controller.info!.version.startsWith("2.")) {
+    await expect(prompt(page)).toHaveValue(
+      "/probe inline args\ncontinued arguments",
+    );
+    try {
+      await expect(page.locator(".otk-composer-notice")).toContainText(
+        "did not provide a way to confirm its message",
+      );
+    } finally {
+      const requests = frames.sent.map(({ frame }) => frame).filter((frame) =>
+        ["session.command", "session.prompt", "projects.visit", "tasks.create"]
+          .includes(frame.method ?? "")
+      );
+      const keys = new Set(requests.map((frame) => frame.ref?.key));
+      await info.attach("command-outcome-boundaries", {
+        contentType: "application/json",
+        body: JSON.stringify({
+          requests,
+          outcomes: frames.received.filter((frame) => keys.has(frame.ref?.key)),
+        }),
+      });
+    }
+  } else await expect(prompt(page)).toHaveValue("");
   await reply(state, page, session.id, "Project command received.");
   await state.queue(["Skill command received."]);
   await prompt(page).fill("/skills");

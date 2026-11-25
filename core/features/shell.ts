@@ -3,12 +3,12 @@ import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { nativeEffect, nativeExecution } from "../requests/policies.ts";
-import { completionReceipt } from "./session-receipts.ts";
+import { submissionReceipt } from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.shell;
   if (!capability) return;
-  const receipt = completionReceipt("shell-settled");
+  const receipt = submissionReceipt("shell-settled");
   rpc.register("session.shell", {
     execution: nativeExecution(
       (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
@@ -18,6 +18,9 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       const model = p.model === undefined ? undefined : object(p.model);
       return {
         sessionID: sessionID(p)!,
+        ...(p.messageID === undefined
+          ? {}
+          : { messageID: text(p, "messageID")! }),
         command: text(p, "command")!,
         agent: text(p, "agent", true),
         ...(model
@@ -31,9 +34,10 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       };
     },
     handler: (ctx, input) =>
-      nativeEffect(ctx, async (operation) => {
-        await capability.shell(input, operation);
-        return null;
-      }, receipt),
+      nativeEffect(
+        ctx,
+        (operation) => capability.shell(input, operation),
+        receipt,
+      ),
   });
 }

@@ -881,7 +881,10 @@ export function InteractionFailures(
               prefs: () => DEFAULT_PREFS,
               dirty() {},
               act: (action) => action(),
-              submit: (action) => action(),
+              submit: async (action) => {
+                await action(undefined, () => {}, "msg_fixture");
+                return { kind: "committed", messageID: "msg_fixture" };
+              },
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             }}
@@ -987,6 +990,12 @@ export function SecondaryFailures(
   );
   const submit = createSessionSubmission({
     sessionID: "probe",
+    delivery: {
+      send: async (action) => {
+        await action(() => {});
+        return { kind: "committed", messageID: "fixture-submitted" };
+      },
+    },
     directory: () => Promise.resolve("/project"),
     inbox,
     tabs: () => ({ send: (_id, action) => action() }),
@@ -1053,11 +1062,15 @@ export function SecondaryFailures(
                 return draft();
               }}
               connected
-              onSubmit={() =>
-                submit(() => {
+              onSubmit={async () => {
+                await submit(() => {
                   setSent((value) => value + 1);
-                  return Promise.resolve();
-                })}
+                  return Promise.resolve({
+                    messageID: "fixture-submitted",
+                    state: "accepted",
+                  });
+                });
+              }}
               onAbort={() => Promise.resolve()}
             />
           </SessionProvider>
@@ -1299,7 +1312,10 @@ export default function SharedControls(
             prefs,
             dirty: () => {},
             act: (action) => action(),
-            submit: (action) => action(),
+            submit: async (action) => {
+              await action(undefined, () => {}, "msg_fixture");
+              return { kind: "committed", messageID: "msg_fixture" };
+            },
             history: () => Promise.resolve([]),
             attachments: (parts) => Promise.resolve(parts),
             rpc: () => Promise.reject(new Error("Unexpected RPC")),

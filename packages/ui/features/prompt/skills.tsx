@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./skills.css" with { type: "text" };
 import { createSignal, Show } from "solid-js";
-import { skillChoices } from "@otk/client";
+import { requireCommittedSend, skillChoices } from "@otk/client";
 import type { SkillOption } from "@otk/protocol";
 import ListPicker, {
   type ListPickerControl,
@@ -23,7 +23,7 @@ export function registerSkillsPrompt(prompt: PromptRegistry): void {
             name: skill.name,
             aliases: [],
             source: "skill",
-          }, { skill }),
+          }, { skill }).then(requireCommittedSend),
       );
       return {
         overlay: picker,

@@ -5,7 +5,11 @@ import type {
   PromptRegistry,
 } from "../../registries/prompt.ts";
 import { createSignal } from "solid-js";
-import { createHarnessCommands } from "@otk/client";
+import {
+  createHarnessCommands,
+  requireCommittedSend,
+  type SendOutcome,
+} from "@otk/client";
 import {
   commandOptions,
   parseCommand,
@@ -23,13 +27,18 @@ export function submitPromptCommand(
     skill?: SkillOption;
   } = {},
   origin: import("@otk/protocol").RequestOrigin = "composer",
-) {
-  return ctx.submit(async (options) => {
+): Promise<SendOutcome> {
+  return ctx.submit(async (options, dispatch, messageID) => {
     if (!args.selection) await ctx.ready();
     const selection = args.selection ??
       ctx.nextSelection(ctx.change((draft) => draft)).input;
-    await ctx.rpc("session.command", {
+    const parts = (await ctx.attachments(args.parts ?? [])).filter((
+      part,
+    ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file");
+    dispatch();
+    return await ctx.rpc("session.command", {
       sessionID: ctx.sessionID(),
+      messageID,
       command: command.name,
       ...(args.skill
         ? {
@@ -41,9 +50,7 @@ export function submitPromptCommand(
         : {}),
       arguments: args.arguments ?? "",
       ...selection,
-      parts: (await ctx.attachments(args.parts ?? [])).filter((
-        part,
-      ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file"),
+      parts,
     }, options);
   }, origin);
 }
@@ -60,7 +67,9 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           ctx.active() && !ctx.props.suspended && ctx.props.connected &&
           ctx.supports("commands"),
         execute: (command, args, origin) =>
-          submitPromptCommand(ctx, command, args, origin),
+          submitPromptCommand(ctx, command, args, origin).then(
+            requireCommittedSend,
+          ),
       });
       ctx.own(owner.dispose);
       let mounted = false;

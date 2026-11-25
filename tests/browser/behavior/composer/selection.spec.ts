@@ -246,6 +246,15 @@ test.describe("native picker choices", () => {
         request.reasoning_effort === "high"
       ),
     ).toBe(true);
+    if (state.controller.info!.version.startsWith("2.")) {
+      // M1 addenda 1-2: a V2 command without a correlatable message ends as
+      // explicitly unconfirmed and retains its draft; the user clears it.
+      await expect(prompt(page)).toHaveValue("/probe chosen");
+      await expect(page.locator(".otk-composer-notice")).toContainText(
+        "did not provide a way to confirm its message",
+      );
+      await prompt(page).fill("");
+    } else await expect(prompt(page)).toHaveValue("");
     await prompt(page).press("!");
     await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
     await expect(page.locator(".otk-variant-picker")).toHaveCount(0);

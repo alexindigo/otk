@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
 import {
+  ascendingID,
   type Capabilities,
   type ContentSession,
   type OperationContext,
@@ -234,13 +235,20 @@ export function sessionActions(ports: {
       async shell(input, operation) {
         return await ordered(input.sessionID, operation, async () => {
           const client = ports.client(),
-            sessionID = ids.decode(input.sessionID);
+            sessionID = ids.decode(input.sessionID),
+            messageID = input.messageID ?? ascendingID("msg");
           await client.effect(
-            (api) => api.session.shell({ sessionID, command: input.command }),
+            (api) =>
+              api.session.shell({
+                sessionID,
+                id: messageID,
+                command: input.command,
+              }),
             operation,
           );
           // Native shell joins its own shell lifetime before replying. It is not
           // a session execution, so execution.wait cannot certify this effect.
+          return { messageID, state: "accepted" as const };
         });
       },
     },

@@ -56,6 +56,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     unavailable: () => unavailable(),
     recovery: () =>
       "Resolve the stated Send reason, then send the retained draft",
+    // Only the exact refusal still on display ends; a newer outcome stays.
+    retire: (id) => {
+      if (session?.feedback?.current()?.diagnosticID === id) {
+        session.feedback.clear();
+      } else if (feedback()?.diagnosticID === id) setFeedback(undefined);
+    },
   });
   const [revision, setRevision] = createSignal(0);
   onCleanup(intent.subscribe(() => setRevision(revision() + 1)));
@@ -192,7 +198,15 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
-  const submitInput = () => intent.submit(submit, performSend);
+  const submitInput = async () => {
+    try {
+      await intent.submit(submit, performSend);
+    } catch (cause) {
+      // Every activation route publishes through the same session-owned sink.
+      // Keyboard dispatch must not borrow a navigation/global error handler.
+      ctx.fail(cause);
+    }
+  };
   const primary = createPrimaryAction({
     label: () => "Send",
     unavailable,

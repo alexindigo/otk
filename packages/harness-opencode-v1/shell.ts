@@ -5,6 +5,7 @@ import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 import type { ErrorRequest } from "./errors.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import { submissionID } from "./submission-id.ts";
 export interface NativeLaunch {
   admitted: Promise<void>;
   settled: Promise<void>;
@@ -22,6 +23,7 @@ export function shell(
 ): ShellCapability {
   return {
     async shell(input, operation) {
+      const messageID = input.messageID ?? submissionID();
       const dir = await directory.resolve(input.sessionID);
       const agent = input.agent ??
         (await client.json<{ name: string; hidden?: boolean; mode: string }[]>(
@@ -44,6 +46,7 @@ export function shell(
           classification: "effect",
           ...(operation ? { operation } : {}),
           body: {
+            messageID,
             command: input.command,
             agent,
             ...(input.model ? { model: nativeModel(input.model) } : {}),
@@ -51,6 +54,7 @@ export function shell(
         },
       );
       if (operation && launched) await launched.settled;
+      return { messageID, state: "accepted" };
     },
   };
 }

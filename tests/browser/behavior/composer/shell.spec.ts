@@ -9,6 +9,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
 import {
   openRecord,
+  readRecordBody,
   revealTool,
   shellOutput,
   shellRun,
@@ -108,7 +109,9 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
         JSON.stringify(row.getAttribute("data-virtual-key"))
       }] ${selector}`;
   }, shellRun(state, "completed"));
-  await openRecord(page, completedSource);
+  if (state.controller.info!.version.startsWith("2.")) {
+    await readRecordBody(page, completedSource);
+  } else await openRecord(page, completedSource);
   await expect(
     shellOutput(state, page, "completed").filter({
       hasText: "long-shell-finished",

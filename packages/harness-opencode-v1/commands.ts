@@ -9,6 +9,7 @@ import { mapPromptParts } from "./prompt.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type { DirectoryCatalogs } from "./catalogs.ts";
 import { nativeCommands } from "./command-vocabulary.ts";
+import { submissionID } from "./submission-id.ts";
 export function commands(
   client: Client,
   directory: Directory,
@@ -39,6 +40,7 @@ export function commands(
       return mergeCommands(mapCommands(commands), skills);
     },
     async command(input, operation) {
+      const messageID = input.messageID ?? submissionID();
       const dir = await directory.resolve(input.sessionID);
       if (input.skill) {
         const native = await client.json<{ name: string; source?: string }[]>(
@@ -70,6 +72,7 @@ export function commands(
           classification: "effect",
           ...(operation ? { operation } : {}),
           body: {
+            messageID,
             command: input.skill?.name ?? input.command,
             arguments: input.arguments,
             agent: input.agent,
@@ -85,6 +88,7 @@ export function commands(
         },
       );
       if (operation && launched) await launched.settled;
+      return { messageID, state: "accepted" };
     },
   };
 }

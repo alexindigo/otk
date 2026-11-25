@@ -1297,6 +1297,20 @@ directly, without promoting a session merely for responding to it.
 atomically. These are UI-independent ports: callers own navigation guards,
 action callbacks and failure presentation.
 
+`SessionSubmission`, `SessionActions.prompt` and `SessionDelivery.send` return
+the closed `SendOutcome`: committed with a canonical native message ID, refused
+with a reason, failed with a reason and Retry, or explicitly unconfirmed with a
+reason when the native API cannot correlate its message. Native acceptance alone
+does not certify commitment; for a prompt with a pending transcript entry it
+ends as `accepted`, and that entry (which carries OTK's supplied identity) owns
+commitment in place or its bounded observation failure with Retry, unchanged
+from 2.39. UI adapters use `requireCommittedSend` before clearing captured
+input; it admits committed and accepted, and all other outcomes retain the input
+and borrow the existing failure presenter. Observation Retry reads existing
+authority without another native mutation. A refusal citing a captured send
+retires only its exact diagnostic when that send settles; later bookkeeping
+cannot clear its feedback.
+
 After a successful action, a failed `projects.visit` is a separate bookkeeping
 diagnostic: `act` still returns the exact action result, so an admitted send or
 reply cannot look unsent. The injected `report` port (console diagnostics by

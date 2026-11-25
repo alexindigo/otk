@@ -241,15 +241,22 @@ test("required attachment mapping preserves every source, order, directory and r
     ];
     assert(receipt?.messageID);
     assertEquals(writes, [{ messageID: receipt.messageID, parts: mapped }]);
-    await commands(client, directory, (_id, _operation, _path, options) => {
-      writes.push(options?.body);
-    }).command({
+    const commandReceipt = await commands(
+      client,
+      directory,
+      (_id, _operation, _path, options) => {
+        writes.push(options?.body);
+      },
+    ).command({
       sessionID: "opcv1-session",
       command: "probe",
       arguments: "args",
       parts: parts.filter((part) => part.kind === "file"),
     });
     assertEquals(writes[1], {
+      messageID: commandReceipt.state !== "unconfirmed"
+        ? commandReceipt.messageID
+        : undefined,
       command: "probe",
       arguments: "args",
       agent: undefined,
