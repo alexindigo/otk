@@ -357,6 +357,8 @@ async function nativeFixture(
   settings.auth.type = "none";
   settings.server.port = 0;
   settings.state.path = join(root, "state");
+  // The fake owns V1 HTTP, events and SQL regardless of ambient discovery.
+  settings.harness.type = "opencode-v1";
   settings.harness.url = `http://127.0.0.1:${server.addr.port}`;
   settings.harness.db = sql ? file : join(root, "absent.db");
   settings.digest = {
