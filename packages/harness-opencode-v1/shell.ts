@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeModel } from "./selection.ts";
 import { HarnessError, type ShellCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
@@ -45,14 +46,7 @@ export function shell(
           body: {
             command: input.command,
             agent,
-            ...(input.model
-              ? {
-                model: {
-                  providerID: input.model.provider,
-                  modelID: input.model.model,
-                },
-              }
-              : {}),
+            ...(input.model ? { model: nativeModel(input.model) } : {}),
           },
         },
       );

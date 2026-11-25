@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeCommandModel, nativeVariant } from "./selection.ts";
 import { type CommandsCapability, HarnessError } from "@otk/harness";
 import type { AttachmentPolicy, CommandOption } from "@otk/protocol";
 import type { Client } from "./client.ts";
@@ -72,10 +73,8 @@ export function commands(
             command: input.skill?.name ?? input.command,
             arguments: input.arguments,
             agent: input.agent,
-            variant: input.variant,
-            model: input.model
-              ? `${input.model.provider}/${input.model.model}`
-              : undefined,
+            variant: nativeVariant(input.variant),
+            model: input.model ? nativeCommandModel(input.model) : undefined,
             parts: await mapPromptParts(
               input.parts || [],
               dir,
