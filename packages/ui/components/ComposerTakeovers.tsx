@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { composerLinkState } from "@otk/client";
+import { composerLinkState, taskHelpers } from "@otk/client";
 import "./ComposerTakeovers.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
@@ -15,6 +15,7 @@ import { sessionSelectionControl } from "./session-open.ts";
 import ChromeMeta from "./ChromeMeta.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
+import { POPOVER_BOUNDS } from "./surface/Popover.tsx";
 export default function ComposerTakeovers(
   props: {
     children?: (active: () => boolean) => Element;
@@ -34,11 +35,11 @@ export default function ComposerTakeovers(
     session.entry(id)?.title ?? "Session unavailable";
   const trail = () => session.trail?.();
   const entities = () => session.entities?.();
-  const task = createMemo(() => {
+  const helpers = createMemo(() => {
     const store = entities(), key = trail()?.task;
-    return key && !store?.isStale ? store?.get(key) : undefined;
+    return store && taskHelpers(store, key);
   });
-  const link = createMemo(() => composerLinkState(task(), shells().length));
+  const link = createMemo(() => composerLinkState(helpers(), shells().length));
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -62,43 +63,45 @@ export default function ComposerTakeovers(
         >
           <div class="otk-composer-activity-slot">
             <div class="otk-composer-activity" aria-label="Message destination">
-              <span
-                class="otk-composer-target"
-                title={[target().task, target().session].filter(Boolean).join(
-                  ": ",
-                )}
-              >
-                <Show when={target().task}>
-                  {(task) => (
-                    <>
-                      <ChromeMeta class="otk-composer-task otk-control-label">
-                        {task()}
-                      </ChromeMeta>
-                      <ChevronIcon class="otk-composer-chevron" />
-                    </>
+              <div class={`otk-composer-activity-line ${POPOVER_BOUNDS}`}>
+                <span
+                  class="otk-composer-target"
+                  title={[target().task, target().session].filter(Boolean).join(
+                    ": ",
                   )}
-                </Show>
-                <ChromeMeta class="otk-composer-destination otk-control-label">
-                  {target().session}
-                </ChromeMeta>
-              </span>
-              <LiveLink state={link()} />
-              <span class="otk-composer-live-slot">
-                <Subagents
-                  helpers={task()?.helpers}
-                  taskKey={trail()?.task}
-                  current={session.sessionID()}
-                  entities={entities()}
-                  owner={session.liveWork}
-                  title={title}
-                  openAction={(id) =>
-                    sessionSelectionControl(commands, {
-                      sidecarId: session.failureTarget?.().sidecarId ?? "",
-                      sessionID: id,
-                    }, title(id))}
-                />
-                <LiveWork shells={shells()} />
-              </span>
+                >
+                  <Show when={target().task}>
+                    {(task) => (
+                      <>
+                        <ChromeMeta class="otk-composer-task otk-control-label">
+                          {task()}
+                        </ChromeMeta>
+                        <ChevronIcon class="otk-composer-chevron" />
+                      </>
+                    )}
+                  </Show>
+                  <ChromeMeta class="otk-composer-destination otk-control-label">
+                    {target().session}
+                  </ChromeMeta>
+                </span>
+                <LiveLink state={link()} />
+                <span class="otk-composer-live-slot">
+                  <Subagents
+                    helpers={helpers()}
+                    current={session.sessionID()}
+                    entities={entities()}
+                    owner={session.liveWork}
+                    title={title}
+                    agent={(id) => session.entry(id)?.agent}
+                    openAction={(id) =>
+                      sessionSelectionControl(commands, {
+                        sidecarId: session.failureTarget?.().sidecarId ?? "",
+                        sessionID: id,
+                      }, title(id))}
+                  />
+                  <LiveWork shells={shells()} />
+                </span>
+              </div>
             </div>
           </div>
           <ScrollRegion

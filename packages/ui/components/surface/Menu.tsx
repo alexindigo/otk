@@ -11,6 +11,7 @@ export default function Menu(props: {
   triggerLabel?: string;
   title?: string;
   size?: "content" | "fit";
+  place?: "bounds-end";
   trigger?: Element;
   triggerClass?: string;
   class?: string;
@@ -56,6 +57,7 @@ export default function Menu(props: {
       trigger={props.trigger}
       triggerClass={props.triggerClass}
       size={props.size ?? "content"}
+      place={props.place}
       density="menu"
       class={`otk-menu ${props.class ?? ""}`}
       dismissOnAction={props.dismissOnAction ?? true}

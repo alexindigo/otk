@@ -48,7 +48,7 @@ export default function EntityPill(props: {
       label={`${props.label} details`}
       triggerLabel={`${props.label} details`}
       class="otk-entity"
-      triggerClass="otk-entity-pill"
+      triggerClass="otk-entity-pill otk-pill-surface"
       trigger={<span class="otk-control-label">{props.label}</span>}
       title={props.label}
       size="content"

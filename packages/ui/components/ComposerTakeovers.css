@@ -49,19 +49,22 @@
   border-color: var(--otk-action-focus);
 }
 .otk-composer-activity {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
   inline-size: 100%;
   max-inline-size: var(--lane-width);
-  min-block-size: var(--control-size);
   margin-inline: auto;
   box-sizing: border-box;
   border-inline: var(--composer-frame-stroke) solid transparent;
   padding-inline: var(--composer-content-inset);
   padding-block-end: var(--space-2);
   flex: none;
+}
+.otk-composer-activity-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: calc(var(--control-size) + var(--space-2));
 }
 .otk-composer-target {
   flex: 0 1 auto;
@@ -99,9 +102,6 @@
   container: composer-activity / inline-size;
   flex: none;
 }
-.otk-composer-activity {
-  min-block-size: calc(var(--control-size) + var(--space-2));
-}
 /* These are container widths in metadata ems: keep vocabulary at ordinary
    widths, compact numbers before retiring decoration, then let flex decide
    whether the information needs a second line. */
@@ -120,6 +120,8 @@
 @container composer-activity (inline-size < 16em) {
   .otk-composer-activity {
     --live-link-display: none;
+  }
+  .otk-composer-activity-line {
     flex-wrap: wrap;
     row-gap: var(--space-1);
   }

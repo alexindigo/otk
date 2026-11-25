@@ -2,7 +2,12 @@
 import { assertEquals } from "@std/assert";
 import { createLiveWork } from "../live-work.ts";
 import * as work from "../live-work.ts";
-import { createEntityStateStore } from "../entity-state.ts";
+import {
+  createEntityStateStore,
+  lamp,
+  presentedEntity,
+  taskHelpers,
+} from "../entity-state.ts";
 import type { EntityState, HelperDisposition } from "@otk/protocol";
 
 const helpers = {
@@ -63,21 +68,30 @@ Deno.test("live-work helper counts omit zero and agree with their verbs", () => 
 });
 
 Deno.test("composer link is absent without either pill", () => {
-  assertEquals(
-    work.composerLinkState({ counts: { ...counts, working: 1 } }, 0),
-    "none",
-  );
+  assertEquals(work.composerLinkState(undefined, 0), "none");
 });
 
 Deno.test("composer link is idle with an undelivered helper and no shells", () => {
-  assertEquals(work.composerLinkState({ counts, helpers }, 0), "idle");
+  const store = createEntityStateStore({
+    read: () => ({
+      "task:root": { ...presentedEntity("task", "root", "working"), helpers },
+      "session:root": presentedEntity("session", "root", "working"),
+      "session:helper": presentedEntity("session", "helper", "finished"),
+    }),
+  });
+  const roster = taskHelpers(store, "task:root");
+  assertEquals(
+    lamp(store, roster!.ids.map((id) => `session:${id}`)),
+    "finished",
+  );
+  assertEquals(work.composerLinkState(roster, 0), "idle");
 });
 
-Deno.test("composer link reads the task's working count, not its winning lamp", () => {
+Deno.test("composer link runs when one helper works and another is blocked", () => {
   assertEquals(
     work.composerLinkState({
-      counts: { ...counts, blocked: 1, working: 1 },
-      helpers,
+      ids: ["working", "blocked"],
+      counts: { running: 1, needsYou: 1, notReturned: 0 },
     }, 0),
     "running",
   );
@@ -92,7 +106,7 @@ Deno.test("composer link ignores stale task evidence", () => {
   store.stale(true);
   assertEquals(
     work.composerLinkState(
-      store.isStale ? undefined : store.get("task:session/root"),
+      taskHelpers(store, "task:session/root"),
       0,
     ),
     "none",

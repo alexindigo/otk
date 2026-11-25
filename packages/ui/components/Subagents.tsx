@@ -25,12 +25,15 @@ import {
   type TaskHelpers,
 } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import { scopedEntityFacts } from "../entity-facts.ts";
+import { useOptionalSessionPorts } from "../registries/session.tsx";
 import ActionButton from "./ActionButton.tsx";
 import StatusLight from "./StatusLight.tsx";
-import LiveCount from "./LiveCount.tsx";
+import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import { StopIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import EntityPill from "./EntityPill.tsx";
 import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import Menu from "./surface/Menu.tsx";
@@ -42,14 +45,15 @@ import "./Subagents.css" with { type: "text" };
 export default function Subagents(
   props: {
     helpers?: TaskHelpers;
-    taskKey?: string;
     current: string;
     entities?: EntityStateStore;
     title(id: string): string;
+    agent(id: string): string | undefined;
     openAction(id: string): ActionControl;
     owner?: LiveWorkOwner;
   },
 ) {
+  const session = useOptionalSessionPorts();
   const helpers = () => props.helpers;
   const entities = () => props.entities;
   const grouped = createMemo(() => {
@@ -118,7 +122,8 @@ export default function Subagents(
       {(publication) => (
         <Menu
           class="otk-subagents"
-          triggerClass="otk-subagents-trigger"
+          place="bounds-end"
+          triggerClass={`${LIVE_COUNT_TRIGGER} otk-subagents-trigger`}
           label="Subagents"
           title="Subagents"
           triggerLabel={`Subagents: ${
@@ -136,14 +141,12 @@ export default function Subagents(
           trigger={
             <LiveCount
               entities={entities()}
-              lampKey={props.taskKey}
+              lampKey={publication().ids.map((id) => entityKey("session", id))}
               label={helperCountsLabel(publication().counts)}
               compact={grouped().map((group) => ({
                 id: group.kind,
                 count: group.count,
-                lampKey: group.ids[0]
-                  ? entityKey("session", group.ids[0])
-                  : undefined,
+                lampKey: group.ids.map((id) => entityKey("session", id)),
               }))}
             />
           }
@@ -201,6 +204,18 @@ export default function Subagents(
                                 </span>
                               </SelectionContent>
                             </ActionButton>
+                          </div>
+                          <div class="otk-subagent-agent">
+                            <Show when={props.agent(id)}>
+                              {(agent) => (
+                                <EntityPill
+                                  label={agent()}
+                                  facts={scopedEntityFacts(session, {
+                                    sessionID: id,
+                                  })}
+                                />
+                              )}
+                            </Show>
                           </div>
                           <ChromeMeta
                             class="otk-subagent-time"

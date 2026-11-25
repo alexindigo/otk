@@ -7,7 +7,7 @@ import type {
   SessionEvidence,
   TaskHelpers,
 } from "@otk/protocol";
-import { entityKey } from "@otk/protocol";
+import { entityKey, rollupStatus } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
 export interface EntityTransition {
@@ -155,8 +155,22 @@ export function presentedEntity(
   };
 }
 
-/** Lamp and aggregate state are the same published verdict. */
-export const lamp = entityState;
+/** Read a published lamp, or roll up the published states of an explicit roster. */
+export function lamp(
+  store: EntityStateStore | undefined,
+  key: string | readonly string[] | undefined,
+): ProjectStatus {
+  if (key === undefined || typeof key === "string") {
+    return entityState(store, key);
+  }
+  if (!store || store.isStale) return "none";
+  let state: ProjectStatus = "none";
+  for (const member of key) {
+    state = rollupStatus(state, store.get(member)?.state);
+    if (state === "blocked") break;
+  }
+  return state;
+}
 
 export function permissionVisible(
   store: EntityStateStore,
@@ -180,6 +194,7 @@ export function taskHelpers(
 ): TaskHelpers | undefined {
   return store.isStale || !key ? undefined : store.get(key)?.helpers;
 }
+
 export function helperDisposition(
   store: EntityStateStore,
   key: string,

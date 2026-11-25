@@ -13,7 +13,7 @@ import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
-import LiveCount from "./LiveCount.tsx";
+import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import Popover from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
@@ -35,11 +35,12 @@ export default function LiveWork(props: { shells: readonly RunningWork[] }) {
     <Show when={props.shells.length}>
       <Popover
         class="otk-live-work"
-        triggerClass="otk-live-work-trigger"
+        triggerClass={`${LIVE_COUNT_TRIGGER} otk-live-work-trigger`}
         label="Running shells"
         triggerLabel={`Running work: ${runningWorkLabel(props.shells)}`}
         title="Running shells"
         size="content"
+        place="bounds-end"
         onOpen={() => {
           stop();
           setNow(Date.now());

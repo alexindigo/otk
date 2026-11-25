@@ -42,6 +42,33 @@ const activeAnimation = [{
 }];
 
 test(
+  "composer.finished-helper-does-not-inherit-the-running-main-lamp",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const task = await state.product("tasks.create", {
+      directory: state.directory,
+      name: taskName,
+      sessions: [root],
+    });
+    await openSession(state, page, root);
+    await activity(state, root, "hold");
+    await activity(state, child, "hold");
+    await activity(state, child, "release");
+    const pill = helpers(page),
+      lamp = pill.locator(".otk-status-light:visible");
+    await expect(pill).toHaveAccessibleName("Subagents: 1 not returned");
+    await expect(page.locator(`[data-tab="${task.id}"] .otk-status-light`))
+      .toHaveAttribute("data-state", "working");
+    await expect.soft(lamp).toHaveAttribute(
+      "data-state",
+      /^(?:none|finished)$/,
+    );
+    await expect.soft(link(page)).toHaveAttribute("data-state", "idle");
+    await expect.poll(() => animations(page)).toEqual([]);
+  },
+);
+
+test(
   "composer.header-row-gaps-and-centerline-borrow-tokens-in-all-themes",
   tags,
   async ({ isolatedState: state, page }, info) => {
