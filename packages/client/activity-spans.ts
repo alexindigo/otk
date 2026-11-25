@@ -139,6 +139,15 @@ export function createRecordProjection(): {
     },
     reconcile(ids, replies) {
       const next = empty();
+      // The projection owns one keyspace for conversation rows and intervals.
+      const occupied = new Set(ids);
+      const allocate = (id: string, assigned?: string) => {
+        const base = `activity:${id}`;
+        let key = assigned && !occupied.has(assigned) ? assigned : base;
+        for (let n = 1; occupied.has(key); n++) key = `${base}:${n}`;
+        occupied.add(key);
+        return key;
+      };
       let interval: ActivityGroup | undefined, conversation: string | undefined;
       let contextEnd = 0, contextHasContent = false;
       for (let index = 0; index < ids.length; index++) {
@@ -176,9 +185,7 @@ export function createRecordProjection(): {
               if (assigned) break;
             }
           }
-          const key = assigned && !next.groups[assigned]
-            ? assigned
-            : `activity:${id}`;
+          const key = allocate(id, assigned);
           interval = next.groups[key] = {
             key,
             members: [],

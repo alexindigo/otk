@@ -39,6 +39,25 @@ function group(messages: Message[]) {
   );
 }
 
+Deno.test("prepending and splitting an activity interval never reuse its live key", () => {
+  const projection = createTranscriptProjection();
+  const left = record("r1"), right = record("r3");
+  projection.replace([right]);
+  const [key] = projection.state.records.keys;
+  projection.replace([left, right]);
+  assertEquals(projection.state.records.keys, [key]);
+  projection.replace([
+    left,
+    { ...record("r2"), role: "user", parts: [] },
+    right,
+  ]);
+  const value = projection.state.records;
+  assertEquals(value.keys.length, 3);
+  assertEquals(new Set(value.keys).size, 3);
+  assertEquals(value.groups[value.owners.r1].members, ["r1"]);
+  assertEquals(value.groups[value.owners.r3].members, ["r3"]);
+});
+
 Deno.test("activity spans summarize mixed records and preserve every reveal path", () => {
   const value = group([
     record("r1"),
