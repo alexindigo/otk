@@ -75,6 +75,19 @@ export default function Toasts(
       aria-label="Notifications"
       aria-live="polite"
     >
+      <Show when={items().length > limit}>
+        <button
+          type="button"
+          class="otk-toasts-more"
+          onClick={() => {
+            setOffset(
+              offset() + limit >= items().length ? 0 : offset() + limit,
+            );
+          }}
+        >
+          {overflow()}
+        </button>
+      </Show>
       <For
         each={items().slice(offset(), offset() + limit)}
         keyed={(item) => item.note.id}
@@ -249,19 +262,6 @@ export default function Toasts(
           );
         }}
       </For>
-      <Show when={items().length > limit}>
-        <button
-          type="button"
-          class="otk-toasts-more"
-          onClick={() => {
-            setOffset(
-              offset() + limit >= items().length ? 0 : offset() + limit,
-            );
-          }}
-        >
-          {overflow()}
-        </button>
-      </Show>
     </section>
   );
 }

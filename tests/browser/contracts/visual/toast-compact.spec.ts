@@ -3,6 +3,8 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
+import { prompt } from "../../pages/composer.ts";
+import { cssLength } from "../../pages/css-length.ts";
 import { focusNotifications, toast } from "../../pages/notifications.ts";
 import { auditUiRules } from "../../pages/ui-rules.ts";
 
@@ -41,6 +43,36 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   });
   const permission = page.locator(toast(c.id));
   await expect(permission).toContainText("Permission needed");
+  const cards = page.locator(".otk-toast");
+  const stage = page.locator(".otk-transcript-stage");
+  const dock = page.locator(".otk-composer-dock");
+  const assertBottom = async (key: string, count: number) => {
+    await expect(cards).toHaveCount(count);
+    const gutter = await cssLength(stage, "--overlay-gutter");
+    const geometry = await stage.evaluate((element) => {
+      const box = (el: Element) => el.getBoundingClientRect();
+      const stack = element.querySelector(".otk-toasts")!;
+      return {
+        stage: box(element).bottom,
+        dock: box(element.parentElement!.querySelector(".otk-composer-dock")!)
+          .top,
+        transcript: box(element.querySelector('[aria-label="Transcript"]')!)
+          .bottom,
+        toast: box(Array.from(stack.querySelectorAll(".otk-toast")).at(-1)!)
+          .bottom,
+        stack: box(stack).toJSON(),
+        parent: box(stack.parentElement!).toJSON(),
+      };
+    });
+    const label = `${key}: ${JSON.stringify({ ...geometry, gutter })}`;
+    expect.soft(Math.abs(geometry.stage - geometry.dock), label)
+      .toBeLessThanOrEqual(0.5);
+    expect.soft(Math.abs(geometry.stage - geometry.transcript), label)
+      .toBeLessThanOrEqual(0.5);
+    expect.soft(Math.abs(geometry.stage - gutter - geometry.toast), label)
+      .toBeLessThanOrEqual(0.5);
+  };
+  await assertBottom("one toast", 1);
   frames.fault({
     t: "error",
     code: "fixture",
@@ -58,11 +90,9 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   const done = page.locator(toast(b.id));
   await expect(done).toContainText("Session done");
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
-  const cards = page.locator(".otk-toast");
   await expect(cards).toHaveCount(3);
   const assertAboveDock = async (key: string) => {
     await expect(cards).toHaveCount(3);
-    const dock = page.locator(".otk-composer-dock");
     await expect(dock).toBeVisible();
     const dockBox = (await dock.boundingBox())!;
     for (const [index, card] of (await cards.all()).entries()) {
@@ -140,10 +170,28 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
       ).toBe(scale);
       const key = `toast-compact-${theme}-${textSize}`;
       await assertAboveDock(key);
+      await assertBottom(key, 3);
       await page.screenshot({
         path: info.outputPath(`${key}.png`),
         fullPage: true,
       });
+      if (textSize === "125") {
+        const empty = (await dock.boundingBox())!.height;
+        await prompt(page).fill(
+          "First line\nSecond line\nThird line\nFourth line",
+        );
+        await expect.poll(async () => (await dock.boundingBox())!.height)
+          .toBeGreaterThan(empty);
+        await assertBottom(`${key} with a multiline draft`, 3);
+        await page.screenshot({
+          path: info.outputPath(`${key}-grown.png`),
+          fullPage: true,
+        });
+        await prompt(page).fill("");
+        await expect.poll(async () => (await dock.boundingBox())!.height).toBe(
+          empty,
+        );
+      }
       expect((await done.boundingBox())!.height).toBeLessThanOrEqual(
         54 * scale + 1,
       );
@@ -225,6 +273,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
         page.evaluate(() => [innerWidth, innerHeight, devicePixelRatio])
       ).toEqual([1000 / zoom, 900 / zoom, zoom]);
       await assertAboveDock(`browser zoom ${zoom * 100}%`);
+      await assertBottom(`browser zoom ${zoom * 100}%`, 3);
     }
   } finally {
     await cdp.send("Emulation.clearDeviceMetricsOverride");
