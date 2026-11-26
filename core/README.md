@@ -33,6 +33,12 @@ to retained presentation leaves.
 
 ## Session hierarchy
 
+EntityStates owns the task's helper roster and resolves the Finished selection
+for `sessions.acknowledge`. Subtree acknowledgement uses the same published
+session terminals and full hierarchy across checkouts. Both bulk acknowledgement
+and `sessions.seen` use the per-user `Seen` watermark; neither settles live
+inputs. A later terminal is still unseen until acknowledged in its own right.
+
 `IndexStore.hierarchy` is the single `SessionHierarchy` owner. It retains only
 demanded structural identities, not digests or transcripts. Native family
 identity survives checkout moves; ancestry is explicitly complete, unresolved or

@@ -76,7 +76,7 @@ test(
     await crumb(root).click();
     await expect(crumb(nested)).toHaveCount(0);
     await inventory.click();
-    await visibleOnScreen(agent(nested));
+    await expect(agent(nested)).toHaveCount(0);
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "release",
@@ -87,14 +87,8 @@ test(
     await visibleOnScreen(agent(helper));
     await activity(state, helper, "release");
     await visibleOnScreen(agent(helper));
-    await viewByUrl(state, page, helper);
-    await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
-      "data-state",
-      "none",
-    );
-    await crumb(root).click();
-    await inventory.click();
-    await visibleOnScreen(agent(helper));
+    await expect(agent(helper).locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "finished");
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "release",
@@ -103,5 +97,8 @@ test(
     });
     await expect(agent(helper)).toHaveCount(0);
     await expect(inventory).toHaveCount(0);
+    await viewByUrl(state, page, helper);
+    await expect(crumb(helper).locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "none");
   },
 );

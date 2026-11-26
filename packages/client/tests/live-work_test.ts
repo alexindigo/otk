@@ -17,13 +17,13 @@ import type {
 
 const helpers: TaskHelpers = {
   ids: ["helper"],
-  counts: { running: 0, needsYou: 0, notReturned: 1 },
+  counts: { running: 0, needsYou: 0, finished: 1 },
   lamps: {
     all: { state: "finished" },
     groups: {
       running: { state: "none" },
       needsYou: { state: "none" },
-      notReturned: { state: "finished" },
+      finished: { state: "finished" },
     },
   },
 };
@@ -53,7 +53,7 @@ Deno.test("helper clock selects one timestamp for the published disposition", ()
   const now = 240_000;
   assertEquals(work.helperClock(entity("running"), now)?.time.text, "1m");
   assertEquals(
-    work.helperClock(entity("notReturned"), now)?.time.spoken,
+    work.helperClock(entity("finished"), now)?.time.spoken,
     "2 minutes ago",
   );
   assertEquals(
@@ -65,17 +65,16 @@ Deno.test("helper clock selects one timestamp for the published disposition", ()
 
 Deno.test("live-work helper counts omit zero and agree with their verbs", () => {
   assertEquals(
-    work.helperCountsLabel({ running: 4, needsYou: 3, notReturned: 221 }),
-    "4 running · 3 need you · 221 not returned",
+    work.helperCountsLabel({ running: 4, needsYou: 3, finished: 221 }),
+    "3 need you, 4 running, 221 finished",
   );
-  const blocked = { running: 0, needsYou: 1, notReturned: 2 };
-  assertEquals(work.helperCountsLabel(blocked), "1 needs you · 2 not returned");
+  const blocked = { running: 0, needsYou: 1, finished: 2 };
   assertEquals(
-    work.helperCountsLabel(blocked, "spoken"),
-    "1 needs you, 2 not returned",
+    work.helperCountsLabel(blocked),
+    "1 needs you, 2 finished",
   );
   assertEquals(
-    work.helperCountsLabel({ running: 0, needsYou: 0, notReturned: 0 }),
+    work.helperCountsLabel({ running: 0, needsYou: 0, finished: 0 }),
     "",
   );
 });

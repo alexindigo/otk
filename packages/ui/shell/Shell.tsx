@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { copyText } from "../clipboard.ts";
-import { createModelRecency, requireCommittedSend } from "@otk/client";
+import {
+  attentionCount,
+  createModelRecency,
+  requireCommittedSend,
+} from "@otk/client";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
@@ -407,6 +411,16 @@ export default function Shell(
     rename,
     working: actions.working,
     helpers: (target) => Math.max(0, actions.familyEntries(target).length - 1),
+    attention: (target) =>
+      attentionCount(
+        inbox(target.sidecarId).entities,
+        entityKey("session", target.sessionID),
+      ),
+    clearAttention: (target) =>
+      inbox(target.sidecarId).clearAttention({
+        scope: "subtree",
+        sessionID: target.sessionID,
+      }),
     remove: navigation.remove,
     current: () => {
       const target = session.state.selection, value = info();

@@ -104,6 +104,11 @@ export function sessionPorts(o: {
     shells: () => sessionShells(entities(), sessionKey),
     trail: () => o.tabs?.()?.trail(),
     stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
+    clearFinished: (task) =>
+      resources.inbox(target.sidecarId).clearAttention({
+        scope: "helpers",
+        task,
+      }),
     requests: connection.attention,
     permissions: () => {
       void session.state.content;

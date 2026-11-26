@@ -30,7 +30,7 @@ import { useOptionalSessionPorts } from "../registries/session.tsx";
 import ActionButton from "./ActionButton.tsx";
 import StatusLight from "./StatusLight.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
-import { StopIcon } from "./ChromeIcons.tsx";
+import { CheckAllIcon, StopIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import EntityPill from "./EntityPill.tsx";
@@ -44,6 +44,7 @@ import "./Subagents.css" with { type: "text" };
 /** D67: the composer's single view of the entity owner's D66 helper inventory. */
 export default function Subagents(
   props: {
+    task?: string;
     helpers?: TaskHelpers;
     current: string;
     entities?: EntityStateStore;
@@ -60,7 +61,7 @@ export default function Subagents(
     const byState: Record<HelperDisposition, string[]> = {
       running: [],
       needsYou: [],
-      notReturned: [],
+      finished: [],
     };
     const store = entities();
     if (store) {
@@ -92,6 +93,31 @@ export default function Subagents(
     return props.owner?.stopping(workID(id));
   };
   const ports = useCommandPorts();
+  const clearCommand = `subagents.clearFinished@${createUniqueId()}`;
+  const task = () => props.task ? entities()?.get(props.task)?.id : undefined;
+  const canClear = () =>
+    !!task() && !!session?.clearFinished &&
+    (helpers()?.counts.finished ?? 0) > 0;
+  ownedCommand(ports, {
+    id: clearCommand,
+    title: "Clear finished subagents",
+    category: "Session",
+    scope: "control",
+    availability: () =>
+      canClear() ? { available: true } : {
+        available: false,
+        hidden: true,
+        reason: "No finished subagents",
+      },
+    run: () => session?.clearFinished?.(task()!),
+  });
+  const clear = ports.commands.control(clearCommand, undefined, {
+    target: { label: "Finished subagents" },
+    // The port resolves only when the published change is observed.
+    shown: () => true,
+    unshown: "The finished subagents are still listed.",
+    recovery: "Try again; if it keeps failing, reload OTK",
+  });
   const stopCommand = `subagents.stop@${createUniqueId()}`;
   ownedCommand(ports, {
     id: stopCommand,
@@ -117,6 +143,21 @@ export default function Subagents(
         "Check the subagent and try stopping it again if it is still running",
     });
   let menu: PopoverControl | undefined;
+  onCleanup(() => menu?.close());
+  const clearTitle = (bind: (button: HTMLElement) => void) => (
+    <ActionButton
+      ref={bind}
+      class="otk-subagents-clear"
+      action={clear}
+      pendingLabel="Clearing..."
+      onShown={() => {
+        if (!helpers()?.ids.length) menu?.close();
+      }}
+    >
+      <CheckAllIcon />
+      <span class="otk-control-label">Clear finished</span>
+    </ActionButton>
+  );
   return (
     <Show when={helpers()?.ids.length ? helpers() : undefined}>
       {(publication) => (
@@ -126,9 +167,8 @@ export default function Subagents(
           triggerClass={`${LIVE_COUNT_TRIGGER} otk-subagents-trigger`}
           label="Subagents"
           title="Subagents"
-          triggerLabel={`Subagents: ${
-            helperCountsLabel(publication().counts, "spoken")
-          }`}
+          titleAction={canClear() ? clearTitle : undefined}
+          triggerLabel={`Subagents: ${helperCountsLabel(publication().counts)}`}
           size="fit"
           control={(control) => menu = control}
           dismissOnAction={false}
@@ -140,12 +180,10 @@ export default function Subagents(
           onClose={stop}
           trigger={
             <LiveCount
-              lamp={publication().lamps?.all}
-              label={helperCountsLabel(publication().counts)}
-              compact={grouped().map((group) => ({
-                id: group.kind,
-                count: group.count,
-                lamp: publication().lamps?.groups[group.kind],
+              compact={helperCountParts(publication().counts).map((part) => ({
+                id: part.kind,
+                count: part.count,
+                lamp: publication().lamps?.groups[part.kind],
               }))}
             />
           }
@@ -160,6 +198,10 @@ export default function Subagents(
                 >
                   <div class="otk-subagent-heading">
                     <ChromeMeta id={`${headingID}-${group().kind}`}>
+                      <StatusLight
+                        small
+                        state={lamp(publication().lamps?.groups[group().kind])}
+                      />
                       {group().title} {group().count}
                     </ChromeMeta>
                   </div>

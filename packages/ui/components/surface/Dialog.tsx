@@ -54,18 +54,16 @@ export default function Dialog(props: {
         layout="dialog"
         fullHeight={props.size === "editor"}
         actions={props.actions}
-        title={
-          <>
-            <h2 class="otk-control-label">{props.title}</h2>
-            <button
-              type="button"
-              class="otk-icon-button"
-              onClick={() => void close()}
-              aria-label={`Close ${props.title}`}
-            >
-              <CloseIcon />
-            </button>
-          </>
+        title={<h2 class="otk-control-label">{props.title}</h2>}
+        titleAction={
+          <button
+            type="button"
+            class="otk-icon-button"
+            onClick={() => void close()}
+            aria-label={`Close ${props.title}`}
+          >
+            <CloseIcon />
+          </button>
         }
       >
         {props.children}

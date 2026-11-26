@@ -19,7 +19,6 @@ import {
   type TaskHelpers,
 } from "@otk/protocol";
 import {
-  deliveredTerminal,
   failedHelperNeedsAck,
   type SessionInputs,
   type SessionSupervision,
@@ -844,7 +843,7 @@ export class EntityStates {
     const groups: Record<HelperDisposition, EntityState[]> = {
       running: [],
       needsYou: [],
-      notReturned: [],
+      finished: [],
     };
     for (const id of members) {
       const state = this.#states.get(entityKey("session", id));
@@ -857,30 +856,26 @@ export class EntityStates {
       (this.family.getMetadata(a.id)?.timeCreated ?? Infinity) -
         (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
       a.id.localeCompare(b.id);
-    const { running, needsYou, notReturned } = groups;
-    const lampOf = (group: EntityState[]) => ({
-      state: group.reduce<ProjectStatus>(
-        (state, item) => rollupStatus(state, item.state),
-        "none",
-      ),
-    });
-    const lamps = {
-      running: lampOf(running),
-      needsYou: lampOf(needsYou),
-      notReturned: lampOf(notReturned),
+    const { running, needsYou, finished } = groups;
+    // Group lamps describe the counted disposition, not the member's own
+    // session lamp (an unseen failure may still have a red session lamp).
+    const lamps: NonNullable<TaskHelpers["lamps"]>["groups"] = {
+      running: { state: running.length ? "working" : "none" },
+      needsYou: { state: needsYou.length ? "blocked" : "none" },
+      finished: { state: finished.length ? "finished" : "none" },
     };
     return {
       counts: {
         running: running.length,
         needsYou: needsYou.length,
-        notReturned: notReturned.length,
+        finished: finished.length,
       },
       lamps: {
         all: {
           state: rollupStatus(
             lamps.running.state,
             lamps.needsYou.state,
-            lamps.notReturned.state,
+            lamps.finished.state,
           ),
         },
         groups: lamps,
@@ -888,11 +883,25 @@ export class EntityStates {
       ids: [
         ...running.sort(active),
         ...needsYou.sort(active),
-        ...notReturned.sort((a, b) =>
+        ...finished.sort((a, b) =>
           (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
         ),
       ].map((value) => value.id),
     };
+  }
+  /** Undefined means the task is unknown; an empty roster is a valid no-op. */
+  finishedHelpers(task: string): string[] | undefined {
+    const value = this.get(entityKey("task", task));
+    return value &&
+      (value.helpers?.ids ?? []).filter((id) =>
+        this.get(entityKey("session", id))?.evidence?.helper === "finished"
+      );
+  }
+  /** The full family, not the checkout's view of it (D70). */
+  subtree(id: string): string[] {
+    return [...new Set([id, ...this.family.descendants(id)])].filter((id) =>
+      !this.family.getMetadata(id)?.deleted
+    );
   }
   #chain(id: string, upserts: EntityState[]): void {
     this.#refresh(id, upserts);
@@ -1008,19 +1017,20 @@ export class EntityStates {
       ? undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
-    const awaitingDelivery = !!entry.parentID &&
-      verdict.terminal > deliveredTerminal(entry);
+    // Live input and work take priority over a prior unseen run. Roster
+    // membership is independent of lamp policy and permission animation.
+    const work = inputs.work || operation === "working";
     const helper = !entry.parentID
       ? undefined
-      : state === "working"
-      ? "running"
-      : state === "blocked" && cause !== "failedHelper"
+      : inputs.questions > 0 || inputs.permissions > 0 ||
+          operation === "blocked"
       ? "needsYou"
-      : awaitingDelivery
-      ? "notReturned"
+      : work
+      ? "running"
+      : verdict.unseen
+      ? "finished"
       : undefined;
     const evidence: SessionEvidence = {
-      awaitingDelivery,
       ...(helper ? { helper } : {}),
       ...(helper === "needsYou"
         ? { waitingSince: before?.evidence?.waitingSince ?? Date.now() }
@@ -1034,7 +1044,7 @@ export class EntityStates {
         },
       }),
       // A received operation in progress is work on its target session.
-      work: inputs.work || operation === "working",
+      work,
       // Some harnesses publish execution keys without detailed items. Only
       // identities accounted for by the shell roster are excluded.
       ...(inputs.work && (activity?.work?.keys.length ?? 0) > shells.length

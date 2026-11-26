@@ -85,6 +85,7 @@ export default function ComposerTakeovers(
                 <LiveLink state={link()} />
                 <span class="otk-composer-live-slot">
                   <Subagents
+                    task={trail()?.task}
                     helpers={helpers()}
                     current={session.sessionID()}
                     entities={entities()}
