@@ -158,7 +158,7 @@ export function createTerminalPanel(
       state.preparing = "";
     });
     display();
-    pane.renderer.focus();
+    if (box?.runs.pending?.terminalID !== id) pane.renderer.focus();
     drain();
   };
   const select = (id: string) => {
@@ -234,15 +234,40 @@ export function createTerminalPanel(
     });
     return creating;
   };
+  const pendingRun = () => box?.runs.pending;
+  const runReady = () => {
+    const id = pendingRun()?.terminalID;
+    return !!id && !!box?.runs.ready(id) &&
+      !terminals.state.disconnected.includes(id);
+  };
+  const focus = () => {
+    if (alive) panes.get(terminals.state.selected ?? "")?.renderer?.focus();
+  };
+  const actOnPending = (act: "confirm" | "cancel") => {
+    const id = pendingRun()?.terminalID;
+    if (!alive || !box || !id || !runReady()) return;
+    if (terminals.state.selected !== id) select(id);
+    if (pendingRun()?.terminalID !== id || !runReady()) return;
+    try {
+      if (box.runs[act]()) focus();
+    } catch (cause) {
+      fail(
+        cause,
+        act === "confirm" ? TERMINAL_RUN_LABEL : "Cancel pasted command",
+      );
+    }
+  };
   return {
     terminals,
     state: store.state,
     title,
     select,
     create,
-    focus() {
-      if (alive) panes.get(terminals.state.selected ?? "")?.renderer?.focus();
-    },
+    focus,
+    pendingRun,
+    runReady,
+    confirmRun: () => actOnPending("confirm"),
+    cancelRun: () => actOnPending("cancel"),
     failure: (cause: unknown) => fail(cause, "Opening terminal"),
     selectedIndex: () =>
       terminals.state.list.findIndex((item) =>
