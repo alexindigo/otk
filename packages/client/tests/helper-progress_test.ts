@@ -145,17 +145,17 @@ Deno.test("entity work retirement publishes final pending state without another 
 Deno.test("helper metadata dependency counts survive partial removal and retire on clear or deletion", () => {
   const projection = createTranscriptProjection(),
     ids = new Set(["tstv1-child"]);
-  projection.replace([linked()]);
+  projection.reset([linked()]);
   assertEquals(projection.usesMetadata(ids), true);
   projection.apply({ op: "part.remove", messageID: "a", partID: "one" });
   assertEquals(projection.usesMetadata(ids), true);
   projection.apply({ op: "part.remove", messageID: "a", partID: "two" });
   assertEquals(projection.usesMetadata(ids), false);
-  projection.replace([linked()]);
+  projection.reset([linked()]);
   projection.apply({ op: "message.remove", messageID: "a" });
   assertEquals(projection.usesMetadata(ids), false);
-  projection.replace([linked()]);
-  projection.clear();
+  projection.reset([linked()]);
+  projection.reset([]);
   assertEquals(projection.usesMetadata(ids), false);
 });
 
@@ -259,7 +259,7 @@ Deno.test("borrowed helper digests patch keyed parts, deduplicate content delive
       },
     }],
   };
-  projection.replace([message]);
+  projection.reset([message]);
   const summary: HelperSummary = {
     state: "ready",
     revision: 1,
@@ -297,6 +297,6 @@ Deno.test("borrowed helper digests patch keyed parts, deduplicate content delive
     return summary;
   });
   assertEquals(reads, 0);
-  projection.clear();
+  projection.reset([]);
   assertEquals(projection.state.messageIDs, []);
 });

@@ -6,7 +6,7 @@ export function queuedMessages(
   busy: boolean,
 ): Set<string> {
   const projection = createTranscriptProjection();
-  projection.replace(messages);
+  projection.reset(messages);
   projection.busy(busy);
   return projection.state.queuedIDs;
 }

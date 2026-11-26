@@ -574,7 +574,7 @@ Deno.test("V2 all native message kinds are context or controls, never fake real 
   });
   assertEquals(mapped.length, rows.length);
   const projection = createTranscriptProjection();
-  projection.replace(mapped);
+  projection.reset(mapped);
   projection.busy(true);
   assertEquals([...projection.state.queuedIDs], []);
   assertEquals(
@@ -612,7 +612,7 @@ Deno.test("V2 real-user anchors and selection follow seq, not copied clocks or f
   assertEquals(facts.contexts.msg_fork_14.replyTo, "msg_fork_13");
   assertEquals(facts.metadata.prompt?.agent, "plan");
   const projection = createTranscriptProjection();
-  projection.replace(
+  projection.reset(
     [...rows].reverse().flatMap((r) => {
       const m = mapMessage(r, id, facts.contexts[r.id]);
       return m ? [m] : [];
@@ -779,7 +779,7 @@ for (const kind of ["text", "reasoning"] as const) {
     });
     t.subscriptions(id, 1);
     try {
-      projection.replace((await t.page(id)).items);
+      projection.reset((await t.page(id)).items);
       await t.event({
         type: "session.step.started",
         created: 3,
@@ -1089,7 +1089,7 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
   });
   t.subscriptions(id, 1);
   try {
-    projection.replace((await t.page(id)).items);
+    projection.reset((await t.page(id)).items);
     block = true;
     const reading = t.page(id);
     await entered.promise;
@@ -1112,7 +1112,7 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
       ),
       false,
     );
-    projection.replace(page.items);
+    projection.reset(page.items);
     for (const { event } of page.catchup) projection.apply(event);
     assertEquals(
       projection.messages()[0].parts.some((p) =>

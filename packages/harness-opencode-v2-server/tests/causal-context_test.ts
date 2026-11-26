@@ -175,7 +175,7 @@ Deno.test("V2 causal context: native parent survives scalar fallback in page, li
     );
     const next = await f.value.page(sessionID);
     const projection = createTranscriptProjection();
-    projection.replace(next.items);
+    projection.reset(next.items);
     for (const { event } of next.catchup) projection.apply(event);
     const mapped = projection.messages().find((m) => m.id === finalID);
     assert(mapped?.role === "assistant");
@@ -226,7 +226,7 @@ Deno.test("V2 causal context: captured 102-call final headers cannot split first
     f.gate.resolve();
     const page = await reading;
     const projection = createTranscriptProjection();
-    projection.replace(page.items);
+    projection.reset(page.items);
     for (const { event } of page.catchup) projection.apply(event);
     assertEquals(projection.state.replyIDs, [`reply:${promptID}`]);
     assertEquals(

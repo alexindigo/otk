@@ -185,7 +185,7 @@ export default function SessionView(props: {
   // commands unmount. Keep the compatibility projection valid independently.
   const fallbackProjection = createTranscriptProjection();
   const fallback = createMemo(() => {
-    fallbackProjection.replace(props.messages ?? []);
+    fallbackProjection.reset(props.messages ?? []);
     fallbackProjection.busy(props.busy);
     return fallbackProjection.state;
   });

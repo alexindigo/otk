@@ -805,7 +805,7 @@ export function createTranscript(
         if (!info.parentID || draft.temperature !== "screen") {
           draft.siblings = [];
         }
-        projection.replace([...prefix, ...messages], {
+        projection.reset([...prefix, ...messages], {
           sameSource: exact,
           keepParked: exact && page.older !== null,
         });
@@ -953,7 +953,7 @@ export function createTranscript(
       draft.siblings = [];
       // Window lifetime changes do not turn projected local sends into native
       // input. Replace only the native window; pending entries survive it.
-      projection.replace([]);
+      projection.reset([]);
       draft.content = attach(emptyContent());
       draft.loading = !!selection;
       draft.continuity = selection ? "loading" : "ready";
