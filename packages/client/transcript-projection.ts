@@ -15,6 +15,7 @@ import {
 } from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
 import { retainStreamMessage } from "./stream-last-good.ts";
+import type { CoverageGap } from "./acquired-range.ts";
 import type { SessionRevertState } from "./session-revert.ts";
 import type { PendingSend } from "./pending-send.ts";
 import {
@@ -169,6 +170,7 @@ export interface TranscriptProjection {
   merge(messages: readonly Message[]): void;
   retain(ids: Set<string>): void;
   park(ids: readonly string[]): void;
+  gaps(values: readonly CoverageGap[]): void;
   boundaries(values: readonly ReplyBoundary[]): void;
   boundary(turnID: string): ReplyBoundary | undefined;
   busy(value: boolean): boolean;
@@ -180,6 +182,7 @@ export interface TranscriptProjection {
 }
 export function createTranscriptProjection(): TranscriptProjection {
   const records = createRecordProjection();
+  let recordValue = records.reconcile([], {});
   const state: TranscriptProjectionState = {
     appendRevision: 0,
     messageIDs: [],
@@ -187,7 +190,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     replyIDs: [],
     repliesByID: dictionary<TranscriptReply>(),
     queuedIDs: new Set(),
-    records: records.reconcile([], {}),
+    records: recordValue,
   };
   const parts = new Map<string, Map<string, number>>();
   const witnesses = new Map<string, { epoch: string; revision: number }>();
@@ -243,6 +246,7 @@ export function createTranscriptProjection(): TranscriptProjection {
   let userOrder: string[] = [], unfinishedOrder: string[] = [];
   let busy = false, detached: Message[] | undefined;
   let recordOrder: readonly string[] | undefined, recordsDirty = true;
+  let gaps: readonly CoverageGap[] = [];
   const read = (id: string) => state.messagesByID[id];
   const boundary = () => {
     const id = unfinishedOrder.at(-1);
@@ -480,7 +484,18 @@ export function createTranscriptProjection(): TranscriptProjection {
       send: sends.get(first.id),
       revision: (previous?.revision ?? 0) + 1,
     };
-    state.records = records.update(key, state.repliesByID[key].revision);
+    const updated = records.update(key, state.repliesByID[key].revision);
+    if (updated !== recordValue) {
+      state.records = state.records === recordValue ? updated : {
+        ...updated,
+        keys: state.records.keys,
+        revisions: {
+          ...state.records.revisions,
+          [key]: updated.revisions[key],
+        },
+      };
+      recordValue = updated;
+    }
     if (
       !previous || previous.messageIDs[0] !== ids[0] ||
       changed?.id === ids[0] && reordered
@@ -511,7 +526,37 @@ export function createTranscriptProjection(): TranscriptProjection {
     state.queuedIDs = queued;
     touched.clear();
     if (recordsDirty || recordOrder !== state.replyIDs) {
-      state.records = records.reconcile(state.replyIDs, state.repliesByID);
+      const breaks = new Set<string>();
+      for (const gap of gaps) {
+        const location = locations.get(gap.older);
+        if (location) breaks.add(location.key);
+      }
+      recordValue = records.reconcile(
+        state.replyIDs,
+        state.repliesByID,
+        breaks,
+      );
+      state.records = recordValue;
+      if (breaks.size) {
+        const after = new Map<string, string[]>();
+        const revisions = { ...recordValue.revisions };
+        for (const gap of gaps) {
+          const reply = locations.get(gap.older)?.key;
+          const key = reply && recordValue.owners[reply];
+          if (!key) continue;
+          const keys = after.get(key) ?? [];
+          keys.push(gap.key);
+          after.set(key, keys);
+          revisions[gap.key] = 0;
+        }
+        state.records = {
+          ...recordValue,
+          keys: recordValue.keys.flatMap((
+            key,
+          ) => [key, ...after.get(key) ?? []]),
+          revisions,
+        };
+      }
       recordOrder = state.replyIDs;
       recordsDirty = false;
     }
@@ -735,6 +780,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       state.replyIDs = [];
       state.repliesByID = dictionary<TranscriptReply>();
       state.queuedIDs = new Set();
+      gaps = [];
       recordOrder = undefined;
       recordsDirty = true;
       parts.clear();
@@ -838,6 +884,11 @@ export function createTranscriptProjection(): TranscriptProjection {
         state.messagesByID[id] = message;
         indexParts(message);
       }
+      queues();
+    },
+    gaps(values: readonly CoverageGap[]) {
+      gaps = values;
+      recordsDirty = true;
       queues();
     },
     boundaries(values: readonly ReplyBoundary[]) {

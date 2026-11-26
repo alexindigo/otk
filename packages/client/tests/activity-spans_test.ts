@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import type { Activity, Message } from "@otk/protocol";
 import { activitySpans, createTranscriptProjection } from "../mod.ts";
+import { createRecordProjection } from "../activity-spans.ts";
 
 function record(id: string, activity: Partial<Activity> = {}): Message {
   return {
@@ -38,6 +39,60 @@ function group(messages: Message[]) {
     projection.state.repliesByID,
   );
 }
+
+Deno.test("activity breaks partition lookahead, silent completions, and identical records", () => {
+  const p = createTranscriptProjection();
+  p.reset([
+    {
+      id: "answer",
+      sessionID: "session",
+      role: "assistant",
+      time: { created: 0, completed: 500 },
+      agent: "build",
+      model: { provider: "test", model: "test" },
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      parts: [],
+    },
+    { ...record("r1"), parts: [] },
+    record("r2"),
+    record("r3"),
+  ]);
+  const records = createRecordProjection();
+  const value = records.reconcile(
+    p.state.replyIDs,
+    p.state.repliesByID,
+    new Set(["r1", "r2"]),
+  );
+  assertEquals(value.keys, [
+    "reply:answer",
+    "r1",
+    "activity:r2",
+    "activity:r3",
+  ]);
+  assertEquals(value.groups["activity:r2"].members, ["r2"]);
+  assertEquals(value.groups["activity:r3"].members, ["r3"]);
+  assertEquals(value.groups["activity:r2"].children?.[0].members, ["r2"]);
+
+  const completion = record("r2", {
+    completion: { placement: "footer" },
+  });
+  p.reset([p.state.messagesByID.answer, completion, record("r3")]);
+  const detached = records.reconcile(
+    p.state.replyIDs,
+    p.state.repliesByID,
+    new Set(["reply:answer", "r2"]),
+  );
+  assertEquals(detached.groups[detached.owners.r2].silent, true);
+  assertEquals(detached.groups[detached.owners.r2].completionOf, undefined);
+  assertEquals(detached.completions["reply:answer"], undefined);
+});
 
 Deno.test("prepending and splitting an activity interval never reuse its live key", () => {
   const projection = createTranscriptProjection();

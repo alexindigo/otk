@@ -106,6 +106,7 @@ export function createRecordProjection(): {
   reconcile(
     ids: readonly string[],
     replies: Readonly<Record<string, TranscriptReply>>,
+    breaks?: ReadonlySet<string>,
   ): RecordProjection;
 } {
   let value = empty(), presentationRevision = 0;
@@ -138,7 +139,7 @@ export function createRecordProjection(): {
       assignment.clear();
       versions.clear();
     },
-    reconcile(ids, replies) {
+    reconcile(ids, replies, breaks = new Set()) {
       const next = empty();
       // The projection owns one keyspace for conversation rows and intervals.
       const occupied = new Set(ids);
@@ -152,6 +153,10 @@ export function createRecordProjection(): {
       let interval: ActivityGroup | undefined, conversation: string | undefined;
       let contextEnd = 0, contextHasContent = false;
       for (let index = 0; index < ids.length; index++) {
+        if (index > 0 && breaks.has(ids[index - 1])) {
+          interval = undefined;
+          conversation = undefined;
+        }
         const id = ids[index];
         const reply = replies[id];
         if (reply.message.role === "context" && index >= contextEnd) {
@@ -163,7 +168,7 @@ export function createRecordProjection(): {
           ) {
             contextHasContent ||= !!replies[ids[contextEnd]].message.parts
               .length;
-            contextEnd++;
+            if (breaks.has(ids[contextEnd++])) break;
           }
         }
         // Headers alone cannot offer an activity disclosure. Once the interval
@@ -180,8 +185,7 @@ export function createRecordProjection(): {
           // Paging an older member must not replace the already minted frame.
           let assigned = assignment.get(id);
           if (!assigned) {
-            for (let n = index + 1; n < ids.length; n++) {
-              if (replies[ids[n]].message.role !== "context") break;
+            for (let n = index + 1; n < contextEnd; n++) {
               assigned = assignment.get(ids[n]);
               if (assigned) break;
             }

@@ -181,6 +181,49 @@ Deno.test("reconcile keeps unchanged activity groups when the page changes topol
   assertStrictEquals(p.state.records.groups[key], groups[key]);
 });
 
+Deno.test("gap keys follow the older reply's record and survive body updates", () => {
+  const p = createTranscriptProjection();
+  const older = record(2), newer = record(4);
+  const user = (id: string, created: number): Message => ({
+    id,
+    sessionID: older.sessionID,
+    role: "user",
+    time: { created },
+    parts: [],
+  });
+  const gap = { key: "gap:r2", older: older.id, newer: newer.id };
+  p.reset([record(1), older, newer, user("tail", 5)]);
+  p.gaps([gap]);
+  const records = () => p.state.records;
+  const { owners } = records();
+  const left = owners.r2, right = owners.r4;
+  assertEquals(records().keys, [left, gap.key, right, "tail"]);
+  assertEquals(records().groups[left].members, ["r1", "r2"]);
+  assertEquals(records().groups[right].members, ["r4"]);
+  assertEquals(records().groups[gap.key], undefined);
+  assertEquals(records().revisions[gap.key], 0);
+
+  p.reconcile([{
+    ...user("tail", 5),
+    parts: [{
+      id: "text",
+      kind: "text",
+      synthetic: false,
+      blocks: [],
+    }],
+  }]);
+  assertEquals(records().keys, [left, gap.key, right, "tail"]);
+  assertEquals(records().revisions[gap.key], 0);
+  p.gaps([]);
+  assertEquals(records().keys, [left, "tail"]);
+  assertEquals(records().groups[left].members, ["r1", "r2", "r4"]);
+  assertEquals(records().revisions[gap.key], undefined);
+  p.gaps([gap]);
+  p.reset([older, newer]);
+  assertEquals(records().keys, [left]);
+  assertEquals(records().groups[left].members, ["r2", "r4"]);
+});
+
 Deno.test("ordinary streamed rows publish new measurement revisions without regrouping", () => {
   const p = createTranscriptProjection();
   p.reset([{
