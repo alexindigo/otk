@@ -426,8 +426,14 @@ test("messages.numbered-empty-blank-terminal-geometry", {
     }
     await expect(page.locator(`[data-session="${session.id}"]`))
       .toHaveAttribute("data-status", "idle");
-    await expect(page.locator(".otk-text p").filter({ hasText: /^Written\.$/ }))
-      .toHaveCount(1);
+    // WP6 places the Work log after the prose. Reading the end of the file
+    // can unmount the prose, so return to the start of this single reply.
+    await scrollTranscript(page, false);
+    const prose = page.locator(".otk-text p").filter({
+      hasText: /^Written\.$/,
+    });
+    await expect(prose).toHaveCount(1);
+    await expect(prose).toBeInViewport();
   }
 });
 

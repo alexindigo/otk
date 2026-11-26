@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
 import {
   panel,
   primary,
@@ -98,6 +98,8 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await expect(page.locator(".otk-questions")).toContainText(
     "Tools, Custom detail",
   );
+  // The answer detail can move the WP6 reply's prose outside the reader window.
+  await revealAcquired(page, '[data-role="assistant"] .otk-text');
   await reply(page, session.id, "Answers recorded.");
   const history = await state.native<
     {
