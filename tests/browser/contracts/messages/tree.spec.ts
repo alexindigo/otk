@@ -427,7 +427,12 @@ test.describe("virtual session tree", () => {
     await expect(row).toBeVisible();
     const facts = await row.evaluate((element) => {
       const row = element.getBoundingClientRect();
-      return Array.from(element.querySelectorAll(".otk-tree-junction")).map(
+      // Issue 2.96: TreeNode owns rails beside its heading label, not inside
+      // the consumer's row frame.
+      const heading = element.querySelector(":scope > .otk-tree-heading")!;
+      return Array.from(heading.querySelectorAll(
+        ":scope > .otk-tree-rails > .otk-tree-junction, :scope > .otk-tree-own",
+      )).map(
         (cell) => {
           const box = cell.getBoundingClientRect();
           const connector = cell.querySelector(".otk-tree-connector");
@@ -444,6 +449,9 @@ test.describe("virtual session tree", () => {
     });
     // The nested row keeps two ancestor rails and its own junction.
     expect(facts).toHaveLength(3);
+    expect(facts.filter((fact) => fact.connector !== undefined)).toHaveLength(
+      1,
+    );
     for (const fact of facts) {
       expect(Math.abs(fact.height - fact.rowHeight)).toBeLessThanOrEqual(1);
       expect(Math.abs(fact.y - fact.rowY)).toBeLessThanOrEqual(1);
