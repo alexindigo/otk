@@ -8,12 +8,16 @@ export interface FittedAction {
   key: string;
   label: string;
   ariaLabel?: string;
+  expanded?: boolean;
   class?: string;
   icon?(): Element;
   disabled?: boolean;
   title?: string;
   run(): void;
 }
+
+const ariaExpanded = (expanded?: boolean) =>
+  expanded === undefined ? undefined : expanded ? "true" : "false";
 /** Action labels fit in full or move to the shared More surface. */
 export default function FittedActions(
   props: { items: readonly FittedAction[]; inline?: boolean },
@@ -50,6 +54,7 @@ export default function FittedActions(
                   disabled={item().disabled}
                   title={item().title}
                   aria-label={item().ariaLabel}
+                  aria-expanded={ariaExpanded(item().expanded)}
                   class={item().class}
                   onClick={() => item().run()}
                 >
@@ -66,6 +71,7 @@ export default function FittedActions(
             class={[item().icon ? "otk-icon-button" : "otk-pill", item().class]
               .filter(Boolean).join(" ")}
             aria-label={item().ariaLabel ?? item().label}
+            aria-expanded={ariaExpanded(item().expanded)}
             disabled={item().disabled}
             title={item().title}
             onClick={() => item().run()}

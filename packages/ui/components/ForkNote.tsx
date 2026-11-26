@@ -16,17 +16,13 @@ export function ForkFact(
     <ComposerNoticeRow
       class="otk-fork-note"
       icon={ForkIcon}
-      trailing={
-        <button
-          type="button"
-          class="otk-icon-button"
-          aria-label="Dismiss fork note"
-          title="Dismiss fork note"
-          onClick={() => props.onDismiss()}
-        >
-          <CloseIcon />
-        </button>
-      }
+      actions={[{
+        key: "dismiss",
+        label: "Dismiss fork note",
+        title: "Dismiss fork note",
+        icon: CloseIcon,
+        run: props.onDismiss,
+      }]}
     >
       <span
         class="otk-control-label otk-control-grow"

@@ -12,8 +12,17 @@
 .otk-overflow-row.has-overflow:not(.is-progressive) {
   grid-template-columns: minmax(0, 1fr) auto;
 }
+.otk-overflow-row.has-overflow:not(.is-progressive):not(:has(.otk-overflow-item:not([hidden]))) {
+  grid-template-columns: auto;
+  justify-content: var(--overflow-items-justify, start);
+  column-gap: 0;
+}
+.otk-overflow-row.has-overflow:not(.is-progressive):not(:has(.otk-overflow-item:not([hidden]))) > .otk-overflow-items {
+  display: none;
+}
 .otk-overflow-items {
   display: flex;
+  justify-content: var(--overflow-items-justify, start);
   flex-wrap: wrap;
   align-items: center;
   gap: inherit;

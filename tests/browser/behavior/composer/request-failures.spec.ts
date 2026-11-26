@@ -37,11 +37,13 @@ test.describe("pre-message rejection", () => {
     );
     await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
     const notice = page.locator(".otk-operation-feedback");
-    await expect(notice).toHaveText("Not sent - see the error above");
+    await expect(notice.locator(".otk-record-row-label")).toHaveText(
+      "Not sent. Sending prompt failed",
+    );
     await expect(notice).not.toContainText("opencode.config.ts");
     await expect(notice).not.toContainText("HTTP 400");
     await expect(editor).toHaveValue("Keep this unsent draft intact");
-    await notice.getByRole("button", { name: "Not sent - see the error above" })
+    await notice.getByRole("button", { name: "Show error" })
       .click();
     await expect(failure.locator("xpath=ancestor::article")).toBeFocused();
     await expect(editor).toHaveValue("Keep this unsent draft intact");
@@ -94,9 +96,12 @@ test.describe("pre-message rejection", () => {
     for (const text of ["x/y2", "x/y3", "HTTP 404"]) {
       await expect(record).toContainText(text);
     }
-    await expect(page.locator(".otk-operation-feedback")).toHaveText(
-      "Not sent - see the error above",
+    const notice = page.locator(".otk-operation-feedback");
+    await expect(notice.locator(".otk-record-row-label")).toHaveText(
+      "Not sent. Sending prompt failed",
     );
+    await expect(notice.getByRole("button", { name: "Show error" }))
+      .toBeVisible();
     await expect(editor).toHaveValue("Keep the model draft");
   });
 });

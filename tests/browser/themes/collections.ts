@@ -1182,70 +1182,39 @@ export async function collections456(input: Inputs) {
               n.top >= destination.bottom - 1 &&
               n.top >= transcript.bottom - 1,
             contentInset: Math.max(
-              Math.abs(r.left - input.left),
+              Math.abs((i?.left ?? t.left) - input.left),
               Math.abs(r.right - send.right),
             ),
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };
+        expect({ row: g.row, notice: g.notice, icon: g.icon }).toEqual(
+          baseline,
+        );
+        expect(g.icon).toEqual([g.row, g.row]);
+        expect(g.iconOffset).toBe(0);
         if (mode === "notice-error") {
-          // FailureContent owns the structured failure's gutter signal, not a
-          // duplicate activity icon. Complete facts still grow within the row.
-          expect(g.row).toBeGreaterThanOrEqual(baseline.row);
-          expect(g.notice).toBeGreaterThanOrEqual(baseline.notice);
-          expect(g.icon).toEqual([]);
-          const signal = page.locator(
-            ".otk-failure-content.otk-failure-signal.is-gutter",
+          const failure = page.locator(
+            ".otk-composer-notice .otk-failure-content",
           );
-          await expect(signal).toHaveCount(1);
-          expect(
-            await signal.evaluate((el) => {
-              const css = getComputedStyle(el),
-                box = el.getBoundingClientRect();
-              const heading = el.querySelector(".otk-failure-heading")!
-                .getBoundingClientRect();
-              const reason = el.querySelector(".otk-failure-main-reason")!
-                .getBoundingClientRect();
-              const label = el.querySelector(".otk-failure-detail-toggle")!
-                .getBoundingClientRect();
-              return {
-                painted: /^(?!rgba\(0, 0, 0, 0\)).* 2px 0px 0px 0px inset$/
-                  .test(css.boxShadow),
-                width: box.width > 0,
-                height: box.height > 0,
-                aligned: Math.max(heading.left, reason.left, label.left) -
-                    Math.min(heading.left, reason.left, label.left) <= .5,
-              };
-            }),
-          ).toEqual({
-            painted: true,
-            width: true,
-            height: true,
-            aligned: true,
-          });
-          expect(
-            await page.locator(".otk-failure-content").evaluate((el) => {
-              const row = el.closest(".otk-composer-notice-row")!
-                .getBoundingClientRect();
-              return Array.from(el.children).every((child) => {
-                const range = document.createRange();
-                range.selectNodeContents(child);
-                const text = range.getBoundingClientRect();
-                return text.left >= row.left - .5 &&
-                  text.right <= row.right + .5 &&
-                  text.top >= row.top - .5 && text.bottom <= row.bottom + .5;
-              });
-            }),
-          ).toBe(true);
-          await expect(page.locator(".otk-failure-content")).toContainText(
+          await expect(
+            failure.locator(".otk-failure-signal, .otk-disclosure-icon"),
+          )
+            .toHaveCount(0);
+          await expect(failure.locator(".otk-composer-notice-icon svg"))
+            .toHaveCSS(
+              "color",
+              await token(page, "--otk-danger"),
+            );
+          await expect(failure.locator(".otk-record-row-label")).toContainText(
             "The requested rollback is no longer available",
           );
-        } else {
-          expect({ row: g.row, notice: g.notice, icon: g.icon }).toEqual(
-            baseline,
-          );
-          expect(g.icon).toEqual([g.row, g.row]);
-          expect(g.iconOffset).toBe(0);
+          const details = failure.getByRole("button", { name: "Details" });
+          await expect(details).toHaveAttribute("aria-expanded", "false");
+          await details.click();
+          await expect(failure.locator(".otk-failure-detail-body"))
+            .toBeVisible();
+          await details.click();
         }
         expect(g.text).toBeLessThanOrEqual(.5);
         expect(g.joined, `${theme.id}/${mode} joined frames`).toBe(true);
@@ -2036,15 +2005,12 @@ export async function collections456(input: Inputs) {
                   "color",
                   await token(page, "--otk-fg"),
                 );
-                const signal = page.locator(
-                  ".otk-operation-feedback .otk-failure-content.otk-failure-signal.is-gutter",
+                const notice = page.locator(".otk-operation-feedback");
+                await expect(notice.locator(".otk-failure-signal")).toHaveCount(
+                  0,
                 );
-                await expect(signal).toBeVisible();
-                const shadow = await signal.evaluate((el) =>
-                  getComputedStyle(el).boxShadow
-                );
-                expect(shadow).toContain(await token(page, "--otk-danger"));
-                expect(shadow).toMatch(/ 2px 0px 0px 0px inset$/);
+                await expect(notice.locator(".otk-composer-notice-icon svg"))
+                  .toHaveCSS("color", await token(page, "--otk-danger"));
               }
               await shot(`notice-${status}-${theme.id}-${width}`);
             }

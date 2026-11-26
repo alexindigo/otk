@@ -119,20 +119,26 @@ test(
     await expect(input).toHaveValue("Keep this other client's exact draft");
     const pointer = page.locator(".otk-operation-feedback");
     await expect(pointer).toHaveCount(1);
-    await expect(pointer).toHaveText("Not sent - see the error above");
+    await expect(pointer.locator(".otk-record-row-label")).toHaveText(
+      "Not sent. Sending prompt failed",
+    );
     await expect(page.locator(".otk-session-error")).toHaveCount(0);
     await info.attach("remote-composer-displayed-pointer", {
       body: await page.screenshot({ fullPage: true }),
       contentType: "image/png",
     });
     await pointer.getByRole("button", {
-      name: "Not sent - see the error above",
+      name: "Show error",
       exact: true,
     }).click();
     await expect(record.locator("xpath=ancestor::article")).toBeFocused();
     await page.reload();
     await expect(record).toHaveCount(1);
-    await expect(pointer).toHaveText("Not sent - see the error above");
+    await expect(pointer.locator(".otk-record-row-label")).toHaveText(
+      "Not sent. Sending prompt failed",
+    );
+    await expect(pointer.getByRole("button", { name: "Show error" }))
+      .toBeVisible();
     await expect(page.locator(".otk-session-error")).toHaveCount(0);
   },
 );

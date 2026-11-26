@@ -43,7 +43,10 @@ test.describe("composer notice inset", () => {
               dock.querySelector(selector)!.getBoundingClientRect();
             const notice = box(".otk-composer-notice-row");
             return {
-              left: Math.abs(notice.left - box(".otk-prompt-input").left),
+              left: Math.abs(
+                box(".otk-composer-notice-icon").left -
+                  box(".otk-prompt-input").left,
+              ),
               right: Math.abs(notice.right - box(".otk-send-button").right),
             };
           },
