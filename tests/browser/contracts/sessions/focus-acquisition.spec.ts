@@ -30,11 +30,13 @@ test("sessions.focused-row-identity-survives-native-page-acquisition", {
     await page.mouse.wheel(0, 100000);
     return last.count();
   }).toBe(1);
-  await last.evaluate((element) => {
+  // Issue 2.96: SidebarRow's action, not the row frame, owns keyboard focus.
+  const action = last.getByRole("button");
+  await action.evaluate((element) => {
     Object.assign(globalThis, { pinnedRow: element });
     (element as HTMLElement).focus();
   });
-  await expect(last).toBeFocused();
+  await expect(action).toBeFocused();
   await page.evaluate(() =>
     new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
@@ -49,7 +51,7 @@ test("sessions.focused-row-identity-survives-native-page-acquisition", {
       "document.activeElement===pinnedRow&&pinnedRow.isConnected",
     )
   ).toBe(true);
-  await expect(last).toBeFocused();
+  await expect(action).toBeFocused();
   await page.getByRole("searchbox", { name: "Search sessions by title" })
     .focus();
   await expect(last).toHaveCount(0);
@@ -181,11 +183,12 @@ test.describe("interior focus pin", () => {
       await page.mouse.wheel(0, 100000);
       return row.count();
     }, { intervals: [0, 16, 32] }).toBe(1);
-    await row.evaluate((element) => {
+    const action = row.getByRole("button");
+    await action.evaluate((element) => {
       Object.assign(globalThis, { interiorFocusRow: element });
       (element as HTMLElement).focus();
     });
-    await expect(row).toBeFocused();
+    await expect(action).toBeFocused();
     await page.mouse.wheel(0, -100000);
     await expect.poll(() => pane.evaluate((element) => element.scrollTop)).toBe(
       0,
