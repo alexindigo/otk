@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 :root {
   --tree-icon-size: var(--icon-compact);
+  --tree-default-row-height: calc(var(--tree-icon-size) * 2);
 }
 .otk-tree-node {
   min-inline-size: 0;
+  --tree-row-height: var(--tree-height, var(--tree-default-row-height));
   --tree-heading-flow: row;
 }
 .otk-tree-rails {
@@ -25,18 +27,24 @@
   grid-template-columns: var(--tree-indent) minmax(0, 1fr);
 }
 .otk-tree-junction {
-  --tree-row-height: var(--tree-height, calc(var(--tree-icon-size) * 2));
   display: grid;
-  grid-template: 1fr var(--tree-junction-size, 0px) 1fr / 1fr
-    var(--tree-junction-size, 0px) 1fr;
-  min-block-size: var(--tree-row-height);
+  grid-template-rows: var(--tree-row-height, var(--tree-default-row-height))
+    1fr;
+  grid-template-columns: 1fr var(--tree-junction-size, 0px) 1fr;
   align-self: stretch;
+}
+.otk-tree-first-line {
+  grid-area: 1 / 1 / 2 / -1;
+  display: grid;
+  grid-template-rows: 1fr var(--tree-junction-size, 0px) 1fr;
+  grid-template-columns: subgrid;
 }
 .otk-tree-junction.has-toggle {
   --tree-junction-size: var(--tree-box-size);
 }
 .otk-tree-upper,
 .otk-tree-lower,
+.otk-tree-extension,
 .otk-tree-icon-stem,
 .otk-tree-continuation::before {
   justify-self: end;
@@ -46,7 +54,8 @@
   background-size: 1px 2px;
 }
 .otk-tree-upper,
-.otk-tree-lower {
+.otk-tree-lower,
+.otk-tree-extension {
   grid-column: 2;
   justify-self: center;
 }
@@ -56,10 +65,14 @@
 .otk-tree-lower {
   grid-row: 3;
 }
-.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > :is(.otk-tree-upper, .otk-tree-lower),
-.otk-tree-node.is-last > .otk-tree-heading > .otk-tree-incoming > .otk-tree-lower,
-.otk-tree-rails .otk-tree-junction:not(.is-through):not(.is-tip) > .otk-tree-upper,
-.otk-tree-rails .otk-tree-junction:not(.is-through) > .otk-tree-lower {
+.otk-tree-extension {
+  grid-row: 2;
+}
+.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > .otk-tree-first-line > .otk-tree-upper,
+.otk-tree-rails .otk-tree-junction:not(.is-through):not(.is-tip) .otk-tree-upper,
+.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own :is(.otk-tree-lower, .otk-tree-extension),
+.otk-tree-node.is-last > .otk-tree-heading > .otk-tree-incoming :is(.otk-tree-lower, .otk-tree-extension),
+.otk-tree-rails .otk-tree-junction:not(.is-through) :is(.otk-tree-lower, .otk-tree-extension) {
   background-image: none;
 }
 .otk-tree-connector {
@@ -70,7 +83,7 @@
     transparent 1px 2px);
   background-size: 2px 1px;
 }
-.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > .otk-tree-connector {
+.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > .otk-tree-first-line > .otk-tree-connector {
   background-image: none;
 }
 .otk-tree-toggle-slot {
@@ -87,7 +100,7 @@
   grid-area: 1 / 2;
   display: grid;
   align-items: center;
-  min-block-size: var(--tree-height, calc(var(--tree-icon-size) * 2));
+  min-block-size: var(--tree-row-height, var(--tree-default-row-height));
 }
 .otk-tree-label > * {
   align-self: stretch;
@@ -161,15 +174,11 @@
 .otk-tree-node.is-outgoing > .otk-tree-feedback > .otk-tree-feedback-content {
   grid-column: 1;
 }
-.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > :is(.otk-tree-upper, .otk-tree-lower),
 .otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-continuation::before {
   grid-column: 2;
   justify-self: start;
 }
-.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > :is(.otk-tree-upper, .otk-tree-lower) {
-  justify-self: center;
-}
-.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > .otk-tree-connector {
+.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > .otk-tree-first-line > .otk-tree-connector {
   grid-column: 1;
 }
 .otk-tree-feedback {
@@ -183,7 +192,7 @@
 .otk-tree-selection {
   grid-area: 1 / 1;
   place-self: start;
-  block-size: var(--tree-height, calc(var(--tree-icon-size) * 2));
+  block-size: var(--tree-row-height, var(--tree-default-row-height));
   display: grid;
   align-items: center;
 }
@@ -210,12 +219,6 @@
 }
 .otk-tree-node.is-compact > .otk-tree-body > .otk-tree-children {
   grid-column: 1;
-}
-.otk-tree-node.has-leading-row > .otk-tree-heading > .otk-tree-junction {
-  grid-template-rows: calc((var(--tree-row-height, calc(var(--tree-icon-size) *
-    2)) - var(--tree-junction-size,
-    0px))
-    / 2) var(--tree-junction-size, 0px) 1fr;
 }
 .otk-tree-node.is-flat > .otk-tree-heading {
   grid-template-columns: auto var(--tree-indent) minmax(0, 1fr);

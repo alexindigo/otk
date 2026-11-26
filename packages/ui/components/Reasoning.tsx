@@ -9,6 +9,7 @@ import Blocks from "./Blocks.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
+import { ActivityIcon } from "./ChromeIcons.tsx";
 export default function Reasoning(
   props: {
     part: Extract<Part, { kind: "reasoning" }>;
@@ -39,7 +40,10 @@ export default function Reasoning(
     return (
       <>
         <TreeIcon>
-          <Show when={props.part.time.end === undefined}>
+          <Show
+            when={props.part.time.end === undefined}
+            fallback={<ActivityIcon />}
+          >
             <ActivityIndicator small decorative />
           </Show>
         </TreeIcon>

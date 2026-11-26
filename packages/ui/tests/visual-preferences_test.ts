@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertMatch } from "@std/assert";
 import { DEFAULT_PREFS, TEXT_SIZES } from "@otk/protocol";
 import { paintVisualPreferences } from "../features/visual.ts";
 
@@ -66,7 +66,10 @@ Deno.test("tool rows and shared trees inherit scaled geometry", async () => {
   assertEquals(theme.includes("--row-tool: calc(26 * var(--otk-unit))"), true);
   assertEquals(tool.includes("min-height: var(--row-tool)"), true);
   assertEquals(tree.includes("--tree-icon-size: var(--icon-compact)"), true);
-  assertEquals(tree.includes("min-block-size: var(--tree-row-height)"), true);
+  assertMatch(
+    tree,
+    /grid-template-rows: var\(--tree-row-height, var\(--tree-default-row-height\)\)\s+1fr/,
+  );
   assertEquals(tool.includes("flex: 0 0 var(--icon-compact)"), true);
   assertEquals(tool.includes("width: var(--icon-compact)"), true);
 });
