@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Toasts.css" with { type: "text" };
 import {
-  createEffect,
   createMemo,
   createSignal,
   type Element,
@@ -37,24 +36,29 @@ export default function Toasts(
   },
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
-  const [items, setItems] = createSignal(props.model.state.items);
-  const limit = 3;
-  const [offset, setOffset] = createSignal(0);
+  const [revision, setRevision] = createSignal(0);
+  onCleanup(props.model.subscribe(() => setRevision((n) => n + 1)));
+  const visible = createMemo(() => {
+    revision();
+    return props.model.visible();
+  });
+  const remaining = createMemo(() => {
+    revision();
+    return props.model.remaining();
+  });
   const overflow = () => {
-    const remaining = items().filter((_item, index) =>
-      index < offset() || index >= offset() + limit
-    );
-    const failures = remaining.filter((item) => item.note.kind === "error")
+    const items = remaining();
+    const failures = items.filter((item) => item.note.kind === "error")
       .reduce(
         (count, item) => count + (notificationFailure(item.note)?.count ?? 1),
         0,
       );
     const attention =
-      remaining.filter((item) =>
+      items.filter((item) =>
         item.note.kind === "permission" || item.note.kind === "question"
       ).length;
     const other =
-      remaining.filter((item) =>
+      items.filter((item) =>
         !["error", "permission", "question"].includes(item.note.kind)
       ).length;
     return [
@@ -65,31 +69,23 @@ export default function Toasts(
       other ? `${other} more notifications` : "",
     ].filter(Boolean).join(", ");
   };
-  onCleanup(props.model.subscribe((state) => setItems(state.items)));
-  createEffect(() => items(), () => {
-    setOffset(0);
-  });
   return (
     <section
       class={["otk-toasts", { "is-layer": props.layout === "layer" }]}
       aria-label="Notifications"
       aria-live="polite"
     >
-      <Show when={items().length > limit}>
+      <Show when={remaining().length > 0}>
         <button
           type="button"
           class="otk-toasts-more"
-          onClick={() => {
-            setOffset(
-              offset() + limit >= items().length ? 0 : offset() + limit,
-            );
-          }}
+          onClick={() => props.model.more()}
         >
           {overflow()}
         </button>
       </Show>
       <For
-        each={items().slice(offset(), offset() + limit)}
+        each={visible()}
         keyed={(item) => item.note.id}
       >
         {(item) => {
