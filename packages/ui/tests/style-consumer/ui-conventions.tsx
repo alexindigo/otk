@@ -86,10 +86,12 @@ function SubagentTimes() {
       })),
     stopHelper: () => () => Promise.resolve(),
   });
+  let home!: HTMLElement;
   return (
-    <section class="style-panel">
+    <section class="style-panel" tabindex={-1} ref={(node) => home = node}>
       <h2>Subagents list</h2>
       <Subagents
+        focusHome={() => home.focus()}
         entities={entities}
         helpers={{
           ids,

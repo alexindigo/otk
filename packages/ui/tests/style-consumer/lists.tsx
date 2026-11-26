@@ -130,6 +130,7 @@ export default function Scene() {
     }));
     return () => releases.forEach((release) => release());
   });
+  let home!: HTMLDivElement;
   return (
     <>
       <ProjectTabs
@@ -155,24 +156,27 @@ export default function Scene() {
           remove: () => Promise.resolve(),
         }}
       />
-      <Subagents
-        entities={tabs.entities()}
-        helpers={(() => {
-          void tabs.state.revision;
-          const store = tabs.entities(), key = tabs.trail().task;
-          return key && !store.isStale ? store.get(key)?.helpers : undefined;
-        })()}
-        current={session()?.id ?? ""}
-        title={(id) => entries().find((row) => row.id === id)?.title ?? id}
-        agent={() => undefined}
-        openAction={(id) =>
-          commands.control("list.open-helper", undefined, {
-            target: { label: id },
-            shown: () => true,
-            unshown: "The subagent did not open.",
-            recovery: "Choose the subagent again",
-          })}
-      />
+      <div tabindex={-1} ref={(region) => home = region}>
+        <Subagents
+          focusHome={() => home.focus()}
+          entities={tabs.entities()}
+          helpers={(() => {
+            void tabs.state.revision;
+            const store = tabs.entities(), key = tabs.trail().task;
+            return key && !store.isStale ? store.get(key)?.helpers : undefined;
+          })()}
+          current={session()?.id ?? ""}
+          title={(id) => entries().find((row) => row.id === id)?.title ?? id}
+          agent={() => undefined}
+          openAction={(id) =>
+            commands.control("list.open-helper", undefined, {
+              target: { label: id },
+              shown: () => true,
+              unshown: "The subagent did not open.",
+              recovery: "Choose the subagent again",
+            })}
+        />
+      </div>
       <CommandMenu
         label="Reactive list menu"
         trigger="Actions"
