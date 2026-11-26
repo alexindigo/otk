@@ -16,6 +16,7 @@ import {
   useNativeSource,
 } from "../../features/transcript-context.tsx";
 import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
+import { WorkLogIcon } from "../ChromeIcons.tsx";
 import { sourcePreview } from "./native-source-preview.ts";
 
 type Loaded =
@@ -93,7 +94,9 @@ export default function NativeSource(props: {
             aria-expanded={open() ? "true" : "false"}
             onClick={() => setOpen(!open())}
           >
-            <TreeIcon />
+            <TreeIcon>
+              <WorkLogIcon />
+            </TreeIcon>
             <span class="otk-control-label">Source</span>
           </button>
         )}

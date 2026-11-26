@@ -3,6 +3,7 @@ import "./WorkLog.css" with { type: "text" };
 import type { Element } from "solid-js";
 import { retainedWorkDisclosure } from "../features/transcript-context.tsx";
 import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
+import { WorkLogIcon } from "./ChromeIcons.tsx";
 import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 import { discloseInViewport } from "./viewport.ts";
@@ -40,7 +41,9 @@ export default function WorkLog(
       aria-expanded={open() ? "true" : "false"}
       onClick={(event) => change(!open(), event)}
     >
-      <TreeIcon />
+      <TreeIcon>
+        <WorkLogIcon />
+      </TreeIcon>
       <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
     </button>
   );

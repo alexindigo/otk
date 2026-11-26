@@ -18,7 +18,7 @@ const IconStemContext = createContext<() => boolean>(() => false);
 
 /** A header supplies its kind artwork; the tree owns its slot and child stem. */
 export function TreeIcon(
-  props: { children?: Element; class?: string },
+  props: { children: Element; class?: string },
 ): Element {
   const stem = useContext(IconStemContext);
   const outgoing = useContext(DirectionContext);
@@ -65,12 +65,15 @@ function Junction(
         "has-toggle": props.toggle,
       }]}
     >
-      <span class="otk-tree-upper" aria-hidden="true" />
-      <span class="otk-tree-lower" aria-hidden="true" />
-      <Show when={props.tip ?? true}>
-        <TreeConnector />
-      </Show>
-      {props.children}
+      <span class="otk-tree-first-line">
+        <span class="otk-tree-upper" aria-hidden="true" />
+        <span class="otk-tree-lower" aria-hidden="true" />
+        <Show when={props.tip ?? true}>
+          <TreeConnector />
+        </Show>
+        {props.children}
+      </span>
+      <span class="otk-tree-extension" aria-hidden="true" />
     </span>
   );
 }
@@ -124,7 +127,6 @@ export function TreeNode(props: {
   outgoing?: boolean;
   compact?: boolean;
   selected?: boolean;
-  leadingRow?: boolean;
   /** Virtual row topology: ancestor continuation flags, then this row's flag.
    * A root has an empty path. A flat row never renders a nested body. */
   path?: readonly boolean[];
@@ -155,8 +157,8 @@ export function TreeNode(props: {
         "has-body": visible(),
         "has-header-toggle": props.toggleHeader,
         "is-compact": props.compact,
+        "has-selection-slot": props.selected !== undefined,
         "has-selection": props.selected,
-        "has-leading-row": props.leadingRow,
       }]}
       data-tree-node=""
     >

@@ -15,7 +15,8 @@ async function geometry(nodes: Locator) {
       const upper = rail.querySelector(".otk-tree-upper")!;
       const lower = rail.querySelector(".otk-tree-lower")!;
       const r = rail.getBoundingClientRect(), b = box?.getBoundingClientRect();
-      const heading = rail.parentElement!.getBoundingClientRect();
+      const heading = rail.querySelector(".otk-tree-first-line")!
+        .getBoundingClientRect();
       const c = connector.getBoundingClientRect(),
         u = upper.getBoundingClientRect();
       const content = node.querySelector(
@@ -66,7 +67,7 @@ async function geometry(nodes: Locator) {
           : undefined,
         boxColor: svg ? getComputedStyle(svg).color : undefined,
         muted: getComputedStyle(node).getPropertyValue("--otk-fg-3").trim(),
-        junction: [r.x + r.width / 2, r.y + r.height / 2],
+        junction: [r.x + r.width / 2, heading.y + heading.height / 2],
         indent: r.width,
         iconSize: parseFloat(getComputedStyle(icon ?? rail).fontSize),
         iconSlot: icon?.getBoundingClientRect().width,
@@ -186,8 +187,10 @@ test.describe("work tree", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
     const root = page.locator(".otk-work-log > .otk-tree-node");
-    await expect(root.locator(":scope > .otk-tree-heading .otk-tree-icon-art"))
-      .toBeEmpty();
+    await expect(
+      root.locator(":scope > .otk-tree-heading .otk-tree-icon-art svg"),
+    )
+      .toHaveCount(1);
     const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-control");
     await expect(root.locator(":scope > .otk-tree-heading [aria-expanded]"))
       .toHaveCount(1);
@@ -353,9 +356,9 @@ test.describe("activity tree", () => {
     const span = page.locator(".otk-record-group").first();
     await expect(
       span.locator(
-        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-icon-art",
+        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-icon-art svg",
       ),
-    ).toBeEmpty();
+    ).toHaveCount(1);
     await expect(span).toHaveAttribute("data-count", "3");
     await span.locator(".otk-record-group-toggle").first().click();
     const run = span.locator(".otk-record-group");
@@ -419,7 +422,8 @@ test.describe("virtual session tree", () => {
     tag: ["@sessions", "@contracts", "@tree"],
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
-    const row = page.locator('[data-session="tstv1-nested"]');
+    const row = page.locator('.otk-session-row[data-session="tstv1-nested"]')
+      .locator("xpath=ancestor::section[@data-tree-node][1]");
     await expect(row).toBeVisible();
     const facts = await row.evaluate((element) => {
       const row = element.getBoundingClientRect();
@@ -438,7 +442,8 @@ test.describe("virtual session tree", () => {
         },
       );
     });
-    expect(facts).toHaveLength(2);
+    // The nested row keeps two ancestor rails and its own junction.
+    expect(facts).toHaveLength(3);
     for (const fact of facts) {
       expect(Math.abs(fact.height - fact.rowHeight)).toBeLessThanOrEqual(1);
       expect(Math.abs(fact.y - fact.rowY)).toBeLessThanOrEqual(1);

@@ -102,6 +102,12 @@ export const ActivityIcon = () => (
     <path d="M12 7v5l3 2" />
   </Icon>
 );
+export const WorkLogIcon = () => (
+  <Icon>
+    <rect x="5" y="3" width="14" height="18" rx="2" />
+    <path d="M9 8h6m-6 4h6m-6 4h6" />
+  </Icon>
+);
 export const TimelineIcon = () => (
   <Icon>
     <path d="M6 3v18M11 5h10M11 12h10M11 19h10" />

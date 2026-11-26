@@ -316,7 +316,6 @@ export default function ProjectInbox(props: {
       <>
         <TreeNode
           compact={collapsed()}
-          leadingRow
           selected={props.selected?.sidecarId === node().project.sidecarId &&
             props.selected?.directory === node().project.directory}
           class="otk-project-tree otk-sidebar-tree"
