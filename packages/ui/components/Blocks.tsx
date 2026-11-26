@@ -10,6 +10,7 @@ import TaskMarker from "./TaskMarker.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
 import PathLink, { PathContext } from "./PathLink.tsx";
 import { usePathSemantics } from "./PathProvider.tsx";
+import { contextTarget } from "./context-target.ts";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;
 const inlineOf = <K extends Inline["i"]>(inline: Inline, kind: K) =>
@@ -57,7 +58,13 @@ function TextInline(props: InlineProps<"text">) {
 }
 function CodeInline(props: InlineProps<"code">) {
   const context = useContext(PathContext);
-  const code = () => <code class="otk-prose-code">{props.item.text}</code>;
+  const target = contextTarget(() => ({
+    kind: "code-span",
+    data: { text: props.item.text },
+  }));
+  const code = () => (
+    <code class="otk-prose-code" ref={target}>{props.item.text}</code>
+  );
   return (
     <Show
       when={context && !context.inLink &&

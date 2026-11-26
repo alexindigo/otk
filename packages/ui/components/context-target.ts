@@ -2,11 +2,19 @@
 import type { ContextTarget } from "@otk/client";
 import { onCleanup } from "solid-js";
 
-const targets = new WeakMap<HTMLElement, () => ContextTarget>();
+export interface ContextInvocation {
+  selection: string;
+  inner: readonly ContextTarget[];
+}
+
+const targets = new WeakMap<
+  HTMLElement,
+  (invocation: ContextInvocation) => ContextTarget
+>();
 
 /** Declare identity/data, never event handling. Data is read at invocation. */
 export function contextTarget<T>(
-  target: () => ContextTarget<T>,
+  target: (invocation: ContextInvocation) => ContextTarget<T>,
 ): (element: HTMLElement) => void {
   const elements = new Set<HTMLElement>();
   // Capture the rendering owner now: native ref callbacks run at commit time,
@@ -24,9 +32,12 @@ export function contextTarget<T>(
 }
 
 /** Only the app-wide owner resolves the composed ancestor path. */
-export function contextTargets(path: readonly EventTarget[]): ContextTarget[] {
+export function contextTargets(
+  path: readonly EventTarget[],
+  invocation: ContextInvocation = { selection: "", inner: [] },
+): ContextTarget[] {
   return path.flatMap((node) => {
     const target = node instanceof HTMLElement ? targets.get(node) : undefined;
-    return target ? [target()] : [];
+    return target ? [target(invocation)] : [];
   });
 }

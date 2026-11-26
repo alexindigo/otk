@@ -133,3 +133,9 @@
   padding: 0;
   gap: 0;
 }
+.otk-surface-panel > .otk-surface-actions {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding-block: var(--space-2) 0;
+  border-top: 1px solid var(--otk-border);
+}

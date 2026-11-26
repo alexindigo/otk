@@ -10,8 +10,8 @@ export const EditIcon = () => (
     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
   </Icon>
 );
-export const RunIcon = () => (
-  <Icon>
+export const RunIcon = (props: { class?: string } = {}) => (
+  <Icon class={props.class}>
     <path d="m5 17 5-5-5-5M12 19h7" />
   </Icon>
 );

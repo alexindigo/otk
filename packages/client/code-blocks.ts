@@ -55,10 +55,27 @@ export function codeRunAvailability(input: {
   unavailable?: string;
 }): CommandAvailability {
   const { source, sessionID, unavailable } = input;
-  const reason = source.kind === "fence" && source.streaming
-    ? "This block is still being written"
-    : !sessionID
-    ? "This block has no session terminal"
-    : unavailable;
+  if (source.kind === "fence" && source.streaming) {
+    return { available: false, reason: "This block is still being written" };
+  }
+  return terminalRunAvailability({
+    sessionID,
+    unavailable,
+    noSessionReason: "This block has no session terminal",
+  });
+}
+
+export function terminalRunAvailability(
+  {
+    sessionID,
+    unavailable,
+    noSessionReason = "This text has no session terminal",
+  }: {
+    sessionID?: string;
+    unavailable?: string;
+    noSessionReason?: string;
+  },
+): CommandAvailability {
+  const reason = sessionID ? unavailable : noSessionReason;
   return reason ? { available: false, reason } : { available: true };
 }

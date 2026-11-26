@@ -68,3 +68,62 @@
 .otk-terminal-empty-action:hover:not(:disabled) {
   background: var(--otk-hover);
 }
+.otk-terminal-pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.otk-terminal-pending-label {
+  flex: none;
+  color: var(--otk-fg-muted);
+  white-space: nowrap;
+}
+.otk-terminal-pending-text {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  font-family: var(--font-mono);
+  background: var(--otk-bg-inline-code);
+  border-radius: var(--radius-inline-code);
+  padding-inline: var(--space-1);
+}
+.otk-terminal-pending-space {
+  flex: 1 1 auto;
+}
+.otk-terminal-run,
+.otk-terminal-cancel {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  min-block-size: var(--control-size);
+  padding-inline: var(--space-3);
+  white-space: nowrap;
+}
+.otk-terminal-run {
+  background: var(--otk-accent);
+  color: var(--otk-accent-on);
+}
+.otk-terminal-run-icon {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
+.otk-terminal-run:focus {
+  outline: 2px solid var(--control-focus);
+  outline-offset: var(--otk-unit);
+}
+.otk-terminal-run:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--otk-accent) 88%, var(--otk-fg));
+}
+.otk-terminal-cancel {
+  border: 1px solid var(--otk-border);
+  background: var(--otk-bg-elevated);
+  color: var(--otk-fg);
+}
+.otk-terminal-cancel:hover:not(:disabled) {
+  background: var(--otk-hover);
+}
