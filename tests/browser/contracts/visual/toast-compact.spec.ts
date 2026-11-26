@@ -60,6 +60,20 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
   const cards = page.locator(".otk-toast");
   await expect(cards).toHaveCount(3);
+  const assertAboveDock = async (key: string) => {
+    await expect(cards).toHaveCount(3);
+    const dock = page.locator(".otk-composer-dock");
+    await expect(dock).toBeVisible();
+    const dockBox = (await dock.boundingBox())!;
+    for (const [index, card] of (await cards.all()).entries()) {
+      await expect(card).toBeInViewport({ ratio: 1 });
+      const cardBox = (await card.boundingBox())!;
+      expect.soft(
+        cardBox.y + cardBox.height,
+        `${key}: toast ${index + 1} must end above the entire composer dock`,
+      ).toBeLessThanOrEqual(dockBox.y);
+    }
+  };
   const measure = () =>
     done.evaluate((card) => {
       const box = (selector: string) =>
@@ -125,6 +139,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
         )
       ).toBe(scale);
       const key = `toast-compact-${theme}-${textSize}`;
+      await assertAboveDock(key);
       await page.screenshot({
         path: info.outputPath(`${key}.png`),
         fullPage: true,
@@ -189,6 +204,34 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
       await auditUiRules(page, info, key);
     }
   }
+  await state.product("prefs.set", { key: "textSize", value: "100" });
+  await expect.poll(() =>
+    page.locator("html").evaluate((root) =>
+      Number(getComputedStyle(root).getPropertyValue("--otk-scale"))
+    )
+  ).toBe(1);
+  const viewport = page.viewportSize()!;
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    for (const zoom of [1, 1.25]) {
+      // Match desktop zoom: fewer CSS pixels at the same physical size.
+      await cdp.send("Emulation.setDeviceMetricsOverride", {
+        width: 1000 / zoom,
+        height: 900 / zoom,
+        deviceScaleFactor: zoom,
+        mobile: false,
+      });
+      await expect.poll(() =>
+        page.evaluate(() => [innerWidth, innerHeight, devicePixelRatio])
+      ).toEqual([1000 / zoom, 900 / zoom, zoom]);
+      await assertAboveDock(`browser zoom ${zoom * 100}%`);
+    }
+  } finally {
+    await cdp.send("Emulation.clearDeviceMetricsOverride");
+    await cdp.detach();
+    await page.setViewportSize({ ...viewport, width: viewport.width + 1 });
+    await page.setViewportSize(viewport);
+  }
   for (
     const [note, session, state] of [[done, b, "finished"], [
       permission,
@@ -198,7 +241,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   ) {
     const lamp = note.locator(".otk-toast-lead .otk-status-light");
     const sidebar = page.locator(
-      `.otk-project-sessions .otk-session-row[data-session="${session.id}"] .otk-session-leading .otk-status-light`,
+      `.otk-project-sessions .otk-session-row[data-session="${session.id}"] .otk-sidebar-lamp .otk-status-light`,
     );
     await expect(lamp).toHaveCount(1);
     await expect(sidebar).toHaveAttribute("data-state", state);

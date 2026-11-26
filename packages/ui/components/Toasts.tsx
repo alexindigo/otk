@@ -32,6 +32,7 @@ export default function Toasts(
     model: ToastsModel;
     detail?(note: Note): Element;
     entities?(sidecar: string): EntityStateStore | undefined;
+    layout?: "layer";
     onMore(): void;
   },
 ): import("solid-js").Element {
@@ -70,7 +71,7 @@ export default function Toasts(
   });
   return (
     <section
-      class="otk-toasts"
+      class={["otk-toasts", { "is-layer": props.layout === "layer" }]}
       aria-label="Notifications"
       aria-live="polite"
     >

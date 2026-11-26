@@ -22,5 +22,13 @@
   list-style-type: disc;
 }
 .otk-permission-compact {
-  gap: var(--space-1);
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.otk-permission-compact > .otk-permission-kind {
+  flex: none;
+}
+.otk-permission-compact > .otk-path {
+  min-inline-size: 0;
 }

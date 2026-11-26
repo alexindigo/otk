@@ -69,3 +69,17 @@
 .otk-message-flow .otk-transcript-delivery {
   margin-block-end: var(--message-gap);
 }
+
+/* The transcript and notifications layer share one row above the dock. */
+.otk-transcript-stage {
+  flex: 1;
+  min-block-size: min-content;
+  max-block-size: 100%;
+  min-inline-size: 0;
+  display: grid;
+  grid-template: minmax(auto, 1fr) / minmax(0, 1fr);
+  overflow: visible clip;
+}
+.otk-transcript-stage > * {
+  grid-area: 1 / 1;
+}
