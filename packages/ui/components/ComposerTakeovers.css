@@ -172,6 +172,17 @@
   max-inline-size: var(--lane-width);
   margin-inline: auto;
 }
+.otk-composer-reopen:not(:empty) {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  padding-inline: var(--composer-content-inset);
+  padding-block-end: var(--space-2);
+}
 .otk-composer-dock[data-read-only="true"] {
   --composer-bottom-inset: 0px;
   flex: none;
