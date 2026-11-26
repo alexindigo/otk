@@ -87,7 +87,13 @@ test.describe("core capabilities", () => {
     frames.release();
     expect(frames.held).toHaveLength(0);
     expect(new URL(page.url()).hash).toBe("");
-    await page.locator(".otk-settings .otk-view-header button").click();
+    // Removing the selected server replaces the route and closes Settings.
+    // Its delayed replies cannot reopen either Settings or the removed view.
+    await expect(page.locator(".otk-settings,textarea[name=prompt]"))
+      .toHaveCount(0);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Close settings", exact: true })
+      .click();
     await expect(page.locator(".otk-settings,textarea[name=prompt]"))
       .toHaveCount(0);
     expect(new URL(page.url()).hash).toBe("");
