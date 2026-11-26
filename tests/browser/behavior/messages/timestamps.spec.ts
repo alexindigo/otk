@@ -45,11 +45,13 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
     delay: 1000,
   });
   await prompt(page, "Show timestamp behavior");
-  // The agent band never owns a second clock, including while streaming.
-  const time = page.locator(
-    "[data-role=assistant] .otk-message-footer time[title]",
-  );
-  await expect.soft(page.locator(".otk-reply-start time")).toHaveCount(0);
+  // 2.105 WP6: the chip's disclosure is now inside the footer. Count the
+  // persistent outcome clock, not instants in the chip's scoped facts.
+  const clockSelector = ".otk-message-details > .otk-chrome-meta > time";
+  const footer = page.locator("[data-role=assistant] .otk-message-footer");
+  const time = footer.locator(clockSelector);
+  await expect.soft(page.locator(".otk-reply-start time:visible"))
+    .toHaveCount(0);
   await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
     "first output",
   );
@@ -86,21 +88,21 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   ).toBe(expected);
   const before = await time.locator("..").boundingBox();
   await time.hover();
-  const geometry = await page.evaluate(() => {
-    const footer = document.querySelector(
-        "[data-role=assistant] .otk-message-footer",
-      )!,
-      time = footer.querySelector<HTMLTimeElement>(
-        "time[title]",
-      )!,
+  await expect(time).toHaveCount(1);
+  const geometry = await time.evaluate((time: HTMLTimeElement) => {
+    const footer = time.closest(".otk-message-footer")!,
+      leading = footer.querySelector(".otk-reply-start")!,
       action = footer.querySelector("[data-message-command]")!,
       f = footer.getBoundingClientRect(),
       a = action.getBoundingClientRect(),
+      l = leading.getBoundingClientRect(),
       t = time.closest(".otk-chrome-meta")!.getBoundingClientRect();
     return {
       timeLeft: t.left,
       timeRight: t.right,
       footerLeft: f.left,
+      leadingLeft: l.left,
+      leadingRight: l.right,
       actionLeft: a.left,
       actionCenter: a.y + a.height / 2,
       timeCenter: t.y + t.height / 2,
@@ -117,7 +119,10 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   expect(Math.abs(geometry.actionCenter - geometry.timeCenter)).toBeLessThan(
     .5,
   );
-  expect(Math.abs(geometry.footerLeft - geometry.timeLeft)).toBeLessThan(.5);
+  expect(Math.abs(geometry.footerLeft - geometry.leadingLeft)).toBeLessThan(
+    .5,
+  );
+  expect(geometry.leadingRight).toBeLessThan(geometry.timeLeft);
   expect(geometry.color).toBe(geometry.footerColor);
   expect(Math.abs(geometry.timeLeft - before!.x)).toBeLessThan(.5);
   expect(Math.abs(geometry.timeRight - before!.x - before!.width)).toBeLessThan(
@@ -180,29 +185,9 @@ test("messages.native-final-clock-persistent-footer-ax-preference-restart", {
   await page.keyboard.press("Escape");
   await expect(page.locator(".otk-turn-usage :popover-open")).toHaveCount(0);
   await expect(page.locator(".otk-turn-usage > button")).toBeFocused();
-  // A native completion can contribute a real control between usage and Fork.
-  // Traverse that control when Tab reaches it, without requiring every native
-  // response to have a separate completion record or racing its publication.
+  // 2.105 WP6 puts completion in the Work log, not between usage and Fork.
+  await expect(footer.locator(".otk-record-completion")).toHaveCount(0);
   await page.keyboard.press("Tab");
-  await expect.poll(() =>
-    page.evaluate(() =>
-      document.activeElement?.matches(
-        '.otk-record-completion button, [data-message-command="reply.fork"]',
-      ) ?? false
-    )
-  ).toBe(true);
-  const completion = page.getByRole("button", {
-    name: "Completion details",
-    exact: true,
-  });
-  if (
-    await completion.evaluateAll((nodes) =>
-      nodes.some((node) => node === document.activeElement)
-    )
-  ) {
-    await expect(completion).toBeFocused();
-    await page.keyboard.press("Tab");
-  }
   await expect(page.locator('[data-message-command="reply.fork"]'))
     .toBeFocused();
   await page.keyboard.press("Tab");
