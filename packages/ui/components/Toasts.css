@@ -2,15 +2,16 @@
 .otk-toasts {
   --toast-width: calc(400 * var(--otk-unit));
   position: fixed;
-  inset-block-end: var(--overlay-gutter);
-  inset-inline-end: var(--overlay-gutter);
+  inset: var(--overlay-gutter);
+  margin-inline-start: auto;
   z-index: var(--layer-toast);
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: stretch;
   gap: var(--space-2);
-  inline-size: min(var(--toast-width), calc(100vi - 2 * var(--overlay-gutter)));
-  max-block-size: calc(100dvb - 2 * var(--overlay-gutter));
+  inline-size: var(--toast-width);
+  max-inline-size: stretch;
   pointer-events: none;
 }
 .otk-toast-row {
@@ -90,9 +91,9 @@
 }
 .otk-toasts.is-layer {
   position: static;
-  place-self: end;
+  /* Stretch over the stage; the flex column packs cards against its end. */
+  justify-self: end;
   margin: var(--overlay-gutter);
-  max-inline-size: stretch;
   max-block-size: stretch;
 }
 /* Borrow inline space when narrow, but keep the owning row's block bounds. */

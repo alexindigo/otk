@@ -1013,19 +1013,19 @@ keyboard intent starts another. Selection, search and membership can therefore
 change without retaining stale interactive rows, while automatic changes remain
 held during a live choice.
 
-`SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
-corner reservation, leading controls, scrolling body and optional footer. The
-shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own
-those dimensions and compact controls; corner clearance derives from the control
-size. Collapsed width belongs to the rail's CSS, never a second numeric view
-policy. Expanded width defaults and validated bounds come from protocol's
-immutable `SHELL_WIDTHS`, also consumed by ARIA, keyboard and pointer resizing.
-ProjectInbox also uses this frame when expanded. Search stays in its expanded
-vertical slot above the project lights; collapsing never moves their y
-positions. The right rail stacks available registered panel icons with vertical
-selection; activating one atomically selects and opens that panel through
-`onLayout`. Its selected content unmounts when collapsed; retained interaction
-belongs to the feature's framework-free scope owner.
+`SidebarRail` is the shared frame for both sides: one 48px rail when collapsed,
+a 52px header, leading controls, body and optional footer. The shared
+`--rail-width`, `--chrome-header-height` and `--control-size` tokens own those
+dimensions and compact controls. Header controls sit in flow. Collapsed width
+belongs to the rail's CSS, never a second numeric view policy. Expanded width
+defaults and validated bounds come from protocol's immutable `SHELL_WIDTHS`,
+also consumed by ARIA, keyboard and pointer resizing. ProjectInbox also uses
+this frame when expanded. Search stays in its expanded vertical slot above the
+project lights; collapsing never moves their y positions. The right rail stacks
+available registered panel icons with vertical selection; activating one
+atomically selects and opens that panel through `onLayout`. Its selected content
+unmounts when collapsed; retained interaction belongs to the feature's
+framework-free scope owner.
 
 `Shell({ theme, api, policy? })` binds `createShellState({api, policy?})` and
 composes the reusable three-region shell with selected UI registrations. The
@@ -1055,33 +1055,33 @@ validation/save/broadcast. No control constructs a whole-layout replacement from
 props. `ProjectTabs` consumes the public client tabs model,
 server/project-scoped task actions and injected guarded navigation. It renders
 task/phantom/preview tabs, the data-only `TaskTrail` and reported usage, using
-8px status lights. Shell-owned 28px corner toggles stay at a shared 12px offset
-across full/rail and right-open/closed layouts; each top bar reserves the corner
-zone. The 52px centre bar contains quiet task pills and injected Display
-options. `TaskTrail` renders the canonical model's ancestry only, with clickable
-titles and chevron boundaries. Shared `OverflowRow` measures matching inert
-content for full and whole-first-word/fitting-tail compact states, preserving
-every ancestor. The composer's `Subagents` control renders that model's separate
-D66 helper set once: lamps and titles left, shared duration-owner values right,
-with navigation and existing Stop admission. `LiveWork` displays shell jobs
-only. Reported usage fills the context bar against the reporting model's catalog
-context window; unknown windows show tokens without an invented denominator or
-bar. The inbox has 32px rows, hover-revealed menus, Search and a compact
-settings/keys/server footer; Sessions has 30px rows and CSS child guides. Chrome
-uses the shared selection pointer/underline, and shortcuts remain in tooltips,
-Keys and the palette. `registerTaskDialogs` contributes its name editor to the
-dialog host. Tabs have no per-tab menu; their owner-scoped commands and
-package-internal task handlers retain pin, naming, moving, adding and closing
-actions independently of presentation. Project rows own selection around their
-flowing open button and trailing cell. That cell reserves visit time and menu
-trigger in the same grid cell, revealing the trigger on hover or focus without
-shifting content or positioning it over the row. `session.preview` and
-`session.pin` are guarded command ports for the Sessions panel; preview
-replacement cannot remove required activity tabs. `ProjectSessions` consumes the
-framework-free client hierarchy and injected open/pin/create actions. The
-shell's existing navigation guard protects draft/attention input, including
-same-event slash navigation and browser history. Project-only URLs support empty
-projects. Opening or acting resets visits; a loaded viewed session records seen.
+8px status lights. Shell injects the corner controls into the panel headers,
+where they share the header centerline in either layout. The 52px centre bar
+contains quiet task pills and injected Display options. `TaskTrail` renders the
+canonical model's ancestry only, with clickable titles and chevron boundaries.
+Shared `OverflowRow` measures matching inert content for full and
+whole-first-word/fitting-tail compact states, preserving every ancestor. The
+composer's `Subagents` control renders that model's separate D66 helper set
+once: lamps and titles left, shared duration-owner values right, with navigation
+and existing Stop admission. `LiveWork` displays shell jobs only. Reported usage
+fills the context bar against the reporting model's catalog context window;
+unknown windows show tokens without an invented denominator or bar. The inbox
+has 32px rows, hover-revealed menus, Search and a compact settings/keys/server
+footer; Sessions has 30px rows and CSS child guides. Chrome uses the shared
+selection pointer/underline, and shortcuts remain in tooltips, Keys and the
+palette. `registerTaskDialogs` contributes its name editor to the dialog host.
+Tabs have no per-tab menu; their owner-scoped commands and package-internal task
+handlers retain pin, naming, moving, adding and closing actions independently of
+presentation. Project rows own selection around their flowing open button and
+trailing cell. That cell reserves visit time and menu trigger in the same grid
+cell, revealing the trigger on hover or focus without shifting content or
+positioning it over the row. `session.preview` and `session.pin` are guarded
+command ports for the Sessions panel; preview replacement cannot remove required
+activity tabs. `ProjectSessions` consumes the framework-free client hierarchy
+and injected open/pin/create actions. The shell's existing navigation guard
+protects draft/attention input, including same-event slash navigation and
+browser history. Project-only URLs support empty projects. Opening or acting
+resets visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the
@@ -1235,12 +1235,12 @@ selection binding and underline, separate from focus paint. Upload/remove, name
 and startup text commit through Save changes; dirty dismissal asks before
 discarding. No project auto-accept field is shown.
 
-`ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
-Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
-ListPicker, is the caller-owned trigger style slot. Chrome search/chevron icons,
-ModelLabel and SelectionContent likewise accept a caller class. Consumers style
-their supplied class/content rather than another component's private wrapper or
-descendants.
+`ProjectTabs.trailing` renders optional consumer chrome in its own flex slot
+without reading a Shell ancestor. Popover's `triggerClass`, forwarded by Menu,
+CommandMenu and ListPicker, is the caller-owned trigger style slot. Chrome
+search/chevron icons, ModelLabel and SelectionContent likewise accept a caller
+class. Consumers style their supplied class/content rather than another
+component's private wrapper or descendants.
 
 Breadcrumb folding and command-menu separators are projected from one coherent
 list snapshot into identity-bound rows. Keyed views consume those flags instead

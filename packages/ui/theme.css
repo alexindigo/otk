@@ -87,7 +87,6 @@
   --row-tool: calc(26 * var(--otk-unit));
   --diff-split-min: 1200px;
   --corner: calc(12 * var(--otk-unit));
-  --corner-zone: calc(var(--corner) + var(--control-size) + 8 * var(--otk-unit));
   --chrome-gap: calc(4 * var(--otk-unit));
   --hover-open-delay: 500ms;
   --hover-close-delay: 150ms;

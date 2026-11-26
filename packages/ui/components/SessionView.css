@@ -58,8 +58,7 @@
 .otk-transcript-viewport {
   position: relative;
   isolation: isolate;
-  /* Fill the assigned track without letting transcript content size it.
-   * Only the toast stack can reserve intrinsic space above the dock. */
+  /* Only notifications contribute intrinsic height to the shared row. */
   contain: size;
   /* The scrollport's padding can exceed a fully-shrunk transcript track. */
   overflow: clip;

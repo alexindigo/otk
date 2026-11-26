@@ -672,10 +672,7 @@ test(
                   r(".otk-corner-left").height,
                   r(".otk-display-trigger").width,
                   r(".otk-server-status").height,
-                  parseFloat(
-                    getComputedStyle(document.querySelector(".otk-task-strip")!)
-                      .paddingRight,
-                  ),
+                  r(".otk-corner-left").top + r(".otk-corner-left").height / 2,
                   r(".otk-corner-left").x,
                   innerWidth - r(".otk-corner-right").right,
                 ];
@@ -690,7 +687,7 @@ test(
               28,
               28,
               28,
-              48,
+              26,
               12,
               12,
             ]);
@@ -710,7 +707,7 @@ test(
               36,
               36,
               36,
-              56,
+              34,
               12,
               12,
             ]);
@@ -733,9 +730,11 @@ test(
                 el,
               ) => [
                 el.getBoundingClientRect().height,
-                parseFloat(getComputedStyle(el).paddingRight),
+                document.querySelector(".otk-corner-right")!
+                  .getBoundingClientRect().left -
+                el.getBoundingClientRect().right,
               ]),
-            ).toEqual([68, 56]);
+            ).toEqual([68, 8]);
             await page.locator("html").evaluate((el) =>
               ["--rail-width", "--chrome-header-height", "--control-size"]
                 .forEach((k) => (el as HTMLElement).style.removeProperty(k))
@@ -1258,19 +1257,19 @@ test(
             await page.evaluate(
               "styleTest.reserve(false);styleTest.collapse(false)",
             );
-            const padding = () =>
-              page.locator(".otk-task-strip").evaluate((el) =>
-                getComputedStyle(el).paddingRight
-              );
-            const normal = await padding();
+            const width = async () =>
+              (await page.locator(".otk-task-list").boundingBox())!.width;
+            const normal = await width();
             await page.evaluate(
               "document.body.className='otk-app';document.body.dataset.rightCollapsed='true'",
             );
-            expect(await padding()).toBe(normal);
+            expect(await width()).toBe(normal);
             await page.evaluate(
               "document.body.className='';styleTest.reserve(true)",
             );
-            await expect.poll(padding).not.toBe(normal);
+            await expect(page.getByRole("button", { name: "Trailing action" }))
+              .toBeVisible();
+            await expect.poll(width).toBeLessThan(normal);
             await page.evaluate("styleTest.collapse(true)");
             await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
               "data-collapsed",
