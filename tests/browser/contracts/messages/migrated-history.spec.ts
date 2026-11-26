@@ -56,26 +56,22 @@ test("messages.work-log-segments-keep-their-name-and-footer-owns-turn-time", {
   await page.setViewportSize({ width: 1280, height: 1600 });
   await openSession(state, page, "tstv1-otk");
   const reply = page.locator('[data-message="segment-call"]');
-  const headers = reply.locator(".otk-work-fold");
-  await expect(headers).toHaveCount(2);
-  await expect(headers.nth(0)).toHaveAttribute("aria-expanded", "false");
-  await expect(headers.nth(1)).toHaveAttribute("aria-expanded", "false");
-  await expect(headers.nth(0)).toHaveText("Work log");
-  await expect(headers.nth(1)).toHaveText("Work log");
-  await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+  const header = reply.locator(".otk-work-fold");
+  const assertWorkLog = async () => {
+    await expect(header).toHaveCount(1);
+    await expect(header).toHaveText("Work log");
+    await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+  };
+  await assertWorkLog();
+  await expect(header).toHaveAttribute("aria-expanded", "false");
   for (const detail of [false, true]) {
     await state.product("prefs.set", { key: "toolDetails", value: detail });
-    await expect(headers).toHaveCount(2);
-    await expect(headers.nth(0)).toHaveText("Work log");
-    await expect(headers.nth(1)).toHaveText("Work log");
-    await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+    await assertWorkLog();
     await page.reload();
-    await expect(headers.nth(0)).toHaveText("Work log");
-    await expect(headers.nth(1)).toHaveText("Work log");
-    await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+    await assertWorkLog();
   }
   await page.reload();
-  await expect(headers.nth(0)).toHaveText("Work log");
-  await expect(headers.nth(1)).toHaveText("Work log");
-  await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
+  await assertWorkLog();
+  await header.click();
+  await expect(reply.locator(".otk-work-body [data-tool=read]")).toHaveCount(3);
 });
