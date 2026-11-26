@@ -7,6 +7,7 @@ import {
   openBlockedSubagents,
   restorePermissionDock,
   subagent,
+  subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
 import { openWorkLogs } from "../../pages/transcript.ts";
@@ -124,7 +125,7 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   const inventory = subagents(page);
   await expect(childCrumb).toHaveCount(0);
   await openBlockedSubagents(page);
-  await expect(subagent(page, child.id).locator(".otk-status-light"))
+  await expect(subagentLamp(page, child.id))
     .toHaveAttribute("data-state", "blocked");
   await inventory.click();
   await restorePermissionDock(page);
@@ -202,7 +203,7 @@ test.describe("native helper lifecycle", () => {
     const helper = subagent(page, child.id);
     await expect(crumb).toHaveCount(0);
     await openBlockedSubagents(page);
-    await expect(helper.locator(".otk-status-light"))
+    await expect(subagentLamp(page, child.id))
       .toHaveAttribute("data-state", "blocked");
     const target = helper.locator(".otk-subagent-name");
     await expect(target).toHaveText("Live helper");

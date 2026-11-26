@@ -4,6 +4,7 @@ import { fixture } from "./config.ts";
 import { serve } from "./http.ts";
 import { type Consumer, consumerAssets } from "./consumer-builds.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
+import { styleListScene } from "./style-list-scene.ts";
 import type { ControlRequest, TestLease } from "./fixture-control.ts";
 /** Prebuilt independent public-entry UI, without acquiring a native backend. */
 export async function publicUiScenario(consumer: Consumer = "ui") {
@@ -40,6 +41,7 @@ export async function publicUiScenario(consumer: Consumer = "ui") {
   const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
   if (record) await Deno.writeTextFile(record, JSON.stringify(info));
   let lease: TestLease | undefined;
+  let lists: ReturnType<typeof styleListScene> | undefined;
   return {
     info,
     async dispatch(frame: ControlRequest): Promise<unknown> {
@@ -56,7 +58,9 @@ export async function publicUiScenario(consumer: Consumer = "ui") {
           lease = undefined;
           return null;
         case "observe":
-          return {};
+          return consumer === "styles"
+            ? { lists: await (lists ??= styleListScene(join(root, "lists"))) }
+            : {};
         case "stop":
           await server.shutdown();
           return null;

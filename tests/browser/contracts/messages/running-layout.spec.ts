@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration } from "../../fixtures/wire.ts";
-import { subagents } from "../../pages/crumbs.ts";
+import { subagentRows, subagents } from "../../pages/crumbs.ts";
 import type { Page } from "@playwright/test";
 import type { TestState } from "../../fixtures/test-state.ts";
 import type { Commands } from "../../../support/fixture-control.ts";
@@ -170,7 +170,7 @@ test(
     const before = await geometry(page, true),
       stop = await frameProbe(page, true, true);
     const inventory = subagents(page);
-    const helpers = page.locator(".otk-subagents [data-subagent]");
+    const helpers = subagentRows(page);
     const allocation = async () => {
       const result = await page.locator(".otk-messages").evaluate((pane) => {
         const b = pane.getBoundingClientRect();
@@ -197,8 +197,9 @@ test(
       await expect(page.locator('.otk-task-crumbs [data-helper="true"]'))
         .toHaveCount(0);
       if (count) {
-        await expect(inventory).toHaveText(
-          `${count} subagent${count === 1 ? "" : "s"}`,
+        // D66/D67: the composer inventory now reports the disposition.
+        await expect(inventory).toHaveAccessibleName(
+          `Subagents: ${count} running`,
         );
         await inventory.click();
         await expect(helpers).toHaveCount(count);
