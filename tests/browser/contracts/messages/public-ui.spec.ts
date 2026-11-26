@@ -6,20 +6,35 @@ test.use({ profile: "contract-messages-public-ui" });
 
 test("messages.constrained-toasts-keep-detail-and-actions-reachable", {
   tag: ["@messages", "@contracts"],
-}, async ({ isolatedState: state, page }) => {
+}, async ({ isolatedState: state, page }, info) => {
   await page.setViewportSize({ width: 400, height: 220 });
-  await page.goto(`${state.url}/?action-toasts&tall`);
   const stack = page.getByRole("region", { name: "Notifications" });
   const toast = stack.locator('[data-note="other"]');
+  const heading = toast.getByText("Target other", { exact: true });
   const lastDetail = toast.getByText("Detail 14 for other", { exact: true });
-  const dismiss = toast.getByRole("button", { name: "Dismiss", exact: true });
-  await expect(toast.getByText("Target other", { exact: true }))
-    .toBeInViewport();
-  await lastDetail.scrollIntoViewIfNeeded();
-  await expect(lastDetail).toBeInViewport();
-  await dismiss.click();
-  await expect(toast).toHaveCount(0);
-  await expect(stack.locator('[data-note="refused"]')).toHaveCount(1);
+  const dismiss = toast.getByRole("button", {
+    name: "Dismiss notification",
+    exact: true,
+  });
+  for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+    await page.goto(`${state.url}/?action-toasts&tall&theme=${theme}`);
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
+    await expect(heading).toBeInViewport();
+    await expect(lastDetail).not.toBeInViewport();
+    await heading.hover();
+    await page.mouse.wheel(0, 2000);
+    await expect(lastDetail).toBeInViewport();
+    await expect(heading).not.toBeInViewport();
+    await page.screenshot({
+      path: info.outputPath(`toast-constrained-${theme}.png`),
+    });
+    await toast.getByRole("button", { name: "Open session", exact: true })
+      .click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await dismiss.click();
+    await expect(toast).toHaveCount(0);
+    await expect(stack.locator('[data-note="refused"]')).toHaveCount(1);
+  }
 });
 
 for (const scenario of ["lifetime", "source"] as const) {

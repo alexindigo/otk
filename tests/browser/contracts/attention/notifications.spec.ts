@@ -132,7 +132,10 @@ test(
     });
     expect(await notes(page, "notes.length")).toBe(0);
     await restore();
-    await note.getByRole("button", { name: "Dismiss", exact: true }).click();
+    await note.getByRole("button", {
+      name: "Dismiss notification",
+      exact: true,
+    }).click();
     await expect(note).toHaveCount(0);
     await badge(page, 1);
     await openSession(state, page, b.id);

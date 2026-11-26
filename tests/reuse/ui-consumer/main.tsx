@@ -89,9 +89,14 @@ declare module "@otk/protocol" {
 
 const themes = new ThemeRegistry();
 registerOtkThemes(themes);
-const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
+const params = new URL(location.href).searchParams;
+const theme = new ThemeEngine(
+  themes,
+  browserThemeEnvironment(),
+  params.get("theme") ?? "otk-dark",
+);
 theme.start();
-const server = new URL(location.href).searchParams.get("server");
+const server = params.get("server");
 if (server) {
   const connection = new SidecarConnection(server, {
     status() {},
@@ -256,7 +261,7 @@ function ActionToasts(): Element {
       <Toasts
         model={toast.model}
         onMore={() => {}}
-        detail={new URL(location.href).searchParams.has("tall")
+        detail={params.has("tall")
           ? (note) => (
             <div>
               <For each={Array.from({ length: 14 }, (_, i) => i + 1)}>

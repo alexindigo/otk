@@ -84,7 +84,9 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
     true,
   );
   await region.evaluate((el) => el.scrollTop = el.scrollHeight);
-  await expect(toast.getByRole("button", { name: "Dismiss", exact: true }))
+  await expect(
+    toast.getByRole("button", { name: "Dismiss notification", exact: true }),
+  )
     .toBeInViewport();
   expect(
     await toast.evaluate((el) => {
@@ -94,8 +96,9 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
   ).toBe(true);
   await expect(toast).toContainText("END OF REASON");
   const geometry = await toast.evaluate((el) => {
-    const header = el.querySelector("header")!.getBoundingClientRect();
-    const actions = el.querySelector(".otk-toast-actions")!
+    const header = el.querySelector(".otk-failure-heading")!
+      .getBoundingClientRect();
+    const actions = el.querySelector(".otk-failure-details")!
       .getBoundingClientRect();
     const walker = document.createTreeWalker(
       el.querySelector(".otk-failure-detail-body")!,

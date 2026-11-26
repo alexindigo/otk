@@ -8,7 +8,7 @@ export default function Surface(props: {
   density?: "menu" | "composer";
   layout?: "fill" | "popover" | "dialog";
   fullHeight?: boolean;
-  signal?: "success" | "error" | "attention";
+  signal?: "error" | "info";
   staticChildren?: boolean;
   scrollable?: boolean;
   title?: Element;

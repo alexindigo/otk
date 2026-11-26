@@ -36,7 +36,7 @@ test(
         const r = surface.getBoundingClientRect(),
           s = getComputedStyle(surface);
         return Array.from(
-          surface.querySelectorAll(".otk-toast-message,.otk-toast-actions"),
+          surface.querySelectorAll(".otk-toast-row,.otk-toast-foot"),
         ).every((e) => {
           const b = e.getBoundingClientRect();
           return b.left >= r.left + parseFloat(s.paddingLeft) - .5 &&
@@ -46,7 +46,8 @@ test(
         });
       }),
     ).toBe(true);
-    await note.getByRole("button", { name: "Open", exact: true }).click();
+    await note.getByRole("button", { name: "Background B", exact: true })
+      .click();
     await expect(page).toHaveURL(new RegExp(`${b.id}$`));
     await badge(page, 0);
     await openSession(state, page, a.id);
