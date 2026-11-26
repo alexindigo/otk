@@ -18,7 +18,7 @@ import {
 } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
-import { SendIcon, StopIcon } from "./ChromeIcons.tsx";
+import { SendIcon, SettingsIcon, StopIcon } from "./ChromeIcons.tsx";
 import {
   actionFeedback,
   composerLabel,
@@ -33,8 +33,12 @@ import { ModelLabel, PromptSetting, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
+import OverflowRow from "./OverflowRow.tsx";
+import Popover from "./surface/Popover.tsx";
 
 const INTERRUPT_WINDOW_MS = 5000;
+const SETTINGS_KEY = "settings";
+const SETTINGS_LABEL = "Next message settings";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -386,55 +390,88 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         }}
       />
       <div class="otk-prompt-actions">
-        <div class="otk-prompt-context" aria-label="Next message settings">
-          <Show
-            when={features.some((feature) => feature.settings)}
-            fallback={
-              <>
-                <PromptSetting>
-                  {selectionLabel(
-                    ctx.nextSelection().agent.value,
-                    "Default agent",
-                  )}
-                </PromptSetting>
-                <PromptSetting>
-                  <ModelLabel
-                    provider={ctx.nextSelection().model.providerName}
-                    name={ctx.nextSelection().model.name}
-                  />
-                </PromptSetting>
-              </>
-            }
-          >
-            <For each={features}>{(feature) => feature.settings?.()}</For>
-          </Show>
-        </div>
-        <For each={features}>{(feature) => feature.actions?.()}</For>
         <Show when={armed()}>
           <span
-            class="otk-control-label"
+            class="otk-control-label otk-prompt-interrupt"
             data-interrupt-confirmation="true"
             role="status"
           >
             {submitTitle()}
           </span>
         </Show>
-        <div class="otk-prompt-send-slot">
-          <PrimaryAction
-            state={primaryState()}
-            class="otk-primary otk-send-button"
-            title={primaryState().mode === "stop"
-              ? primaryState().label
-              : submitTitle()}
-            description={primaryState().mode === "stop"
-              ? (props.activity().unstarted
-                ? "Stop and return the message to the composer"
-                : "Stop the response")
-              : undefined}
-            onInvoke={() => void activate("button")}
-          >
-            {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
-          </PrimaryAction>
+        <OverflowRow
+          items={[{ key: SETTINGS_KEY }]}
+          required={[SETTINGS_KEY]}
+          intrinsic={false}
+          singleLine
+          measure={() => <span class="otk-prompt-context-measure" />}
+          compactMeasure={() => <span class="otk-prompt-context-icon" />}
+          more={() => null}
+        >
+          {(_item, compact) => {
+            const settings = (inPopover = false) => (
+              <div
+                class={["otk-prompt-context", { "is-in-popover": inPopover }]}
+                role="group"
+                aria-label={SETTINGS_LABEL}
+              >
+                <Show
+                  when={features.some((feature) => feature.settings)}
+                  fallback={
+                    <>
+                      <PromptSetting>
+                        {selectionLabel(
+                          ctx.nextSelection().agent.value,
+                          "Default agent",
+                        )}
+                      </PromptSetting>
+                      <PromptSetting>
+                        <ModelLabel
+                          provider={ctx.nextSelection().model.providerName}
+                          name={ctx.nextSelection().model.name}
+                        />
+                      </PromptSetting>
+                    </>
+                  }
+                >
+                  <For each={features}>{(feature) => feature.settings?.()}</For>
+                </Show>
+              </div>
+            );
+            return (
+              <Show when={compact()} fallback={settings()}>
+                <Popover
+                  label={SETTINGS_LABEL}
+                  title={SETTINGS_LABEL}
+                  trigger={<SettingsIcon />}
+                  triggerClass="otk-icon-button otk-prompt-context-icon"
+                  size="content"
+                >
+                  {settings(true)}
+                </Popover>
+              </Show>
+            );
+          }}
+        </OverflowRow>
+        <div class="otk-prompt-action-group">
+          <For each={features}>{(feature) => feature.actions?.()}</For>
+          <div class="otk-prompt-send-slot">
+            <PrimaryAction
+              state={primaryState()}
+              class="otk-primary otk-send-button"
+              title={primaryState().mode === "stop"
+                ? primaryState().label
+                : submitTitle()}
+              description={primaryState().mode === "stop"
+                ? (props.activity().unstarted
+                  ? "Stop and return the message to the composer"
+                  : "Stop the response")
+                : undefined}
+              onInvoke={() => void activate("button")}
+            >
+              {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
+            </PrimaryAction>
+          </div>
         </div>
       </div>
       <For each={features}>{(feature) => feature.overlay?.()}</For>
