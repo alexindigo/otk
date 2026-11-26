@@ -51,7 +51,7 @@ import type {
   TranscriptRange,
 } from "./transcripts.ts";
 import { MESSAGE_ADMISSION_WATERMARK } from "./message-policy.ts";
-import { createAcquiredRange } from "./acquired-range.ts";
+import { type CoverageGap, createAcquiredRange } from "./acquired-range.ts";
 import {
   createTranscriptInteraction,
   type TranscriptInteraction,
@@ -83,6 +83,11 @@ function promptAfter(
   };
 }
 
+export interface TranscriptGapState extends CoverageGap {
+  state: "idle" | "loading" | "failed";
+  failure?: FailureValue;
+}
+
 export interface TranscriptState {
   appendRevision?: number;
   temperature: Temperature;
@@ -93,6 +98,7 @@ export interface TranscriptState {
   repliesByID: Record<string, TranscriptReply>;
   queuedIDs: Set<string>;
   records: import("./activity-spans.ts").RecordProjection;
+  gaps: readonly TranscriptGapState[];
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
   load?: LoadCoverage;
@@ -163,12 +169,19 @@ export interface TranscriptOwner {
   sibling(delta: number): Promise<string | undefined>;
   receive(sidecarId: string, frame: ServerFrame): void;
   older(): Promise<void>;
+  bridge(key?: string): Promise<void>;
   latestPrompt(): LatestPrompt | undefined;
   usesMetadata(ids: ReadonlySet<string>): boolean;
   stop(): void;
 }
 /** Opened Source folds in one transcript lifetime, each a bounded preview. */
 const SOURCE_RESULTS = 64;
+const missingMessage = () =>
+  new RequestFailure({
+    code: "message.missing",
+    retry: "none",
+    diagnosticID: randomID(),
+  });
 export function createTranscript(
   target: BodyTarget,
   connection: (id: string) => SidecarConnection,
@@ -390,6 +403,7 @@ export function createTranscript(
       ? projection.entry(op.messageID)?.key
       : undefined;
     if (op.op === "message.remove") {
+      acquired.remove(op.messageID);
       interaction.retireIdentity(op.messageID);
       for (
         const part of projection.state.messagesByID[op.messageID]?.parts ?? []
@@ -420,6 +434,9 @@ export function createTranscript(
     }
     const recordBefore = projection.state.records;
     const projected = projection.apply(op);
+    if (op.op === "message.upsert" && projection.materialized(op.message.id)) {
+      acquired.observe(op.message);
+    }
     // A native message may be one step of a reply. Retire the logical key
     // only when the reply itself is deleted, not when one step is removed.
     if (
@@ -460,6 +477,7 @@ export function createTranscript(
     repliesByID: {},
     queuedIDs: new Set(),
     records: projection.state.records,
+    gaps: [],
     olderCursor: null,
     pageLoading: false,
     recovering: [],
@@ -475,8 +493,17 @@ export function createTranscript(
   const state = currentStore.state;
   const subscribe = (listener: (value: TranscriptState) => void) =>
     binding.subscribe(() => listener(state));
+  let updating = false;
   const setState = (change: (draft: TranscriptState) => void) => {
-    currentStore.update(change);
+    // Applying a page's attention events can synchronously notify this owner.
+    // Only the outer transaction publishes the projection.
+    if (updating) return;
+    updating = true;
+    try {
+      currentStore.update(change);
+    } finally {
+      updating = false;
+    }
     state.messageIDs = projection.state.messageIDs;
     state.messagesByID = projection.state.messagesByID;
     state.replyIDs = projection.state.replyIDs;
@@ -500,6 +527,8 @@ export function createTranscript(
   let subscribed = false;
   let buffer: ClockedContent[] = [], bufferBytes = 0, fetching = false;
   let clock: ContentClock | undefined;
+  // Keep the last accepted clock even when live admission drops its clock.
+  let lastClock: ContentClock | undefined;
   let missing = false, retry: ReturnType<typeof setTimeout> | undefined;
   let recoveryAttempted = false;
   let hasBaseline = false;
@@ -521,6 +550,23 @@ export function createTranscript(
   let repairingHead: Promise<void> | undefined;
   let reconciling: Promise<void> | undefined;
   let automatic = false;
+  let bridging: { key: string; failure?: FailureValue } | undefined;
+  const publishGaps = (draft: TranscriptState) => {
+    const gaps = acquired.gaps();
+    if (
+      gaps.length !== draft.gaps.length ||
+      gaps.some((gap, i) =>
+        gap.key !== draft.gaps[i].key || gap.newer !== draft.gaps[i].newer ||
+        gap.older !== draft.gaps[i].older
+      )
+    ) projection.gaps(gaps);
+    draft.gaps = gaps.map((gap) => {
+      if (gap.key !== bridging?.key) return { ...gap, state: "idle" };
+      return bridging.failure
+        ? { ...gap, state: "failed", failure: bridging.failure }
+        : { ...gap, state: "loading" };
+    });
+  };
   let toolGeneration = 0;
   let selectedForTools = false;
   // IDs only: the selected transcript remains the sole owner of part data.
@@ -568,7 +614,7 @@ export function createTranscript(
       retry = undefined;
       if (selected && id === generation) {
         recoveryAttempted = true;
-        void refetch();
+        void reacquireNewest("recovery");
       }
     }, settings.retryms);
   };
@@ -581,12 +627,15 @@ export function createTranscript(
     controller?.abort();
     boundaryRead = undefined;
     fetching = false;
+    inFlight = undefined;
+    bridging = undefined;
     attentionReads = undefined;
     setState((draft) => {
       draft.loading = false;
       draft.paging = false;
       draft.continuity = "missing";
       draft.load = undefined;
+      publishGaps(draft);
     });
     schedule();
   };
@@ -678,7 +727,101 @@ export function createTranscript(
       });
     }
   };
-  const refetch = async (retryRecovery = false) => {
+  type NewestCause =
+    | "open"
+    | "recovery"
+    | "invalidated"
+    | "resync"
+    | "welcome"
+    | "latest"
+    | "send"
+    | "retry"
+    | "head-repair";
+  const reconcileNewest = (
+    page: MessagePage,
+    replay: readonly ClockedContent[],
+    cause: NewestCause,
+  ) => {
+    const { items, session: info } = page;
+    const same = authority !== undefined &&
+      compareTranscriptVersion(page.version, authority) === 0 &&
+      lastClock?.epoch === page.clock.epoch &&
+      // Same epoch/version alone does not prove that an unseen interval
+      // contains no edits to acquired history.
+      page.from.seq <= lastClock.seq;
+    const held = projection.messages().filter((message) =>
+      projection.committed(message.id)
+    );
+    const pageIDs = new Set(items.map((message) => message.id));
+    const recovering = state.recovering.filter((value) =>
+      !pageIDs.has(value.messageID)
+    );
+    clock = lastClock = replay.at(-1)?.clock ?? page.clock;
+    authority = minimum = page.version;
+    baseline(items);
+    buffer = [];
+    bufferBytes = 0;
+    fetching = false;
+    hasBaseline = true;
+    initialResync = false;
+    setState((draft) => {
+      const { deleted } = acquired.head(page, held, { same });
+      if (!info.parentID || draft.temperature !== "screen") draft.siblings = [];
+      projection.reconcile(items, page);
+      let content: ContentState = attach({
+        ...contentMetadata(draft.content),
+        revert: info.revert || null,
+        revertCommitted: info.revertCommitted ?? draft.content.revertCommitted,
+        error: info.error,
+        errorState: info.errorState,
+        recovering: [...recovering, ...page.recovering],
+        selection: info.selection,
+      });
+      for (const messageID of deleted) {
+        content = apply(content, { op: "message.remove", messageID });
+      }
+      let latestPrompt = page.prompt;
+      for (const { event } of [...page.catchup, ...replay]) {
+        content = apply(content, event);
+        if (event.op === "session.selection" && latestPrompt) {
+          latestPrompt = mergePromptSelection(latestPrompt, event.selection);
+        }
+        if (event.op === "message.upsert") {
+          latestPrompt = promptAfter(
+            latestPrompt,
+            event.message,
+            (id) => projection.state.messagesByID[id],
+          );
+        }
+      }
+      projection.helpers(helper);
+      projection.boundaries(
+        Object.values(page.turns).map((turn) => turn.boundary),
+      );
+      publishGaps(draft);
+      draft.info = info;
+      draft.clock = clock;
+      draft.version = authority;
+      draft.latestPrompt = latestPrompt;
+      draft.content = content;
+      draft.loading = false;
+      draft.continuity = "ready";
+    });
+    // Head repair's caller will run the batch. Otherwise only an on-screen
+    // transcript bridges automatically, after newest waiters can settle.
+    if (
+      cause !== "head-repair" && state.gaps.length &&
+      state.temperature === "screen"
+    ) {
+      const request = load;
+      queueMicrotask(() => {
+        if (request === load && state.temperature === "screen") {
+          void owner.bridge();
+        }
+      });
+    }
+  };
+  const reacquireNewest = async (cause: NewestCause, retryRecovery = false) => {
     if (!selected) return;
     if (!policy()) return;
     clearTimeout(retry);
@@ -693,6 +836,8 @@ export function createTranscript(
     readLabel = "Loading messages";
     readStage("queued", progressGeneration);
     controller?.abort();
+    inFlight = undefined;
+    bridging = undefined;
     const abort = controller = new AbortController();
     fetching = true;
     buffer = [];
@@ -708,6 +853,7 @@ export function createTranscript(
         : "loading";
       draft.error = undefined;
       draft.pageError = undefined;
+      publishGaps(draft);
     });
     try {
       const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
@@ -759,28 +905,7 @@ export function createTranscript(
         nextClock = frame.clock;
         replay.push(frame);
       }
-      const { prefix, exact } = acquired.replace(
-        page,
-        projection.messages().filter((message) =>
-          projection.committed(message.id)
-        ),
-        authority,
-        recovering ? undefined : clock,
-      );
-      const retainedIDs = new Set(prefix.map((message) => message.id));
-      const boundaries = prefix.flatMap((message) => {
-        const boundary = projection.boundary(
-          message.role === "assistant"
-            ? message.replyTo ?? message.id
-            : message.id,
-        );
-        return boundary ? [boundary] : [];
-      });
-      const recoveringPrefix = state.recovering.filter((value) =>
-        retainedIDs.has(value.messageID)
-      );
-      clock = nextClock;
-      authority = minimum = page.version;
+      reconcileNewest(page, replay, cause);
       if (info.parentID && state.temperature === "screen") {
         void rpc.call(
           "session.children",
@@ -795,72 +920,6 @@ export function createTranscript(
           }
         }).catch(diagnostic);
       }
-      baseline(messages);
-      buffer = [];
-      bufferBytes = 0;
-      fetching = false;
-      hasBaseline = true;
-      initialResync = false;
-      setState((draft) => {
-        if (!info.parentID || draft.temperature !== "screen") {
-          draft.siblings = [];
-        }
-        projection.reset([...prefix, ...messages], {
-          sameSource: exact,
-          keepParked: exact && page.older !== null,
-        });
-        projection.helpers(helper);
-        projection.boundaries(
-          [
-            ...boundaries,
-            ...Object.values(page.turns).map((turn) => turn.boundary),
-          ],
-        );
-        let content: ContentState = attach({
-          ...contentMetadata(draft.content),
-          revert: info.revert || null,
-          revertCommitted: info.revertCommitted ??
-            draft.content.revertCommitted,
-          error: info.error,
-          errorState: info.errorState,
-          recovering: [...recoveringPrefix, ...page.recovering],
-          selection: info.selection,
-        });
-        let latestPrompt = page.prompt;
-        for (const { event } of page.catchup) {
-          content = apply(content, event);
-          if (event.op === "session.selection" && latestPrompt) {
-            latestPrompt = mergePromptSelection(latestPrompt, event.selection);
-          }
-          if (event.op === "message.upsert") {
-            latestPrompt = promptAfter(
-              latestPrompt,
-              event.message,
-              (id) => projection.state.messagesByID[id],
-            );
-          }
-        }
-        for (const { event } of replay) {
-          content = apply(content, event);
-          if (event.op === "session.selection" && latestPrompt) {
-            latestPrompt = mergePromptSelection(latestPrompt, event.selection);
-          }
-          if (event.op === "message.upsert") {
-            latestPrompt = promptAfter(
-              latestPrompt,
-              event.message,
-              (id) => projection.state.messagesByID[id],
-            );
-          }
-        }
-        draft.info = info;
-        draft.clock = clock;
-        draft.version = authority;
-        draft.latestPrompt = latestPrompt;
-        draft.content = content;
-        draft.loading = false;
-        draft.continuity = "ready";
-      });
       recoveryAttempted = false;
       queueMicrotask(reserve);
       deliveryDiagnostics.record({
@@ -893,7 +952,9 @@ export function createTranscript(
       if (resynced) {
         retriedVersion = minimum;
         queueMicrotask(() => {
-          if (selected && current(id, request) && !fetching) void refetch();
+          if (selected && current(id, request) && !fetching) {
+            void reacquireNewest("resync");
+          }
         });
       } else schedule();
     }
@@ -931,10 +992,13 @@ export function createTranscript(
     liveCompleted.clear();
     buffer = [];
     bufferBytes = 0;
-    clock = undefined;
+    clock = lastClock = undefined;
     authority = minimum = undefined;
     retriedVersion = undefined;
     acquired.clear();
+    interaction.clear();
+    inFlight = repairingHead = undefined;
+    bridging = undefined;
     missing = false;
     fetching = false;
     hasBaseline = false;
@@ -954,6 +1018,7 @@ export function createTranscript(
       // Window lifetime changes do not turn projected local sends into native
       // input. Replace only the native window; pending entries survive it.
       projection.reset([]);
+      publishGaps(draft);
       draft.content = attach(emptyContent());
       draft.loading = !!selection;
       draft.continuity = selection ? "loading" : "ready";
@@ -976,7 +1041,7 @@ export function createTranscript(
     if (selection && !deleted?.deleted) {
       connection(selection.sidecarId).subscribe(selection.sessionID, true);
       subscribed = true;
-      void refetch();
+      void reacquireNewest("open");
     }
   };
   const trim = () => {
@@ -996,8 +1061,9 @@ export function createTranscript(
   };
   const reserve = () => {
     if (
-      !selected || state.loading || state.paging || state.exhausted ||
-      state.pageError || state.continuity !== "ready" ||
+      !selected || repairingHead || state.loading || state.paging ||
+      state.exhausted ||
+      state.pageError || state.gaps.length || state.continuity !== "ready" ||
       state.load?.state === "loading"
     ) return;
     const ids = state.messageIDs;
@@ -1011,7 +1077,10 @@ export function createTranscript(
       automatic = true;
       const work = owner.older();
       automatic = false;
-      void work.then(reserve);
+      const length = ids.length;
+      void work.then(() => {
+        if (state.messageIDs.length > length) reserve();
+      });
     }
   };
   const snapshotLifetime = new AbortController();
@@ -1070,12 +1139,14 @@ export function createTranscript(
           const reply = state.repliesByID[key];
           if (!reply) throw new Error("Reply is no longer available");
           const boundary = projection.boundary(turnID);
-          if (boundary?.firstID && projection.materialized(boundary.firstID)) {
-            break;
-          }
-          if (message.replyTo && projection.materialized(message.replyTo)) {
-            break;
-          }
+          const first = boundary?.firstID ?? message.replyTo;
+          if (
+            first && projection.materialized(first) &&
+            acquired.current(first) &&
+            reply.segments.every((segment) =>
+              acquired.current(segment.messageID)
+            )
+          ) break;
           if (state.exhausted) break;
           await owner.older();
           if (state.pageError) throw feedbackError(state.pageError);
@@ -1083,9 +1154,15 @@ export function createTranscript(
         if (id !== generation || !selected) {
           throw new Error("Reply changed while loading source");
         }
-        return state.repliesByID[key].segments.flatMap((segment) =>
-          segment.parts.map(text)
-        ).filter(Boolean).join("\n\n");
+        const reply = state.repliesByID[key];
+        if (
+          !reply ||
+          reply.segments.some((segment) => !acquired.current(segment.messageID))
+        ) {
+          throw missingMessage();
+        }
+        return reply.segments.flatMap((segment) => segment.parts.map(text))
+          .filter(Boolean).join("\n\n");
       }
       return message.parts.map(text).filter(Boolean).join("\n\n");
     },
@@ -1168,9 +1245,10 @@ export function createTranscript(
       reserve();
     },
     async ensure(messageID, signal) {
+      const lifetime = generation;
       while (
-        selected && (state.loading || missing ||
-          !projection.materialized(messageID))
+        selected && lifetime === generation && (state.loading || missing ||
+          !projection.materialized(messageID) || !acquired.current(messageID))
       ) {
         signal?.throwIfAborted();
         if (state.loading) {
@@ -1183,16 +1261,19 @@ export function createTranscript(
             });
           });
         } else if (state.exhausted && !missing) {
-          throw new RequestFailure({
-            code: "message.missing",
-            retry: "none",
-            diagnosticID: randomID(),
-          });
+          throw missingMessage();
         } else if (missing) await owner.latest(signal);
-        else await owner.older();
+        else if (!state.gaps.length && acquired.next != null && !inFlight) {
+          await paginate(
+            undefined,
+            undefined,
+            () =>
+              projection.materialized(messageID) && acquired.current(messageID),
+          );
+        } else await owner.older();
         if (state.pageError) throw feedbackError(state.pageError);
       }
-      if (!selected) {
+      if (!selected || lifetime !== generation) {
         throw new DOMException("Transcript demand ended", "AbortError");
       }
       signal?.throwIfAborted();
@@ -1230,7 +1311,7 @@ export function createTranscript(
         // may need a fresh *older continuation*, not another newest body read.
         // Missing authority uses the same generation-fenced recovery owner as
         // initial selection and reconnect. Cancelling a waiter never cancels it.
-        if (selected && missing && !fetching) void refetch();
+        if (selected && missing && !fetching) void reacquireNewest("latest");
         inspect();
       });
     },
@@ -1251,7 +1332,7 @@ export function createTranscript(
             });
           });
         }
-        if (selected && (absent() || missing)) await refetch();
+        if (selected && (absent() || missing)) await reacquireNewest("send");
       })();
       const pending = work.finally(() => {
         if (reconciling === pending) reconciling = undefined;
@@ -1272,7 +1353,7 @@ export function createTranscript(
         trim();
       };
     },
-    refetch: () => refetch(true),
+    refetch: () => reacquireNewest("retry", true),
     latestPrompt: () => state.latestPrompt,
     usesMetadata: (ids) =>
       ids.has(target.sessionID) || projection.usesMetadata(ids),
@@ -1378,13 +1459,13 @@ export function createTranscript(
         clock = undefined;
         sources.invalidate();
         missing = true;
-        void refetch();
+        void reacquireNewest("invalidated");
         return;
       }
       if (frame.t === "welcome") {
         sources.invalidate();
-        authority = minimum = undefined;
-        void refetch();
+        minimum = retriedVersion = undefined;
+        void reacquireNewest("welcome");
         return;
       }
       if (frame.t !== "content") return;
@@ -1512,6 +1593,9 @@ export function createTranscript(
           setState((draft) => {
             draft.content = apply(draft.content, frame.event);
             draft.clock = clock;
+            if (frame.event.op === "message.remove" && draft.gaps.length) {
+              publishGaps(draft);
+            }
             if (frame.event.op === "session.selection") {
               if (draft.latestPrompt) {
                 draft.latestPrompt = mergePromptSelection(
@@ -1539,6 +1623,7 @@ export function createTranscript(
               );
             }
           });
+          lastClock = clock;
           if (
             frame.event.op === "message.upsert" ||
             frame.event.op === "message.remove"
@@ -1606,8 +1691,29 @@ export function createTranscript(
         : state.siblings[(at + delta + size) % size]?.id;
     },
     older(): Promise<void> {
+      if (inFlight) return inFlight;
       if (repairingHead) return repairingHead;
-      return pagination.older();
+      if (!selected || state.loading || state.paging) return Promise.resolve();
+      if (state.gaps.length && !missing && acquired.ranges()[0]?.next != null) {
+        return owner.bridge();
+      }
+      if (acquired.next !== undefined && !missing) return paginate();
+      const lifetime = generation;
+      const work = reacquireNewest("head-repair").then(() => {
+        if (generation === lifetime && !missing && !state.pageError) {
+          return owner.bridge();
+        }
+      }).finally(() => {
+        if (repairingHead === work) repairingHead = undefined;
+      });
+      return repairingHead = work;
+    },
+    bridge(key) {
+      if (inFlight) return inFlight;
+      if (key && !state.gaps.some((gap) => gap.key === key)) {
+        return Promise.resolve();
+      }
+      return paginate(state.gaps[0]?.key, key);
     },
     stop(): void {
       stopEntities?.();
@@ -1619,140 +1725,160 @@ export function createTranscript(
       owner.temperature("cold");
     },
   };
-  const pagination = {
-    older(): Promise<void> {
-      if (inFlight) return inFlight;
-      if (!selected || state.loading || state.paging) return Promise.resolve();
-      if (acquired.next === undefined || missing) {
-        // A retired tail has no trustworthy cursor; use the same replacement
-        // path as every other newest-page read. The old window's first identity
-        // describes demand, not coverage: refill to its immediate predecessor.
-        const first = firstRetained(), lifetime = generation;
-        const work = refetch().then(async () => {
-          while (
-            generation === lifetime && !state.loading && !missing &&
-            acquired.next != null && !state.pageError
+  const paginate = (
+    gapKey?: string,
+    requested = gapKey,
+    until?: () => boolean,
+  ): Promise<void> => {
+    const head = acquired.ranges()[0];
+    if (
+      !selected || state.loading || state.paging || missing || !head ||
+      head.next == null
+    ) {
+      return Promise.resolve();
+    }
+    const limit = policy()?.bridgepages ?? 1;
+    const target = selected,
+      id = generation,
+      request = load;
+    let before = head.next;
+    const retain = !automatic && !gapKey;
+    if (retain) {
+      for (const message of state.content.messages) visited.add(message.id);
+    }
+    setState((draft) => {
+      draft.paging = true;
+      draft.error = undefined;
+      draft.pageError = undefined;
+      bridging = gapKey ? { key: gapKey } : undefined;
+      if (gapKey) publishGaps(draft);
+    });
+    const read = async () => {
+      try {
+        for (let i = 0; i < limit; i++) {
+          const progressGeneration = `${id}:${request}:older:${
+            before ?? "tail"
+          }`;
+          readLabel = "Loading earlier messages";
+          readStage("queued", progressGeneration);
+          const page = await readBoundary(
+            before,
+            controller!.signal,
+            false,
+            () => {
+              readStage("reading", progressGeneration);
+            },
+          );
+          if (!current(id, request)) return;
+          if (boundaryRead) boundaryRead.deliver = undefined;
+          if (page.load && !coverage(page.load)) {
+            throw new Error("Invalid message coverage");
+          }
+          if (
+            page.sessionID !== target.sessionID ||
+            page.from.epoch !== page.clock.epoch ||
+            page.from.seq > page.clock.seq ||
+            page.clock.epoch !== clock?.epoch || !authority ||
+            compareTranscriptVersion(page.version, authority) !== 0
           ) {
-            await pagination.older();
-            const current = firstRetained();
-            if (!first || current && compareMessages(current, first) < 0) break;
+            invalidate();
+            return;
           }
-        }).finally(() => {
-          if (repairingHead === work) repairingHead = undefined;
-        });
-        return repairingHead = work;
-      }
-      if (acquired.next === null) return Promise.resolve();
-      const target = selected,
-        id = generation,
-        request = load;
-      let before: string = acquired.next;
-      const retain = !automatic;
-      if (retain) {
-        for (const message of state.content.messages) visited.add(message.id);
-      }
-      setState((draft) => {
-        draft.paging = true;
-        draft.error = undefined;
-        draft.pageError = undefined;
-      });
-      const read = async () => {
-        try {
-          for (;;) {
-            const progressGeneration = `${id}:${request}:older:${
-              before ?? "tail"
-            }`;
-            readLabel = "Loading earlier messages";
-            readStage("queued", progressGeneration);
-            const page = await readBoundary(
-              before,
-              controller!.signal,
-              false,
-              () => {
-                readStage("reading", progressGeneration);
-              },
+          let loaded = { ...emptyContent(), messages: page.items };
+          const tombstones = new Set<string>();
+          const retained = firstRetained(), pageFirst = page.items[0];
+          const first = retained &&
+              (!pageFirst || compareMessages(retained, pageFirst) < 0)
+            ? retained
+            : pageFirst;
+          for (const { event } of page.catchup) {
+            if (event.op === "message.remove") tombstones.add(event.messageID);
+            if (outsideAcquiredRange(event, first, page.older !== null)) {
+              continue;
+            }
+            loaded = reduce(loaded, event);
+          }
+          // Do not roll back current rows whose live clock is ahead of this
+          // older page. Stale and parked rows still need their page bodies.
+          const messages = loaded.messages.filter((message) =>
+            !projection.materialized(message.id) ||
+            !acquired.current(message.id) ||
+            page.clock.seq >= clock!.seq
+          );
+          const { deleted } = acquired.extend(
+            head.key,
+            before,
+            page.older,
+            page.items,
+          );
+          if (retain) {
+            for (const message of messages) visited.add(message.id);
+          }
+          baseline(messages);
+          const added = messages.some((m) => !projection.materialized(m.id));
+          const gaps = acquired.gaps();
+          const next = acquired.ranges()[0]?.next;
+          let again = i + 1 < limit && next != null &&
+            (requested ? gaps.some(({ key }) => key === requested) : !added);
+          setState((draft) => {
+            projection.reconcile(
+              messages,
+              page.catchup.length ? undefined : page,
             );
-            if (!current(id, request)) return;
-            if (boundaryRead) boundaryRead.deliver = undefined;
-            if (page.load && !coverage(page.load)) {
-              throw new Error("Invalid message coverage");
+            let content = draft.content;
+            for (const messageID of new Set([...deleted, ...tombstones])) {
+              content = apply(content, { op: "message.remove", messageID });
             }
-            if (
-              page.sessionID !== target.sessionID ||
-              page.from.epoch !== page.clock.epoch ||
-              page.from.seq > page.clock.seq ||
-              page.clock.epoch !== clock?.epoch || !authority ||
-              compareTranscriptVersion(page.version, authority) !== 0
-            ) {
-              invalidate();
-              return;
-            }
-            let loaded = { ...emptyContent(), messages: page.items };
-            const retained = firstRetained(), pageFirst = page.items[0];
-            const first = retained &&
-                (!pageFirst || compareMessages(retained, pageFirst) < 0)
-              ? retained
-              : pageFirst;
-            for (const { event } of page.catchup) {
-              if (outsideAcquiredRange(event, first, page.older !== null)) {
-                continue;
-              }
-              loaded = reduce(loaded, event);
-            }
-            const messages = loaded.messages;
-            acquired.extend(before, page.older, messages);
-            if (retain) {
-              for (const message of messages) visited.add(message.id);
-            }
-            baseline(messages);
-            const added = messages.filter((m) =>
-              !projection.materialized(m.id)
+            projection.helpers(helper);
+            projection.boundaries(
+              Object.values(page.turns).map((turn) => turn.boundary),
             );
-            setState((draft) => {
-              projection.merge(added);
-              projection.helpers(helper);
-              projection.boundaries(
-                Object.values(page.turns).map((turn) => turn.boundary),
-              );
-              let metadata = contentMetadata(draft.content);
-              for (const recovering of page.recovering) {
-                if (
-                  added.some((message) => message.id === recovering.messageID)
-                ) {
-                  metadata = reduceRecovery(metadata, {
-                    op: "stream.recovery",
-                    ...recovering,
-                    state: recovering.state ?? "recovering",
-                  });
-                }
-              }
-              draft.content = attach(metadata);
-              draft.paging = !added.length && page.older !== null;
+            const reread = new Set(messages.map(({ id }) => id));
+            draft.content = attach({
+              ...contentMetadata(content),
+              recovering: [
+                ...(content.recovering ?? []).filter(({ messageID }) =>
+                  !reread.has(messageID)
+                ),
+                ...page.recovering.filter(({ messageID }) =>
+                  reread.has(messageID)
+                ),
+              ],
             });
-            if (!page.load || page.load.state === "complete") {
-              readStage("ready", progressGeneration, page.items.length);
-            }
-            if (boundaryRead) boundaryRead.painted = true;
-            finishCoverage();
-            if (added.length || page.older === null) return;
-            before = page.older;
+            if (until?.()) again = false;
+            bridging = again && requested && gaps[0]
+              ? { key: gaps[0].key }
+              : undefined;
+            publishGaps(draft);
+            draft.paging = again;
+          });
+          if (!page.load || page.load.state === "complete") {
+            readStage("ready", progressGeneration, page.items.length);
           }
-        } catch (error) {
-          if (current(id, request)) {
-            setState((draft) => {
-              draft.paging = false;
-              draft.error = failureValue(error);
-              draft.pageError = draft.error;
-            });
-          }
+          if (boundaryRead) boundaryRead.painted = true;
+          finishCoverage();
+          if (!again || next == null) return;
+          before = next;
         }
-      };
-      const work = read().finally(() => {
-        if (inFlight === work) inFlight = undefined;
-      });
-      inFlight = work;
-      return work;
-    },
+      } catch (error) {
+        if (current(id, request)) {
+          setState((draft) => {
+            draft.paging = false;
+            draft.error = failureValue(error);
+            draft.pageError = draft.error;
+            if (bridging) {
+              bridging = { key: bridging.key, failure: draft.error };
+            }
+            publishGaps(draft);
+          });
+        }
+      }
+    };
+    const work = read().finally(() => {
+      if (inFlight === work) inFlight = undefined;
+    });
+    inFlight = work;
+    return work;
   };
   const refreshWork = () => {
     if (
