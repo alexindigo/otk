@@ -34,9 +34,17 @@ Deno.test("UI convention: one terminal run path", async () => {
           surface,
           'this.core.encodePaste(text) + "\\r"; function pasteAndSubmit() {}',
         ],
+        [
+          "packages/ui/features/terminal/Terminal.tsx",
+          "pane.renderer!.submit(); new TerminalRuns();",
+        ],
+        [
+          "packages/ui/features/code-blocks.tsx",
+          'box.runs.request("x", "submit");',
+        ],
       ]),
     ).length,
-    2,
+    5,
   );
   assertEquals(
     terminalRunErrors(
@@ -45,6 +53,11 @@ Deno.test("UI convention: one terminal run path", async () => {
           surface,
           'this.sendInput(() => this.core.encodePaste(text)); this.sendInput(() => "\\r");',
         ],
+        [
+          "packages/ui/features/terminal/model.ts",
+          "function runTarget() { return { paste: (text) => pane.renderer!.paste(text) }; }",
+        ],
+        ["packages/ui/features/prompt/shell.ts", "ctx.submit(action);"],
       ]),
     ),
     [],

@@ -10,6 +10,7 @@ import {
   TERMINAL_RUN_LABEL,
   type TerminalAttachment,
   type TerminalBox,
+  type TerminalRunTarget,
   TERMINALS_UNAVAILABLE,
 } from "@otk/client";
 import type { TerminalInfo } from "@otk/protocol";
@@ -24,6 +25,17 @@ interface Pane {
   alive: boolean;
   renderer?: TerminalRenderer;
   attachment?: TerminalAttachment;
+  detachRun?: () => void;
+}
+
+function runTarget(id: string, pane: Pane): TerminalRunTarget {
+  return {
+    terminalID: id,
+    bracketedPaste: () => pane.renderer!.bracketedPaste(),
+    paste: (text) => pane.renderer!.paste(text),
+    submit: () => pane.renderer!.submit(),
+    erase: (count) => pane.renderer!.erase(count),
+  };
 }
 export function terminalPrompt(text: string, title: string) {
   let length = 3;
@@ -79,13 +91,14 @@ export function createTerminalPanel(
       state.error = failure;
     });
     const error = new FeedbackFailure(failure);
-    box?.failRuns(error);
+    box?.runs.fail(error);
     return error;
   };
   // Input is admitted only after the mux restores the shell's active modes.
   const drain = () => {
     if (
-      !alive || !started || !box?.hasRuns || box.unavailable || creating ||
+      !alive || !started || !box?.runs.waiting || box.mode === "closed" ||
+      box.unavailable || creating ||
       terminals.state.loading || terminals.state.error
     ) return;
     const selected = terminals.state.list.find((item) =>
@@ -98,25 +111,14 @@ export function createTerminalPanel(
     const pane = panes.get(selected.id);
     if (
       !pane?.alive || !pane.attachment || !pane.renderer ||
+      !box.runs.ready(selected.id) ||
       terminals.state.disconnected.includes(selected.id)
     ) return;
-    let failure: unknown;
-    for (const run of box.takeRuns()) {
-      if (failure) {
-        run.reject(failure);
-        continue;
-      }
-      try {
-        if (run.text) {
-          pane.renderer.paste(run.text);
-          pane.renderer.submit();
-        }
-        pane.renderer.focus();
-        run.resolve();
-      } catch (cause) {
-        failure = fail(cause, TERMINAL_RUN_LABEL) ?? cause;
-        run.reject(failure);
-      }
+    try {
+      box.runs.deliver(selected.id);
+      if (!box.runs.pending) pane.renderer.focus();
+    } catch (cause) {
+      fail(cause, TERMINAL_RUN_LABEL);
     }
   };
   const title = (id: string) =>
@@ -131,9 +133,26 @@ export function createTerminalPanel(
         panes.get(terminals.state.selected ?? "")?.renderer?.selection() ?? "";
     });
   };
+  // A retained renderer can remain attached while offscreen. The write port
+  // exists only while its live channel can actually accept bytes.
+  const bindRunTarget = (id: string, pane: Pane) => {
+    if (!box) return;
+    const { list, disconnected } = terminals.state;
+    if (
+      pane.alive && pane.renderer && pane.attachment?.retained &&
+      !disconnected.includes(id) &&
+      list.some((item) => item.id === id && item.status === "running")
+    ) {
+      pane.detachRun ??= box.runs.attach(runTarget(id, pane));
+    } else {
+      pane.detachRun?.();
+      pane.detachRun = undefined;
+    }
+  };
   const activate = (id: string, pane: Pane) => {
     if (!alive || !pane.alive || !pane.renderer || intent !== id) return;
     pane.attachment = terminals.show(id, pane.renderer.sink);
+    bindRunTarget(id, pane);
     intent = "";
     store.update((state) => {
       state.preparing = "";
@@ -154,6 +173,14 @@ export function createTerminalPanel(
   };
   const unlisten = terminals.subscribe(() => {
     const { loading, error } = terminals.state;
+    if (!loading && !error) {
+      box?.runs.present(
+        terminals.state.list.filter((item) => item.status === "running").map((
+          item,
+        ) => item.id),
+      );
+    }
+    for (const [id, pane] of panes) bindRunTarget(id, pane);
     const refreshed = wasLoading && !loading;
     wasLoading = loading;
     const selected = terminals.state.selected;
@@ -250,7 +277,10 @@ export function createTerminalPanel(
       panes.set(id, pane);
       void rendererFactory(element, {
         colors: theme.snapshot().colors,
-        input: (bytes) => pane.attachment?.input(bytes),
+        input: (bytes, origin) => {
+          pane.attachment?.input(bytes);
+          if (origin === "user" && pane.detachRun) box?.runs.input(id);
+        },
         resize: (cols, rows) => pane.attachment?.resize(cols, rows),
         selection: (text) => {
           if (
@@ -275,6 +305,7 @@ export function createTerminalPanel(
       }).catch((cause) => fail(cause, "Opening terminal"));
       return () => {
         pane.alive = false;
+        pane.detachRun?.();
         pane.attachment?.close();
         pane.renderer?.dispose();
         if (panes.get(id) === pane) panes.delete(id);
@@ -314,6 +345,7 @@ export function createTerminalPanel(
       terminals.dispose();
       for (const pane of panes.values()) {
         pane.alive = false;
+        pane.detachRun?.();
         pane.renderer?.dispose();
       }
       panes.clear();
