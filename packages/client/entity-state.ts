@@ -256,6 +256,12 @@ export function emphasis(store: EntityStateStore, k: string): boolean {
   const value = store.get(k);
   return !store.isStale && (value?.counts.unseen ?? 0) > 0;
 }
+/** Published unseen runs of this session and its full subtree (D70). */
+export function attentionCount(store: EntityStateStore, k: string): number {
+  const value = store.isStale ? undefined : store.get(k);
+  return (value?.counts.unseen ?? 0) +
+    (value?.evidence?.descendants.unseen ?? 0);
+}
 /** Sessions that need the user: blocked, or finished and not seen. */
 export function attention(
   store: EntityStateStore,

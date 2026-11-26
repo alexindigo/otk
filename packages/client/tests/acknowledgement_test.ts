@@ -2,6 +2,7 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { entityKey, type EntityState } from "@otk/protocol";
 import {
+  attentionCount,
   awaitAcknowledged,
   createEntityStateStore,
   presentedEntity,
@@ -39,6 +40,26 @@ Deno.test("clear feedback waits for published terminals without consuming a newe
   store.stale(true);
   await stale;
   store.stop();
+});
+
+Deno.test("clear attention counts published unseen runs, not live inputs", () => {
+  const key = entityKey("session", "s");
+  const store = createEntityStateStore({
+    read: () => ({
+      [key]: {
+        ...presentedEntity("session", "s", "blocked", true),
+        evidence: {
+          work: false,
+          permissions: 1,
+          questions: 0,
+          descendants: { unseen: 3, blocked: 2, working: 1, finished: 0 },
+        },
+      },
+    }),
+  });
+  assertEquals(attentionCount(store, key), 4);
+  store.stale(true);
+  assertEquals(attentionCount(store, key), 0);
 });
 
 Deno.test("clear feedback waits for the visible verdict without demanding off-view entities", async () => {
