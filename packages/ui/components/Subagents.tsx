@@ -180,7 +180,7 @@ export default function Subagents(
           onClose={stop}
           trigger={
             <LiveCount
-              compact={helperCountParts(publication().counts).map((part) => ({
+              parts={helperCountParts(publication().counts).map((part) => ({
                 id: part.kind,
                 count: part.count,
                 lamp: publication().lamps?.groups[part.kind],

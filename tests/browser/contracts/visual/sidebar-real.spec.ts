@@ -224,7 +224,9 @@ test.describe("composer", () => {
           }),
         });
         const destination = page.locator(".otk-composer-target");
-        expect.soft(await destination.locator("svg").count()).toBe(1);
+        await expect.soft(destination.locator("svg")).toHaveCount(0);
+        await expect.soft(destination.locator(".otk-composer-separator"))
+          .toHaveText("·");
         const sessionLabel = destination.locator(".otk-composer-destination");
         expect.soft(await sessionLabel.allTextContents()).toEqual([
           "Execution",

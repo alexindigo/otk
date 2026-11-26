@@ -60,7 +60,6 @@
   min-inline-size: min(var(--row-title-min), 100%);
   display: flex;
   align-items: center;
-  gap: var(--space-1);
 }
 .otk-composer-live-slot {
   flex: none;
@@ -78,10 +77,9 @@
   flex: none;
   max-inline-size: 100%;
 }
-.otk-composer-chevron {
+.otk-composer-target > .otk-composer-separator {
   flex: none;
-  inline-size: var(--icon-compact);
-  block-size: var(--icon-compact);
+  white-space: pre;
 }
 .otk-composer-activity-slot {
   display: grid;
@@ -91,14 +89,8 @@
   container: composer-activity / inline-size;
   flex: none;
 }
-/* These are container widths in metadata ems: keep vocabulary at ordinary
-   widths, compact numbers before retiring decoration, then let flex decide
-   whether the information needs a second line. */
+/* At narrow widths keep the shared title floor and let the pills reflow. */
 @container composer-activity (inline-size < 33em) {
-  .otk-composer-activity {
-    --live-count-full: none;
-    --live-count-compact: flex;
-  }
   .otk-composer-activity-line {
     flex-wrap: wrap;
     row-gap: var(--space-1);
@@ -118,6 +110,18 @@
 @container composer-activity (inline-size < 16em) {
   .otk-composer-activity {
     --live-link-display: none;
+  }
+  /* Give the destination the whole line. Its two titles only yield below
+     the shared floor when the line cannot hold both plus the separator. */
+  .otk-composer-target:has(.otk-composer-task) {
+    flex-basis: 100%;
+    min-inline-size: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto
+      fit-content(var(--row-title-min));
+  }
+  .otk-composer-task {
+    min-inline-size: 0;
   }
   .otk-composer-live-slot {
     max-inline-size: 100%;
