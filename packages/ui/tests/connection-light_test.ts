@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
+import type { ServerContinuity } from "@otk/client";
 import {
   CONNECTION_STATES,
   connectionFeedback,
@@ -7,6 +8,33 @@ import {
   connectionLabel,
   connectionState,
 } from "../components/connection-light.ts";
+
+Deno.test("the footer offers the same Reload for update, outage and refusal", () => {
+  let reloads = 0;
+  const cases: [ServerContinuity, string][] = [
+    [{ kind: "updated" }, "OTK was updated"],
+    [{ kind: "unreachable", since: 1 }, "Can't reach OTK"],
+    [{
+      kind: "away",
+      since: 1,
+      refused: "Still unreachable. Page not reloaded.",
+    }, "Still unreachable. Page not reloaded."],
+  ];
+  for (const [continuity, text] of cases) {
+    const state = {
+      label: "This server",
+      id: "local",
+      status: "reconnecting",
+      harness: "connected",
+      continuity,
+    } as const;
+    const feedback = connectionFeedback(state, () => reloads++);
+    assertEquals(feedback?.text, text);
+    assertEquals(feedback?.action?.label, "Reload");
+    feedback?.action?.run();
+  }
+  assertEquals(reloads, cases.length);
+});
 
 const healthy: ConnectionInput = {
   label: "This server",

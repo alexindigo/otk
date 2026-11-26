@@ -63,6 +63,7 @@ export interface ShellState {
 export function createShellState(
   o: {
     api: URL;
+    build?: string;
     policy?: import("@otk/protocol").ClientRequestPolicy;
     promptBlocks?(text: string): import("@otk/protocol").Block[];
     promptCommitted?(message: import("@otk/protocol").UserMessage): void;
@@ -79,6 +80,7 @@ export function createShellState(
         storage,
         connection: {
           api: o.api,
+          page: { build: o.build },
           policy: o.policy,
           reload: () => reload.run(),
         },
@@ -119,6 +121,11 @@ export function createShellState(
     key: `otk.reload.v1:${o.api.href}`,
     storage: tabStorage,
     navigate: () => globalThis.location.reload(),
+    reachable: () =>
+      fetch(new URL("health", o.api), {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      }).then((response) => response.ok, () => false),
     owners: {
       drafts,
       connections: keyedReload({

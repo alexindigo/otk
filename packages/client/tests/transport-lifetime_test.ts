@@ -2,6 +2,7 @@
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { SidecarConnection } from "../connection.ts";
+import type { ServerContinuity } from "../server-continuity.ts";
 import { createSidecars } from "../sidecars.ts";
 import { FeedbackFailure } from "../failures.ts";
 import { PROTOCOL_VERSION } from "@otk/protocol";
@@ -94,15 +95,18 @@ Deno.test("incompatible hello and welcome publish OTK was updated with an owner-
     ]
   ) {
     const socket = new Socket();
+    let continuity: ServerContinuity | undefined;
     let latest: {
       state: string;
       error?: string;
-      feedback?: import("../failures.ts").Feedback;
     } | undefined;
     let reloads = 0;
     const connection = new SidecarConnection("http://example.test", {
-      status(state, error, _auth, feedback) {
-        latest = { state, error, feedback };
+      status(state, error) {
+        latest = { state, error };
+      },
+      continuity(value) {
+        continuity = value;
       },
       frame() {},
     }, {
@@ -124,9 +128,12 @@ Deno.test("incompatible hello and welcome publish OTK was updated with an owner-
       assertEquals(pending.state.connection, "client-outdated");
       assertEquals(latest?.state, "client outdated");
       assertEquals(latest?.error, undefined);
-      assertEquals(latest?.feedback?.text, "OTK was updated");
-      assertEquals(latest?.feedback?.action?.label, "Reload");
-      latest?.feedback?.action?.run();
+      assertEquals(continuity, {
+        kind: "updated",
+        protocol: "protocol" in frame ? frame.protocol : undefined,
+        build: "build" in frame ? frame.build : undefined,
+      });
+      await connection.reload();
       assertEquals(reloads, 1);
       assertEquals(socket.closed, 1);
     } finally {

@@ -4,6 +4,7 @@ export {
   keyedReload,
   type Reload,
   type ReloadOwner,
+  ReloadRefused,
 } from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
@@ -83,6 +84,7 @@ export * from "./tool-failure.ts";
 export * from "./message-policy.ts";
 export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";
+export * from "./server-continuity.ts";
 export * from "./browser-storage.ts";
 export * from "./server-resources.ts";
 export type { ProjectProjectionRow } from "./project-projection.ts";
