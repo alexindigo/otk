@@ -93,11 +93,34 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
           c = cost.getClientRects().length
             ? cost.getBoundingClientRect()
             : null,
+          meta = cost.closest(".otk-meta-row")!.getBoundingClientRect(),
+          label = r.querySelector<HTMLElement>("[data-row-title]")!,
+          labelRect = label.getBoundingClientRect(),
+          floor = document.createElement("span"),
           t = r.querySelector(".otk-session-title")!.getBoundingClientRect(),
           l = r.querySelector(".otk-status-light")!.getBoundingClientRect(),
           b = r.getBoundingClientRect();
+        Object.assign(floor.style, {
+          position: "absolute",
+          inlineSize: "var(--row-title-min)",
+        });
+        label.append(floor);
+        const minimumTitleWidth = Math.min(
+          t.width,
+          floor.getBoundingClientRect().width,
+        );
+        floor.remove();
         return {
-          cost: c && { right: c.right, centre: c.y + c.height / 2 },
+          cost: c && {
+            left: c.left,
+            right: c.right,
+            centre: c.y + c.height / 2,
+            whole: c.left >= meta.left - .5 && c.right <= meta.right + .5,
+          },
+          rowRight: b.right,
+          titleRight: labelRect.right,
+          labelWidth: labelRect.width,
+          minimumTitleWidth,
           centre: b.y + b.height / 2,
           titleCentre: t.y + t.height / 2,
           lightCentre: l.y + l.height / 2,
@@ -108,16 +131,19 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
     );
     expect(boxes).toHaveLength(3);
     const visibleCosts = boxes.flatMap((box) => box.cost ? [box.cost] : []);
-    // 6c1ed6ca: a narrow row hides secondary meta before squeezing its title.
-    // Wide costs still align; narrow rows must retain the exact accessible cost.
+    // 2.109: a narrow row yields only whole facts, and only if they do not
+    // fit beside the title floor. Its exact accessible cost is independent.
     expect(visibleCosts.length).toBeGreaterThan(0);
-    if (narrow) expect(visibleCosts.length).toBeLessThan(boxes.length);
-    else expect(visibleCosts).toHaveLength(boxes.length);
+    if (!narrow) expect(visibleCosts).toHaveLength(boxes.length);
     for (const b of boxes) {
       if (b.cost) {
         expect(Math.abs(b.cost.right - visibleCosts[0].right))
           .toBeLessThanOrEqual(.5);
         expect(Math.abs(b.centre - b.cost.centre)).toBeLessThanOrEqual(.5);
+        expect(b.cost.whole).toBe(true);
+        expect(b.cost.left).toBeGreaterThanOrEqual(b.titleRight - .5);
+        expect(b.cost.right).toBeLessThanOrEqual(b.rowRight + .5);
+        expect(b.labelWidth).toBeGreaterThanOrEqual(b.minimumTitleWidth - .5);
       }
       expect(Math.abs(b.centre - b.titleCentre)).toBeLessThanOrEqual(.5);
       expect(Math.abs(b.centre - b.lightCentre)).toBeLessThanOrEqual(.5);

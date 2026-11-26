@@ -27,7 +27,8 @@ test.describe("inactive supervision", () => {
           `[data-project=${JSON.stringify(entry.directory)}]`,
         );
         await row.locator(".otk-project-menu > button").click();
-        await row.locator(".otk-menu-items button").click();
+        await row.getByRole("menuitem", { name: "Mark inactive", exact: true })
+          .click();
         await expect(row).toHaveCount(0);
       }
       await expect(page.locator(".otk-inactive-toggle")).toHaveAccessibleName(

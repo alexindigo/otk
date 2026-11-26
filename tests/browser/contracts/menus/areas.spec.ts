@@ -139,7 +139,15 @@ test(
       page,
       '[data-project$="/projects/otk"] .otk-project-open',
     );
-    expect(await groups(page)).toEqual([["Mark inactive"], projects]);
+    expect(await groups(page)).toEqual([
+      ["Move up", "Move down", "Mark inactive"],
+      projects,
+    ]);
+    const projectMenu = contextMenu(page);
+    await expect(projectMenu.getByRole("menuitem", { name: "Move up" }))
+      .toBeDisabled();
+    await expect(projectMenu.getByRole("menuitem", { name: "Move down" }))
+      .toBeEnabled();
     await dismiss(page);
     await rightClick(page, ".otk-inbox-scroll", true);
     await pick(page, "Add project");

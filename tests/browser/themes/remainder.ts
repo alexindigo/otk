@@ -290,12 +290,12 @@ export async function remainder(
               )!.getBoundingClientRect(),
               track = el.closest(".otk-sidebar-row-feedback")!
                 .getBoundingClientRect(),
-              grid = el.closest(".otk-sidebar-row-grid")!
+              frame = el.closest(".otk-sidebar-row")!
                 .getBoundingClientRect();
             // SidebarRow owns one full-width feedback track below its action.
             return track.top >= action.bottom && track.bottom <= row.bottom &&
-              Math.abs(track.left - grid.left) <= .5 &&
-              Math.abs(track.right - grid.right) <= .5 &&
+              Math.abs(track.left - frame.left) <= .5 &&
+              Math.abs(track.right - frame.right) <= .5 &&
               r.top >= track.top && r.bottom <= track.bottom &&
               r.left >= track.left && r.right <= track.right;
           },

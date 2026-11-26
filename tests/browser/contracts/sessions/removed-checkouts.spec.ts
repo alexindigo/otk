@@ -97,38 +97,76 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   ) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
-    for (const directory of [one, two]) {
-      const geometry = await row(directory).evaluate((element) => {
-        const name = element.querySelector(".otk-project-name")!
-          .getBoundingClientRect();
-        const label = element.querySelector(".otk-project-availability")!
-          .getBoundingClientRect();
-        const meta = element.querySelector(".otk-sidebar-meta")!
-          .getBoundingClientRect();
-        return {
-          nameCenter: name.y + name.height / 2,
-          labelCenter: label.y + label.height / 2,
-          height: element.getBoundingClientRect().height,
-          stacked: meta.y >= name.bottom - .5,
-          nameBottom: name.bottom,
-          metaTop: meta.y,
-          nameRight: name.right,
-          metaLeft: meta.x,
-        };
-      });
-      if (geometry.stacked) {
-        expect(geometry.metaTop).toBeGreaterThanOrEqual(
-          geometry.nameBottom - .5,
+    const originalWidth = (await state.product("prefs.get", {})).shellLayout
+      .leftWidth;
+    for (const wide of [true, false]) {
+      const width = wide ? 360 : originalWidth;
+      await state.product("layout.patch", { leftWidth: width });
+      if (width) {
+        await expect(page.locator(".otk-project-inbox")).toHaveCSS(
+          "width",
+          `${width}px`,
         );
-      } else {
-        expect(Math.abs(geometry.nameCenter - geometry.labelCenter))
-          .toBeLessThanOrEqual(1);
-        expect(geometry.metaLeft).toBeGreaterThanOrEqual(
-          geometry.nameRight - .5,
-        );
-        expect(geometry.height).toBe(32);
       }
-      expect(geometry.height).toBeGreaterThanOrEqual(32);
+      for (const directory of [one, two]) {
+        const project = row(directory);
+        // 2.109: the fact stays in the accessibility description even if
+        // it yields as a whole. Read geometry only for painted metadata.
+        await expect(project.locator(".otk-project-open"))
+          .toHaveAccessibleName(/, removed$/);
+        if (wide) {
+          await expect(project.locator(".otk-project-availability"))
+            .toBeVisible();
+        }
+        const geometry = await project.evaluate((element) => {
+          const name = element.querySelector(".otk-project-name")!
+            .getBoundingClientRect();
+          const meta = element.querySelector(".otk-sidebar-meta")!
+            .getBoundingClientRect();
+          const visible = Array.from(
+            element.querySelectorAll<HTMLElement>(".otk-meta-item"),
+          ).filter((item) => !item.hidden && item.getClientRects().length > 0);
+          return {
+            height: element.getBoundingClientRect().height,
+            stacked: meta.y >= name.bottom - .5,
+            nameBottom: name.bottom,
+            nameCenter: name.y + name.height / 2,
+            nameRight: name.right,
+            metaTop: meta.y,
+            metaLeft: meta.x,
+            metaRight: meta.right,
+            facts: visible.map((item) => {
+              const rect = item.getBoundingClientRect();
+              return {
+                left: rect.left,
+                right: rect.right,
+                center: rect.y + rect.height / 2,
+                whole: item.scrollWidth <= item.clientWidth + .5,
+              };
+            }),
+          };
+        });
+        if (geometry.stacked) {
+          expect(geometry.metaTop).toBeGreaterThanOrEqual(
+            geometry.nameBottom - .5,
+          );
+        } else {
+          expect(geometry.metaLeft).toBeGreaterThanOrEqual(
+            geometry.nameRight - .5,
+          );
+          expect(geometry.height).toBe(32);
+        }
+        for (const fact of geometry.facts) {
+          expect(fact.whole).toBe(true);
+          expect(fact.left).toBeGreaterThanOrEqual(geometry.metaLeft - .5);
+          expect(fact.right).toBeLessThanOrEqual(geometry.metaRight + .5);
+          if (!geometry.stacked) {
+            expect(Math.abs(geometry.nameCenter - fact.center))
+              .toBeLessThanOrEqual(1);
+          }
+        }
+        expect(geometry.height).toBeGreaterThanOrEqual(32);
+      }
     }
     await page.screenshot({
       path: info.outputPath(`ph1-${label}-removed.png`),
@@ -214,6 +252,10 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
         .getBoundingClientRect();
       const tree = document.querySelector(".otk-archive-tree")!;
       const heading = tree.querySelector(":scope > .otk-tree-heading")!;
+      // 2.108: the first grid column can be the selection mark, not the
+      // depth track. The tree owner exposes the actual junction track.
+      const indent = heading.querySelector(":scope > .otk-tree-own")!
+        .getBoundingClientRect().width;
       const child = document.querySelector(
         `.otk-project-row[data-project="${two}"]`,
       )!.closest(".otk-tree-node")!;
@@ -227,7 +269,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
         archived: archived.x + archived.width / 2,
         countRight: count.right,
         headerRight: toggle.right,
-        indent: parseFloat(getComputedStyle(heading).gridTemplateColumns),
+        indent,
         sharedHeader: tree.classList.contains("is-connected"),
         sharedChild: child.classList.contains("is-connected"),
         childJunction: junction.x + junction.width / 2,
