@@ -100,3 +100,14 @@
   flex: none;
   max-inline-size: none;
 }
+.otk-overflow-row.is-paged > .otk-overflow-lane {
+  grid-template-rows: auto var(--space-2);
+}
+.otk-overflow-row.is-paged .otk-overflow-items {
+  grid-row: 1;
+  scroll-snap-type: inline mandatory;
+}
+.otk-overflow-row.is-paged .otk-overflow-items > .otk-overflow-item {
+  flex: none;
+  max-inline-size: none;
+}

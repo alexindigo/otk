@@ -53,6 +53,15 @@ Deno.test("D66 progressive fitting compacts every title before aggregating the w
       widths: input.compactWidths,
     },
   );
+  assertEquals(
+    fitOverflow({
+      ...input,
+      available: 100,
+      required: input.keys,
+      scrollRequired: true,
+    }),
+    { visible: input.keys, overflow: [], mode: "scroll" },
+  );
 });
 Deno.test("overflow partitions by measured width, preserving required identity and preference order", () => {
   const keys = ["root", "a", "b", "selected", "tail"],
