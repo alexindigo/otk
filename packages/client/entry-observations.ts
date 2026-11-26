@@ -99,6 +99,7 @@ export function createAttentionProjection(o: {
         evidence = o.entity?.(id)?.evidence;
       const permissions = evidence?.requests?.permissions.map(({ id }) => id) ??
         [];
+      const questions = evidence?.requests?.questions.map(({ id }) => id) ?? [];
       const after = raw && o.entity
         ? {
           ...raw,
@@ -110,6 +111,7 @@ export function createAttentionProjection(o: {
           activity: {
             ...raw.activity,
             permissions: { keys: permissions, fresh: !!evidence },
+            inputs: { keys: questions, fresh: !!evidence },
           },
         }
         : raw;

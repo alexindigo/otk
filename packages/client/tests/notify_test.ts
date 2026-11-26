@@ -327,6 +327,67 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
   });
   assertEquals(emitted.at(-1)?.id, "other/a");
 });
+Deno.test("a connected inbox baseline compares input changes only for previously observed sessions", () => {
+  const emitted: Note[] = [], removed: string[] = [];
+  const triggers = new NotificationTriggers(
+    (note) => emitted.push(note),
+    (id) => removed.push(id),
+  );
+  const pending = (
+    id: string,
+    kind: "permissions" | "questions",
+    request: string,
+  ) => {
+    const session = entry(id);
+    return {
+      ...session,
+      attention: { ...session.attention, [kind]: 1 },
+      activity: kind === "questions"
+        ? { inputs: { fresh: true, keys: [request] } }
+        : { permissions: { fresh: true, keys: [request] } },
+    };
+  };
+  let rev = 0;
+  const baseline = (generation: string, ...entries: IndexEntry[]) =>
+    triggers.entriesChanged("s", {
+      generation,
+      revision: ++rev,
+      baseline: true,
+      changes: entries.map((after) => ({ id: after.id, after })),
+    });
+  const historical = pending("admitted", "questions", "old");
+  baseline("one", entry("a"), entry("b"));
+  baseline(
+    "one",
+    pending("a", "questions", "q1"),
+    pending("b", "permissions", "p1"),
+    historical,
+  );
+  assertEquals(emitted.map((note) => [note.id, note.dismissalKey]), [[
+    "s/a",
+    "question/q1",
+  ], ["s/b", "permission/p1"]]);
+  baseline(
+    "one",
+    pending("a", "questions", "q2"),
+    pending("b", "permissions", "p1"),
+    historical,
+  );
+  assertEquals(emitted.map((note) => note.dismissalKey), [
+    "question/q1",
+    "permission/p1",
+    "question/q2",
+  ]);
+  baseline("one", entry("a"), entry("b"), historical);
+  assertEquals(removed, ["s/a", "s/b"]);
+  baseline(
+    "two",
+    pending("a", "questions", "q3"),
+    pending("b", "permissions", "p2"),
+    historical,
+  );
+  assertEquals(emitted.length, 3);
+});
 Deno.test("new genuine error observations alert even with identical text; inactive revisions do not", () => {
   const emitted: Note[] = [];
   const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});

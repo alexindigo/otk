@@ -141,7 +141,11 @@ export function applicationNotifications(input: {
           sessionID: ref.session,
         }).then((requests) => {
           if (candidates.get(incoming.id) !== incoming) return;
-          const request = requests[0];
+          const request = incoming.dismissalKey
+            ? requests.find((request) =>
+              incoming.dismissalKey === `question/${request.id}`
+            )
+            : requests[0];
           if (!request) return retract(incoming.id);
           const idle = requestIdle(
             input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
