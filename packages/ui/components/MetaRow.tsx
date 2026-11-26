@@ -22,6 +22,10 @@ export function MetaItem(props: {
   rank: number;
   class?: string;
   compact?: Element;
+  /** This item has a compact label inside the same focusable control. */
+  compactInPlace?: boolean;
+  /** Compact when necessary, but never remove this affordance. */
+  required?: boolean;
   children: Element;
   title?: string;
   "aria-label"?: string;
@@ -30,6 +34,8 @@ export function MetaItem(props: {
     <span
       class={["otk-meta-item", props.class]}
       data-meta-rank={props.rank}
+      data-meta-required={props.required ? "" : undefined}
+      data-meta-compact={props.compactInPlace ? "" : undefined}
       title={props.title}
       aria-label={props["aria-label"]}
     >
@@ -88,6 +94,7 @@ export function MetaRow(
         const byYield = children.map((item, index) => ({
           item,
           rank: Number(item.dataset.metaRank ?? index + 1),
+          required: item.hasAttribute("data-meta-required"),
           index,
         })).sort((a, b) => b.rank - a.rank || b.index - a.index);
         for (const item of children) {
@@ -108,17 +115,26 @@ export function MetaRow(
         }
         const available = root.clientWidth;
         const overflows = () => total() > available + 0.5;
-        for (const { item } of byYield) {
-          if (!overflows()) return;
-          if (item.querySelector(":scope > .otk-meta-compact")) {
+        const compact = (item: HTMLElement) => {
+          if (
+            item.hasAttribute("data-meta-compact") ||
+            item.querySelector(":scope > .otk-meta-compact")
+          ) {
             item.classList.add("is-compact");
             widths.set(item, item.getBoundingClientRect().width);
           }
-        }
-        for (const { item } of byYield) {
+        };
+        for (const { item, required } of byYield) {
           if (!overflows()) return;
-          item.hidden = true;
-          widths.delete(item);
+          if (!required) compact(item);
+        }
+        for (const { item, required } of byYield) {
+          if (!overflows()) return;
+          if (required) compact(item);
+          else {
+            item.hidden = true;
+            widths.delete(item);
+          }
         }
       };
       const resize = new ResizeObserver(fitItems);

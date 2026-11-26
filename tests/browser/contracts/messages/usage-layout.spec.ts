@@ -46,7 +46,20 @@ for (const count of [3, 120] as const) {
           .count();
         for (const [width, height] of [[1280, 720], [800, 600]]) {
           await page.setViewportSize({ width, height });
-          await page.locator(trigger).evaluate((element) =>
+          const usage = page.getByRole("button", {
+            name: new RegExp(`^Turn usage: ${count} model calls`),
+          });
+          await expect(usage).toBeVisible();
+          expect(
+            await usage.evaluate((element) => {
+              const button = element.getBoundingClientRect();
+              const track = element.closest(".otk-message-details")!
+                .getBoundingClientRect();
+              return button.left >= track.left && button.right <= track.right &&
+                element.scrollWidth === element.clientWidth;
+            }),
+          ).toBe(true);
+          await usage.evaluate((element) =>
             element.scrollIntoView({ block: "center" })
           );
           await page.locator(trigger).hover();

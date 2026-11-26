@@ -54,12 +54,22 @@ export default function TurnUsage(props: {
         }`
         : ""
     }`;
+  const summaryLabel = () => (
+    <>
+      <span class="otk-turn-usage-full">{summary()}</span>
+      <span
+        class="otk-turn-usage-compact"
+        data-label="Usage"
+        aria-hidden="true"
+      />
+    </>
+  );
   return (
     <Show
       when={!!props.open}
       fallback={
         <span class="otk-control-label" role="group" aria-label={label()}>
-          {summary()}
+          {summaryLabel()}
         </span>
       }
     >
@@ -78,7 +88,7 @@ export default function TurnUsage(props: {
               popover = value;
               props.control?.({ open: () => popover.open() });
             }}
-            trigger={<span>{summary()}</span>}
+            trigger={summaryLabel()}
             onOpen={() => {
               setOpened(true);
               release ??= props.open?.();
