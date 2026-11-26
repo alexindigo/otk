@@ -65,7 +65,9 @@ import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 import ChromeMeta, {
+  MetaItem,
   metaList,
+  MetaRow,
   MetaText,
   SectionHeader,
 } from "./ChromeMeta.tsx";
@@ -890,27 +892,31 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
         meta={
           <Show when={!collapsed() && !editing()}>
             <div class="otk-project-trailing">
-              <Show when={(project().source ?? "tracked") === "tracked"}>
-                <ChromeMeta
-                  class="otk-project-visit"
-                  title="Availability and time since last visit"
-                >
-                  <Show
-                    when={project().annotation}
-                    fallback={
-                      <Show when={project().visit}>
-                        {(visit) => <TimeText time={visit()} />}
+              <MetaRow whole intrinsic>
+                <Show when={(project().source ?? "tracked") === "tracked"}>
+                  <MetaItem rank={1}>
+                    <ChromeMeta
+                      class="otk-project-visit"
+                      title="Availability and time since last visit"
+                    >
+                      <Show
+                        when={project().annotation}
+                        fallback={
+                          <Show when={project().visit}>
+                            {(visit) => <TimeText time={visit()} />}
+                          </Show>
+                        }
+                      >
+                        <span class="otk-project-availability">
+                          <MetaText
+                            items={[project().annotation, project().visit]}
+                          />
+                        </span>
                       </Show>
-                    }
-                  >
-                    <span class="otk-project-availability">
-                      <MetaText
-                        items={[project().annotation, project().visit]}
-                      />
-                    </span>
-                  </Show>
-                </ChromeMeta>
-              </Show>
+                    </ChromeMeta>
+                  </MetaItem>
+                </Show>
+              </MetaRow>
               <CommandMenu
                 class="otk-project-menu"
                 triggerClass="otk-project-menu-trigger"

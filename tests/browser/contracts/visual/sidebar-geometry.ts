@@ -154,7 +154,7 @@ export async function sidebarGeometry(page: Page, compact = false) {
           required,
           whiteSpace: style.whiteSpace,
           highlight,
-          availability: availability
+          availability: availability && visible(availability)
             ? {
               left: box(availability).x,
               right: box(availability).right,
@@ -163,13 +163,28 @@ export async function sidebarGeometry(page: Page, compact = false) {
             }
             : null,
           meta: box(row.querySelector(".otk-sidebar-meta")!),
-          hasMeta: !!row.querySelector(".otk-sidebar-meta")?.children.length,
+          hasMeta: !!row.querySelector(
+            ".otk-sidebar-meta .otk-meta-item, .otk-project-menu",
+          ),
+          facts: Array.from(
+            row.querySelectorAll(".otk-sidebar-meta .otk-meta-item"),
+          )
+            .filter(visible).map((item) => {
+              const clip = item.parentElement!;
+              return {
+                text: item.textContent,
+                clipping: item.scrollWidth > item.clientWidth + .5 ||
+                  box(item).x < box(clip).x - .5 ||
+                  box(item).right > box(clip).right + .5,
+              };
+            }),
           lamp: lamp && visible(lamp) ? box(lamp) : null,
         };
       });
   });
   expect(rows.length).toBeGreaterThan(0);
   const edges = new Map<number, number[]>();
+  const labelEdges = new Map<string, number>();
   const disclosures = new Map<number, number>();
   let bottom = -Infinity;
   for (const row of rows) {
@@ -177,16 +192,33 @@ export async function sidebarGeometry(page: Page, compact = false) {
       .toBeGreaterThanOrEqual(bottom - .5);
     bottom = row.heading.bottom;
     if (!compact) {
-      const current = [row.lampSlot.x, row.iconSlot.x, row.label.x],
+      const current = [row.lampSlot.x, row.iconSlot.x],
         previous = edges.get(row.heading.x);
       if (previous) {
         current.forEach((edge, i) =>
           expect.soft(
             Math.abs(edge - previous[i]),
-            "same-depth lamp/artwork/label axes across every row kind",
+            "same-depth lamp and artwork axes across every row kind",
           ).toBeLessThanOrEqual(.5)
         );
       } else edges.set(row.heading.x, current);
+      // WP10 releases the empty artwork track in narrow rows. Compare label
+      // axes for the same depth *and* track presence, not against occupied art.
+      const labelKey = `${row.heading.x}/${row.iconSlot.w > .5}`;
+      const labelEdge = labelEdges.get(labelKey);
+      if (labelEdge === undefined) labelEdges.set(labelKey, row.label.x);
+      else {
+        expect.soft(
+          Math.abs(row.label.x - labelEdge),
+          "same-depth label axis for the same artwork tracks",
+        )
+          .toBeLessThanOrEqual(.5);
+      }
+      expect.soft(
+        Math.abs(row.label.x - row.iconSlot.right),
+        "label starts after the artwork track",
+      )
+        .toBeLessThanOrEqual(.5);
       expect.soft(row.labelText.w, `minimum readable label: ${row.text}`)
         .toBeGreaterThanOrEqual(row.required - .5);
       expect.soft(row.whiteSpace, `single-line label: ${row.text}`).toBe(
@@ -199,6 +231,12 @@ export async function sidebarGeometry(page: Page, compact = false) {
         ).toBeGreaterThanOrEqual(row.availability.clipLeft - .5);
         expect.soft(row.availability.right, "availability never truncates")
           .toBeLessThanOrEqual(row.availability.clipRight + .5);
+      }
+      // 2.109: metadata may yield only as whole facts; all visible facts must
+      // fit their owner's clipping box, not merely fit their own DOM box.
+      for (const fact of row.facts) {
+        expect.soft(fact.clipping, `metadata never truncates: ${fact.text}`)
+          .toBe(false);
       }
       if (!row.hasMeta) {
         expect.soft(row.meta.w, "absent meta consumes no track")
