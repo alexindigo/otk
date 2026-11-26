@@ -6,10 +6,63 @@ import {
   type SessionListRow,
   type SessionLookup,
   type SessionStructure,
+  type SessionTreeTarget,
   type TaskRecord,
 } from "@otk/protocol";
 import { projectTabGroups } from "./tab-groups.ts";
+import { treePaths } from "./tree-paths.ts";
 export type { SessionListRow } from "@otk/protocol";
+
+type SessionTreeBranch = {
+  key: string;
+  row: SessionListRow;
+  depth: number;
+  hasChildren: boolean;
+  target: SessionTreeTarget;
+};
+export type SessionTreeItem = SessionTreeBranch & { path: boolean[] };
+
+/** A view over the existing preorder, not a second hierarchy or task owner. */
+export function sessionTreeView(
+  rows: readonly SessionListRow[],
+  scope: { sidecarId: string; directory: string },
+  open: (item: SessionTreeBranch) => boolean,
+): SessionTreeItem[] {
+  const visible: SessionTreeBranch[] = [];
+  let hiddenBelow: number | undefined;
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+    const next = rows[index + 1];
+    const depth = row.kind === "heading" ? 0 : row.depth + 1;
+    const hasChildren = next?.kind === "session" &&
+      (row.kind === "heading"
+        ? next.group === row.group
+        : next.parentID === row.id);
+    const item: SessionTreeBranch = {
+      key: row.key,
+      row,
+      depth,
+      hasChildren,
+      target: {
+        sidecarId: scope.sidecarId,
+        kind: row.kind === "session"
+          ? "session"
+          : row.group
+          ? "task"
+          : "ungrouped",
+        id: row.kind === "session" ? row.id : row.group || scope.directory,
+      },
+    };
+    const expanded = (row.kind === "heading" || hasChildren)
+      ? open(item)
+      : true;
+    if (hiddenBelow !== undefined && depth > hiddenBelow) continue;
+    hiddenBelow = expanded ? undefined : depth;
+    visible.push(item);
+  }
+  const paths = treePaths(visible, (item) => item.depth);
+  return visible.map((item, index) => ({ ...item, path: paths[index] }));
+}
 
 export function sessionFamily(id: string, lookup: SessionLookup): string[] {
   return [id, ...sessionAncestors(id, lookup)];

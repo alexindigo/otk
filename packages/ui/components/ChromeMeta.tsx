@@ -191,6 +191,8 @@ export function SectionHeader(props: {
   metaClass?: string;
   compact?: boolean;
   sidebar?: boolean;
+  path?: readonly boolean[];
+  hasChildren?: boolean;
   leading?(): Element;
   attributes?: Record<string, unknown>;
   body?(): Element;
@@ -205,6 +207,7 @@ export function SectionHeader(props: {
   return (
     <TreeNode
       compact={props.compact}
+      path={props.path}
       leadingRow={props.sidebar}
       toggleHeader={!props.compact || !!props.leading}
       class={[
@@ -214,7 +217,8 @@ export function SectionHeader(props: {
       ].filter(Boolean).join(" ")}
       label={description()}
       open={props.open}
-      hasChildren
+      hasChildren={props.hasChildren ?? true}
+      showEmptyToggle
       onOpen={props.onOpen}
       feedback={props.feedback}
       body={props.body}

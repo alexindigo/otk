@@ -30,11 +30,6 @@
   width: var(--icon-compact);
   height: var(--icon-compact);
 }
-.otk-project-session-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
 .otk-project-sessions input[type="search"] {
   width: 100%;
   min-width: 0;
@@ -51,18 +46,14 @@
   flex: 1;
   min-height: 0;
 }
-.otk-session-group-heading {
-  height: var(--row-project);
+.otk-session-group {
   margin: 0;
-  padding: 0 var(--project-inset);
 }
-.otk-session-group > p {
-  margin: var(--space-2);
-}
-.otk-session-leading {
+.otk-session-meta {
   display: flex;
   align-items: center;
-  flex: none;
+  gap: var(--space-3);
+  padding-inline-end: var(--space-2);
 }
 .otk-session-cost {
   flex: none;
@@ -77,7 +68,6 @@
   text-decoration: line-through;
 }
 .otk-session-digest-state {
-  inline-size: 15ch;
   text-align: end;
 }
 .otk-session-summary-status {

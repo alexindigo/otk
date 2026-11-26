@@ -38,6 +38,7 @@ test("core records real status edges at the single index owner and clears persis
   };
   const discovery = new Map<string, boolean>();
   const clock = new ManualClock();
+  let elapsedDuringTask = 0;
   const index = new IndexStore(),
     feature = new InboxFeature(
       stores,
@@ -49,7 +50,7 @@ test("core records real status edges at the single index owner and clears persis
       undefined,
       undefined,
       (directory, active) => discovery.set(directory, active),
-      clock,
+      { ...clock, now: () => clock.now() + elapsedDuringTask },
     );
   const idle: IndexEntry = {
     digest: { state: "digesting", revision: 0, turns: {} },
@@ -102,7 +103,16 @@ test("core records real status edges at the single index owner and clears persis
       activity: { permissions: { keys: ["permission"], fresh: true } },
     });
     assertEquals(stores.projects.get("alice", "/p").inactive, true);
+    // Time can pass inside a task before the ready timer gets its turn. The
+    // summary must not publish an input edge ahead of the wakeup that makes
+    // Inbox reconcile the persisted project policy.
+    elapsedDuringTask = 1000;
+    feature.summaries.mark("s");
+    assertEquals(feature.navigationStatus("s"), "none");
+    assertEquals(stores.projects.get("alice", "/p").inactive, true);
+    elapsedDuringTask = 0;
     clock.runNext();
+    assertEquals(feature.navigationStatus("s"), "blocked");
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     index.upsert(idle);
     stores.projects.inactive("alice", "/p", true);

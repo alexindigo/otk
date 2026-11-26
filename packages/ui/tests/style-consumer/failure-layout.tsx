@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createTranscriptProjection, type SidecarState } from "@otk/client";
+import {
+  createTranscriptProjection,
+  createTreeDisclosure,
+  type SidecarState,
+} from "@otk/client";
+import { solidState } from "../../state/binding.ts";
 import {
   DEFAULT_PREFS,
   type Derived,
@@ -156,6 +161,7 @@ const records: MessageData[] = [
 
 /** Shared production consumers with fixed facts for placement/geometry regression. */
 export default function FailureLayout() {
+  const tree = createTreeDisclosure(solidState);
   const surface = new URL(location.href).searchParams.get("surface");
   const registry = useUiRegistries();
   registerUnknownPart(registry.parts);
@@ -337,6 +343,7 @@ export default function FailureLayout() {
     return (
       <div class="error-review-layout">
         <ProjectInbox
+          disclosure={tree}
           projects={[]}
           duplicateName={() => false}
           servers={[server]}

@@ -35,11 +35,15 @@ export const isPreference: PreferenceRegistry["validate"] = preferences.validate
 export { registerDiffPreferences } from "./preferences/diff.ts";
 export {
   isProjectLocation,
+  isSessionTreeKind,
   projectLayoutKey,
   type ProjectLocation,
   registerLayoutPreferences,
+  type SessionTreeKind,
+  type SessionTreeTarget,
   SHELL_WIDTHS,
   type ShellLayout,
+  treeLayoutKey,
 } from "./preferences/layout.ts";
 export { registerKeymapPreferences } from "./preferences/keymap.ts";
 export { registerNotificationPreferences } from "./preferences/notifications.ts";

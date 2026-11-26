@@ -30,6 +30,7 @@ interface EntityClock {
   set(run: () => void, delay: number): unknown;
   clear(timer: unknown): void;
 }
+type PermissionWake = { at: number; timer?: unknown };
 const systemClock: EntityClock = {
   now: () => performance.now(),
   set: (run, delay) => setTimeout(run, delay),
@@ -104,7 +105,12 @@ function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
 export class EntityStates {
   #permissions = new Map<
     string,
-    { due: Map<string, number>; timer?: unknown }
+    {
+      due: Map<string, number>;
+      through: number;
+      wake?: PermissionWake;
+      refresh: () => void;
+    }
   >();
   #states = new Map<string, EntityState>();
   /** Own counts of each live session, for its ancestors' descendant evidence. */
@@ -166,7 +172,8 @@ export class EntityStates {
   /** A new user generation starts without transitions from the previous one. */
   reset(): void {
     for (const lifetime of this.#permissions.values()) {
-      this.clock.clear(lifetime.timer);
+      this.clock.clear(lifetime.wake?.timer);
+      lifetime.wake = undefined;
     }
     this.#states.clear();
     this.#own.clear();
@@ -195,7 +202,7 @@ export class EntityStates {
   }
   close(): void {
     for (const lifetime of this.#permissions.values()) {
-      this.clock.clear(lifetime.timer);
+      this.clock.clear(lifetime.wake?.timer);
     }
     this.#permissions.clear();
   }
@@ -206,18 +213,21 @@ export class EntityStates {
     refresh: () => void,
   ): string[] {
     const previous = this.#permissions.get(entry.id);
-    if (previous?.timer !== undefined) this.clock.clear(previous.timer);
+    const wake = previous?.wake;
     if (entry.deleted) {
+      this.clock.clear(wake?.timer);
       this.#permissions.delete(entry.id);
       return [];
     }
     const input = entry.activity?.permissions;
     if (!input?.fresh) {
       // Native source loss is not settlement. A fresh snapshot reconciles IDs.
-      if (previous) previous.timer = undefined;
+      this.clock.clear(wake?.timer);
+      if (previous) previous.wake = undefined;
       return [];
     }
     if (!input.keys.length) {
+      this.clock.clear(wake?.timer);
       this.#permissions.delete(entry.id);
       return [];
     }
@@ -228,19 +238,38 @@ export class EntityStates {
       ) => [id, previous?.due.get(id) ?? now + PERMISSION_GRACE_MS]),
     );
     const active: string[] = [];
+    const through = previous?.through ?? -Infinity;
     let next = Infinity;
     if (count > 0) {
       for (const [id, at] of due) {
-        if (at <= now) active.push(id);
+        if (at <= through) active.push(id);
         else next = Math.min(next, at);
       }
     }
-    const lifetime: { due: Map<string, number>; timer?: unknown } = { due };
+    // Only the deadline callback releases the grace. A summary refresh can
+    // arrive after the deadline but before its callback; reading the clock
+    // there would publish a lamp before Inbox reconciles persisted policy.
+    const retainWake = wake?.at === next;
+    const lifetime = {
+      due,
+      through,
+      wake: retainWake ? wake : undefined,
+      refresh,
+    };
     this.#permissions.set(entry.id, lifetime);
-    if (Number.isFinite(next)) {
-      lifetime.timer = this.clock.set(() => {
-        if (this.#permissions.get(entry.id) === lifetime) refresh();
-      }, next - now);
+    if (!retainWake) {
+      this.clock.clear(wake?.timer);
+      if (Number.isFinite(next)) {
+        const pending: PermissionWake = { at: next };
+        lifetime.wake = pending;
+        pending.timer = this.clock.set(() => {
+          const current = this.#permissions.get(entry.id);
+          if (current?.wake !== pending) return;
+          current.wake = undefined;
+          current.through = Math.max(pending.at, this.clock.now());
+          current.refresh();
+        }, Math.max(0, next - now));
+      }
     }
     return active.slice(0, count);
   }
@@ -777,7 +806,7 @@ export class EntityStates {
     };
   }
   #retire(id: string, removals: string[]): void {
-    this.clock.clear(this.#permissions.get(id)?.timer);
+    this.clock.clear(this.#permissions.get(id)?.wake?.timer);
     this.#permissions.delete(id);
     this.#own.delete(id);
     this.#parents.delete(id);

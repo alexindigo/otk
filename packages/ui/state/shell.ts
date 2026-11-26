@@ -17,6 +17,7 @@ import {
   createSessionRevert,
   createShellNavigation,
   createTranscriptScopes,
+  createTreeDisclosure,
   type CurrentClient,
   type Drafts,
   type ForkNotes,
@@ -30,6 +31,7 @@ import {
   type SessionRename,
   type SessionRevert,
   type ShellNavigation,
+  type TreeDisclosures,
 } from "@otk/client";
 import { solidState } from "./binding.ts";
 import { createIndex } from "./index.ts";
@@ -40,6 +42,7 @@ export interface ShellState {
   reload: import("@otk/client").Reload;
   confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
+  tree: TreeDisclosures;
   resources: ServerResources;
   session: ClientSession;
   drafts: Drafts;
@@ -82,6 +85,7 @@ export function createShellState(
   });
   const { sidecars, entry } = resources;
   const listScopes = createListScopes();
+  const tree = createTreeDisclosure(solidState);
   resources.observe({ removed: (id) => listScopes.remove(id) });
   const session = createSession(
     (id) => sidecars.connection(id),
@@ -334,6 +338,7 @@ export function createShellState(
     confirmCommand: (message: string) => globalThis.confirm(message),
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
+    tree,
     resources,
     session,
     drafts,

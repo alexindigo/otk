@@ -1,37 +1,46 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState, type StateFactory } from "./state.ts";
+import type { SessionTreeKind } from "@otk/protocol";
 
-export type ProjectDisclosureKind =
+export type TreeDisclosureKind =
   | "project"
   | "discovered"
   | "archive"
-  | "inactive";
-export interface ProjectDisclosure {
+  | "inactive"
+  | SessionTreeKind;
+export interface TreeTarget {
+  sidecarId?: string;
+  id: string;
+}
+export interface TreeDisclosure {
   open(): boolean;
   pending(): boolean;
   error(): unknown;
+  failureOrder(): number;
   set(open: boolean): Promise<void>;
   retry(): Promise<void>;
 }
-export interface ProjectDisclosures {
+export interface TreeDisclosures {
   bind(
-    kind: ProjectDisclosureKind,
-    target: { sidecarId?: string; directory: string },
+    kind: TreeDisclosureKind,
+    target: TreeTarget,
     baseline: () => boolean,
     save?: (open: boolean) => Promise<void>,
-  ): ProjectDisclosure;
+  ): TreeDisclosure;
 }
 /** Local intent is immediate; persistence for each identity is ordered. A late
  * acknowledgement or refusal can never replace a newer local choice. */
-export function createProjectDisclosure(
+export function createTreeDisclosure(
   factory: StateFactory = createState,
-): ProjectDisclosures {
+): TreeDisclosures {
   const clock = factory({ revision: 0 });
+  let failures = 0;
   const entries = new Map<string, {
     intent?: boolean;
     revision: number;
     pending: boolean;
     error?: unknown;
+    failureOrder?: number;
     tail?: Promise<void>;
   }>();
   const publish = () =>
@@ -40,12 +49,12 @@ export function createProjectDisclosure(
     });
   return {
     bind(
-      kind: ProjectDisclosureKind,
-      target: { sidecarId?: string; directory: string },
+      kind: TreeDisclosureKind,
+      target: TreeTarget,
       baseline: () => boolean,
       save?: (open: boolean) => Promise<void>,
-    ): ProjectDisclosure {
-      const key = JSON.stringify([kind, target.sidecarId, target.directory]);
+    ): TreeDisclosure {
+      const key = JSON.stringify([kind, target.sidecarId, target.id]);
       let entry = entries.get(key);
       if (!entry) {
         entry = { revision: 0, pending: false };
@@ -60,12 +69,16 @@ export function createProjectDisclosure(
         const revision = ++value.revision;
         value.intent = open;
         value.error = undefined;
+        value.failureOrder = undefined;
         value.pending = !!save;
         const persist = async () => {
           try {
             await save?.(open);
           } catch (error) {
-            if (value.revision === revision) value.error = error;
+            if (value.revision === revision) {
+              value.error = error;
+              value.failureOrder = ++failures;
+            }
           } finally {
             if (value.revision === revision) value.pending = false;
             publish();
@@ -88,6 +101,7 @@ export function createProjectDisclosure(
         },
         pending: () => read().pending,
         error: () => read().error,
+        failureOrder: () => read().failureOrder ?? 0,
         set,
         retry: () => set(value.intent ?? baseline()),
       };
