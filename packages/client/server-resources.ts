@@ -546,6 +546,12 @@ export function createServerResources(o: {
         factory,
       });
       projections.set(id, owner);
+      owner.subscribe((changes) => {
+        requests(id).observePermissionScopes(
+          changes,
+          (session) => entry(id, session),
+        );
+      });
       for (
         const [session, time] of Object.entries(inbox(id).state.inbox.finishes)
       ) {
