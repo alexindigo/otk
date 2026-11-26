@@ -354,6 +354,34 @@ Deno.test("history revisits an omitted forward row when fine recovery releases i
   }
 });
 
+Deno.test("an advancing native head reuses the exact recovered anchor", async () => {
+  const x = fixture();
+  x.rows.splice(0, 1, reply("recovered", 1));
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.rows.push(reply("next", 2));
+    x.transcript.options.digest = {
+      read: (_kind: string, input: { messageID?: string }) =>
+        Promise.resolve(
+          input.messageID === "recovered"
+            ? { id: "recovered", seq: 1, updated: 1 }
+            : { id: "next", seq: 2, updated: 2 },
+        ),
+      release() {},
+    } as unknown as NonNullable<typeof x.transcript.options.digest>;
+    x.transcript.recovery.touch(sessionID, "recovered", "text");
+    x.transcript.recovery.terminal(sessionID, "recovered");
+    while (x.transcript.recovery.snapshot(sessionID).length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await x.transcript.check(sessionID);
+    assertEquals(x.gets, ["recovered"]);
+    assertEquals(x.projection.state.messageIDs, ["recovered", "next"]);
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
 Deno.test("history rechecks a recovered anchor edited before a newer head appears", async () => {
   const x = fixture();
   x.rows[0] = reply("anchor", 1);
