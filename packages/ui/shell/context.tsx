@@ -28,6 +28,7 @@ export interface ShellPorts {
   toggles: Toggles;
   usage: SessionUsageOwner;
   rename?: SessionRename;
+  projectRename?: import("@otk/client").ProjectRename;
   transcript: {
     messages(): Message[];
     exhausted(): boolean;
@@ -46,6 +47,7 @@ export interface ShellPorts {
   entries(): MergedEntry[];
   entry(server: string, session: string): IndexEntry | undefined;
   projectEntries(project: ProjectSelection): MergedEntry[];
+  projectLabel: import("@otk/client").ServerResources["projectLabel"];
   projectMetadata: import("@otk/client").ServerResources["projectMetadata"];
   metadataEntry: import("@otk/client").ServerResources["metadataEntry"];
   sessionRows: import("@otk/client").ServerResources["sessionRows"];

@@ -17,10 +17,10 @@ import {
 } from "./navigation.ts";
 import {
   projectHash,
-  projectName,
   projectRoute,
   type ProjectSelection,
 } from "./project-navigation.ts";
+import { folderName } from "./project-names.ts";
 import type { ServerResources } from "./server-resources.ts";
 import type { SessionActions } from "./session-actions.ts";
 import {
@@ -52,6 +52,8 @@ export function historyTarget(
   lookup: (
     selection: Selection,
   ) => { title: string; project: string; deleted?: boolean } | undefined,
+  label: (selection: ProjectSelection) => string = (p) =>
+    folderName(p.directory),
 ): HistoryTarget {
   const entry = history[direction];
   if (!entry) {
@@ -72,7 +74,7 @@ export function historyTarget(
   if (!entry.hash) return target("the start page", "page");
   const project = projectRoute(entry.hash);
   if (project) {
-    return target(`the ${projectName(project.directory)} project page`, "page");
+    return target(`the ${label(project)} project page`, "page");
   }
   const selection = route(entry.hash);
   const live = selection && lookup(selection);
@@ -673,7 +675,10 @@ export function createShellNavigation(o: {
         if (indexed) {
           navigation.describe(hashFor(value.selected), {
             title: indexed.title,
-            project: projectName(presented.directory),
+            project: resources.checkoutLabel(
+              presented.sidecarId,
+              presented.directory,
+            ),
           });
         }
       }

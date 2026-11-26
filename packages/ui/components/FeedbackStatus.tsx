@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorFeedback, type Feedback } from "@otk/client";
+import { errorFeedback, type Feedback, validationFeedback } from "@otk/client";
 import { type Element, Show } from "solid-js";
 import { feedbackState } from "./feedback-state.ts";
 import { nativeAttributes } from "./native-attributes.ts";
@@ -11,25 +11,30 @@ export type FeedbackInput = string | Feedback | undefined;
 export default function FeedbackStatus(props: {
   feedback?: Feedback;
   error?: FeedbackInput;
+  validation?: string;
   id?: string;
   class?: string;
   ref?(element: HTMLDivElement): void;
   focusable?: boolean;
   singleLine?: boolean;
   compact?: boolean;
+  expanded?: boolean;
   time?: number;
   placement?: "record";
   subgrid?: boolean;
   intrinsic?: boolean;
   onReveal?(messageID: string): void;
 }): Element {
-  const feedback = () => errorFeedback(props.feedback ?? props.error);
+  const feedback = (): Feedback | undefined =>
+    props.validation
+      ? validationFeedback(props.validation)
+      : errorFeedback(props.feedback ?? props.error);
   const native = nativeAttributes(() =>
     feedbackState({
       feedback: feedback(),
       class: `otk-feedback-status ${props.subgrid ? "uses-subgrid" : ""} ${
         props.singleLine ? "is-single-line" : ""
-      } ${props.class ?? ""}`,
+      } ${props.validation ? "is-validation" : ""} ${props.class ?? ""}`,
     })
   );
   return (
@@ -51,6 +56,7 @@ export default function FeedbackStatus(props: {
               failure={feedback()!.failure!}
               inline={props.singleLine}
               compact={props.compact}
+              expanded={props.expanded}
               time={props.time}
               placement={props.placement}
               subgrid={props.subgrid}

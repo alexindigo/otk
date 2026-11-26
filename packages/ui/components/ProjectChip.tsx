@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, type Element, Show } from "solid-js";
-import {
-  errorFeedback,
-  type FailureValue,
-  failureValue,
-  projectName,
-} from "@otk/client";
+import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import type { CatalogProject, CatalogRepository } from "@otk/protocol";
 import { copyText } from "../clipboard.ts";
 import Menu from "./surface/Menu.tsx";
@@ -87,14 +82,14 @@ function ProjectMenuRow(
 /** Data-only location presentation. Native vocabulary is supplied by the harness. */
 export default function ProjectChip(props: {
   directory: string;
+  name: string;
   project?: CatalogProject;
   repository?: CatalogRepository;
   onOpen?(): void;
   onEdit?(ready: () => void): void;
   feedback?: FailureValue;
 }): Element {
-  const name = () =>
-    props.project?.name || projectName(props.project?.root ?? props.directory);
+  const name = () => props.name;
   const [error, setError] = createSignal<FailureValue>("");
   let menu!: PopoverControl;
   const copy = (text: string) => {

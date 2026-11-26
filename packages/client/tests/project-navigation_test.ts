@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import {
-  projectHash,
-  projectName,
-  projectRoute,
-} from "../project-navigation.ts";
+import { projectHash, projectRoute } from "../project-navigation.ts";
+import { folderName } from "../project-names.ts";
 import { route } from "../session.ts";
 import * as client from "@otk/client";
 Deno.test("project-only routes preserve server and literal paths without colliding with session routes", () => {
@@ -17,16 +14,16 @@ Deno.test("project-only routes preserve server and literal paths without collidi
   assertEquals(route(hash), undefined);
   assertEquals(projectRoute("#/local/session"), undefined);
   assertEquals(projectRoute("#project/local/%"), undefined);
-  assertEquals(projectName(project.directory), "a #b");
+  assertEquals(folderName(project.directory), "a #b");
 });
 
 Deno.test("shell title preserves session, project and application join semantics", () => {
   assertEquals(
-    client.shellTitle("Session", { sidecarId: "s", directory: "/p/project" }),
+    client.shellTitle("Session", "project"),
     "Session — project — OTK",
   );
   assertEquals(
-    client.shellTitle(undefined, { sidecarId: "s", directory: "/" }),
+    client.shellTitle(undefined, "/"),
     "/ — OTK",
   );
   assertEquals(client.shellTitle("", undefined), "OTK");

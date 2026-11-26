@@ -60,6 +60,16 @@ test("WP9 core gates native project edits and rejects foreign targets and unsupp
     );
     assertEquals(effects, 1);
     assertEquals(current.values.name, "After");
+    assertEquals(
+      await rpc.dispatch("project.update", {
+        projectID: "fixture",
+        directory: "/fixture",
+        patch: { name: "" },
+      }),
+      null,
+    );
+    assertEquals(effects, 2);
+    assertEquals(current.values.name, "");
   } finally {
     db.close();
   }
@@ -165,4 +175,61 @@ test("superseded native project edit closes as unconfirmed without reading or di
     await requests.stop();
     db.close();
   }
+});
+
+test("project edit yields execution while awaiting native validation", async () => {
+  const db = new OtkDb(await fixture(), [], { busyms: 0 });
+  const current: ProjectEditSnapshot = {
+    projectID: "fixture",
+    directory: "/fixture",
+    fields: ["name"],
+    values: { name: "Before", icon: "", color: "", startScript: "" },
+    colors: [],
+    hints: [],
+  };
+  const readStarted = Promise.withResolvers<void>();
+  const permission = Promise.withResolvers<void>();
+  let active = false, writes = 0;
+  const harness = stub({
+    projectEdit: {
+      async read() {
+        readStarted.resolve();
+        await permission.promise;
+        return current;
+      },
+      update(_target, patch) {
+        writes++;
+        Object.assign(current.values, patch);
+        return Promise.resolve(current);
+      },
+    },
+  });
+  const registry = new RpcRegistry(harness, db, (_owner, value) => {
+    active = value;
+  });
+  registerProjectEdit(registry, harness);
+  const pending = registry.dispatch(
+    "project.update",
+    {
+      directory: current.directory,
+      projectID: current.projectID,
+      patch: { name: "After" },
+    },
+    undefined,
+    { signal: new AbortController().signal },
+  );
+  try {
+    await readStarted.promise;
+    assertEquals(active, false, "A waiting native read is not executing work");
+    assertEquals(writes, 0);
+  } finally {
+    permission.resolve();
+    try {
+      await pending;
+    } finally {
+      db.close();
+    }
+  }
+  assertEquals(writes, 1);
+  assertEquals(current.values.name, "After");
 });

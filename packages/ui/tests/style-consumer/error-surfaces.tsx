@@ -230,6 +230,7 @@ export default function ErrorSurfaces() {
             <h2>Error presentation review</h2>
             <ProjectChip
               directory="/home/tester/projects/error-review"
+              name="error-review"
               feedback={save}
             />
           </header>

@@ -16,10 +16,20 @@ import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import SidebarRow from "./SidebarRow.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
-import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import {
-  projectName,
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  Show,
+} from "solid-js";
+import {
+  checkoutLabel,
+  projectLabel,
   type ProjectProjectionRow,
+  type ProjectRename,
+  type ProjectRenameTarget,
   type ProjectSelection,
   type SidecarState,
 } from "@otk/client";
@@ -57,6 +67,8 @@ import TimeText from "./TimeText.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { orderInteraction } from "./order-interaction.ts";
 import { connectionFeedback } from "./connection-light.ts";
+import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
+const RENAMING_PROJECT = "Renaming project...";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -65,6 +77,9 @@ export default function ProjectInbox(props: {
   disclosure: TreeDisclosures;
   projects: ProjectRow[];
   duplicateName(name: string): boolean;
+  projectLabel?(sidecarId: string, directory: string): string;
+  projectRename?: ProjectRename;
+  canRename?(row: ProjectRow): boolean;
   servers: SidecarState[];
   selected?: ProjectSelection;
   prefs: Preferences;
@@ -153,6 +168,54 @@ export default function ProjectInbox(props: {
       },
     },
   );
+  const renameTarget = (
+    project: ProjectRow,
+  ): ProjectRenameTarget | undefined => {
+    const projectID = project.summary?.presentation?.id;
+    if (!projectID) return;
+    return {
+      sidecarId: project.sidecarId,
+      directory: project.directory,
+      projectID,
+      title: project.displayName ??
+        checkoutLabel(project.directory, project.summary),
+    };
+  };
+  const renameRow = (input: ProjectSelection) => {
+    if (!props.ready || !props.projectRename) return;
+    const row = props.projects.find((p) =>
+      p.sidecarId === input.sidecarId && p.directory === input.directory
+    );
+    if (row && props.canRename?.(row)) return row;
+  };
+  const renameArgs = {
+    type: "object" as const,
+    properties: {
+      sidecarId: { type: "string" as const },
+      directory: { type: "string" as const },
+    },
+  };
+  ownedAction("project.rename", (input: ProjectSelection) => {
+    const row = renameRow(input), target = row && renameTarget(row);
+    if (target) props.projectRename?.start(target);
+  }, {
+    arguments: renameArgs,
+    context: { kind: "project", title: () => "Rename", order: -20 },
+    enabled: (_ctx, input) =>
+      !!input && !props.projectRename?.state.pending && !!renameRow(input),
+  });
+  const resetRow = (input: ProjectSelection) => {
+    const row = renameRow(input);
+    return row?.summary?.presentation?.name ? row : undefined;
+  };
+  ownedAction("project.resetName", async (input: ProjectSelection) => {
+    const row = resetRow(input), target = row && renameTarget(row);
+    if (target) await props.projectRename?.reset(target);
+  }, {
+    arguments: renameArgs,
+    context: { kind: "project", title: () => "Reset name", order: -10 },
+    enabled: (_ctx, input) => !!input && !!resetRow(input),
+  });
   ownedAction(
     "project.inactive",
     (input: { sidecarId: string; directory: string; value: boolean }) =>
@@ -256,7 +319,7 @@ export default function ProjectInbox(props: {
           selected={props.selected?.sidecarId === node().project.sidecarId &&
             props.selected?.directory === node().project.directory}
           class="otk-project-tree otk-sidebar-tree"
-          label={`Worktrees in ${projectName(node().project.directory)}`}
+          label={`Worktrees in ${node().project.displayName}`}
           open={expanded()}
           hasChildren={presentation().hasChildren}
           showEmptyToggle={false}
@@ -331,7 +394,12 @@ export default function ProjectInbox(props: {
     const label = () =>
       unknown()
         ? "Checkouts with unknown repository"
-        : `Archived checkouts in ${projectName(repository(section.repo))}`;
+        : `Archived checkouts in ${
+          props.projectLabel?.(
+            section.repo.sidecarId,
+            section.repo.directory,
+          ) ?? projectLabel(section.repo.directory, section.repo.summary)
+        }`;
     const archive = () => props.entities?.(section.repo.sidecarId);
     const key = () => entityKey("archive", archiveEntityID(section.repo));
     const attention = () => {
@@ -418,6 +486,25 @@ export default function ProjectInbox(props: {
     const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
     const project = () => row.project;
+    const editing = () => {
+      const target = renameTarget(project());
+      return !!target && !!props.projectRename?.matches(target);
+    };
+    let root!: HTMLElement;
+    let openButton: HTMLButtonElement | undefined;
+    createEffect(editing, (active, before) => {
+      if (!active && before) {
+        queueMicrotask(() => {
+          if (
+            !editing() &&
+            (document.activeElement === document.body ||
+              root.contains(document.activeElement))
+          ) {
+            openButton?.focus();
+          }
+        });
+      }
+    });
     const target = () => ({
       kind: "project",
       data: {
@@ -428,7 +515,8 @@ export default function ProjectInbox(props: {
       },
     });
     const name = () =>
-      project().displayName || projectName(project().directory);
+      project().displayName ??
+        checkoutLabel(project().directory, project().summary);
     const duplicate = () => props.duplicateName(name());
     const key = () => entityKey("project", project().directory);
     const entities = () => props.entities?.(project().sidecarId);
@@ -436,7 +524,10 @@ export default function ProjectInbox(props: {
     return (
       <SidebarRow
         frame={{
-          ref: contextTarget(target),
+          ref: (element) => {
+            root = element;
+            contextTarget(target)(element);
+          },
           class: `otk-project-row otk-sidebar-selection${
             project().depth ? " is-subproject" : ""
           }`,
@@ -457,6 +548,8 @@ export default function ProjectInbox(props: {
             "data-project-archived": project().archived ? "true" : "false",
           },
         }}
+        editing={editing()}
+        mainRef={(element) => openButton = element}
         compact={collapsed()}
         detailedMeta={!!project().annotation ||
           (project().visit?.parts.length ?? 0) > 1}
@@ -505,33 +598,45 @@ export default function ProjectInbox(props: {
           ? { name: name(), color: project().summary?.presentation?.color }
           : undefined}
         label={
-          <span class="otk-project-name-line">
-            <span
-              class="otk-project-name"
-              data-unread={project().unread ? "true" : "false"}
-            >
-              {name()}
-            </span>
-            <Show when={project().inactive && project().parentLabel}>
-              <ChromeMeta
-                class="otk-project-parent otk-control-label otk-control-grow"
-                title={project().topology?.canonicalRoot}
-              >
-                {project().parentLabel}
-              </ChromeMeta>
-            </Show>
-            <Show when={duplicate()}>
-              <ChromeMeta
-                class="otk-project-machine otk-control-label otk-control-grow"
-                title={project().label}
-              >
-                {project().label}
-              </ChromeMeta>
-            </Show>
-          </span>
+          <Show
+            when={editing()}
+            fallback={
+              <span class="otk-project-name-line">
+                <span
+                  class="otk-project-name"
+                  data-unread={project().unread ? "true" : "false"}
+                >
+                  {name()}
+                </span>
+                <Show when={project().inactive && project().parentLabel}>
+                  <ChromeMeta
+                    class="otk-project-parent otk-control-label otk-control-grow"
+                    title={project().topology?.canonicalRoot}
+                  >
+                    {project().parentLabel}
+                  </ChromeMeta>
+                </Show>
+                <Show when={duplicate()}>
+                  <ChromeMeta
+                    class="otk-project-machine otk-control-label otk-control-grow"
+                    title={project().label}
+                  >
+                    {project().label}
+                  </ChromeMeta>
+                </Show>
+              </span>
+            }
+          >
+            <TitleEditor
+              owner={props.projectRename!}
+              label="Rename project"
+              pendingText={RENAMING_PROJECT}
+              feedbackID={rowErrorID}
+            />
+          </Show>
         }
         meta={
-          <Show when={!collapsed()}>
+          <Show when={!collapsed() && !editing()}>
             <div class="otk-project-trailing">
               <Show when={(project().source ?? "tracked") === "tracked"}>
                 <ChromeMeta
@@ -568,13 +673,34 @@ export default function ProjectInbox(props: {
           </Show>
         }
         feedback={
-          <Show when={rowError()}>
-            <div
-              id={rowErrorID}
-              class="otk-project-error"
+          <Show
+            when={editing()}
+            fallback={
+              <Show when={rowError()}>
+                <div
+                  id={rowErrorID}
+                  class="otk-project-error"
+                >
+                  <FeedbackStatus
+                    compact
+                    feedback={errorFeedback(rowError())}
+                  />
+                </div>
+              </Show>
+            }
+          >
+            <Show
+              when={props.projectRename!.state.pending ||
+                props.projectRename!.state.invalid ||
+                props.projectRename!.state.error}
             >
-              <FeedbackStatus compact feedback={errorFeedback(rowError())} />
-            </div>
+              <TitleFeedback
+                owner={props.projectRename!}
+                id={rowErrorID}
+                pendingText={RENAMING_PROJECT}
+                expanded
+              />
+            </Show>
           </Show>
         }
       />

@@ -23,7 +23,7 @@ import type {
 import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
-import { projectName } from "./project-navigation.ts";
+import { checkoutLabel } from "./project-names.ts";
 import { age, type TimeText } from "./format.ts";
 import {
   type ProjectPlacement,
@@ -115,7 +115,7 @@ export function projectHierarchy<
   const walk = (
     node: ReturnType<typeof projectTree<T>>[number],
     depth = 0,
-    parent?: T,
+    parentLabel?: string,
   ) => {
     const row = node.project;
     const worktree = !!row.topology &&
@@ -123,21 +123,21 @@ export function projectHierarchy<
     const presentation = {
       level: worktree ? "worktree" as const : "project" as const,
       artwork: worktree ? "none" as const : "avatar" as const,
-      displayName: (!worktree && row.summary?.presentation?.name) ||
-        projectName(row.directory),
+      displayName: checkoutLabel(row.directory, {
+        presentation: row.summary?.presentation,
+        topology: row.topology,
+      }),
     };
     const lifted = row.inactive &&
       node.children.some((child) =>
         ["active", "archived"].includes(projectGroup(child.project))
       );
-    const parentLabel = parent
-      ? projectName(parent.directory)
-      : row.parentLabel;
+    const label = parentLabel ?? row.parentLabel;
     const key = JSON.stringify([
       presentation,
       lifted,
-      parent ? depth : row.depth,
-      parentLabel,
+      parentLabel ? depth : row.depth,
+      label,
     ]);
     let cached = hierarchyRows.get(row);
     if (!cached || cached.key !== key) {
@@ -150,10 +150,8 @@ export function projectHierarchy<
             inactive: false,
             inactivePolicy: true,
           }
-          : parent &&
-              (row.depth !== depth ||
-                row.parentLabel !== projectName(parent.directory))
-          ? { ...row, depth, parentLabel: projectName(parent.directory) }
+          : parentLabel && (row.depth !== depth || row.parentLabel !== label)
+          ? { ...row, depth, parentLabel: label }
           : row),
         ...presentation,
       };
@@ -161,7 +159,9 @@ export function projectHierarchy<
       hierarchyRows.set(row, cached);
     }
     result.push(cached.row as HierarchyRow<T>);
-    for (const child of node.children) walk(child, depth + 1, row);
+    for (const child of node.children) {
+      walk(child, depth + 1, presentation.displayName);
+    }
   };
   for (const root of projectTree(rows)) walk(root);
   return result;

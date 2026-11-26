@@ -12,7 +12,6 @@ import type { SessionActivity } from "./primary-action.ts";
 import type { CurrentClient } from "./current.ts";
 import { liveSessionInfo, sessionKey } from "./index.ts";
 import type { PromptChoices } from "./prompt-selection.ts";
-import { projectName } from "./project-navigation.ts";
 import type { ServerResources } from "./server-resources.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import {
@@ -652,7 +651,10 @@ export function createSessionActions(o: {
         (value
           ? undefined
           : taskFor(target, target.rootID ?? target.sessionID));
-      return [value && projectName(value.directory), task?.name ?? value?.title]
+      return [
+        value && resources.checkoutLabel(target.sidecarId, value.directory),
+        task?.name ?? value?.title,
+      ]
         .filter(Boolean).join(", ");
     },
     inTask(target) {

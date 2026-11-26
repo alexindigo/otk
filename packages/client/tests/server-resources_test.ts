@@ -1066,6 +1066,42 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
   f.resources.stop();
 });
 
+Deno.test("duplicate checkout hints follow native project name publications", () => {
+  const f = fixture();
+  const a = "/one/shared", b = "/two/shared";
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "names",
+    revision: 0,
+    inbox: metadata(),
+  });
+  const summary = (directory: string, name?: string) => ({
+    directory,
+    presentation: { id: directory, name },
+    hasSessions: true,
+    status: null,
+    sessionCount: 1,
+    unseenCount: 0,
+    lastActivity: null,
+    authority: "current" as const,
+  });
+  const publish = (from: number, ...summaries: ReturnType<typeof summary>[]) =>
+    f.receive("local", {
+      t: "inbox.summaries",
+      generation: "names",
+      from,
+      revision: from + summaries.length,
+      summaries,
+    });
+  publish(0, summary(a), summary(b));
+  assertEquals(f.resources.duplicateProjectName("shared"), true);
+  publish(2, summary(a, "Shared app"));
+  assertEquals(f.resources.duplicateProjectName("shared"), false);
+  assertEquals(f.resources.duplicateProjectName("Shared app"), false);
+  publish(3, summary(b, "Shared app"));
+  assertEquals(f.resources.duplicateProjectName("Shared app"), true);
+});
+
 Deno.test("keyed project attention follows operation lifetimes, task membership, policy and native link", () => {
   const f = fixture();
   const session = {
