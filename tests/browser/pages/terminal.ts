@@ -42,6 +42,7 @@ export function observe(page: Page) {
     detaches: 0,
     input: [] as string[],
     restores: [] as string[],
+    grids: [] as { cols: number; rows: number }[],
   };
   page.on("websocket", (socket) => {
     if (new URL(socket.url()).pathname !== "/api/terminal") return;
@@ -50,6 +51,9 @@ export function observe(page: Page) {
       if (typeof payload === "string") {
         const message = JSON.parse(payload);
         if (message.t === "snapshot") data.restores.push(message.restore);
+        if (message.t === "resized") {
+          data.grids.push({ cols: message.cols, rows: message.rows });
+        }
       }
     });
     socket.on("framesent", ({ payload }) => {

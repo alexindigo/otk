@@ -48,7 +48,11 @@ class slots or its own grid track, never a selector reaching into a child. The
 syntax-aware style-boundary check inventories native classes, state bindings and
 every DisclosureToggle caller, rather than naming a few consumers.
 DisclosureToggle's `tree` variant owns the compact box; Tree positions its slot.
-Surface likewise owns its fill/popover layout and signal variants.
+Surface likewise owns its fill/popover layout and signal variants. Containers
+own their chrome: a frame renders its heading and actions at every item count,
+including an explicit empty body. Tabs is an item collection without chrome
+slots. The terminal frame uses Surface's `panel` density, independent of the
+shells its tab strip and panels render.
 
 Project inbox rows and section headers borrow `SidebarRow`: scaled lamp/artwork
 tracks, a shrinkable single-line label and intrinsic metadata. Empty metadata

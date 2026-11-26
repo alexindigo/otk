@@ -22,6 +22,10 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
   for (
     const [name, text] of [
       ["components/Bad.tsx", 'import Surface from "./surface/Surface.tsx";'],
+      [
+        "features/terminal/Terminal.tsx",
+        'import Frame from "../../components/surface/Surface.tsx"; <Frame density="panel" layout="popover" />;',
+      ],
       ["components/Bad.tsx", "<dialog />"],
       ["components/Bad.tsx", '<div popover="auto" />'],
       [
@@ -58,6 +62,15 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
       ],
     ]
   ) assert(surfaceErrors(new Map([[name, text]])).length, text);
+  assertEquals(
+    surfaceErrors(
+      new Map([[
+        "features/terminal/Terminal.tsx",
+        'import Surface from "../../components/surface/Surface.tsx"; <Surface density="panel" layout="fill" />;',
+      ]]),
+    ),
+    [],
+  );
   for (const owner of ["Dialog", "Popover", "Menu", "Toast", "Takeover"]) {
     assertEquals(
       surfaceErrors(
