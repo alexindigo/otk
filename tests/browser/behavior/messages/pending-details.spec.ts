@@ -34,10 +34,21 @@ test("messages.pending-preview-and-ready-question-copy", {
       contentType: "image/png",
     });
   }
+  // 2.105 WP1 removes inventory measurement from layout. Do not depend on
+  // the incidental virtual range fitting both prose and an expanded log.
+  const work = page.locator(".otk-work-log").filter({ has: edit });
+  const disclosure = work.getByRole("button", {
+    name: "Work log",
+    exact: true,
+  });
+  await disclosure.click();
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await reply(page, session.id, "Edit completed.");
+  // WP6 puts pending and settled steps under the same reply disclosure.
+  await openWorkLogs(page);
   await expect(edit.locator(".otk-tool-add")).toHaveText("+1");
   await expect(edit.locator(".otk-tool-del")).toHaveText("\u22121");
+  await disclosure.click();
   await tool(state, "question", {
     questions: [{
       header: "Next step",
