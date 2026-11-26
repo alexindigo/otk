@@ -5,6 +5,7 @@ import {
   type DirectoryCatalogLease,
   type FailureValue,
   failureValue,
+  folderName,
 } from "@otk/client";
 import ProjectChip from "../components/ProjectChip.tsx";
 import { useShellPorts } from "../shell/context.tsx";
@@ -19,6 +20,10 @@ export default function ProjectLocation(props: {
 }) {
   const lease = props.catalog;
   const shell = useShellPorts(), { commands } = useCommandPorts();
+  const name = () =>
+    props.sidecarId && shell
+      ? shell.projectLabel(props.sidecarId, props.directory)
+      : folderName(props.directory);
   const [error, setError] = createSignal<FailureValue>("");
   const controller = new AbortController();
   const connection = () =>
@@ -37,6 +42,7 @@ export default function ProjectLocation(props: {
   return (
     <ProjectChip
       directory={props.directory}
+      name={name()}
       project={project?.state.value?.[0]}
       repository={repository?.state.value?.[0]}
       feedback={error() || project?.state.error || repository?.state.error}
@@ -72,8 +78,7 @@ export default function ProjectLocation(props: {
                     snapshot.directory,
                     snapshot.projectID,
                   ]),
-                  name: project?.state.value?.[0]?.name ||
-                    directory.split("/").at(-1) || directory,
+                  name: name(),
                   editor,
                 },
               });
@@ -82,7 +87,7 @@ export default function ProjectLocation(props: {
               setError(
                 failureValue(cause, {
                   actionLabel: "Opening project settings",
-                  target: { directory },
+                  target: { directory, label: name() },
                   recovery: "Reopen the project menu and try again.",
                 }),
               );

@@ -50,6 +50,7 @@ export * from "./format.ts";
 export * from "./progress.ts";
 export * from "./paths.ts";
 export * from "./project-navigation.ts";
+export * from "./project-names.ts";
 export * from "./project-picker.ts";
 /** Framework-free OTK transport, observable state and navigation models. */
 export * from "./auth.ts";

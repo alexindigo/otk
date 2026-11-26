@@ -18,7 +18,8 @@ import SidebarRow from "./SidebarRow.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import { createMemo, createSignal, createUniqueId, For, Show } from "solid-js";
 import {
-  projectName,
+  checkoutLabel,
+  projectLabel,
   type ProjectProjectionRow,
   type ProjectSelection,
   type SidecarState,
@@ -65,6 +66,7 @@ export default function ProjectInbox(props: {
   disclosure: TreeDisclosures;
   projects: ProjectRow[];
   duplicateName(name: string): boolean;
+  projectLabel?(sidecarId: string, directory: string): string;
   servers: SidecarState[];
   selected?: ProjectSelection;
   prefs: Preferences;
@@ -256,7 +258,7 @@ export default function ProjectInbox(props: {
           selected={props.selected?.sidecarId === node().project.sidecarId &&
             props.selected?.directory === node().project.directory}
           class="otk-project-tree otk-sidebar-tree"
-          label={`Worktrees in ${projectName(node().project.directory)}`}
+          label={`Worktrees in ${node().project.displayName}`}
           open={expanded()}
           hasChildren={presentation().hasChildren}
           showEmptyToggle={false}
@@ -331,7 +333,12 @@ export default function ProjectInbox(props: {
     const label = () =>
       unknown()
         ? "Checkouts with unknown repository"
-        : `Archived checkouts in ${projectName(repository(section.repo))}`;
+        : `Archived checkouts in ${
+          props.projectLabel?.(
+            section.repo.sidecarId,
+            section.repo.directory,
+          ) ?? projectLabel(section.repo.directory, section.repo.summary)
+        }`;
     const archive = () => props.entities?.(section.repo.sidecarId);
     const key = () => entityKey("archive", archiveEntityID(section.repo));
     const attention = () => {
@@ -428,7 +435,8 @@ export default function ProjectInbox(props: {
       },
     });
     const name = () =>
-      project().displayName || projectName(project().directory);
+      project().displayName ??
+        checkoutLabel(project().directory, project().summary);
     const duplicate = () => props.duplicateName(name());
     const key = () => entityKey("project", project().directory);
     const entities = () => props.entities?.(project().sidecarId);

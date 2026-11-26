@@ -28,7 +28,8 @@ import {
 } from "@otk/protocol";
 import { hashFor } from "./session.ts";
 import { sessionTitle } from "./session-title.ts";
-import { projectHash, projectName } from "./project-navigation.ts";
+import { projectHash } from "./project-navigation.ts";
+import { folderName } from "./project-names.ts";
 import type { Note } from "./notifications.ts";
 import { localFailure, RequestFailure, RequestReleased } from "./failures.ts";
 import type { RequestTracker } from "./requests.ts";
@@ -48,7 +49,7 @@ export function createFailurePresenter(): FailurePresenter {
       label: target.sessionID
         ? sessionTitle(target.sessionID, target.label)
         : target.directory
-        ? target.label || projectName(target.directory)
+        ? target.label || folderName(target.directory)
         : target.label || "OTK",
       href: target.sessionID
         ? hashFor({

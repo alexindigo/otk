@@ -28,7 +28,7 @@ import {
   type ProjectProjectionRow,
 } from "./project-projection.ts";
 import type { Selection } from "./session.ts";
-import { projectName, type ProjectSelection } from "./project-navigation.ts";
+import type { ProjectSelection } from "./project-navigation.ts";
 import {
   type ClientSidecars,
   LOCAL_SIDECAR,
@@ -136,6 +136,8 @@ export interface ServerResources {
     now: number,
   ): ProjectProjectionRow | undefined;
   duplicateProjectName(name: string): boolean;
+  checkoutLabel(sidecarId: string, directory: string): string;
+  projectLabel(sidecarId: string, directory: string): string;
   projects(
     now: number,
   ): (ProjectProjectionRow & { sidecarId: string; label: string })[];
@@ -315,10 +317,11 @@ export function createServerResources(o: {
   >();
   const projectReleases = new Map<string, (() => void)[]>();
   const names = new Map<string, number>();
+  const projectLabels = new Map<string, Map<string, string>>();
   const nameClock = factory({ keys: {} as Record<string, number> });
-  const nameMembership = (directory: string, present: boolean) => {
-    const name = projectName(directory), before = names.get(name) ?? 0;
-    const after = before + (present ? 1 : -1);
+  const countName = (name: string, delta: number) => {
+    const before = names.get(name) ?? 0;
+    const after = before + delta;
     if (after) names.set(name, after);
     else names.delete(name);
     if ((before > 1) !== (after > 1)) {
@@ -544,9 +547,20 @@ export function createServerResources(o: {
   const projectOwner = (id: string) => {
     let owner = projectOwners.get(id);
     if (owner) return owner;
+    const counted = new Map<string, string>();
+    projectLabels.set(id, counted);
     owner = createProjectProjection({
       factory,
-      membership: nameMembership,
+      labelChanged(directory, label) {
+        const before = counted.get(directory);
+        if (label === before) return;
+        if (before !== undefined) countName(before, -1);
+        if (label === undefined) counted.delete(directory);
+        else {
+          counted.set(directory, label);
+          countName(label, 1);
+        }
+      },
       inbox: () => inbox(id).state.inbox,
       entities: () => inbox(id).entities,
       entry: (sessionID) => o.index.getMetadata(id, sessionID),
@@ -1073,6 +1087,8 @@ export function createServerResources(o: {
       ),
     sessionRows,
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
+    checkoutLabel: (id, directory) => projectOwner(id).label(directory),
+    projectLabel: (id, directory) => projectOwner(id).projectLabel(directory),
     duplicateProjectName: (name) => {
       for (const s of sidecars.state.list) projectOwner(s.id);
       void nameClock.state.keys[name];
@@ -1149,9 +1165,10 @@ export function createServerResources(o: {
       progressOwners.delete(id);
       for (const release of projectReleases.get(id) ?? []) release();
       projectReleases.delete(id);
-      for (const directory of projectOwners.get(id)?.directories() ?? []) {
-        nameMembership(directory, false);
+      for (const label of projectLabels.get(id)?.values() ?? []) {
+        countName(label, -1);
       }
+      projectLabels.delete(id);
       projectOwners.delete(id);
       for (const [key, cache] of tabInputs) {
         if (cache.server === id) tabInputs.delete(key);
