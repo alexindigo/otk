@@ -28,6 +28,7 @@ const value: PublicFailure = {
     },
   },
 };
+const hasRecord = (id: string) => id === "record-one" || id === "record-two";
 Deno.test("retained composer feedback is a displayed current target projection, never a phantom or replacement for local feedback", () => {
   const view = { sidecarId: "server", sessionID: "opcv1-ses_one" };
   const observation = {
@@ -37,42 +38,61 @@ Deno.test("retained composer feedback is a displayed current target projection, 
     failure: value,
   };
   const state = { revision: 1, observations: [observation] };
-  const shown = sessionComposerFeedback(state, view);
+  const shown = sessionComposerFeedback(state, view, undefined, hasRecord);
   assertEquals(shown?.failure?.reference?.messageID, "record-one");
   assertEquals(shown?.failure?.value.facts?.target?.sidecarId, "server");
   const local = { kind: "pending" as const, text: "Current local action" };
-  assert(sessionComposerFeedback(state, view, local) === local);
+  assert(sessionComposerFeedback(state, view, local, hasRecord) === local);
   assertEquals(
-    sessionComposerFeedback({
-      revision: 2,
-      observations: [{ ...observation, cleared: true }],
-    }, view),
+    sessionComposerFeedback(
+      {
+        revision: 2,
+        observations: [{ ...observation, cleared: true }],
+      },
+      view,
+      undefined,
+      hasRecord,
+    ),
     undefined,
   );
   assertEquals(
-    sessionComposerFeedback(state, { ...view, sessionID: "other" }),
+    sessionComposerFeedback(
+      state,
+      { ...view, sessionID: "other" },
+      undefined,
+      hasRecord,
+    ),
     undefined,
   );
   assertEquals(
-    sessionComposerFeedback({
-      revision: 1,
-      observations: [{
-        ...observation,
-        failure: {
-          ...value,
-          facts: {
-            ...value.facts,
-            target: { ...value.facts!.target, sidecarId: "foreign" },
+    sessionComposerFeedback(
+      {
+        revision: 1,
+        observations: [{
+          ...observation,
+          failure: {
+            ...value,
+            facts: {
+              ...value.facts,
+              target: { ...value.facts!.target, sidecarId: "foreign" },
+            },
           },
-        },
-      }],
-    }, view),
+        }],
+      },
+      view,
+      undefined,
+      hasRecord,
+    ),
     undefined,
   );
 });
 Deno.test("FP1 scopes retained-record pointers to inline surfaces in the matching session view", () => {
   const presenter = createFailurePresenter();
-  const feedback = presenter.describe(value);
+  const feedback = presenter.describe(value, {
+    surface: "feedback",
+    view: value.facts!.target,
+    hasRecord,
+  });
   assertEquals(feedback.text, "Not sent - see the error above");
   assertEquals(feedback.failure?.reference?.messageID, "record-one");
   const full = presenter.describe(value, "record");
@@ -84,7 +104,7 @@ Deno.test("FP1 scopes retained-record pointers to inline surfaces in the matchin
   assertEquals(full.failure?.value.diagnosticID, "original");
   assertEquals(
     presenter.group(value).failure?.reference?.messageID,
-    "record-one",
+    undefined,
   );
   const produced = sessionFailure(
     {
@@ -100,13 +120,21 @@ Deno.test("FP1 scopes retained-record pointers to inline surfaces in the matchin
   assertEquals(produced.facts?.record, value.facts?.record);
   for (const surface of ["session", "feedback"] as const) {
     assertEquals(
-      presenter.describe(value, { surface, view: value.facts!.target }).text,
+      presenter.describe(value, {
+        surface,
+        view: value.facts!.target,
+        hasRecord,
+      }).text,
       surface === "session"
         ? "See the session error"
         : "Not sent - see the error above",
     );
     assertEquals(
-      presenter.describe(value, { surface, view: value.facts!.target }).failure
+      presenter.describe(value, {
+        surface,
+        view: value.facts!.target,
+        hasRecord,
+      }).failure
         ?.reference?.messageID,
       "record-one",
     );
@@ -117,7 +145,8 @@ Deno.test("FP1 scopes retained-record pointers to inline surfaces in the matchin
       }]
     ) {
       assertEquals(
-        presenter.describe(value, { surface, view }).failure?.reference,
+        presenter.describe(value, { surface, view, hasRecord }).failure
+          ?.reference,
         undefined,
       );
     }
@@ -151,8 +180,16 @@ Deno.test("FP1 gives each retained failure one inline pointer at its origin", ()
   ) {
     const failure = { ...value, facts: { ...value.facts, origin } };
     const view = failure.facts.target;
-    const composer = presenter.place(failure, { surface: "feedback", view });
-    const session = presenter.place(failure, { surface: "session", view });
+    const composer = presenter.place(failure, {
+      surface: "feedback",
+      view,
+      hasRecord,
+    });
+    const session = presenter.place(failure, {
+      surface: "session",
+      view,
+      hasRecord,
+    });
     assertEquals(
       composer?.text,
       origin === "composer" ? "Not sent - see the error above" : undefined,
@@ -181,6 +218,8 @@ Deno.test("FP1 gives each retained failure one inline pointer at its origin", ()
 Deno.test("FP1 spends a view's one pointer on the composer before the session indicator", () => {
   const presenter = createFailurePresenter();
   const view = value.facts!.target!;
+  const feedback = { surface: "feedback", view, hasRecord } as const;
+  const session = { surface: "session", view, hasRecord } as const;
   // Two independent failures in one session view: the composer submission's
   // HTTP failure and an unlinked native report with no origin.
   const submitted = value;
@@ -194,13 +233,13 @@ Deno.test("FP1 spends a view's one pointer on the composer before the session in
       record: { messageID: "record-two" },
     },
   };
-  const composer = presenter.place(submitted, { surface: "feedback", view });
+  const composer = presenter.place(submitted, feedback);
   assertEquals(composer?.text, "Not sent - see the error above");
   const pointers = [
     composer,
-    presenter.place(native, { surface: "feedback", view }),
-    presenter.place(submitted, { surface: "session", view }, composer),
-    presenter.place(native, { surface: "session", view }, composer),
+    presenter.place(native, feedback),
+    presenter.place(submitted, session, composer),
+    presenter.place(native, session, composer),
   ].filter(Boolean);
   assertEquals(pointers.map((p) => p?.failure?.reference?.messageID), [
     "record-one",
@@ -214,31 +253,42 @@ Deno.test("FP1 spends a view's one pointer on the composer before the session in
   }
   // With no composer pointer in this view, the session indicator appears.
   assertEquals(
-    presenter.place(native, { surface: "session", view })?.text,
+    presenter.place(native, session)?.text,
     "See the session error",
   );
   // A composer submission retained in the session's failures holds the
   // budget in every view of it, even when another client submitted it.
-  const retained = composerPointer([native, submitted], view);
+  const retained = composerPointer(
+    [native, submitted],
+    view,
+    undefined,
+    hasRecord,
+  );
   assertEquals(retained?.failure?.reference?.messageID, "record-one");
   assertEquals(
-    presenter.place(native, { surface: "session", view }, retained),
+    presenter.place(native, session, retained),
     undefined,
   );
-  assertEquals(composerPointer([native], view), undefined);
-  assertEquals(composerPointer([submitted], { sessionID: "other" }), undefined);
+  assertEquals(
+    composerPointer([native], view, undefined, hasRecord),
+    undefined,
+  );
+  assertEquals(
+    composerPointer([submitted], { sessionID: "other" }, undefined, hasRecord),
+    undefined,
+  );
   // A composer pointer in another view does not spend this view's budget.
   assertEquals(
     presenter.place(
       native,
-      { surface: "session", view },
+      session,
       presenter.place({
         ...submitted,
         facts: {
           ...submitted.facts,
           target: { sessionID: "opcv1-ses_two" },
         },
-      }, { surface: "feedback", view: { sessionID: "opcv1-ses_two" } }),
+      }, { ...feedback, view: { sessionID: "opcv1-ses_two" } }),
     )?.text,
     "See the session error",
   );

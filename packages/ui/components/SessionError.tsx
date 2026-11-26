@@ -14,6 +14,7 @@ export default function SessionError(
     /** The composer's feedback in this view; it may hold the view's pointer. */
     composer?: import("@otk/client").Feedback;
     target?: import("@otk/protocol").FailureTarget;
+    hasRecord?(messageID: string): boolean;
     onReveal?(messageID: string): void;
   },
 ) {
@@ -31,7 +32,7 @@ export default function SessionError(
     return failure
       ? placeFailure(
         failure,
-        { surface: "session", view: props.target },
+        { surface: "session", view: props.target, hasRecord: props.hasRecord },
         props.composer,
       )
       : undefined;

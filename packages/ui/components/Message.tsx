@@ -5,6 +5,7 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
 import {
   errorFeedback,
+  failedSendPresentation,
   messageTimeValue,
   replyErrorFeedback,
 } from "@otk/client";
@@ -235,6 +236,7 @@ export default function Message(
     )
   );
   const frames = () => framing().frames;
+  const failedSend = () => failedSendPresentation(props.send?.feedback);
   const failureTime = (part: Part) => {
     const id =
       parts.presentation(part, props.prefs).failure?.facts?.record?.messageID ??
@@ -351,6 +353,7 @@ export default function Message(
         data-role={props.message.role}
         data-send-state={props.send?.phase}
         data-send-key={props.send?.intent.key}
+        data-failure-diagnostic={failedSend().diagnosticID}
         tabindex="-1"
       >
         <For each={frames()} keyed={(frame) => frame.id}>
@@ -492,11 +495,18 @@ export default function Message(
             </Show>
           </MessageFooter>
           <Show when={props.send?.phase === "failed"}>
-            <FeedbackStatus
-              class="otk-send-failure"
-              intrinsic
-              feedback={props.send?.feedback}
-            />
+            <Show
+              when={failedSend().feedback}
+              fallback={<ChromeMeta>Not sent</ChromeMeta>}
+            >
+              {(feedback) => (
+                <FeedbackStatus
+                  class="otk-send-failure"
+                  intrinsic
+                  feedback={feedback()}
+                />
+              )}
+            </Show>
           </Show>
         </Show>
         <Show when={assistant()}>
