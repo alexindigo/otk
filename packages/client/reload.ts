@@ -4,6 +4,31 @@ export interface ReloadOwner {
   snapshot(): unknown;
   restore(value: unknown): void;
 }
+
+/** Checkpoint keyed owners without mounting detached identities on restore. */
+export function keyedReload<T extends { id: string }>(options: {
+  ids(): readonly string[];
+  snapshot(id: string): T;
+  restore(value: T): void;
+}): ReloadOwner {
+  const detached = new Map<string, T>();
+  return {
+    snapshot() {
+      const saved = new Map(detached);
+      for (const id of options.ids()) saved.set(id, options.snapshot(id));
+      return [...saved.values()];
+    },
+    restore(value) {
+      const ids = new Set(options.ids());
+      for (const saved of value as T[]) {
+        if (ids.has(saved.id)) {
+          options.restore(saved);
+          detached.delete(saved.id);
+        } else detached.set(saved.id, saved);
+      }
+    },
+  };
+}
 type Encoded = [string, unknown?];
 // Tag every node, not user objects, so own-undefined Default and Sets round-trip
 // without colliding with arbitrary user text or plugin field names.

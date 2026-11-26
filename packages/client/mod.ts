@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-export { createReload, type Reload, type ReloadOwner } from "./reload.ts";
+export {
+  createReload,
+  keyedReload,
+  type Reload,
+  type ReloadOwner,
+} from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
 export * from "./tree-disclosure.ts";

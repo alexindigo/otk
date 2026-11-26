@@ -312,7 +312,10 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
           code: "native.rejected",
           retry: "new-intent",
           diagnosticID: "restored-rejection",
-          facts: { reason: "Native refused the original send" },
+          facts: {
+            reason: "Native refused the original send",
+            outcome: "rejected",
+          },
         }),
       );
       for (let n = 0; n < 10; n++) await Promise.resolve();
@@ -332,6 +335,11 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
         restored.feedback.failure.reason,
         "Native refused the original send",
       );
+      assertEquals(
+        restored.retry,
+        undefined,
+        "do not offer Reload as a new-intent Retry",
+      );
     } else {
       assert(restored.feedback.failure.reason.includes("not been observed"));
       restored.retry?.();
@@ -347,6 +355,36 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
     f.owner.stop();
   });
 }
+
+Deno.test("a restored rejection returns to draft custody without replaying the original intent", async () => {
+  const f = fixture();
+  const entry = { ...localSend(), dispatched: true };
+  const result = Promise.withResolvers<PromptReceipt | null>();
+  const seen: SendOutcome[] = [];
+  try {
+    f.projection.send(entry);
+    Reflect.apply(f.owner.resume, f.owner, [entry, result.promise, {
+      outcome(value: SendOutcome) {
+        seen.push(value);
+        return true;
+      },
+    }]);
+    result.reject(
+      new RequestFailure({
+        code: "native.rejected",
+        retry: "new-intent",
+        diagnosticID: "rejection",
+        facts: { outcome: "rejected", reason: "Refused" },
+      }),
+    );
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    assertEquals(seen.map((result) => result.kind), ["failed"]);
+    assertEquals(f.counts().reads, 0);
+    assertEquals(f.projection.entry(entry.message.id)?.send?.retry, undefined);
+  } finally {
+    f.owner.stop();
+  }
+});
 
 Deno.test("send custody sees live commitment while the dispatch promise is held", async () => {
   const f = fixture();
