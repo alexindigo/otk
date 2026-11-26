@@ -12,7 +12,8 @@ import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { contextTarget } from "./context-target.ts";
 import MessageFooter from "./MessageFooter.tsx";
-import ListRow from "./ListRow.tsx";
+import SidebarRow from "./SidebarRow.tsx";
+import { TreeNode } from "./Tree.tsx";
 import { EmptyState } from "./View.tsx";
 import VirtualList from "./VirtualList.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -23,32 +24,45 @@ function PromptRow(props: {
   selected: boolean;
   onReveal(): void;
 }) {
+  const ref = contextTarget(() => ({ kind: "prompt", data: props.target }));
   return (
     <li>
-      <ListRow
-        as="div"
-        ref={contextTarget(() => ({ kind: "prompt", data: props.target }))}
+      <TreeNode
+        class="otk-sidebar-tree"
+        leadingRow
         selected={props.selected}
-        class="otk-timeline-row"
-        attributes={{ "data-timeline-prompt": props.prompt.id }}
-        labelClass="otk-timeline-preview"
-        labelTitle={props.target.text}
-        actionClass="otk-timeline-reveal"
-        activate={props.onReveal}
-        trailing={
-          <MessageFooter
-            class="otk-timeline-trailing"
-            at={props.prompt.time}
-            actions={{ kind: "prompt", target: props.target }}
+        header={() => (
+          <SidebarRow
+            frame={{
+              selected: props.selected,
+              class: "otk-timeline-row",
+              ref,
+              attributes: { "data-timeline-prompt": props.prompt.id },
+            }}
+            action={{
+              class: "otk-timeline-reveal",
+              title: props.target.text,
+              onClick: props.onReveal,
+            }}
+            label={
+              <span class="otk-timeline-preview">
+                {props.target.text || "Prompt"}
+                <Show when={props.prompt.queued}>
+                  {" "}
+                  <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
+                </Show>
+              </span>
+            }
+            meta={
+              <MessageFooter
+                class="otk-timeline-trailing"
+                at={props.prompt.time}
+                actions={{ kind: "prompt", target: props.target }}
+              />
+            }
           />
-        }
-      >
-        {props.target.text || "Prompt"}
-        <Show when={props.prompt.queued}>
-          {" "}
-          <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
-        </Show>
-      </ListRow>
+        )}
+      />
     </li>
   );
 }
@@ -125,7 +139,7 @@ export default function Timeline(props: {
           keys={props.prompts.map((prompt) => prompt.id)}
           class="otk-timeline-list"
           label="Acquired prompts"
-          samples={[{ role: "prompt", class: "otk-list-row" }]}
+          samples={[{ role: "prompt", class: "otk-sidebar-row-grid" }]}
           role={() => "prompt"}
           overscan={0}
           retainExcluded={false}

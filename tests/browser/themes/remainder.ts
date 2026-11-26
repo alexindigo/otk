@@ -323,8 +323,14 @@ export async function remainder(
       .scrollIntoViewIfNeeded();
     await revealAcquired(page, replyMessage + " .otk-message-footer");
     await page.mouse.move(1, 1);
-    const reply = page.locator("[data-role=assistant]").first();
-    await expect(reply.locator(".otk-message-actions")).toHaveCSS(
+    const reply = page.locator(replyMessage);
+    // Code blocks now have their own actions; hover continuity is a contract
+    // of the reply's footer, not of nested block controls.
+    const footer = reply.locator(".otk-message-footer").filter({
+      has: page.locator('[data-message-command="reply.copy"]'),
+    });
+    const actions = footer.locator(".otk-message-actions");
+    await expect(actions).toHaveCSS(
       "opacity",
       "1",
     );
@@ -332,9 +338,9 @@ export async function remainder(
     // owning flow so that exact equality measures layout, not reader position.
     const replyBounds = () => ownedBounds(reply, ".otk-message-flow");
     const fixed = await replyBounds();
-    await reply.locator(".otk-message-footer").hover();
+    await footer.hover();
     expect(
-      await reply.locator(".otk-message-footer").evaluate((footer) => {
+      await footer.evaluate((footer) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
             .getBoundingClientRect(),
           b = footer.querySelector("time[title]")!.parentElement!
@@ -345,7 +351,7 @@ export async function remainder(
     ).toBe(true);
     await page.mouse.move(1, 1);
     await expect(reply).not.toHaveClass(/is-revealed/);
-    await expect(reply.locator(".otk-message-actions")).toHaveCSS(
+    await expect(actions).toHaveCSS(
       "opacity",
       "1",
     );

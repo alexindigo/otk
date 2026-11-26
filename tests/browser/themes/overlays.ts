@@ -147,8 +147,10 @@ export async function menuGeometry(page: Page) {
   const g = await page.locator(":popover-open [role=menu]").evaluate((menu) => {
     const panel = menu.closest(".otk-surface")!,
       r = panel.getBoundingClientRect(),
-      first = menu.parentElement!.firstElementChild!.getBoundingClientRect(),
-      last = menu.parentElement!.lastElementChild!.getBoundingClientRect();
+      // A named menu includes the title in its chrome, outside the body.
+      // Measure both insets at the surface slots, not at the menu rows.
+      first = panel.firstElementChild!.getBoundingClientRect(),
+      last = panel.lastElementChild!.getBoundingClientRect();
     return {
       inside: r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
         r.right <= innerWidth + .5 && r.bottom <= innerHeight + .5,
@@ -179,7 +181,7 @@ async function allMarks(
       expect([item.w, item.h, item.start]).toEqual([
         3,
         14,
-        item.external ? 0 : 3,
+        item.external ? item.railWidth : 3,
       ]);
       expect(item.centred).toBeLessThanOrEqual(.5);
     } else {expect([item.h, item.start, item.end, item.bottom]).toEqual([
@@ -257,13 +259,17 @@ export async function usage(
               };
             })
           );
+          const rowHeight = await cssLength(
+            page.locator(".otk-session-row:has(.otk-session-cost)").first(),
+            "--row-project",
+          );
           for (const box of boxes) {
             expect(Math.abs(box.right - boxes[0].right)).toBeLessThanOrEqual(
               .5,
             );
             expect(Math.abs(box.centre - box.title)).toBeLessThanOrEqual(.5);
             expect(Math.abs(box.centre - box.light)).toBeLessThanOrEqual(.5);
-            expect(box.height).toBe(30);
+            expect(box.height).toBe(rowHeight);
             expect(box.overflow).toBe(false);
           }
           await shot(`usage-rows-${name}-${width}-${theme.id}`);
@@ -393,7 +399,11 @@ export async function usage(
         ).toHaveText(label);
         await expect(page.locator(".otk-context-meter .otk-usage-cost"))
           .toHaveText(label);
-        await expect(page.locator(`[data-session="${content.sessionID}"]`))
+        await expect(
+          page.locator(
+            `[data-session="${content.sessionID}"] .otk-session-open`,
+          ),
+        )
           .toHaveAttribute("aria-description", `Exact session cost: ${exact}`);
         await expect(page.locator(".otk-turn-usage > button")).toHaveAttribute(
           "aria-label",

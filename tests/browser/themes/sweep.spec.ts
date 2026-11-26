@@ -15,6 +15,7 @@ import { supplemental } from "./supplemental.ts";
 import { capture, restoreViewport } from "./capture.ts";
 import { stripGeometry } from "../pages/task-strip.ts";
 import { assertCrumbCoverage } from "../pages/crumbs.ts";
+import { cssLength } from "../pages/css-length.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -94,14 +95,16 @@ async function centers(page: Page, selector: string, a: string, b: string) {
 async function marks(
   page: Page,
   cdp: CDPSession,
-  selector: string,
-  minimum: number,
+  targets: readonly string[],
 ) {
+  for (const target of targets) {
+    await expect(page.locator(target)).toBeVisible();
+  }
   const items = await selectionGeometry({
     send: (method, params = {}) =>
       cdp.send(method as Parameters<CDPSession["send"]>[0], params),
-  }, selector);
-  expect(items.length).toBeGreaterThanOrEqual(minimum);
+  }, targets.join(","));
+  expect(items).toHaveLength(targets.length);
   for (const item of items) {
     expect(item.shift).toBe(0);
     expect(item.position).toBe("static");
@@ -470,14 +473,24 @@ test(
                         .toBeLessThanOrEqual(.5)
                     )
                   );
-                  const ys = await page.locator(
-                    ".otk-project-row[data-inactive=false] .otk-status-light,.otk-inbox-search",
-                  ).evaluateAll((els) =>
-                    els.map((el) => {
-                      const r = el.getBoundingClientRect();
-                      return r.y + r.height / 2;
-                    })
-                  );
+                  const ys = await page.locator(".otk-project-inbox")
+                    .evaluate((inbox) => {
+                      const centre = (el: Element) => {
+                        const r = el.getBoundingClientRect();
+                        return r.y + r.height / 2;
+                      };
+                      // D71 stacks history ahead of the search control in the
+                      // narrow rail. That moves the section, not its row grid.
+                      const origin = centre(
+                        inbox.querySelector(".otk-inbox-search")!,
+                      );
+                      return Array.from(
+                        inbox.querySelectorAll(
+                          ".otk-project-row[data-inactive=false] .otk-status-light",
+                        ),
+                        (lamp) => centre(lamp) - origin,
+                      );
+                    });
                   lights ??= ys;
                   expect(ys).toEqual(lights);
                   expect(
@@ -582,12 +595,19 @@ test(
                       return opacity;
                     }),
                   ).toBe(1);
-                  await marks(
-                    page,
-                    cdp,
-                    "[data-otk-selection].is-selected",
-                    right ? 3 : 5,
-                  );
+                  // The selected session is marked in the Sessions panel,
+                  // not a second time in its ancestry trail or closed menu.
+                  const activeMark = "[data-otk-selection].is-selected";
+                  await marks(page, cdp, [
+                    `.otk-project-row[data-project$="/projects/otk"]${activeMark}`,
+                    `[data-tab="${task.id}"][data-open-session="tstv1-child"]${activeMark}`,
+                    `${
+                      right ? ".otk-right-rail" : ".otk-panel-icons"
+                    } [data-panel-view="sessions"]${activeMark}`,
+                    ...(right ? [] : [
+                      `.otk-project-sessions [data-session="tstv1-child"]${activeMark}`,
+                    ]),
+                  ]);
                   expect(
                     await page.evaluate(() =>
                       !!document.querySelector(
@@ -786,16 +806,14 @@ test(
           .toBeVisible();
         expect((await page.locator(".otk-task-strip").boundingBox())!.height)
           .toBe(52);
-        expect(
-          (await page.locator(".otk-project-row").first().boundingBox())!
-            .height,
-        ).toBe(32);
-        expect(
-          (await page.locator(".otk-session-row").first().boundingBox())!
-            .height,
-        ).toBe(30);
+        for (const kind of ["project", "session"]) {
+          const row = page.locator(`.otk-${kind}-row`).first();
+          expect((await row.boundingBox())!.height).toBe(
+            await cssLength(row, "--row-project"),
+          );
+        }
         await expect(
-          page.locator(".otk-session-branch, .otk-tree-guide").first(),
+          page.locator(".otk-session-tree .otk-tree-own").first(),
         ).toHaveText(
           "",
         );
@@ -883,14 +901,14 @@ test(
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-list-row-leading",
-                ".otk-list-row-label",
+                ".otk-sidebar-lamp",
+                ".otk-sidebar-label",
               );
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-list-row-leading",
-                ".otk-list-row-trailing",
+                ".otk-sidebar-lamp",
+                ".otk-sidebar-meta",
               );
               expect(
                 await page.locator(".otk-session-row .otk-session-title")
@@ -954,7 +972,7 @@ test(
               exact: true,
             }).fill("Retained editor");
             await page.keyboard.press("Enter");
-            await expect(page.locator(".otk-list-row-feedback [role=alert]"))
+            await expect(page.locator(".otk-sidebar-row-feedback [role=alert]"))
               .toBeVisible();
             await centers(
               page,
@@ -966,7 +984,7 @@ test(
               page,
               ".otk-session-row.is-editing",
               "input",
-              ".otk-list-row-trailing",
+              ".otk-sidebar-meta",
             );
             expect(
               await page.locator(".otk-project-session-tree").evaluate((el) =>
@@ -1054,7 +1072,8 @@ test(
                 const r = el.getBoundingClientRect(),
                   t = el.querySelector(".otk-session-title")!
                     .getBoundingClientRect();
-                return { left: r.left, text: t.left, height: r.height };
+                // Tree depth owns the outer indent; the row owns its gutter.
+                return { gutter: t.left - r.left, height: r.height };
               });
             await page.locator("[data-panel-view=timeline]").click();
             await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
@@ -1064,7 +1083,7 @@ test(
                 const r = el.getBoundingClientRect(),
                   t = el.querySelector(".otk-timeline-preview")!
                     .getBoundingClientRect();
-                return { left: r.left, text: t.left, height: r.height };
+                return { gutter: t.left - r.left, height: r.height };
               }),
             ).toEqual(session);
             const actions = () =>
@@ -1188,9 +1207,12 @@ test(
             await page.setViewportSize({ width: 1280, height: 900 });
             await page.setViewportSize({ width: 800, height: 800 });
             await settled(page);
-            await page.locator(".otk-subagents > button").click();
+            await page.getByRole("button", { name: /^Subagents:/ }).click();
+            const inventoryRows = page.locator(
+              ".otk-subagents .otk-subagent-row[data-subagent]",
+            );
             await expect(
-              page.locator(".otk-subagents [data-subagent]").first(),
+              inventoryRows.first(),
             ).toBeVisible();
             const shown = await page.locator("[data-crumb]").evaluateAll((
               els,
@@ -1199,18 +1221,16 @@ test(
                 el.getAttribute("data-crumb")!
               )
             );
-            const omitted = await page.locator(
-              ".otk-subagents [data-subagent]",
-            ).evaluateAll((els) =>
+            const omitted = await inventoryRows.evaluateAll((els) =>
               els.map((el) => el.getAttribute("data-subagent")!)
             );
             assertCrumbCoverage(
               ids,
               shown,
-              omitted,
-              // The active fixture family includes the selected helper and
-              // its existing child as well as the synthetic working ancestors.
-              [...ids.slice(1), "tstv1-child"],
+              omitted.sort(),
+              // D67 checks coverage here, not ancestry order in a menu that
+              // groups sessions by disposition. A duplicate still fails.
+              [...ids.slice(1), "tstv1-child"].sort(),
             );
             await shot(`more-${theme.id}-800`);
             await page.keyboard.press("Escape");
