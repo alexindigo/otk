@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
   BlockedCause,
+  ComposerLinkState,
   EntityLamp,
   EntityState,
   HelperDisposition,
@@ -269,4 +270,14 @@ export function liveWork(
 ): SessionEvidence["liveWork"] {
   if (store.isStale) return undefined;
   return store.get(k)?.evidence?.liveWork;
+}
+
+/** Read the server's selected composer verdict, with the usual stale fence. */
+export function sessionComposerLink(
+  store: EntityStateStore | undefined,
+  sessionID: string,
+): ComposerLinkState {
+  return !store || store.isStale
+    ? "none"
+    : store.get(entityKey("session", sessionID))?.composerLink ?? "none";
 }

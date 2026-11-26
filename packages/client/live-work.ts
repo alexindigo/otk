@@ -121,14 +121,3 @@ export function helperClock(
       }
   }
 }
-
-export type ComposerLinkState = "none" | "idle" | "running";
-
-/** The link reflects helper and shell work, never the main session's run. */
-export function composerLinkState(
-  helpers: TaskHelpers | undefined,
-  shells: number,
-): ComposerLinkState {
-  if (!helpers?.ids.length && !shells) return "none";
-  return shells || (helpers?.counts.running ?? 0) > 0 ? "running" : "idle";
-}

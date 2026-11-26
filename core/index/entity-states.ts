@@ -2,6 +2,7 @@
 import {
   archiveEntityID,
   type BlockedCause,
+  type ComposerLinkState,
   type EntityCounts,
   entityKey,
   type EntityState,
@@ -163,6 +164,23 @@ export class EntityStates {
   ) {}
   get(key: string): EntityState | undefined {
     return this.#states.get(key);
+  }
+  /** Selected composer scope: borrow the own work and the assigned task roster.
+   * No sibling enumeration or fanout to every session when a helper changes. */
+  composerLink(id: string): ComposerLinkState {
+    const session = this.get(entityKey("session", id));
+    if (!session) return "none";
+    const task = this.#taskOf.get(id);
+    const helpers = task
+      ? this.get(entityKey("task", task))?.helpers
+      : undefined;
+    if (
+      session.evidence?.nativeRun || session.shells?.state === "working" ||
+      helpers?.counts.running
+    ) {
+      return "running";
+    }
+    return helpers?.ids.length ? "idle" : "none";
   }
   terminalOwners(count: (id: string) => number): void {
     this.#terminalOwners = count;
@@ -1017,6 +1035,11 @@ export class EntityStates {
       }),
       // A received operation in progress is work on its target session.
       work: inputs.work || operation === "working",
+      // Some harnesses publish execution keys without detailed items. Only
+      // identities accounted for by the shell roster are excluded.
+      ...(inputs.work && (activity?.work?.keys.length ?? 0) > shells.length
+        ? { nativeRun: true as const }
+        : {}),
       permissions: inputs.permissions,
       questions: inputs.questions,
       descendants: this.#descendants(entry.id),
