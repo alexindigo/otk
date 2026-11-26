@@ -24,10 +24,11 @@ export function fitOverflow(input: {
   moreWidth: number;
   gap: number;
   compactWidths?: ReadonlyMap<string, number>;
+  scrollRequired?: boolean;
 }): {
   visible: string[];
   overflow: string[];
-  mode?: "full" | "compact" | "collapsed";
+  mode?: "full" | "compact" | "collapsed" | "scroll";
   widths?: ReadonlyMap<string, number>;
 } {
   const { keys, widths, available, gap } = input;
@@ -50,6 +51,9 @@ export function fitOverflow(input: {
       [...widths.values()].reduce((a, b) => a + b, 0);
     if (spare < 0) {
       const visible = keys.filter((key) => input.required.includes(key));
+      if (input.scrollRequired && visible.length === keys.length) {
+        return { visible, overflow: [], mode: "scroll" };
+      }
       return {
         visible,
         overflow: keys.filter((key) => !input.required.includes(key)),

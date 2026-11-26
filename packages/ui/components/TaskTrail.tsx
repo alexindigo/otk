@@ -58,7 +58,7 @@ export default function TaskTrail(props: {
   const rows = () => breadcrumbRows(props.model.crumbs);
   const separator = (first: boolean) => (
     <Show when={!first}>
-      <span class="otk-trail-separator">
+      <span class="otk-trail-separator" aria-hidden="true">
         <ChevronIcon />
       </span>
     </Show>
@@ -83,7 +83,7 @@ export default function TaskTrail(props: {
   ) =>
     crumbContent(
       row,
-      <span class="otk-trail-title otk-crumb-title">
+      <span class="otk-trail-title otk-crumb-title otk-control-label">
         <Show when={compact()} fallback={props.title(row().id)}>
           {compactTitle(props.title(row().id), measure)}
         </Show>
@@ -115,7 +115,7 @@ export default function TaskTrail(props: {
         compactMeasure={(row) => measure(row, true)}
         more={() => null}
       >
-        {(row: () => TrailCrumb & { key: string; first: boolean }, compact) => {
+        {(row, compact, scrolling) => {
           const target = contextTarget(() => props.target(row().id));
           const attributes = () => ({
             "data-crumb": row().id,
@@ -128,7 +128,7 @@ export default function TaskTrail(props: {
             ...place(row()),
           }));
           return (
-            <span class="otk-trail-link">
+            <span class={["otk-trail-link", { "is-paged": scrolling() }]}>
               {separator(row().first)}
               <Show
                 when={editing(row().id)}
