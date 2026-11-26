@@ -62,7 +62,7 @@ import TaskTrail from "./TaskTrail.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import ProjectChip from "./ProjectChip.tsx";
 import { orderInteraction } from "./order-interaction.ts";
-import { metaList } from "./ChromeMeta.tsx";
+import { metaList, MetaRow } from "./ChromeMeta.tsx";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -589,55 +589,57 @@ export default function ProjectTabs(props: {
             </button>
           </Show>
         </nav>
-        <output
-          class="otk-context-meter"
-          aria-label={props.showCost === false
-            ? "Session context"
-            : "Session context and cost"}
-          title={`${"Session context"}; latest reported context tokens; ${
-            meter().limit === undefined
-              ? "context window unavailable"
-              : `${contextRange()}, ${
-                (meter().tokens! / meter().limit! * 100).toFixed(1)
-              }%`
-          }`}
-          data-tokens={meter().tokens}
-          data-cost={props.showCost === false ? undefined : cost()}
-          data-limit={meter().limit}
-        >
-          <Show when={meter().tokens !== undefined}>
-            <span>
-              {countLabel(
-                meter().tokens!,
-                "token",
-                undefined,
-                exactCount(meter().tokens!),
-              )}
-            </span>
-            <Show when={meter().fraction !== undefined}>
-              <span
-                class="otk-context-bar"
-                role="meter"
-                aria-label="Context window used"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={meter().fraction! * 100}
-                aria-valuetext={contextRange()}
-              >
-                <span style={{ width: `${meter().fraction! * 100}%` }} />
-              </span>
-            </Show>
-          </Show>
-          <Show when={props.showCost !== false && cost() !== undefined}>
-            <UsageCost value={cost()!} />
-          </Show>
-          <Show
-            when={meter().tokens === undefined &&
-              (props.showCost === false || cost() === undefined)}
+        <MetaRow class="otk-context-fit">
+          <output
+            class="otk-context-meter"
+            aria-label={props.showCost === false
+              ? "Session context"
+              : "Session context and cost"}
+            title={`${"Session context"}; latest reported context tokens; ${
+              meter().limit === undefined
+                ? "context window unavailable"
+                : `${contextRange()}, ${
+                  (meter().tokens! / meter().limit! * 100).toFixed(1)
+                }%`
+            }`}
+            data-tokens={meter().tokens}
+            data-cost={props.showCost === false ? undefined : cost()}
+            data-limit={meter().limit}
           >
-            <span>{digestLabel(props.entry)}</span>
-          </Show>
-        </output>
+            <Show when={meter().tokens !== undefined}>
+              <span>
+                {countLabel(
+                  meter().tokens!,
+                  "token",
+                  undefined,
+                  exactCount(meter().tokens!),
+                )}
+              </span>
+              <Show when={meter().fraction !== undefined}>
+                <span
+                  class="otk-context-bar"
+                  role="meter"
+                  aria-label="Context window used"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={meter().fraction! * 100}
+                  aria-valuetext={contextRange()}
+                >
+                  <span style={{ width: `${meter().fraction! * 100}%` }} />
+                </span>
+              </Show>
+            </Show>
+            <Show when={props.showCost !== false && cost() !== undefined}>
+              <UsageCost value={cost()!} />
+            </Show>
+            <Show
+              when={meter().tokens === undefined &&
+                (props.showCost === false || cost() === undefined)}
+            >
+              <span>{digestLabel(props.entry)}</span>
+            </Show>
+          </output>
+        </MetaRow>
       </div>
       <Show
         when={trail().crumbs.some((crumb) =>
