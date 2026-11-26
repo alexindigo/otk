@@ -234,7 +234,7 @@ test.describe("input-referenced catalog", () => {
         "aria-description",
         "Preparing or sending prompt...",
       );
-      await expectPrimaryBlocked(send(page), "Sending");
+      await expectPrimaryBlocked(send(page), "Previous message still sending");
       await expect(prompt(page)).toHaveValue(text);
       const submissions = () =>
         frames.sent.filter(({ frame }) =>

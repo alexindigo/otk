@@ -58,10 +58,8 @@ test("composer.empty-completion-preserves-enter-native-up-and-escape", {
   await prompt(page).fill(query);
   await ready();
   await prompt(page).press("Escape");
-  await expect(page.locator(".otk-prompt button[type=submit]")).toHaveAttribute(
-    "title",
-    "Esc again to interrupt",
-  );
+  await expect(page.locator(".otk-prompt [data-interrupt-confirmation]"))
+    .toHaveText("Esc again to interrupt");
   await state.release(held.gate);
   await reply(state, page, session.id, "No-match prompt submitted.");
 });

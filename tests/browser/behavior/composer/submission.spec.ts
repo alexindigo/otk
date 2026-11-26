@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -59,7 +60,7 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
             ? `/probe turn-${turn}`
             : `SUBMISSION-NORMAL-${turn}`,
         );
-        await page.locator(".otk-prompt button[type=submit]").click();
+        await send(page).click();
         if (unconfirmed) {
           // WP1.9: uncertainty keeps the submitted input in custody, not in
           // the fresh composer. Recovery only checks the existing send.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { openWorkLogs } from "../../pages/transcript.ts";
@@ -43,7 +44,7 @@ test("messages.takeovers-retain-two-drafts-native-outcomes", {
   await expect(page.locator(".otk-prompt")).toBeHidden();
   // Triage decision 5: the hidden composer keeps its Send mounted; the
   // takeover's own primary is the visible action.
-  await expect(page.locator(".otk-prompt button[type=submit]")).toBeHidden();
+  await expect(send(page)).toBeHidden();
   await expect(page.locator(".otk-permission-dock [data-primary-action]"))
     .toBeVisible();
   await openSession(state, page, other.id);

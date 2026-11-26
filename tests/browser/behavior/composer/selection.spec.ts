@@ -495,7 +495,7 @@ test.describe("history choices", () => {
         );
         await expect(page.locator("dialog[open]")).toHaveCount(0);
         await queue(state, "Reply from chosen history model");
-        await page.locator(".otk-prompt button[type=submit]").click();
+        await composerSend(page).click();
         await reply(state, page, target.id, "Reply from chosen history model");
         const frame = frames.sent.filter(({ frame }) =>
           frame.method === "session.prompt"

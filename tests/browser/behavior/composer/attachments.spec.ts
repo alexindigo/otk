@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import {
@@ -59,7 +60,7 @@ test(
     await expect(chips(page)).toHaveCount(2);
     await expect(pendingChips(page)).toHaveCount(0);
     await state.queue(["All retained file bytes received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(async () =>
       (await messages(state, session.id)).find((row) =>
         row.info.role === "user"
@@ -99,7 +100,7 @@ test(
     await expect(chips(page)).toContainText("[File 1]");
     await expect(pendingChips(page)).toHaveCount(0);
     await state.queue(["Retained upload received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(async () =>
       (await messages(state, session.id)).flatMap((row) => row.parts).find(
         (p) => p.filename === "old-session.txt",
@@ -130,7 +131,7 @@ test("composer.drop-paste-reference-and-exact-native-file", {
   await openSession(state, page, session.id);
   await expect(chips(page)).toHaveCount(1);
   await state.queue(["attachment received"]);
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator("[data-role=user] .otk-chip")).toContainText(
     "client.txt",
   );
@@ -151,7 +152,7 @@ test("composer.drop-paste-reference-and-exact-native-file", {
   await expect(readyChips(page).filter({ hasText: "[Image 1]" })).toHaveCount(
     1,
   );
-  await expect(page.locator(".otk-prompt button[type=submit]")).toBeEnabled();
+  await expect(send(page)).toBeEnabled();
 });
 
 test("composer.oversize-combined-files-retain-draft-without-send", {
@@ -175,7 +176,7 @@ test("composer.oversize-combined-files-retain-draft-without-send", {
   });
   await expect(chips(page)).toHaveCount(3);
   await expect(pendingChips(page)).toHaveCount(0);
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator(".otk-composer-notice [role=alert]")).toBeVisible();
   expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
     .toHaveLength(0);

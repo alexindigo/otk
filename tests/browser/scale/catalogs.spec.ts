@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../pages/primary-action.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { scaleGenerations, scaleWire } from "../fixtures/scale-wire.ts";
@@ -13,11 +14,12 @@ interface Watch {
   latePublications: number;
 }
 test.use({ profile: "contract-scale-files" });
+// The existing scale budget covers the costly isolated fixture as well.
+test.describe.configure({ timeout: 600_000 });
 test(
   "scale.complete-catalogs-keyed-tasks-provider",
   { tag: ["@scale"] },
   async ({ isolatedState: state, page }, info) => {
-    test.setTimeout(600_000);
     const initial = await state.observe<
       {
         counts: unknown;
@@ -256,7 +258,7 @@ test(
       "candidate-09999.txt",
     );
     await state.queue(["The last complete catalog candidate arrived."]);
-    await page.locator('.otk-prompt button[type="submit"]').click();
+    await send(page).click();
     await expect(
       page.locator(".otk-text").filter({
         hasText: "The last complete catalog candidate arrived.",

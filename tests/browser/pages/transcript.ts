@@ -2,6 +2,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import type { Json } from "../../support/fixture-control.ts";
+import { prompt as input, sendPrompt } from "./composer.ts";
 
 export const viewportSource = Array.from(
   { length: 2000 },
@@ -35,13 +36,8 @@ export async function hoverCompletedUsage(page: Page) {
 }
 
 export async function prompt(page: Page, text: string) {
-  const input = page.locator("textarea[name=prompt]");
-  await input.fill(text);
-  // Native idle precedes settlement of the composer submission owner. Match
-  // the legacy submitPrompt admission, rather than dropping Enter while pending.
-  await expect(page.locator(".otk-send-button")).toBeEnabled();
-  await expect(input).toBeFocused();
-  await input.press("Enter");
+  await input(page).fill(text);
+  await sendPrompt(page);
 }
 
 export async function toolScript(

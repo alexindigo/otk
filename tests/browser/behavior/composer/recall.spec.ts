@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { chips, messages, prompt, reply } from "../../pages/composer.ts";
@@ -43,7 +44,7 @@ test(
       frames.sent.filter(({ frame }) => frame.method === "history.attachments"),
     ).toHaveLength(0);
     await state.queue(["Recalled files received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(async () =>
       (await messages(state, target.id)).flatMap((row) => row.parts).filter(
         (p) => p.type === "file",
@@ -60,9 +61,9 @@ test(
     expect(batches[0].frame.params!.refs).toHaveLength(2);
     await expect(chips(page)).toHaveCount(0);
     await expect(prompt(page)).toHaveValue("");
-    const storage = `${state.controller.info!.root}/otk-${
-      new URL(state.url).port
-    }`;
+    const storage = state.controller.info!.statePath;
+    expect(storage, "fixture must publish its actual state directory")
+      .toBeTruthy();
     for (const name of ["otk.db", "digest.db", "otk.db-wal", "digest.db-wal"]) {
       try {
         const persisted = await readFile(`${storage}/${name}`, "utf8");
@@ -111,7 +112,7 @@ test("composer.deleted-recall-rejects-with-complete-draft-and-no-send", {
   await expect(prompt(page)).toHaveValue("Keep this recalled draft");
   await expect(chips(page)).toHaveCount(1);
   await state.native(`/session/${source.id}`, "DELETE");
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
     1,
   );

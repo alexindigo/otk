@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { send } from "../../pages/primary-action.ts";
 
 test.use({
   profile: "contract-menus-session-actions-no-history",
@@ -61,7 +62,7 @@ for (
         path: info.outputPath(`rv2-no-history-${name}.png`),
         fullPage: true,
       });
-      await expect(page.locator(".otk-send-button")).toBeEnabled();
+      await expect(send(page)).toBeEnabled();
       await input.press("Enter");
       await expect(page.locator(".otk-permanence-choice")).toContainText(
         "Sending makes the revert permanent",
