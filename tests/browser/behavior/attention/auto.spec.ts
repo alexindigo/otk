@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { Locator } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { notificationTest as hiddenTest } from "../../fixtures/notifications.ts";
@@ -16,6 +17,11 @@ import {
   instrumentNotifications,
   notes,
 } from "../../pages/notifications.ts";
+
+// a794de26: the shared CodeBlock keeps an empty copy announcement region
+// mounted inside the permission details; silence means nothing is announced.
+const activityStatuses = (activity: Locator) =>
+  activity.getByRole("status").filter({ hasText: /\S/ });
 
 test.use({ profile: "contract-attention-auto" });
 hiddenTest(
@@ -110,8 +116,7 @@ hiddenTest(
     await page.locator('[data-panel-view="activity"]').click();
     const activity = page.locator(".otk-permission-activity");
     await expect(activity).toContainText("quiet-auto.txt");
-    await expect(activity.locator("[role=status]:not([aria-hidden=true])"))
-      .toHaveCount(0);
+    await expect(activityStatuses(activity)).toHaveCount(0);
     const reads = () =>
       a.sent.filter(({ frame }) => frame.method === "permission.activity")
         .length;
@@ -197,8 +202,7 @@ test(
     await expect(activity).toContainText("browser-auto.txt");
     await expect(activity).toContainText("Allowed");
     await expect(activity).toContainText("Auto");
-    await expect(activity.locator("[role=status]:not([aria-hidden=true])"))
-      .toHaveCount(0);
+    await expect(activityStatuses(activity)).toHaveCount(0);
     expect(
       frames.sent.filter(({ frame }) => frame.method === "permission.activity"),
     ).toHaveLength(1);
@@ -211,7 +215,10 @@ test(
       "Permission replies will appear here.",
     );
     await expect(rows).toHaveCount(0);
-    await expect(page.locator(".otk-subagent-bar")).toBeVisible();
+    // 5b059fcb: only a child with eligible siblings has sibling controls.
+    await expect(page.locator(`[data-crumb="${child.id}"]`)).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Subagent siblings" }))
+      .toHaveCount(0);
     await expect(page.getByRole("region", { name: "Transcript", exact: true }))
       .toHaveAttribute("aria-busy", "false");
     await page.locator(`[data-crumb="${root.id}"]`).click();
@@ -263,8 +270,7 @@ test(
         root.nativeID
       ]
     ).toBe(true);
-    await expect(activity.locator("[role=status]:not([aria-hidden=true])"))
-      .toHaveCount(0);
+    await expect(activityStatuses(activity)).toHaveCount(0);
     const disconnectedAt = frames.received.length;
     await scenario(state, "freeze");
     await expect.poll(
@@ -278,7 +284,7 @@ test(
     await expect(toggle).toHaveAttribute("aria-pressed", "false");
     await expect(rows).toHaveCount(2);
     await expect(
-      activity.locator("[role=alert],[role=status]:not([aria-hidden=true])"),
+      activity.getByRole("alert").or(activityStatuses(activity)),
     ).toHaveCount(0);
     const connectedAt = frames.received.length;
     await scenario(state, "thaw");
@@ -328,8 +334,7 @@ test(
     await expect(activity).toContainText(
       "Reply started; outcome not confirmed",
     );
-    await expect(activity.locator("[role=status]:not([aria-hidden=true])"))
-      .toHaveCount(0);
+    await expect(activityStatuses(activity)).toHaveCount(0);
     expect(
       await activity.evaluate((e) => {
         const r = e.getBoundingClientRect(),
