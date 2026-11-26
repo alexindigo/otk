@@ -41,10 +41,9 @@ test("messages.exact-money-accessibility-all-consumers", {
       `Turn usage: 1 model call · 100 tokens · ${label}; exact cost ${exact}`;
     await expect(trigger).toHaveText(`1 model call · 100 tokens · ${label}`);
     await expect(trigger).toHaveAttribute("aria-label", triggerName);
-    await expect(page.locator(".otk-session-row")).toHaveAttribute(
-      "aria-description",
-      `Exact session cost: ${exact}`,
-    );
+    // Issue 2.96: the shared row's action owns the accessible cost.
+    await expect(page.locator(".otk-session-row").getByRole("button"))
+      .toHaveAccessibleDescription(`Exact session cost: ${exact}`);
     await trigger.evaluate((element) =>
       element.scrollIntoView({ block: "center" })
     );

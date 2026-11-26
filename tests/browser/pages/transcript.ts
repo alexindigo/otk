@@ -668,21 +668,23 @@ export function recordToggle(record: Locator) {
 
 /** Plugin-owned compaction boundaries, with each harness's lifecycle wording. */
 export function compactionBoundary(state: TestState) {
+  // The native record header owns the title; compact/expanded records share it.
+  const title = (name: string) =>
+    `[data-native-record="${name}"] .otk-tool-state .otk-tool-brief:first-child`;
   return v2(state)
     ? {
       selector: '[data-native-record="opencode-v2/compaction"]',
-      title: '[data-native-record="opencode-v2/compaction"] .otk-tool-verb',
-      queued: '[data-native-record="opencode-v2/compaction"] .otk-tool-verb',
+      title: title("opencode-v2/compaction"),
+      queued: title("opencode-v2/compaction"),
       queuedLabel: "Session compaction queued",
       running: "Session compaction started",
       completed: /^Session compacted(?: by provider)?(?: - .* in - .* out)?$/,
     }
     : {
       selector: '[data-native-record="opencode-v1/compaction-summary"]',
-      title:
-        '[data-native-record="opencode-v1/compaction-summary"] .otk-tool-verb',
+      title: title("opencode-v1/compaction-summary"),
       // Before its summary exists, a queued compaction is its marker record.
-      queued: '[data-native-record="opencode-v1/compaction"] .otk-tool-verb',
+      queued: title("opencode-v1/compaction"),
       queuedLabel: "Session compaction",
       running: "Session compaction",
       completed: "Session compacted",

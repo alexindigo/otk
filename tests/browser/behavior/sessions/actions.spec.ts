@@ -29,17 +29,15 @@ interface Message {
 async function deletedDetails(page: Page, id: string, title: string) {
   const row = page.locator(`[data-session="${id}"]`);
   await expect(row).toHaveClass(/is-deleted/);
-  await expect(row).toHaveAttribute(
-    "aria-label",
-    new RegExp("^Deleted session, "),
-  );
-  // Style7 shared ListRow label slot (style7fix note; decision 3).
+  // Issue 2.96: SidebarRow's action owns the accessible name, not its frame.
+  const action = row.getByRole("button");
+  await expect(action).toHaveAccessibleName(/^Deleted session, /);
   await expect(row.locator(".otk-session-title")).toHaveText(title);
   await expect(row.locator(".otk-session-title")).toHaveCSS(
     "text-decoration-line",
     /line-through/,
   );
-  await row.click();
+  await action.click();
   await expect(page).toHaveURL(new RegExp(`${id}$`));
   const details = page.locator(".otk-deleted-session");
   await expect(details).toContainText(title);

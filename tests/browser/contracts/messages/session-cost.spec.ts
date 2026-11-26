@@ -76,25 +76,29 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
   }
   expect(observation.reads.filter((id) => id === "tstv1-core")).toHaveLength(0);
   expect(observation.reads).not.toContain("tstv1-other");
-  await expect(row("tstv1-core")).toHaveAttribute(
-    "aria-label",
+  // Issue 2.96: the shared row's action owns the accessible name.
+  await expect(row("tstv1-core").getByRole("button")).toHaveAccessibleName(
     `${observation.title}, session cost $1.02`,
   );
-  await expect(row("tstv1-helper")).toHaveAttribute(
-    "aria-label",
+  await expect(row("tstv1-helper").getByRole("button")).toHaveAccessibleName(
     `Explore callers, child of ${observation.title}, session cost $0.07`,
   );
-  const geometry = async () => {
+  const geometry = async (narrow = false) => {
+    const projectHeight = await page.locator(".otk-project-row[data-project]")
+      .first().evaluate((element) => element.getBoundingClientRect().height);
+    expect(projectHeight).toBeGreaterThan(0);
     const boxes = await page.locator(".otk-session-row").evaluateAll((rows) =>
       rows.filter((r) => r.querySelector(".otk-session-cost")).map((r) => {
-        const c = r.querySelector(".otk-session-cost")!.getBoundingClientRect(),
-          // Style7 shared ListRow label slot (style7fix note; decision 3).
+        const cost = r.querySelector(".otk-session-cost")!,
+          c = cost.getClientRects().length
+            ? cost.getBoundingClientRect()
+            : null,
           t = r.querySelector(".otk-session-title")!.getBoundingClientRect(),
           l = r.querySelector(".otk-status-light")!.getBoundingClientRect(),
           b = r.getBoundingClientRect();
         return {
-          right: c.right,
-          centre: c.y + c.height / 2,
+          cost: c && { right: c.right, centre: c.y + c.height / 2 },
+          centre: b.y + b.height / 2,
           titleCentre: t.y + t.height / 2,
           lightCentre: l.y + l.height / 2,
           height: b.height,
@@ -103,19 +107,41 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
       })
     );
     expect(boxes).toHaveLength(3);
+    const visibleCosts = boxes.flatMap((box) => box.cost ? [box.cost] : []);
+    // 6c1ed6ca: a narrow row hides secondary meta before squeezing its title.
+    // Wide costs still align; narrow rows must retain the exact accessible cost.
+    expect(visibleCosts.length).toBeGreaterThan(0);
+    if (narrow) expect(visibleCosts.length).toBeLessThan(boxes.length);
+    else expect(visibleCosts).toHaveLength(boxes.length);
     for (const b of boxes) {
-      expect(Math.abs(b.right - boxes[0].right)).toBeLessThanOrEqual(.5);
+      if (b.cost) {
+        expect(Math.abs(b.cost.right - visibleCosts[0].right))
+          .toBeLessThanOrEqual(.5);
+        expect(Math.abs(b.centre - b.cost.centre)).toBeLessThanOrEqual(.5);
+      }
       expect(Math.abs(b.centre - b.titleCentre)).toBeLessThanOrEqual(.5);
       expect(Math.abs(b.centre - b.lightCentre)).toBeLessThanOrEqual(.5);
-      expect(b.height).toBe(30);
+      // Issue 2.96: both sidebars use the same fixed row track.
+      expect(Math.abs(b.height - projectHeight)).toBeLessThanOrEqual(.5);
       expect(b.overflow).toBe(false);
     }
   };
   await geometry();
+  const costDescriptions = await Promise.all(
+    ["tstv1-core", "tstv1-helper"].map(async (id) => {
+      const action = row(id).getByRole("button");
+      const description = await action.getAttribute("aria-description");
+      expect(description).toMatch(/^Exact session cost: \$\d/);
+      return { action, description: description! };
+    }),
+  );
   const prefs = await state.product("prefs.get", {});
   await state.product("layout.patch", { rightWidth: 280 });
   await expect(page.locator(".otk-right-panel")).toHaveCSS("width", "280px");
-  await geometry();
+  await geometry(true);
+  for (const { action, description } of costDescriptions) {
+    await expect(action).toHaveAccessibleDescription(description);
+  }
   await state.product("layout.patch", {
     rightWidth: prefs.shellLayout.rightWidth,
   });
