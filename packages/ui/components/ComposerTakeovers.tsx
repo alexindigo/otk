@@ -124,6 +124,9 @@ export default function ComposerTakeovers(
               {(item) => item().component()}
             </For>
           </Show>
+          <div class="otk-composer-reopen">
+            <RequestReopen />
+          </div>
           <div class="otk-composer-frame" hidden={!hasComposer()}>
             <ScrollRegion
               class={["otk-composer", {
@@ -139,7 +142,6 @@ export default function ComposerTakeovers(
             </ScrollRegion>
           </div>
           <div class="otk-composer-takeover-layer">
-            <RequestReopen />
             <For each={available()} keyed={(item) => item.id}>
               {(item) =>
                 item().component({

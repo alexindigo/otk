@@ -51,6 +51,13 @@
 .otk-trail-title {
   text-underline-offset: 0.2em;
 }
+.otk-session-crumb.is-current .otk-trail-title {
+  min-inline-size: min(var(--row-title-min), 100%);
+}
+.otk-trail-title-floor {
+  display: block;
+  max-inline-size: var(--row-title-min);
+}
 .otk-trail-first,
 .otk-trail-ellipsis {
   flex: none;

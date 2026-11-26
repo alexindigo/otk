@@ -32,7 +32,7 @@ import StatusLight from "./StatusLight.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import { CheckAllIcon, StopIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem, MetaRow } from "./ChromeMeta.tsx";
 import EntityPill from "./EntityPill.tsx";
 import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
@@ -246,42 +246,48 @@ export default function Subagents(
                               </SelectionContent>
                             </ActionButton>
                           </div>
-                          <div class="otk-subagent-agent">
-                            <Show when={props.agent(id)}>
-                              {(agent) => (
-                                <EntityPill
-                                  label={agent()}
-                                  facts={scopedEntityFacts(session, {
-                                    sessionID: id,
-                                  })}
-                                />
-                              )}
-                            </Show>
-                          </div>
-                          <ChromeMeta
-                            class="otk-subagent-time"
-                            aria-label={group().kind === "needsYou"
-                              ? "Waiting for you"
-                              : undefined}
-                          >
-                            <Show
-                              when={clock()}
-                              fallback={
-                                <TimeValue
-                                  value={unknownTime(
-                                    "The native execution start and finish times are not available.",
+                          <div class="otk-subagent-meta">
+                            <MetaRow whole intrinsic class="otk-subagent-facts">
+                              <MetaItem rank={2} class="otk-subagent-agent">
+                                <Show when={props.agent(id)}>
+                                  {(agent) => (
+                                    <EntityPill
+                                      label={agent()}
+                                      facts={scopedEntityFacts(session, {
+                                        sessionID: id,
+                                      })}
+                                    />
                                   )}
-                                />
-                              }
-                            >
-                              {(value) => (
-                                <TimeText
-                                  time={value().time}
-                                  suffix={value().ago ? "ago" : undefined}
-                                />
-                              )}
-                            </Show>
-                          </ChromeMeta>
+                                </Show>
+                              </MetaItem>
+                              <MetaItem rank={1}>
+                                <ChromeMeta
+                                  class="otk-subagent-time"
+                                  aria-label={group().kind === "needsYou"
+                                    ? "Waiting for you"
+                                    : undefined}
+                                >
+                                  <Show
+                                    when={clock()}
+                                    fallback={
+                                      <TimeValue
+                                        value={unknownTime(
+                                          "The native execution start and finish times are not available.",
+                                        )}
+                                      />
+                                    }
+                                  >
+                                    {(value) => (
+                                      <TimeText
+                                        time={value().time}
+                                        suffix={value().ago ? "ago" : undefined}
+                                      />
+                                    )}
+                                  </Show>
+                                </ChromeMeta>
+                              </MetaItem>
+                            </MetaRow>
+                          </div>
                           <div class="otk-subagent-stop">
                             <Show when={group().kind === "running"}>
                               <ActionButton

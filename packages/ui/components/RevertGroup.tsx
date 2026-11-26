@@ -12,7 +12,7 @@ import {
 import type { Message as RecordMessage, Preferences } from "@otk/protocol";
 import ActivityGroup from "./ActivityGroup.tsx";
 import Message from "./Message.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 import Clock from "./Clock.tsx";
 import { CloseIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
@@ -118,29 +118,41 @@ export default function RevertGroup(props: {
         status={() => (
           <Show when={!props.state.dismissed}>
             <Show when={pending()}>
-              <ActivityIndicator
-                small
-                label={props.state.phase === "restoring"
-                  ? "Restoring"
-                  : "Reverting"}
-              />
-            </Show>
-            <Show when={pending()}>
-              <ChromeMeta>
-                {props.state.phase === "restoring"
-                  ? "Restoring..."
-                  : "Reverting..."}
-              </ChromeMeta>
+              <MetaItem rank={1}>
+                <span class="otk-revert-progress">
+                  <ActivityIndicator
+                    small
+                    label={props.state.phase === "restoring"
+                      ? "Restoring"
+                      : "Reverting"}
+                  />
+                  <ChromeMeta>
+                    {props.state.phase === "restoring"
+                      ? "Restoring..."
+                      : "Reverting..."}
+                  </ChromeMeta>
+                </span>
+              </MetaItem>
             </Show>
             <Show when={props.state.phase === "saving"}>
-              <ActivityIndicator small label="Saving copy" />
-              <ChromeMeta>Saving copy...</ChromeMeta>
+              <MetaItem rank={2}>
+                <span class="otk-revert-progress">
+                  <ActivityIndicator small label="Saving copy" />
+                  <ChromeMeta>Saving copy...</ChromeMeta>
+                </span>
+              </MetaItem>
             </Show>
             <Show when={props.state.phase === "saved"}>
-              <ChromeMeta>Copy saved</ChromeMeta>
+              <MetaItem rank={3}>
+                <ChromeMeta>Copy saved</ChromeMeta>
+              </MetaItem>
             </Show>
             <Show when={props.failureStatus}>
-              {(status) => <ChromeMeta>{status()}</ChromeMeta>}
+              {(status) => (
+                <MetaItem rank={4}>
+                  <ChromeMeta>{status()}</ChromeMeta>
+                </MetaItem>
+              )}
             </Show>
           </Show>
         )}

@@ -55,9 +55,9 @@ test("sessions.sidebar-title-priority-and-flat-timeline", {
   const row = right.locator("[data-timeline-prompt]");
   await expect(row).toHaveCount(1);
   const gap = await row.evaluate((el) => {
-    const panel = el.closest(".otk-timeline")!;
-    const left = panel.getBoundingClientRect().left +
-      parseFloat(getComputedStyle(panel).paddingLeft);
+    const grid = el.querySelector(".otk-sidebar-row-grid")!;
+    const left = grid.getBoundingClientRect().left +
+      parseFloat(getComputedStyle(grid).paddingInlineStart);
     return Math.abs(
       el.querySelector(".otk-sidebar-label")!.getBoundingClientRect().left -
         left,

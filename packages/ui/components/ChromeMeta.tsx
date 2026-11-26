@@ -1,19 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  createMemo,
-  createSignal,
-  type Element,
-  For,
-  onCleanup,
-  onSettled,
-  Show,
-} from "solid-js";
+import { type Element, For, Show } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
 import { META_SEPARATOR, metaParts, type TimeText as Time } from "@otk/client";
 import TimeText from "./TimeText.tsx";
 import { TreeNode } from "./Tree.tsx";
 import SidebarRow from "./SidebarRow.tsx";
-import ContentSlot from "./ContentSlot.tsx";
+import { MetaItem } from "./MetaRow.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import "./ChromeMeta.css" with { type: "text" };
 
@@ -36,154 +28,8 @@ export function MetaText(
   );
 }
 
-export interface MetaControl {
-  key: string;
-  measure(): Element;
-  render(): Element;
-}
-/** One metadata track. Text yields first; optional controls fit only as wholes. */
-export function MetaRow(
-  props: {
-    children?: Element;
-    class?: string;
-    controls?: readonly MetaControl[];
-    whole?: boolean;
-  },
-): Element {
-  let root!: HTMLSpanElement, primary!: HTMLSpanElement;
-  const frames = new Map<string, HTMLSpanElement>();
-  const [visible, setVisible] = createSignal<readonly string[]>([]);
-  let observer: ResizeObserver | undefined;
-  const fit = () => {
-    if (!primary) return;
-    const gap = parseFloat(getComputedStyle(root).columnGap) || 0;
-    const minimum = Math.min(
-      primary.scrollWidth,
-      parseFloat(getComputedStyle(primary).minInlineSize) || 0,
-    );
-    let available = root.clientWidth - minimum;
-    const next: string[] = [];
-    for (const control of props.controls ?? []) {
-      const width = frames.get(control.key)?.getBoundingClientRect().width ??
-        Infinity;
-      if (width + gap > available) break;
-      available -= width + gap;
-      next.push(control.key);
-    }
-    setVisible((old) => old.join("\0") === next.join("\0") ? old : next);
-  };
-  const controls = createMemo(() => props.controls ?? []);
-  onSettled(() => {
-    if (props.whole) {
-      const items = new Set<HTMLElement>();
-      const fitItems = () => {
-        let remaining = root.clientWidth;
-        const gap = parseFloat(getComputedStyle(root).columnGap) || 0;
-        for (const item of items) item.hidden = false;
-        const widths = new Map(
-          [...items].map((item) => [item, item.getBoundingClientRect().width]),
-        );
-        for (const item of root.children) {
-          if (!(item instanceof HTMLElement)) continue;
-          const width = widths.get(item) ?? Infinity;
-          const fits = width <= remaining + 0.5;
-          item.hidden = !fits;
-          remaining = fits ? remaining - width - gap : -1;
-        }
-      };
-      const resize = new ResizeObserver(fitItems);
-      const update = () => {
-        for (const item of items) {
-          if (item.parentElement !== root) {
-            resize.unobserve(item);
-            items.delete(item);
-          }
-        }
-        for (const item of root.children) {
-          if (!(item instanceof HTMLElement) || items.has(item)) continue;
-          items.add(item);
-          resize.observe(item);
-        }
-        fitItems();
-      };
-      const mutation = new MutationObserver(update);
-      resize.observe(root);
-      mutation.observe(root, { childList: true });
-      update();
-      return () => {
-        resize.disconnect();
-        mutation.disconnect();
-      };
-    }
-    if (!props.controls) return;
-    observer = new ResizeObserver(fit);
-    observer.observe(root);
-    observer.observe(primary);
-    for (const frame of frames.values()) observer.observe(frame);
-    let active = true;
-    void document.fonts.ready.then(() => {
-      if (active) fit();
-    });
-    fit();
-    return () => {
-      active = false;
-      observer?.disconnect();
-    };
-  });
-  return (
-    <span
-      ref={(element) => root = element}
-      class={["otk-meta-row", props.class, {
-        "has-controls": props.controls !== undefined,
-        "fits-whole-items": props.whole,
-      }]}
-    >
-      <Show when={props.controls} fallback={props.children}>
-        <span class="otk-meta-fit">
-          <span class="otk-meta-primary" ref={(element) => primary = element}>
-            {props.children}
-          </span>
-          <For each={controls()} keyed={(item) => item.key}>
-            {(item) => (
-              <span
-                class="otk-meta-control"
-                hidden={!visible().includes(item().key)}
-                inert={!visible().includes(item().key)}
-              >
-                <ContentSlot content={() => item().render()} />
-              </span>
-            )}
-          </For>
-        </span>
-        <span class="otk-meta-measure" aria-hidden="true" inert>
-          <For each={controls()} keyed={(item) => item.key}>
-            {(item) => {
-              const key = item().key;
-              let frame: HTMLSpanElement;
-              onCleanup(() => {
-                if (frame) observer?.unobserve(frame);
-                frames.delete(key);
-              });
-              return (
-                <span
-                  ref={(element) => {
-                    frame = element;
-                    frames.set(key, element);
-                    observer?.observe(element);
-                  }}
-                >
-                  <ContentSlot content={() => item().measure()} />
-                </span>
-              );
-            }}
-          </For>
-        </span>
-      </Show>
-    </span>
-  );
-}
+export { type MetaControl, MetaItem, MetaRow } from "./MetaRow.tsx";
 
-/** Quiet product-owned chrome metadata, shared with the project's visit clock. */
 export default function ChromeMeta(
   props: Omit<ComponentProps<"span">, "class"> & {
     class?: string;
@@ -300,13 +146,18 @@ export function SectionHeader(props: {
                 lamp={props.leading?.()}
                 label={
                   <span class="otk-section-row-label">
-                    <SectionHeaderMeta
-                      label={props.label}
-                      count={props.count}
-                      metaClass={props.metaClass}
-                    />
+                    <span class="otk-control-label">{props.label}</span>
                     <span class="otk-section-header-rule" aria-hidden="true" />
                   </span>
+                }
+                meta={
+                  <Show when={props.count !== undefined}>
+                    <MetaItem rank={1}>
+                      <ChromeMeta class={props.metaClass}>
+                        {props.count}
+                      </ChromeMeta>
+                    </MetaItem>
+                  </Show>
                 }
               />
             </Show>

@@ -85,7 +85,14 @@ export default function TaskTrail(props: {
       row,
       <span class="otk-trail-title otk-crumb-title otk-control-label">
         <Show when={compact()} fallback={props.title(row().id)}>
-          {compactTitle(props.title(row().id), measure)}
+          <Show
+            when={row().id === props.selected}
+            fallback={compactTitle(props.title(row().id), measure)}
+          >
+            <Show when={measure} fallback={props.title(row().id)}>
+              <span class="otk-trail-title-floor">{props.title(row().id)}</span>
+            </Show>
+          </Show>
         </Show>
       </span>,
     );

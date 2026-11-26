@@ -12,6 +12,7 @@ export default function MessageFooter(props: {
   duration?: Element;
   leading?: Element;
   whole?: boolean;
+  intrinsic?: boolean;
   children?: Element;
   class?: string;
   ref?(element: HTMLElement): void;
@@ -24,7 +25,11 @@ export default function MessageFooter(props: {
         "has-whole-details": props.whole,
       }]}
     >
-      <MetaRow class="otk-message-details" whole={props.whole}>
+      <MetaRow
+        class="otk-message-details"
+        whole={props.whole}
+        intrinsic={props.intrinsic}
+      >
         {props.leading}
         <Show when={props.at !== undefined}>
           <Clock at={props.at!} />

@@ -34,10 +34,13 @@
   width: 100%;
   min-width: 0;
   height: var(--row-compact);
-  padding: 0;
+  padding: 0 var(--space-2) 0 0;
   border: 0;
   background: transparent;
   color: var(--otk-fg-3);
+}
+.otk-project-sessions input[type="search"]:placeholder-shown:not(:focus) {
+  text-overflow: ellipsis;
 }
 .otk-project-sessions input::placeholder {
   color: inherit;
@@ -48,15 +51,6 @@
 }
 .otk-session-group {
   margin: 0;
-}
-.otk-session-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-inline-end: var(--space-2);
-}
-.otk-session-cost {
-  flex: none;
 }
 .otk-session-title {
   overflow: hidden;

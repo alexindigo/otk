@@ -23,6 +23,8 @@ async function sweep(
   profile: string,
   prepare: () => Promise<void>,
 ) {
+  // Exercise WP10's optional artwork track and 2.109's whole-meta fit
+  // against the real repository/discovery fixtures, not just the style scene.
   guard();
   const facts: unknown[] = [];
   await page.setViewportSize({ width: 1280, height: 860 });
