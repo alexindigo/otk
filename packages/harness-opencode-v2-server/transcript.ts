@@ -2964,13 +2964,13 @@ export class Transcript {
       return;
     }
     if (
-      sourceID &&
-      (event.type === "session.synthetic" ||
-        event.type === "session.instructions.updated" ||
-        event.type === "session.skill.activated")
+      event.type === "session.synthetic" ||
+      event.type === "session.instructions.updated" ||
+      event.type === "session.skill.activated"
     ) {
       const raw = eventMessage(event);
-      if (!raw) {
+      if (raw === null) return;
+      if (raw === undefined) {
         this.#repairHistory(id);
         return;
       }
