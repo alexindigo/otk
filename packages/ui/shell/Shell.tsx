@@ -16,6 +16,7 @@ import {
   onSettled,
   Show,
 } from "solid-js";
+import { Portal } from "@solidjs/web";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import {
   canRenameProject,
@@ -161,7 +162,13 @@ export default function Shell(
   const forwardTarget = createMemo(() => target("forward"));
   const [dialog, setDialog] = createSignal("");
   const [now, setNow] = createSignal(Date.now());
-  let root!: HTMLDivElement;
+  const [root, setRoot] = createSignal<HTMLDivElement>();
+  const [transcriptLayer, setTranscriptLayer] = createSignal<HTMLDivElement>();
+  const mountTranscriptLayer = (stage: HTMLDivElement) => {
+    setTranscriptLayer(stage);
+    return () =>
+      setTranscriptLayer((current) => current === stage ? undefined : current);
+  };
   const commands = new CommandHub(
     () => ({
       sidecar: session.state.selection?.sidecarId,
@@ -639,9 +646,7 @@ export default function Shell(
         >
           <div
             class="otk-app"
-            ref={(element) => {
-              root = element;
-            }}
+            ref={setRoot}
             onInput={(event) => {
               if (event.isTrusted && !settings()) interact();
             }}
@@ -654,6 +659,7 @@ export default function Shell(
             onKeyDown={(event) => {
               if (event.isTrusted && !settings()) interact();
             }}
+            data-left-collapsed={String(layout().leftCollapsed)}
             data-right-collapsed={String(layout().rightCollapsed)}
           >
             <Show when={toggles.state.ready}>
@@ -927,6 +933,7 @@ export default function Shell(
                               })}
                             >
                               <SessionView
+                                mountTranscriptLayer={mountTranscriptLayer}
                                 sidecarId={target.sidecarId}
                                 revert={session.state.content.revert}
                                 rollback={revert}
@@ -1063,20 +1070,25 @@ export default function Shell(
                 resources.advertised(project()?.sidecarId ?? "", capability)}
               onLayout={saveLayout}
             />
-            <Toasts
-              model={notifications.toast}
-              entities={resources.entities}
-              detail={permissionNotificationDetail}
-              onMore={() =>
-                void saveLayout({
-                  rightCollapsed: false,
-                  rightView: "sessions",
-                })
-                  .catch(fail)}
-            />
+            <Show when={root()}>
+              <Portal mount={transcriptLayer() ?? root()}>
+                <Toasts
+                  layout={transcriptLayer() ? "layer" : undefined}
+                  model={notifications.toast}
+                  entities={resources.entities}
+                  detail={permissionNotificationDetail}
+                  onMore={() =>
+                    void saveLayout({
+                      rightCollapsed: false,
+                      rightView: "sessions",
+                    })
+                      .catch(fail)}
+                />
+              </Portal>
+            </Show>
             <DialogHost onChange={setDialog} />
             <ContextMenu
-              root={root}
+              root={root()!}
               control={(openFor) => openFileMenu = openFor}
             />
           </div>

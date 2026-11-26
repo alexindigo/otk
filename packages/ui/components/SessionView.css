@@ -58,6 +58,9 @@
 .otk-transcript-viewport {
   position: relative;
   isolation: isolate;
+  /* Fill the assigned track without letting transcript content size it.
+   * Only the toast stack can reserve intrinsic space above the dock. */
+  contain: size;
   /* The scrollport's padding can exceed a fully-shrunk transcript track. */
   overflow: clip;
   display: flex;
@@ -68,4 +71,18 @@
 }
 .otk-message-flow .otk-transcript-delivery {
   margin-block-end: var(--message-gap);
+}
+
+/* The transcript and notifications layer share one row above the dock. */
+.otk-transcript-stage {
+  flex: 1;
+  min-block-size: min-content;
+  max-block-size: 100%;
+  min-inline-size: 0;
+  display: grid;
+  grid-template: minmax(auto, 1fr) / minmax(0, 1fr);
+  overflow: visible clip;
+}
+.otk-transcript-stage > * {
+  grid-area: 1 / 1;
 }

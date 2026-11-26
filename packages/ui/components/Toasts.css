@@ -1,16 +1,16 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-toasts {
+  --toast-width: calc(400 * var(--otk-unit));
   position: fixed;
-  right: var(--overlay-gutter);
-  bottom: var(--overlay-gutter);
+  inset-block-end: var(--overlay-gutter);
+  inset-inline-end: var(--overlay-gutter);
   z-index: var(--layer-toast);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
-  width: min(calc(400 * var(--otk-unit)), calc(100vw - 2 *
-    var(--overlay-gutter)));
-  max-height: calc(100dvh - 2 * var(--overlay-gutter));
+  inline-size: min(var(--toast-width), calc(100vi - 2 * var(--overlay-gutter)));
+  max-block-size: calc(100dvb - 2 * var(--overlay-gutter));
   pointer-events: none;
 }
 .otk-toast-row {
@@ -87,4 +87,19 @@
   align-self: flex-end;
   background: var(--overlay-bg);
   flex: none;
+}
+.otk-toasts.is-layer {
+  position: static;
+  place-self: end;
+  margin: var(--overlay-gutter);
+  max-inline-size: stretch;
+  max-block-size: stretch;
+}
+/* Borrow inline space when narrow, but keep the owning row's block bounds. */
+@container (inline-size < 28rem) {
+  .otk-toasts.is-layer {
+    justify-self: var(--toast-narrow-alignment, center);
+    inline-size: min(var(--toast-width), 50vi);
+    max-inline-size: none;
+  }
 }

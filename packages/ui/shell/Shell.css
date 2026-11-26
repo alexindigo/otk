@@ -58,3 +58,10 @@
 .otk-shell-progress:empty::before {
   content: "\00a0";
 }
+
+.otk-app[data-left-collapsed="true"] {
+  --toast-narrow-alignment: start;
+}
+.otk-app[data-right-collapsed="true"] {
+  --toast-narrow-alignment: end;
+}
