@@ -84,7 +84,8 @@ test.describe("inbox ownership", () => {
     );
     await expect(row.locator("time")).toHaveText("now");
     await row.locator(".otk-project-menu > button").click();
-    await row.locator(".otk-menu-items button").click();
+    await page.getByRole("menuitem", { name: "Mark inactive", exact: true })
+      .click();
     await page.locator(".otk-inactive-toggle").click();
     await expect(row).toBeVisible();
     const paused = await row.locator("time").textContent();

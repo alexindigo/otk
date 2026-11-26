@@ -193,3 +193,42 @@
   color: inherit;
   background: transparent;
 }
+.otk-project-order-status {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.otk-project-inbox.is-reordering,
+.otk-project-inbox.is-reordering [data-project-root] * {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.otk-project-drop {
+  display: flex;
+  align-items: center;
+  block-size: 0;
+  padding-inline-start: var(--tree-indent);
+  pointer-events: none;
+  position: relative;
+  z-index: 1;
+}
+
+.otk-project-drop > span {
+  flex: 0 0 8px;
+  block-size: 8px;
+  border: 2px solid var(--otk-focus);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.otk-project-drop::after {
+  content: "";
+  flex: 1;
+  block-size: 2px;
+  background: var(--otk-focus);
+}

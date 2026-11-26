@@ -72,6 +72,9 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await page.locator(".otk-skills-picker .otk-picker-option").filter({
     hasText: "canary",
   }).click();
+  // Verify the reply while following the live tail. Reading the historical
+  // skill record below can move it out of the virtualized viewport.
+  await reply(state, page, session.id, "Skill command received.");
   // NT1 keeps injected skill context visible without a user bubble. NT2: a V2
   // skill is a plugin record. Its prose needs the measured viewport after
   // disclosure, not just a mounted header and body shell.
@@ -88,7 +91,6 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
       }),
     ).toBeVisible();
   }
-  await reply(state, page, session.id, "Skill command received.");
   const catalog = await state.product("commands.list", {
     sessionID: session.id,
   });

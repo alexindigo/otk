@@ -194,8 +194,15 @@ test.describe("project catalog", () => {
     await page.getByRole("button", { name: "Expand projects", exact: true })
       .click();
     await row(empty).locator(".otk-project-menu > button").click();
-    await expect(page.getByRole("menuitem")).toHaveText(["New session"]);
-    await page.getByRole("menuitem").click();
+    await expect(page.getByRole("menuitem")).toHaveText([
+      "New session",
+      "Move up",
+      "Move down",
+    ]);
+    for (const name of ["Move up", "Move down"]) {
+      await expect(page.getByRole("menuitem", { name })).toBeDisabled();
+    }
+    await page.getByRole("menuitem", { name: "New session" }).click();
     await expect(row(empty)).toHaveAttribute("data-source", "tracked");
     expect(
       (await state.observe<{ entries: { directory: string }[] }>()).entries

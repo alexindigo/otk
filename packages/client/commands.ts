@@ -72,6 +72,8 @@ export interface Command<A = unknown, R = unknown> extends CommandMetadata {
       title?(args: A): string;
       confirm?(args: A): string;
       destructive?: boolean;
+      group?: string;
+      showUnavailable?: boolean;
       order?: number;
     }
     & ({ items?: undefined; arguments?: never } | {
@@ -375,7 +377,8 @@ export class CommandHub {
         const availability = this.availability(command.id, context, item.args);
         if (
           !availability.available &&
-          (!includeUnavailable || availability.hidden)
+          (availability.hidden ||
+            !includeUnavailable && !contribution?.showUnavailable)
         ) return [];
         // Presentation consumes the same admitted arguments as invocation. An
         // area may exist before its target resource has finished reloading.
@@ -388,6 +391,7 @@ export class CommandHub {
           title,
           args: item.args,
           destructive: command.context?.destructive ?? false,
+          group: contribution?.group,
           ...(!availability.available
             ? { unavailable: availability.reason }
             : {}),
@@ -469,6 +473,7 @@ export interface ContextAction {
   title: string;
   args: unknown;
   destructive: boolean;
+  group?: string;
   unavailable?: string;
   confirm?: string;
 }
