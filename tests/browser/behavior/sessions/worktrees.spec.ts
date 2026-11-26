@@ -56,7 +56,13 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
   await visibleOnScreen(page.locator("[data-tab=tstv1-worktree-0]"));
   await page.locator(".otk-inactive-toggle").click();
   await expect(row(archived)).toHaveAttribute("data-inactive", "true");
-  await expect(row(archived).locator(".otk-project-parent")).toHaveText("otk");
+  // 6ca4d662: the checkout inherits the native project label, not its basename.
+  await expect(row(canonical).locator(".otk-project-name")).toHaveText(
+    "Fixture project",
+  );
+  await expect(row(archived).locator(".otk-project-parent")).toHaveText(
+    "Fixture project",
+  );
   for (
     const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
       "otk-light-stone",
@@ -107,7 +113,18 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
     await page.locator(".otk-project-inbox").screenshot({
       path: info.outputPath(`review-${name}-column.png`),
     });
-    const centers = await row(one).locator(".otk-status-light").boundingBox();
+    // Back/Forward plan, 4d810f0f: the collapsed header adds a vertical
+    // control stack. Its height is not part of tree or row alignment.
+    const centerInList = () =>
+      row(one).locator(".otk-status-light").evaluate(
+        (element) => {
+          const lamp = element.getBoundingClientRect();
+          const list = element.closest(".otk-inbox-scroll")!
+            .getBoundingClientRect();
+          return lamp.y + lamp.height / 2 - list.y;
+        },
+      );
+    const centers = await centerInList();
     await page.getByRole("button", { name: "Collapse projects", exact: true })
       .click();
     await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
@@ -118,8 +135,7 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
       row(one).locator(".otk-status-light[data-state=working]"),
     );
     await visibleOnScreen(page.locator("[data-kind=phantom]").first());
-    const rail = await row(one).locator(".otk-status-light").boundingBox();
-    expect(rail!.y + rail!.height / 2).toBe(centers!.y + centers!.height / 2);
+    expect(await centerInList()).toBe(centers);
     await page.screenshot({
       path: info.outputPath(`v6a-${name}-rail.png`),
       fullPage: true,
