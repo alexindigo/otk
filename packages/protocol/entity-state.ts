@@ -29,7 +29,7 @@ export interface EntityRequestEvidence {
   id: string;
   arrivedAt?: number;
 }
-export type HelperDisposition = "running" | "needsYou" | "notReturned";
+export type HelperDisposition = "running" | "needsYou" | "finished";
 export type ComposerLinkState = "none" | "idle" | "running";
 export interface EntityLamp {
   state: ProjectStatus;
@@ -55,8 +55,6 @@ export interface RunningShells extends EntityLamp {
   }[];
 }
 export interface SessionEvidence {
-  /** D66: a proven helper terminal not covered by its parent's result receipt. */
-  awaitingDelivery?: boolean;
   helper?: HelperDisposition;
   /** Wall-clock time when the entity owner first observed this needs-you interval. */
   waitingSince?: number;
@@ -113,13 +111,13 @@ export interface EntityState {
 export const entityKey = (kind: EntityKind, id: string): string =>
   `${kind}:${id}`;
 
-/** Keep attention and undelivered helper results reachable (D62/D66). */
+/** Keep attention and published helpers reachable (D62/D72). */
 export function entityRequiresVisibility(
   value: EntityState | undefined,
 ): boolean {
   return !!value && (value.state !== "none" ||
     (value.dependencies ?? 0) > 0 ||
-    value.evidence?.awaitingDelivery === true);
+    value.evidence?.helper !== undefined);
 }
 
 /** D69/D70: a task's identity is independent of checkout and view. */

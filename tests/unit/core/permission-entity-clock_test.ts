@@ -54,7 +54,7 @@ Deno.test("server permission deadlines publish one verdict to the session, task 
   assertEquals(task()?.helpers?.counts, {
     running: 1,
     needsYou: 0,
-    notReturned: 0,
+    finished: 0,
   });
   clock.advanceTo(400);
   put("new");
@@ -68,7 +68,7 @@ Deno.test("server permission deadlines publish one verdict to the session, task 
   assertEquals(task()?.helpers?.counts, {
     running: 0,
     needsYou: 1,
-    notReturned: 0,
+    finished: 0,
   });
   assertEquals(project()?.state, "blocked");
   put();

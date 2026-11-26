@@ -6,6 +6,8 @@ import {
 } from "./entity-state.ts";
 import { entityKey } from "@otk/protocol";
 import type {
+  AcknowledgedSessions,
+  AcknowledgeScope,
   InboxBaseline,
   InboxOp,
   InboxSnapshot,
@@ -30,6 +32,46 @@ import {
   projectPlacement,
 } from "./project-placement.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
+
+/** Wait for the consumer's authoritative replica, not merely the write receipt. */
+export function awaitAcknowledged(
+  store: EntityStateStore,
+  { sessions }: AcknowledgedSessions,
+  signal: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      if (signal.aborted || store.isStale) {
+        cleanup();
+        reject(
+          new Error(
+            "The lamps did not update. Reload to see the current state.",
+          ),
+        );
+      } else if (
+        sessions.every(({ sessionID, terminal }) => {
+          const value = store.get(entityKey("session", sessionID));
+          // A receipt spans the whole subtree, not the socket's leased rows.
+          // An unleased entity has no local lamp to wait for.
+          return !value || (value.terminal ?? 0) > terminal ||
+            (value.counts.unseen === 0 &&
+              value.evidence?.helper !== "finished");
+        })
+      ) {
+        cleanup();
+        resolve();
+      }
+    };
+    const release = store.observeChanges(finish);
+    const cleanup = () => {
+      release();
+      signal.removeEventListener("abort", finish);
+    };
+    signal.addEventListener("abort", finish, { once: true });
+    finish();
+  });
+}
+
 export type InboxStatus = ProjectStatus;
 export interface OperationAttention {
   operationStatus?: InboxStatus;
@@ -345,6 +387,11 @@ export interface InboxModel {
     directory: string,
     terminal?: number,
   ): Promise<void>;
+  acknowledge(
+    scope: AcknowledgeScope,
+    options?: RequestOptions,
+  ): Promise<AcknowledgedSessions>;
+  clearAttention(scope: AcknowledgeScope, signal?: AbortSignal): Promise<void>;
   visit(directory: string, options?: RequestOptions): Promise<unknown>;
   act<T>(
     directory: string,
@@ -380,6 +427,8 @@ export function createInbox(
     factory,
     connected,
   });
+  const acknowledge = (scope: AcknowledgeScope, options?: RequestOptions) =>
+    rpc.call("sessions.acknowledge", scope, options);
   const state: InboxState = {
     get ready() {
       void clock.state.revision;
@@ -709,6 +758,17 @@ export function createInbox(
     ): Promise<void> {
       await rpc.call("projects.visit", { directory });
       await rpc.call("sessions.seen", { sessionID, terminal });
+    },
+    acknowledge,
+    async clearAttention(scope: AcknowledgeScope, signal?: AbortSignal) {
+      const acknowledged = await acknowledge(scope, {
+        signal,
+      });
+      await awaitAcknowledged(
+        entityStates,
+        acknowledged,
+        signal ?? AbortSignal.timeout(75_000),
+      );
     },
     visit(directory: string, options?: RequestOptions) {
       return rpc.call("projects.visit", { directory, active: true }, options);

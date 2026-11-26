@@ -157,6 +157,12 @@ export const SendIcon = () => (
     <path d="m6 11 6-6 6 6M12 19V5" />
   </Icon>
 );
+export const CheckAllIcon = () => (
+  <Icon>
+    <path d="M18 6 7 17l-5-5" />
+    <path d="m22 10-7.5 7.5L13 16" />
+  </Icon>
+);
 export const StopIcon = () => (
   <Icon class="otk-stop-icon">
     <rect

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Menu.css" with { type: "text" };
-import { type Element, onSettled } from "solid-js";
+import { createMemo, type Element, onSettled } from "solid-js";
 import Popover, {
   type PopoverControl,
   type PopoverOpenReason,
@@ -10,6 +10,7 @@ export default function Menu(props: {
   label: string;
   triggerLabel?: string;
   title?: string;
+  titleAction?: (bind: (button: HTMLElement) => void) => Element;
   size?: "content" | "fit";
   place?: "bounds-end";
   trigger?: Element;
@@ -25,6 +26,12 @@ export default function Menu(props: {
   children: Element;
 }): Element {
   let root!: HTMLDivElement, popover!: PopoverControl;
+  let titleButton: HTMLElement | undefined;
+  const titleControl = () =>
+    titleButton instanceof HTMLButtonElement && !titleButton.disabled &&
+      titleButton.getClientRects().length
+      ? titleButton
+      : undefined;
   let query = "", typedAt = 0;
   let tracked: HTMLButtonElement | undefined;
   const track = (target: EventTarget | null) => {
@@ -49,11 +56,39 @@ export default function Menu(props: {
     }
     button?.focus();
   };
+  const titleAction = createMemo(() => props.titleAction);
+  const titleContent = createMemo(() => {
+    const render = titleAction();
+    return render
+      ? (
+        <div
+          onKeyDown={(event) => {
+            if (event.key !== "Tab" || event.target !== titleControl()) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.shiftKey) popover.close();
+            else {
+              const first = items()[0];
+              if (first) rove(first);
+              else popover.close();
+            }
+          }}
+        >
+          {render((button) => {
+            titleButton = button;
+          })}
+        </div>
+      )
+      : undefined;
+  });
   return (
     <Popover
       label={props.label}
       triggerLabel={props.triggerLabel}
       title={props.title}
+      titleAction={titleContent()}
       trigger={props.trigger}
       triggerClass={props.triggerClass}
       size={props.size ?? "content"}
@@ -71,9 +106,12 @@ export default function Menu(props: {
         typedAt = 0;
         tracked = undefined;
         onSettled(() => {
-          const first = reason === "keyboard" ? items()[0] : undefined;
+          const title = reason === "keyboard" ? titleControl() : undefined;
+          const first = reason === "keyboard" && !title
+            ? items()[0]
+            : undefined;
           rove(first);
-          if (!first) root.focus();
+          if (!first) (title ?? root).focus();
         });
       }}
       onClose={props.onClose}
@@ -122,7 +160,9 @@ export default function Menu(props: {
           } else if (event.key === "Tab") {
             event.preventDefault();
             event.stopPropagation();
-            popover.close();
+            const title = event.shiftKey ? titleControl() : undefined;
+            if (title) title.focus();
+            else popover.close();
           } else if (event.key.length === 1 && event.key !== " ") {
             event.preventDefault();
             event.stopPropagation();

@@ -29,17 +29,23 @@
   padding-inline: var(--surface-slot-inset);
 }
 /* A slot's single child is the slot's row: it fills the slot's width. */
-.otk-surface-title > :only-child,
 .otk-surface-actions > :only-child {
   flex: 1 1 auto;
   min-width: 0;
 }
 .otk-surface-title h2 {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
 }
-.otk-surface.is-dialog .otk-surface-title {
+.otk-surface .otk-surface-title {
   flex-wrap: nowrap;
+}
+.otk-surface-title-action {
+  display: flex;
+  flex: none;
+  min-width: 0;
 }
 .otk-surface .otk-surface-body {
   flex: 1 1 auto;

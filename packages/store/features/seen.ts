@@ -69,6 +69,19 @@ export class Seen extends MetadataChanges<SeenChange> {
       return time;
     }, tx);
   }
+  acknowledgeMany(
+    user: string,
+    entries: readonly { session: string; terminal: number }[],
+    tx?: StoreWrite,
+  ): number[] {
+    return this.db.write(
+      (scope) =>
+        entries.map(({ session, terminal }) =>
+          this.acknowledge(user, session, terminal, scope)
+        ),
+      tx,
+    );
+  }
   tokens(): SeenChange[] {
     return this.db.connection.prepare(
       "SELECT user,session,terminal FROM session_seen",

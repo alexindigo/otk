@@ -115,7 +115,7 @@ test(
     await activity(state, child, "release");
     const pill = helpers(page),
       lamp = pill.locator(".otk-status-light:visible");
-    await expect(pill).toHaveAccessibleName("Subagents: 1 not returned");
+    await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
     await expect(page.locator(`[data-tab="${task.id}"] .otk-status-light`))
       .toHaveAttribute("data-state", "working");
     await expect.soft(lamp).toHaveAttribute(
@@ -173,7 +173,8 @@ test(
             ? ".otk-live-count.is-full"
             : ".otk-live-count-compact .otk-live-count";
           const titleLabel = at(".otk-composer-task");
-          const count = (pill: string) => `${pill} ${visibleCount}`;
+          const count = (pill: string) =>
+            `${pill} ${pill === pills[0] ? ".otk-live-count" : visibleCount}`;
           const lastPill = box(pills[1]);
           return {
             leading: title.left - box(".otk-prompt-input").left,
@@ -255,7 +256,7 @@ test(
         );
       } else expect.soft(measured.linkWidth, context).toBe(0);
       expect.soft(measured.pillText, context).toEqual(
-        stage === "full" ? ["1 running", "2 shells"] : ["1", "2"],
+        ["1", stage === "full" ? "2 shells" : "2"],
       );
       expect.soft(measured.wrap, context).toBe(stage === "wrap");
       expect.soft(measured.overflow, context).toBeLessThanOrEqual(1);
@@ -404,7 +405,7 @@ test(
     await expect(shells(page)).toHaveAccessibleName("Running work: 2 shells");
     await activity(state, child, "release");
     await expect(helpers(page)).toHaveAccessibleName(
-      "Subagents: 1 not returned",
+      "Subagents: 1 finished",
     );
     await expectRunning();
     await shellState("release");
@@ -415,7 +416,7 @@ test(
       "hidden",
     );
     await expect(helpers(page)).toHaveAccessibleName(
-      "Subagents: 1 not returned",
+      "Subagents: 1 finished",
     );
     await activity(state, child, "hold");
     await expect(helpers(page)).toHaveAccessibleName("Subagents: 1 running");

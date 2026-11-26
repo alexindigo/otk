@@ -5,7 +5,7 @@ import type {
   HelperDisposition,
   TaskHelpers,
 } from "@otk/protocol";
-import { age, elapsed, metaList, type TimeText } from "./format.ts";
+import { age, elapsed, type TimeText } from "./format.ts";
 
 export interface RunningWork {
   id: string;
@@ -52,6 +52,22 @@ export function createLiveWork(input: {
   };
 }
 
+const helperLabels = [
+  {
+    kind: "needsYou",
+    title: "Needs you",
+    singular: "needs you",
+    plural: "need you",
+  },
+  { kind: "running", title: "Running", singular: "running", plural: "running" },
+  {
+    kind: "finished",
+    title: "Finished",
+    singular: "finished",
+    plural: "finished",
+  },
+] as const;
+
 /** Display order and vocabulary shared by every form of the same counts. */
 export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
   kind: HelperDisposition;
@@ -59,37 +75,21 @@ export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
   count: number;
   phrase: string;
 }[] {
-  return ([
-    {
-      kind: "running",
-      title: "Running",
-      count: counts.running,
-      phrase: "running",
-    },
-    {
-      kind: "needsYou",
-      title: "Needs you",
-      count: counts.needsYou,
-      phrase: counts.needsYou === 1 ? "needs you" : "need you",
-    },
-    {
-      kind: "notReturned",
-      title: "Not returned",
-      count: counts.notReturned,
-      phrase: "not returned",
-    },
-  ] as const).filter(({ count }) => count > 0);
+  return helperLabels.flatMap(({ kind, title, singular, plural }) => {
+    const count = counts[kind];
+    return count > 0
+      ? [{ kind, title, count, phrase: count === 1 ? singular : plural }]
+      : [];
+  });
 }
 
 /** One vocabulary for the pill and its accessible name, from published counts. */
 export function helperCountsLabel(
   counts: TaskHelpers["counts"],
-  form: "visible" | "spoken" = "visible",
 ): string {
-  const items = helperCountParts(counts).map(({ count, phrase }) =>
+  return helperCountParts(counts).map(({ count, phrase }) =>
     `${count} ${phrase}`
-  );
-  return form === "spoken" ? items.join(", ") : metaList(items);
+  ).join(", ");
 }
 
 /** One clock per published disposition; an earlier run cannot date a wait. */
@@ -114,7 +114,7 @@ export function helperClock(
         return { time: elapsed(now - evidence.waitingSince), ago: false };
       }
       break;
-    case "notReturned":
+    case "finished":
       if (entity?.terminal !== undefined) {
         const time = age(entity.terminal, now);
         return { time, ago: !time.word };

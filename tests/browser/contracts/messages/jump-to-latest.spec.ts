@@ -322,6 +322,10 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
     title: "Read-only child",
     parentID: root.id,
   });
+  const sibling = await state.native<{ id: string }>("/session", "POST", {
+    title: "Unread sibling",
+    parentID: root.id,
+  });
   await state.queue(["Child source.\n\n".repeat(180)]);
   await state.native(`/session/${child.id}/prompt_async`, "POST", {
     parts: [{ type: "text", text: "Inspect the child" }],
@@ -332,8 +336,15 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   const pane = page.getByRole("region", { name: "Transcript", exact: true });
   await expect(pane).toHaveAttribute("aria-busy", "false");
   await expect(pane).toContainText("Child source.");
+  // D72 removes the selected helper after it is read. Keep the footer in the
+  // layout under test with an independent unread sibling, not a seen row.
+  await expect(subagents(page)).toHaveCount(0);
+  await state.queue(["Sibling source."]);
+  await state.native(`/session/${sibling.id}/prompt_async`, "POST", {
+    parts: [{ type: "text", text: "Inspect the sibling" }],
+  });
   await expect(subagents(page)).toHaveAccessibleName(
-    "Subagents: 1 not returned",
+    "Subagents: 1 finished",
   );
   const activity = page.locator(".otk-composer-activity-slot");
   await expect(activity).toBeVisible();

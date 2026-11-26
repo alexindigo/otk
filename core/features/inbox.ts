@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  type AcknowledgeScope,
   entityKey,
   entityRequiresVisibility,
   type EntityState,
@@ -46,6 +47,7 @@ import {
   readExecution,
 } from "../requests/policies.ts";
 import {
+  acknowledgeReceipt,
   closedReceipt,
   projectReceipt,
   projectSessionReceipt,
@@ -1359,6 +1361,29 @@ export class InboxFeature implements FrameSource {
         : {}),
     });
   }
+  async #validateAcknowledgement(
+    ctx: RpcContext,
+    entries: readonly { session: string; terminal: number }[],
+  ): Promise<void> {
+    await ctx.sessionDirectories(
+      entries.flatMap(({ session }) =>
+        this.index.getMetadata(session)?.deleted ? [] : [session]
+      ),
+    );
+    if (
+      entries.some(({ session, terminal }) =>
+        terminal > (this.#finishes.get(session) ?? 0)
+      )
+    ) throw new HarnessError("params", "Terminal token was not published");
+  }
+
+  #acknowledge(
+    entries: readonly { session: string; terminal: number }[],
+    tx: StoreWrite,
+  ): number[] {
+    return this.stores.seen.acknowledgeMany(this.user, entries, tx);
+  }
+
   register(rpc: RpcRegistry): void {
     const s = this.stores, user = () => this.user;
     const added = (ctx: RpcContext, session: ContentSession) => {
@@ -1696,15 +1721,53 @@ export class InboxFeature implements FrameSource {
         return { sessionID: sessionID(p)!, terminal: Number(p.terminal) };
       },
       handler: async (ctx, { sessionID: id, terminal }) => {
-        if (!this.index.get(id)?.deleted) await ctx.sessionDirectory(id);
-        if (terminal > (this.#finishes.get(id) ?? 0)) {
-          throw new HarnessError("params", "Terminal token was not published");
-        }
+        const entries = [{ session: id, terminal }];
+        await this.#validateAcknowledgement(ctx, entries);
         return localWrite(
           ctx,
-          (tx) => s.seen.acknowledge(user(), id, terminal, tx),
+          (tx) => this.#acknowledge(entries, tx)[0],
           seenReceipt,
         );
+      },
+    });
+    rpc.register("sessions.acknowledge", {
+      execution: preparedLocalExecution(
+        (p: AcknowledgeScope) =>
+          p.scope === "helpers"
+            ? { resource: p.task }
+            : { sessionID: p.sessionID },
+        acknowledgeReceipt,
+      ),
+      params: (p): AcknowledgeScope => {
+        if (p.scope === "helpers") {
+          return { scope: "helpers", task: text(p, "task")! };
+        }
+        if (p.scope === "subtree") {
+          return { scope: "subtree", sessionID: sessionID(p)! };
+        }
+        throw new HarnessError("params", "Expected helpers or subtree scope");
+      },
+      handler: async (ctx, p) => {
+        if (p.scope === "subtree") await ctx.sessionDirectory(p.sessionID);
+        const ids = p.scope === "helpers"
+          ? this.states.finishedHelpers(p.task)
+          : this.states.subtree(p.sessionID);
+        if (!ids) throw new HarnessError("params", "Task not found");
+        const sessions = ids.flatMap((sessionID) => {
+          const value = this.states.get(entityKey("session", sessionID));
+          return value?.counts.unseen && value.terminal
+            ? [{ sessionID, terminal: value.terminal }]
+            : [];
+        });
+        const entries = sessions.map(({ sessionID, terminal }) => ({
+          session: sessionID,
+          terminal,
+        }));
+        await this.#validateAcknowledgement(ctx, entries);
+        return localWrite(ctx, (tx) => {
+          this.#acknowledge(entries, tx);
+          return { sessions };
+        }, acknowledgeReceipt);
       },
     });
     rpc.register("sessions.finishes", {

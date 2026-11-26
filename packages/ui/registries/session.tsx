@@ -59,6 +59,7 @@ export interface SessionPorts {
   liveWork?: LiveWorkOwner;
   delivery?: SessionDelivery;
   stopHelper?(id: string): Promise<void>;
+  clearFinished?(task: string): Promise<void>;
   permissions(): PermissionRequest[];
   permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];

@@ -81,11 +81,6 @@ test.use({ profile: "contract-sessions-tab-groups" });
 test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
   tag: ["@sessions", "@attention", "@load", "@visual", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
-  await state.controller.call("scenario", {
-    lease: state.lease.lease,
-    action: "hold",
-    target: "trail-decisions",
-  });
   const root = "tstv1-otk",
     child = "tstv1-group-a",
     deep = "tstv1-trail-nested";
@@ -111,6 +106,12 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
       "otk-light-stone",
     ]]
   ) {
+    // Each theme observes a new finished run: opening the prior one marks it seen.
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "hold",
+      target: "trail-decisions",
+    });
     await state.product("prefs.set", { key: "theme", value: theme });
     await viewByUrl(state, page, root);
     await page.setViewportSize({ width: 1920, height: 1000 });
@@ -133,9 +134,11 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
     await shot("main-narrow", name);
     const control = subagents(page);
     await expect(control).toHaveAccessibleName(
-      "Subagents: 2 running, 1 needs you, 1 not returned",
+      "Subagents: 1 needs you, 2 running, 1 finished",
     );
-    await expect(control.locator(".otk-live-count.is-full .otk-status-light"))
+    await expect(
+      control.locator(".otk-status-light:visible").first(),
+    )
       .toHaveAttribute(
         "data-state",
         "blocked",
@@ -186,9 +189,14 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
       await expect(page).toHaveURL(new RegExp(`${id}$`));
       await expect.poll(async () => (await ids()).at(-1)).toBe(id);
       await expect(control).toHaveAccessibleName(
-        "Subagents: 2 running, 1 needs you, 1 not returned",
+        id === child || id === "tstv1-trail-blocked"
+          ? "Subagents: 1 needs you, 2 running, 1 finished"
+          : "Subagents: 1 needs you, 2 running",
       );
       await control.click();
+      if (id === "tstv1-trail-cont-1") {
+        await expect(menu.locator(`[data-subagent="${id}"]`)).toHaveCount(0);
+      }
     }
     await menu.locator(`[data-subagent="${child}"] .otk-subagent-name`).click();
     await expect(page).toHaveURL(new RegExp(`${child}$`));

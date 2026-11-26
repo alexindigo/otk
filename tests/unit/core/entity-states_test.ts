@@ -159,7 +159,7 @@ test("terminal dependencies stay independent of freshness and session lamps", ()
   assertEquals(o.get(base.id)?.dependencies, undefined);
 });
 
-test("D66: parent delivery and native run clocks survive human seen independently", () => {
+test("D72: a helper leaves the roster after human seen or matching parent delivery", () => {
   const o = owner();
   const entry = { ...base, parentID: "root" };
   o.put({
@@ -182,9 +182,11 @@ test("D66: parent delivery and native run clocks survive human seen independentl
     ...entry,
     activity: { terminal: 50, outcome: "succeeded" as const },
   };
+  o.put(terminal);
+  assertEquals(o.get("s")?.evidence?.helper, "finished");
   o.put(terminal, 50);
   assertEquals(o.get("s")?.state, "none");
-  assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+  assertEquals(o.get("s")?.evidence?.helper, undefined);
   assertEquals(o.get("s")?.evidence?.run, { startedAt: 10, endedAt: 50 });
   for (
     const delivered of [
@@ -193,8 +195,8 @@ test("D66: parent delivery and native run clocks survive human seen independentl
       { parentID: "root", receipt: "result", terminal: 49 },
     ]
   ) {
-    o.put({ ...terminal, activity: { ...terminal.activity, delivered } }, 50);
-    assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+    o.put({ ...terminal, activity: { ...terminal.activity, delivered } });
+    assertEquals(o.get("s")?.evidence?.helper, "finished");
   }
   o.put({
     ...terminal,
@@ -202,8 +204,8 @@ test("D66: parent delivery and native run clocks survive human seen independentl
       ...terminal.activity,
       delivered: { parentID: "root", receipt: "result", terminal: 50 },
     },
-  }, 50);
-  assertEquals(o.get("s")?.evidence?.awaitingDelivery, false);
+  });
+  assertEquals(o.get("s")?.evidence?.helper, undefined);
   o.put({ ...entry, activity: { work: keys("rerun"), terminal: 50 } }, 50);
   assertEquals(o.get("s")?.evidence?.run, undefined);
   o.put({
@@ -1089,13 +1091,13 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
   put(6, { terminal: 80, outcome: "failed" }, "helper-0");
   const task = () => o.states.get(entityKey("task", "session/s"));
   assertEquals(task()?.helpers, {
-    counts: { running: 2, needsYou: 1, notReturned: 3 },
+    counts: { running: 2, needsYou: 1, finished: 4 },
     lamps: {
       all: { state: "blocked" },
       groups: {
         running: { state: "working" },
         needsYou: { state: "blocked" },
-        notReturned: { state: "blocked" },
+        finished: { state: "finished" },
       },
     },
     ids: [
@@ -1103,6 +1105,7 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
       "helper-1",
       "helper-2",
       "helper-6",
+      "helper-5",
       "helper-4",
       "helper-3",
     ],
@@ -1110,8 +1113,8 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
   assertEquals(o.get("s")?.evidence?.helper, undefined);
   assertEquals(o.get("helper-2")?.evidence?.helper, "needsYou");
   assertEquals(o.get("helper-5")?.state, "blocked");
-  assertEquals(o.get("helper-5")?.evidence?.helper, undefined);
-  assertEquals(o.get("helper-6")?.evidence?.helper, "notReturned");
+  assertEquals(o.get("helper-5")?.evidence?.helper, "finished");
+  assertEquals(o.get("helper-6")?.evidence?.helper, "finished");
   put(1, running(5));
   assertEquals(task()?.helpers?.ids.slice(0, 2), ["helper-1", "helper-0"]);
 });

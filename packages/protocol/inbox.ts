@@ -28,7 +28,15 @@ export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
     presentation: "bookkeeping",
   },
   "sessions.finishes": { kind: "read", pending: "Loading session activity" },
+  "sessions.acknowledge": { kind: "mutation", pending: "Clearing attention" },
 };
+export type AcknowledgeScope = { scope: "helpers"; task: string } | {
+  scope: "subtree";
+  sessionID: string;
+};
+export interface AcknowledgedSessions {
+  sessions: { sessionID: string; terminal: number }[];
+}
 /** Inbox metadata is server-local; callers pair it with their connection ID. */
 export interface ProjectRecord {
   directory: string;
@@ -216,6 +224,10 @@ export interface InboxRpcMethods {
     params: { sessionID: string; terminal: number };
     result: number;
   };
+  "sessions.acknowledge": {
+    params: AcknowledgeScope;
+    result: AcknowledgedSessions;
+  };
   "sessions.finishes": {
     params: Record<string, never>;
     result: Record<string, number>;
@@ -231,4 +243,5 @@ export interface InboxRequestReceipts {
   "project-visit": ProjectRecord | null;
   "project-templates": string[];
   "session-seen": number;
+  "session-acknowledge": AcknowledgedSessions;
 }
