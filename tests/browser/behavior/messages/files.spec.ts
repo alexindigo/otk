@@ -8,10 +8,8 @@ import { readFile, stat } from "node:fs/promises";
 
 async function openDiffStyleForKeyboard(page: Page) {
   await page.locator("button[name=diffStyle]").click();
-  // The native popover can open before its toggle mounts and focuses the picker.
-  const picker = page.locator(".otk-picker-content").filter({
-    has: page.getByRole("listbox", { name: "Diff style", exact: true }),
-  });
+  // fad738b9: the listbox owns focus and the active keyboard candidate.
+  const picker = page.getByRole("listbox", { name: "Diff style", exact: true });
   await expect(picker).toBeFocused();
 }
 

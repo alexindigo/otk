@@ -47,8 +47,17 @@ for (const source of ["enter", "click"] as const) {
         const draft = await input.inputValue(), sent = sends().length;
         for (let i = 0; i < 2; i++) {
           await activate();
-          await expect(notice.filter({ hasText: reason })).toHaveCount(1);
-          await expect(notice.filter({ hasText: reason })).toBeVisible();
+          if (source === "click") {
+            // ebb7b155: unavailable primaries block pointer dispatch. The
+            // disabled control exposes why; only Enter reaches the composer.
+            await expect(button).toBeDisabled();
+            await expect(button).toHaveAccessibleDescription(reason);
+            await expect(button).toHaveAttribute("title", reason);
+            await expect(notice.filter({ hasText: reason })).toHaveCount(0);
+          } else {
+            await expect(notice.filter({ hasText: reason })).toHaveCount(1);
+            await expect(notice.filter({ hasText: reason })).toBeVisible();
+          }
           await expect(input).toHaveValue(draft);
           expect(sends()).toHaveLength(sent);
         }
