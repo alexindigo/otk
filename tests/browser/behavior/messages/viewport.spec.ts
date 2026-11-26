@@ -73,9 +73,12 @@ test(
     await expect(page).toHaveURL(
       `${state.url}/#/local/${session.id}/${first.id}`,
     );
-    await expect(page.locator(".otk-subagent-bar")).toContainText(
-      "First reveal",
-    );
+    // Decision 71 / 2.105 WP9: the current crumb owns identity; the bar
+    // owns sibling movements only.
+    const crumb = page.locator(`.otk-trail [data-crumb="${first.id}"]`);
+    await expect(crumb).toBeVisible();
+    await expect(crumb).toHaveAttribute("aria-current", "page");
+    await expect(crumb).toHaveAccessibleName(first.title);
     await expect(page.locator(".otk-prompt")).toHaveCount(0);
   },
 );
