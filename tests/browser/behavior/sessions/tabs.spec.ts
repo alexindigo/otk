@@ -158,43 +158,41 @@ test.describe("task tabs", () => {
       await openSession(state, page, "tstv1-otk");
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      // D66/D58: human seen does not replace a parent delivery receipt.
+      // D72: both human acknowledgement and parent delivery retire a finish.
+      const helper = "tstv1-helper", nested = "tstv1-nested";
       const helpers = page.locator(
-        "[data-session=tstv1-helper], [data-session=tstv1-nested]",
+        `[data-session=${helper}], [data-session=${nested}]`,
       );
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(2);
       await expect(page.locator(
         "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
       )).toHaveCount(0);
-      await page.getByRole("button", { name: /^Subagents:/ })
-        .click();
-      await expect(page.locator("[data-subagent]")).toHaveCount(2);
+      const pill = page.getByRole("button", { name: /^Subagents:/ });
+      await expect(pill).toHaveAccessibleName("Subagents: 2 finished");
+      await pill.click();
+      const menu = page.getByRole("menu", { name: "Subagents" });
+      const agent = (id: string) => menu.locator(`[data-subagent=${id}]`);
+      await expect(agent(helper)).toBeVisible();
+      await expect(agent(nested)).toBeVisible();
       const finishes = await state.product("sessions.finishes", {});
-      for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
-        await state.product("sessions.seen", {
-          sessionID,
-          terminal: finishes[sessionID],
-        });
-      }
+      await state.product("sessions.seen", {
+        sessionID: helper,
+        terminal: finishes[helper],
+      });
+      await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+      await expect(agent(helper)).toHaveCount(0);
+      await expect(agent(nested)).toBeVisible();
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "release",
+        target: "trail-delivery",
+        sessionID: nested,
+      });
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(0);
-      await expect(page.locator(
-        "[data-subagent=tstv1-helper], [data-subagent=tstv1-nested]",
-      )).toHaveCount(2);
-      for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
-        await state.controller.call("scenario", {
-          lease: state.lease.lease,
-          action: "release",
-          target: "trail-delivery",
-          sessionID,
-        });
-      }
-      await expect(
-        page.locator(
-          "[data-subagent=tstv1-helper], [data-subagent=tstv1-nested]",
-        ),
-      ).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(menu.locator("[data-subagent]")).toHaveCount(0);
       await expect(
         page.locator("[data-tab=tstv1-helper], [data-tab=tstv1-nested]"),
       )
