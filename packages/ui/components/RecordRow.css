@@ -7,8 +7,11 @@
   container: record-row / inline-size;
 }
 .otk-record-row-grid {
+  --record-title-track: minmax(min(var(--row-title-min), 100%), 1fr);
+  --record-status-track: minmax(0, max-content);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto var(--record-title-track)
+    var(--record-status-track) auto;
   align-items: center;
   min-block-size: var(--control-size);
 }
@@ -24,17 +27,20 @@
 }
 .otk-record-row-status {
   grid-column: 3;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-1);
-  white-space: nowrap;
+  justify-items: end;
+  min-inline-size: 0;
+  --meta-row-gap: var(--space-1);
 }
-.otk-record-row-status:not(:empty),
+.otk-record-row-status:has(.otk-record-row-facts:not(:empty)),
 .otk-record-row-actions {
   margin-inline-start: var(--space-2);
 }
 .otk-record-row.is-outgoing > .otk-record-row-grid {
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto var(--record-status-track)
+    var(--record-title-track) auto;
 }
 .otk-record-row.is-outgoing > .otk-record-row-grid > :first-child {
   grid-area: 1 / 4;
@@ -54,11 +60,6 @@
   grid-column: 4;
   /* Long action labels must not take the preview's share of the row. */
   max-inline-size: max(var(--control-size), 34cqi);
-}
-@container record-row (inline-size < 32em) {
-  .otk-record-row-status {
-    display: none;
-  }
 }
 @container record-row (inline-size < 22em) {
   .otk-record-row-actions {

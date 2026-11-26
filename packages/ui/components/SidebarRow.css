@@ -8,14 +8,20 @@
 .otk-sidebar-row-grid {
   --sidebar-lamp-track: var(--tree-indent);
   --sidebar-icon-track: calc(18 * var(--otk-unit));
-  --sidebar-title-track: minmax(min(12ch, 70%), 1fr);
+  /* Below the title floor the fixed leading slots still consume space.
+     Cap against the title/meta budget, not the width before those tracks. */
+  --sidebar-title-budget: max(0px,
+    100% - var(--sidebar-lamp-track) - var(--sidebar-icon-track));
+  --sidebar-title-track: minmax(min(var(--row-title-min), var(--sidebar-title-budget)), 1fr);
   --sidebar-meta-track: minmax(0, max-content);
+  --meta-row-gap: var(--space-3);
   display: grid;
   grid-template-columns: var(--sidebar-lamp-track) var(--sidebar-icon-track)
     var(--sidebar-title-track) var(--sidebar-meta-track);
   grid-template-rows: minmax(var(--row-project), auto);
   align-items: center;
   min-block-size: var(--row-project);
+  padding-inline-end: var(--space-2);
 }
 .otk-sidebar-slot {
   min-inline-size: 0;
@@ -53,16 +59,13 @@
   grid-area: 1 / 4;
   display: grid;
   align-items: center;
-  justify-items: stretch;
-  text-align: end;
-  white-space: nowrap;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
 }
-.otk-sidebar-row:not(.is-flat) .otk-sidebar-meta > * {
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.otk-sidebar-meta > * {
+  grid-area: 1 / 1;
 }
-.otk-sidebar-meta:not(:empty) {
+.otk-sidebar-meta:has(> :not(:empty)) {
   margin-inline-start: var(--space-1);
 }
 .otk-sidebar-row-grid:has(> .otk-sidebar-meta:empty) {
@@ -72,16 +75,9 @@
   grid-column: 1 / -1;
   min-inline-size: 0;
 }
-/* In a narrow tree row, secondary facts yield before the title or lamp. */
 @container otk-sidebar-row (inline-size < 24ch) {
-  .otk-sidebar-row:not(.is-flat, .has-detailed-meta) > .otk-sidebar-row-grid {
-    --sidebar-meta-track: 0px;
-  }
   .otk-sidebar-row-grid:not(:has(.otk-sidebar-icon > *)) {
     --sidebar-icon-track: 0px;
-  }
-  .otk-sidebar-row:not(.is-flat, .has-detailed-meta) .otk-sidebar-meta {
-    display: none;
   }
 }
 @container otk-sidebar-row (max-width: 14em) {
@@ -91,7 +87,7 @@
   .otk-sidebar-row.has-detailed-meta .otk-sidebar-row-main {
     grid-column: 2 / -1;
   }
-  .otk-sidebar-row.has-detailed-meta .otk-sidebar-meta:not(:empty) {
+  .otk-sidebar-row.has-detailed-meta .otk-sidebar-meta:has(> :not(:empty)) {
     grid-area: 2 / 1 / 3 / -1;
     padding-block-end: var(--space-1);
   }
@@ -99,8 +95,7 @@
 .otk-sidebar-row.is-flat > .otk-sidebar-row-grid {
   --sidebar-lamp-track: 0px;
   --sidebar-icon-track: 0px;
-  --sidebar-title-track: minmax(0, 1fr);
-  --sidebar-meta-track: max-content;
+  padding-inline-start: var(--space-2);
 }
 .otk-sidebar-row.is-flat :is(.otk-sidebar-lamp, .otk-sidebar-icon) {
   display: none;

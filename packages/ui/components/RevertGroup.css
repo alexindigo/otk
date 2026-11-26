@@ -1,4 +1,9 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-revert-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
 .otk-revert-group {
   min-inline-size: 0;
 }

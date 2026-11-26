@@ -4,6 +4,7 @@ import type { ComponentProps } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
 import { ProjectAvatar } from "./ProjectChip.tsx";
 import { selection } from "./selection.ts";
+import { MetaRow } from "./MetaRow.tsx";
 import "./SidebarRow.css" with { type: "text" };
 
 /** Tree owns disclosure/depth. A row can reserve lamp and artwork tracks or
@@ -13,6 +14,8 @@ export default function SidebarRow(props: {
   avatar?: { name: string; color?: string };
   label?: Element;
   meta?: Element;
+  metaClass?: string;
+  metaControl?: Element;
   feedback?: Element;
   compact?: boolean;
   flat?: boolean;
@@ -43,7 +46,9 @@ export default function SidebarRow(props: {
             )}
           </Show>
         </span>
-        <span class="otk-sidebar-slot otk-sidebar-label">{props.label}</span>
+        <span class="otk-sidebar-slot otk-sidebar-label" data-row-title>
+          {props.label}
+        </span>
       </>
     );
   }
@@ -77,7 +82,10 @@ export default function SidebarRow(props: {
             <Main />
           </button>
         </Show>
-        <span class="otk-sidebar-slot otk-sidebar-meta">{props.meta}</span>
+        <span class={["otk-sidebar-slot otk-sidebar-meta", props.metaClass]}>
+          <MetaRow whole intrinsic>{props.meta}</MetaRow>
+          {props.metaControl}
+        </span>
         <Show when={props.feedback}>
           <span class="otk-sidebar-row-feedback">{props.feedback}</span>
         </Show>

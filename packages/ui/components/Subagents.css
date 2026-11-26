@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-subagent-list {
   display: grid;
-  grid-template-columns: minmax(min(8ch, 100%), 1fr) minmax(0, max-content)
-    max-content var(--control-size);
+  grid-template-columns: minmax(auto, 1fr) minmax(0, max-content)
+    var(--control-size);
   column-gap: var(--space-3);
   row-gap: var(--menu-row-gap);
 }
@@ -23,7 +23,7 @@
   font-weight: 600;
 }
 .otk-subagent-stop {
-  grid-column: 4;
+  grid-column: 3;
   min-inline-size: 0;
 }
 .otk-subagent-stop .otk-subagent-stop-button {
@@ -31,21 +31,25 @@
   padding: 0;
 }
 .otk-subagent-time {
-  grid-column: 3;
-  justify-self: end;
-  text-align: end;
   white-space: nowrap;
 }
 .otk-subagent-navigation {
-  min-inline-size: 0;
+  grid-column: 1;
 }
-.otk-subagent-agent {
+.otk-subagent-meta {
   grid-column: 2;
   min-inline-size: 0;
   display: flex;
 }
+.otk-subagent-facts {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
 .otk-subagent-name {
   inline-size: 100%;
+}
+.otk-subagent-name .otk-control-label {
+  min-inline-size: var(--row-title-min);
 }
 .otk-subagent-heading > * {
   display: inline-flex;

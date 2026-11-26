@@ -65,6 +65,7 @@ import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 import ChromeMeta, {
+  MetaItem,
   metaList,
   MetaText,
   SectionHeader,
@@ -887,10 +888,11 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
             />
           </Show>
         }
+        metaClass="otk-project-trailing"
         meta={
           <Show when={!collapsed() && !editing()}>
-            <div class="otk-project-trailing">
-              <Show when={(project().source ?? "tracked") === "tracked"}>
+            <Show when={(project().source ?? "tracked") === "tracked"}>
+              <MetaItem rank={1}>
                 <ChromeMeta
                   class="otk-project-visit"
                   title="Availability and time since last visit"
@@ -910,18 +912,22 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
                     </span>
                   </Show>
                 </ChromeMeta>
-              </Show>
-              <CommandMenu
-                class="otk-project-menu"
-                triggerClass="otk-project-menu-trigger"
-                label={`Project menu for ${name()}`}
-                trigger="⋯"
-                targets={() => [target()]}
-                beforeRun={() => setRowError("")}
-                onError={setRowError}
-                feedbackID={rowErrorID}
-              />
-            </div>
+              </MetaItem>
+            </Show>
+          </Show>
+        }
+        metaControl={
+          <Show when={!collapsed() && !editing()}>
+            <CommandMenu
+              class="otk-project-menu"
+              triggerClass="otk-project-menu-trigger"
+              label={`Project menu for ${name()}`}
+              trigger="⋯"
+              targets={() => [target()]}
+              beforeRun={() => setRowError("")}
+              onError={setRowError}
+              feedbackID={rowErrorID}
+            />
           </Show>
         }
         feedback={

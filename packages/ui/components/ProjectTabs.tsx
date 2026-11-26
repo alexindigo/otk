@@ -62,7 +62,7 @@ import TaskTrail from "./TaskTrail.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import ProjectChip from "./ProjectChip.tsx";
 import { orderInteraction } from "./order-interaction.ts";
-import { metaList, MetaRow } from "./ChromeMeta.tsx";
+import { MetaItem, metaList, MetaRow } from "./ChromeMeta.tsx";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -500,35 +500,37 @@ export default function ProjectTabs(props: {
                       : undefined}
                     {...native.attributes}
                   >
-                    <SelectionContent
-                      class="otk-session-selection"
-                      leading={
-                        <StatusLight
-                          small
-                          dependencies={tab().dependencies}
-                          state={lamp(
-                            props.model.entities(),
-                            props.model.tabEntityKey(tab()),
-                          )}
-                        />
-                      }
-                    >
-                      <span class="otk-control-label">
-                        <Show
-                          when={editing()}
-                          fallback={tab().title || "Session"}
-                        >
-                          <TitleEditor
-                            owner={props.rename!}
-                            label="Rename session"
-                            pendingText="Renaming session..."
-                            maxLength={MAX_SESSION_TITLE}
-                          />
+                    <SelectionContent class="otk-session-selection">
+                      <StatusLight
+                        small
+                        dependencies={tab().dependencies}
+                        state={lamp(
+                          props.model.entities(),
+                          props.model.tabEntityKey(tab()),
+                        )}
+                      />
+                      <span class="otk-tab-text">
+                        <span class="otk-control-label otk-tab-title">
+                          <Show
+                            when={editing()}
+                            fallback={tab().title || "Session"}
+                          >
+                            <TitleEditor
+                              owner={props.rename!}
+                              label="Rename session"
+                              pendingText="Renaming session..."
+                              maxLength={MAX_SESSION_TITLE}
+                            />
+                          </Show>
+                        </span>
+                        <Show when={tab().preview}>
+                          <MetaRow whole intrinsic class="otk-tab-meta">
+                            <MetaItem rank={1}>
+                              <span class="otk-preview-label">Preview</span>
+                            </MetaItem>
+                          </MetaRow>
                         </Show>
                       </span>
-                      <Show when={tab().preview}>
-                        <span class="otk-preview-label">Preview</span>
-                      </Show>
                     </SelectionContent>
                   </Control>
                 </div>
@@ -579,66 +581,70 @@ export default function ProjectTabs(props: {
             rename={props.rename}
             feedbackID={crumbFeedbackID}
           />
-          <Show when={props.ready}>
-            <button
-              type="button"
-              class="otk-new-session"
-              onClick={() => run(createSession())}
-            >
-              <PlusIcon /> Session
-            </button>
-          </Show>
         </nav>
-        <MetaRow class="otk-context-fit">
-          <output
-            class="otk-context-meter"
-            aria-label={props.showCost === false
-              ? "Session context"
-              : "Session context and cost"}
-            title={`${"Session context"}; latest reported context tokens; ${
-              meter().limit === undefined
-                ? "context window unavailable"
-                : `${contextRange()}, ${
-                  (meter().tokens! / meter().limit! * 100).toFixed(1)
-                }%`
-            }`}
-            data-tokens={meter().tokens}
-            data-cost={props.showCost === false ? undefined : cost()}
-            data-limit={meter().limit}
-          >
-            <Show when={meter().tokens !== undefined}>
-              <span>
-                {countLabel(
-                  meter().tokens!,
-                  "token",
-                  undefined,
-                  exactCount(meter().tokens!),
-                )}
-              </span>
-              <Show when={meter().fraction !== undefined}>
-                <span
-                  class="otk-context-bar"
-                  role="meter"
-                  aria-label="Context window used"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={meter().fraction! * 100}
-                  aria-valuetext={contextRange()}
-                >
-                  <span style={{ width: `${meter().fraction! * 100}%` }} />
-                </span>
-              </Show>
-            </Show>
-            <Show when={props.showCost !== false && cost() !== undefined}>
-              <UsageCost value={cost()!} />
-            </Show>
-            <Show
-              when={meter().tokens === undefined &&
-                (props.showCost === false || cost() === undefined)}
+        <MetaRow whole intrinsic class="otk-context-fit">
+          <Show when={props.ready}>
+            <MetaItem rank={2}>
+              <button
+                type="button"
+                class="otk-new-session"
+                onClick={() => run(createSession())}
+              >
+                <PlusIcon /> Session
+              </button>
+            </MetaItem>
+          </Show>
+          <MetaItem rank={1}>
+            <output
+              class="otk-context-meter"
+              aria-label={props.showCost === false
+                ? "Session context"
+                : "Session context and cost"}
+              title={`${"Session context"}; latest reported context tokens; ${
+                meter().limit === undefined
+                  ? "context window unavailable"
+                  : `${contextRange()}, ${
+                    (meter().tokens! / meter().limit! * 100).toFixed(1)
+                  }%`
+              }`}
+              data-tokens={meter().tokens}
+              data-cost={props.showCost === false ? undefined : cost()}
+              data-limit={meter().limit}
             >
-              <span>{digestLabel(props.entry)}</span>
-            </Show>
-          </output>
+              <Show when={meter().tokens !== undefined}>
+                <span>
+                  {countLabel(
+                    meter().tokens!,
+                    "token",
+                    undefined,
+                    exactCount(meter().tokens!),
+                  )}
+                </span>
+                <Show when={meter().fraction !== undefined}>
+                  <span
+                    class="otk-context-bar"
+                    role="meter"
+                    aria-label="Context window used"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={meter().fraction! * 100}
+                    aria-valuetext={contextRange()}
+                  >
+                    <span style={{ width: `${meter().fraction! * 100}%` }} />
+                  </span>
+                </Show>
+              </Show>
+              <Show when={props.showCost !== false && cost() !== undefined}>
+                <UsageCost value={cost()!} />
+              </Show>
+              <Show
+                when={meter().tokens === undefined &&
+                  (props.showCost === false || cost() === undefined)}
+              >
+                <span>{digestLabel(props.entry)}</span>
+              </Show>
+            </output>
+          </MetaItem>
         </MetaRow>
       </div>
       <Show

@@ -68,7 +68,7 @@
 }
 .otk-composer-target {
   flex: 0 1 auto;
-  min-inline-size: min(8ch, 100%);
+  min-inline-size: min(var(--row-title-min), 100%);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -83,7 +83,7 @@
 }
 .otk-composer-task {
   flex: 0 1 auto;
-  min-inline-size: min(8ch, 100%);
+  min-inline-size: min(var(--row-title-min), 100%);
 }
 .otk-composer-destination {
   flex: none;
@@ -110,8 +110,17 @@
     --live-count-full: none;
     --live-count-compact: flex;
   }
+  .otk-composer-activity-line {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .otk-composer-target {
+    flex: 1 1 0;
+    min-inline-size: auto;
+    max-inline-size: 100%;
+  }
   .otk-composer-destination {
-    flex: 0 1 auto;
+    max-inline-size: min(var(--row-title-min), 100%);
   }
   .otk-composer-task {
     flex: 1 1 0;
@@ -121,23 +130,10 @@
   .otk-composer-activity {
     --live-link-display: none;
   }
-  .otk-composer-activity-line {
-    flex-wrap: wrap;
-    row-gap: var(--space-1);
-  }
   .otk-composer-live-slot {
     max-inline-size: 100%;
     flex-wrap: wrap;
     row-gap: var(--space-1);
-  }
-  /* A wrapped flex line uses the minimum, not the full title, to decide
-     whether the pills can stay on the line. */
-  .otk-composer-target {
-    flex: 1 1 0;
-  }
-  .otk-composer-target:has(.otk-composer-task) {
-    min-inline-size: min(calc(8ch + var(--icon-compact) + 2 * var(--space-1)),
-      100%);
   }
 }
 .otk-composer-takeover-layer {
@@ -171,6 +167,17 @@
   inline-size: 100%;
   max-inline-size: var(--lane-width);
   margin-inline: auto;
+}
+.otk-composer-reopen:not(:empty) {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  padding-inline: var(--composer-content-inset);
+  padding-block-end: var(--space-2);
 }
 .otk-composer-dock[data-read-only="true"] {
   --composer-bottom-inset: 0px;

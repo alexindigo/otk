@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { TreeIcon, TreeNode } from "./Tree.tsx";
-import ChromeMeta, { SectionHeader } from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem, SectionHeader } from "./ChromeMeta.tsx";
 import { solidState } from "../state/binding.ts";
 import { sessionSummary } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
@@ -367,29 +367,33 @@ export default function ProjectSessions(props: {
               meta={
                 <Show when={entry()}>
                   {(session) => (
-                    <span class="otk-session-meta">
+                    <>
                       <SessionStateMeta
                         entities={entities()}
                         entityKey={stateKey}
                       />
                       <Show when={costLabel(key)}>
-                        <ChromeMeta
-                          class="otk-session-cost"
-                          aria-hidden="true"
-                          title="Session cost"
-                        >
-                          <UsageCost value={cost(key)!} />
-                        </ChromeMeta>
+                        <MetaItem rank={6}>
+                          <ChromeMeta
+                            class="otk-session-cost"
+                            aria-hidden="true"
+                            title="Session cost"
+                          >
+                            <UsageCost value={cost(key)!} />
+                          </ChromeMeta>
+                        </MetaItem>
                       </Show>
                       <Show
                         when={session().digest?.total?.state !== "known" ||
                           (props.showCost && costLabel(key) === undefined)}
                       >
-                        <ChromeMeta class="otk-session-digest-state">
-                          {digestLabel(session())}
-                        </ChromeMeta>
+                        <MetaItem rank={7}>
+                          <ChromeMeta class="otk-session-digest-state">
+                            {digestLabel(session())}
+                          </ChromeMeta>
+                        </MetaItem>
                       </Show>
-                    </span>
+                    </>
                   )}
                 </Show>
               }
