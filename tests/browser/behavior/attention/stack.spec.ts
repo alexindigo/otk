@@ -194,28 +194,26 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   );
   expect(pending).toHaveLength(8);
   await badge(page, 8);
-  const firstPage = await page.locator(".otk-toast").evaluateAll((cards) =>
-    cards.map((card) => card.getAttribute("data-note"))
-  );
+  const cards = page.locator(".otk-toast");
+  const visible = () =>
+    cards.evaluateAll((items) =>
+      items.map((card) => card.getAttribute("data-note"))
+    );
+  const notes = (...indices: number[]) =>
+    indices.map((index) => `local/${sessions[index - 1].id}`);
+  await expect.poll(visible).toEqual(notes(6, 5, 4));
   await page.getByRole("button", { name: "3 more need you", exact: true })
     .click();
-  await expect(page.locator(".otk-toast")).toHaveCount(3);
-  await expect.poll(() =>
-    page.locator(".otk-toast").evaluateAll((cards) =>
-      cards.map((card) => card.getAttribute("data-note"))
-    )
-  ).not.toEqual(firstPage);
+  await expect.poll(visible).toEqual(notes(3, 2, 1));
   expect(replies()).toBe(before);
   await badge(page, 8);
-  // Overflow pages retained evidence; only explicit dismissal retires a note.
-  for (let remaining = 6; remaining > 0; remaining--) {
-    await page.locator(".otk-toast").first().getByRole("button", {
+  // Dismissal preserves page two until it is empty, then clamps to page one.
+  for (const remaining of [[2, 1], [1], [6, 5, 4], [5, 4], [4], []]) {
+    await cards.first().getByRole("button", {
       name: "Dismiss notification",
       exact: true,
     }).click();
-    await expect(page.locator(".otk-toast")).toHaveCount(
-      Math.min(3, remaining - 1),
-    );
+    await expect.poll(visible).toEqual(notes(...remaining));
   }
   await expect(page.locator(".otk-toast")).toHaveCount(0);
   for (const session of sessions) {
