@@ -97,28 +97,26 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
     '[data-tool=task]:has(.otk-tool-brief[title="First inspection"]) .otk-task-card';
   await revealAcquired(page, card);
   await page.locator(card).click();
+  const trail = page.getByRole("navigation", { name: "Task sessions" });
+  const current = trail.locator('[aria-current="page"]');
+  const parent = trail.getByRole("link", { name: "Subagents", exact: true });
+  const siblings = page.getByRole("navigation", { name: "Subagent siblings" });
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}/${first.id}$`));
-  await expect(page.locator(".otk-subagent-bar")).toContainText(
-    "First inspection",
-  );
+  await expect(current).toContainText("First inspection");
   await expect(page.locator(".otk-prompt")).toHaveCount(0);
-  await page.locator(".otk-subagent-bar button").nth(2).click();
+  await siblings.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${second.id}$`));
-  await expect(page.locator(".otk-subagent-bar")).toContainText(
-    "Second inspection",
-  );
-  await page.locator(".otk-subagent-bar button").nth(1).click();
+  await expect(current).toContainText("Second inspection");
+  await siblings.getByRole("button", { name: "Prev", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${first.id}$`));
-  await page.locator(".otk-subagent-bar button").first().click();
+  await parent.click();
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}$`));
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Unsent parent work",
   );
   await page.evaluate(() => history.back());
   await expect(page).toHaveURL(new RegExp(`${first.id}$`));
-  await expect(page.locator(".otk-subagent-bar")).toContainText(
-    "First inspection",
-  );
+  await expect(current).toContainText("First inspection");
   await expect(page.locator(".otk-prompt")).toHaveCount(0);
   await page.evaluate(() => history.forward());
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}$`));
@@ -146,7 +144,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await expect(page.locator(".otk-messages")).toContainText(
     "Second child completed.",
   );
-  await page.locator(".otk-subagent-bar button").first().click();
+  await parent.click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Unsent parent work",
   );
