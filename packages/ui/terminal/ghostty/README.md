@@ -1,5 +1,8 @@
 # Ghostty browser renderer
 
+OTK's Run in terminal is a user paste gesture followed by Enter through
+`pasteAndSubmit`.
+
 Vendored from T3 Code (`pingdotgg/t3code`), commit
 `7462f234e89027943cf0d1a73d3ae1f36571d4e3`, `apps/web/src/terminal/ghostty/` and
 `apps/web/src/terminal-links.ts`. The prebuilt libghostty-vt assets use Ghostty

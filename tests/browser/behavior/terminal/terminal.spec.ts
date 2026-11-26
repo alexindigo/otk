@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { messages, prompt } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 import { nativeIdle } from "../../pages/transcript.ts";
 import {
   cleanup,
@@ -48,6 +49,13 @@ async function command(page: Page, value: string) {
   await viewport(page).click({ position: { x: 8, y: 8 } });
   await page.keyboard.type(value);
   await page.keyboard.press("Enter");
+}
+
+// Focus the input directly after reconnect. Clicking a live full-screen app
+// sends mouse bytes; btop 1.3.2 can consume a following key in the same read.
+function quitRestoredBtop(page: Page) {
+  return page.getByRole("textbox", { name: "Terminal input", exact: true })
+    .press("q");
 }
 
 test("terminal.repeated-lag-shows-disconnected-and-explicit-reconnect", {
@@ -330,7 +338,7 @@ test(
       })
         .click();
       await state.queue(["Terminal selection received."]);
-      await page.locator(".otk-prompt button[type=submit]").click();
+      await send(page).click();
       await expect(page.locator("[data-role=user]")).toContainText(
         "terminal-```-selected-output",
       );
@@ -794,8 +802,7 @@ test(
           (canvas as HTMLCanvasElement).toDataURL()
         )
       ).not.toBe(previous);
-      await viewport(page).click({ position: { x: 8, y: 8 } });
-      await page.keyboard.press("q");
+      await quitRestoredBtop(page);
       await expect(viewport(page)).toHaveAttribute("aria-label", /\$\s*$/);
       expect(await screenAndScrollback(page)).toContain("before-reload");
       await command(page, "printf 'reload-%s\\n' returned");
@@ -836,8 +843,7 @@ test("terminal.truncated-replay-falls-back-to-live-btop-checkpoint", {
         (canvas as HTMLCanvasElement).toDataURL()
       )
     ).not.toBe(before);
-    await viewport(page).click({ position: { x: 8, y: 8 } });
-    await page.keyboard.press("q");
+    await quitRestoredBtop(page);
     // A truncated active-screen checkpoint cannot preserve the inactive screen.
     await expect(viewport(page)).toHaveAttribute("aria-label", /\$\s*$/);
     expect(await screenAndScrollback(page)).not.toContain("truncated-ready");

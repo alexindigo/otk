@@ -2,6 +2,7 @@
 import { Show } from "solid-js";
 import type { BashCall } from "@otk/protocol";
 import ToolOutput from "./ToolOutput.tsx";
+import CodeBlock from "../CodeBlock.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { RunIcon } from "./ToolIcons.tsx";
 import ToolPath from "./ToolPath.tsx";
@@ -23,6 +24,7 @@ export default function BashTool(
 ) {
   return (
     <>
+      <CodeBlock source={{ kind: "command", text: props.call.command }} />
       <Show
         when={props.call.cwd && props.call.cwd !== "." &&
           props.call.cwd !== props.directory}

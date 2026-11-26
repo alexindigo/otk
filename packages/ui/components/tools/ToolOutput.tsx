@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import "./ToolOutput.css" with { type: "text" };
 import { For, Match, Show, Switch } from "solid-js";
 import type { ToolResult } from "@otk/protocol";
 import { metaList } from "@otk/client";
-import Code from "../Code.tsx";
+import CodeBlock from "../CodeBlock.tsx";
 import Blocks from "../Blocks.tsx";
 import ToolPath from "./ToolPath.tsx";
 import { relativeTarget } from "./paths.ts";
@@ -70,7 +69,10 @@ export default function ToolOutput(
       fallback={
         <>
           <Show when={text()}>
-            <pre class="otk-tool-output">{text()}</pre>
+            <CodeBlock
+              source={{ kind: "output", text: text() }}
+              textClass="otk-tool-output"
+            />
           </Show>
           <Show when={pathMeta()}>
             <small class="otk-muted" data-tool-result-meta>
@@ -90,11 +92,13 @@ export default function ToolOutput(
               when={result().endLine >= result().startLine}
               fallback={<p class="otk-muted">No lines returned</p>}
             >
-              <Code
-                text={result().text}
-                lang={result().lang}
-                lineNumbers
-                startLine={result().startLine}
+              <CodeBlock
+                source={{
+                  kind: "file",
+                  text: result().text,
+                  lang: result().lang,
+                  startLine: result().startLine,
+                }}
               />
             </Show>
             <Show
@@ -111,14 +115,30 @@ export default function ToolOutput(
       <Match when={matches()}>
         {(result) => (
           <>
-            <For each={result().matches} keyed={false}>
-              {(match) => (
-                <pre
-                  class="otk-tool-output"
-                  data-tool-match
-                ><ToolPath path={match().path} directory={props.directory} />:{match().line}: {match().text}</pre>
-              )}
-            </For>
+            <Show when={result().matches.length}>
+              <CodeBlock
+                source={{
+                  kind: "output",
+                  text: result().matches.map((match) =>
+                    `${
+                      relativeTarget(match.path, props.directory, paths())
+                    }:${match.line}: ${match.text}`
+                  ).join("\n"),
+                }}
+                textClass="otk-tool-output"
+              >
+                <For each={result().matches} keyed={false}>
+                  {(match) => (
+                    <span class="otk-code-line" data-tool-match>
+                      <ToolPath
+                        path={match().path}
+                        directory={props.directory}
+                      />:{match().line}: {match().text}
+                    </span>
+                  )}
+                </For>
+              </CodeBlock>
+            </Show>
             <Show when={!result().matches.length}>
               <p class="otk-muted">No matches</p>
             </Show>
@@ -133,7 +153,10 @@ export default function ToolOutput(
       <Match when={skill()}>
         {(result) => (
           <>
-            <pre class="otk-tool-output">{result().text}</pre>
+            <CodeBlock
+              source={{ kind: "output", text: result().text }}
+              textClass="otk-tool-output"
+            />
             <p class="otk-muted">
               Base directory:{" "}
               <ToolPath path={result().directory} directory={props.directory} />

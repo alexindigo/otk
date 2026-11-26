@@ -1,0 +1,50 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-code-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: var(--space-2) 0;
+  border-radius: var(--radius-card);
+  background: var(--otk-bg-code);
+  border: 1px solid var(--otk-border-code);
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
+}
+.otk-code-block[data-frame=inherit] {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  grid-template-areas: "head actions" "rows rows";
+}
+.otk-code-block-header {
+  grid-area: head;
+  min-width: 0;
+}
+.otk-code-block-rows {
+  grid-area: rows;
+  min-width: 0;
+}
+.otk-code-block-body {
+  min-width: 0;
+}
+.otk-code-block-text {
+  margin: 0;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+}
+.otk-code-block-actions {
+  --control-size: calc(24 * var(--otk-unit));
+  --message-action-gap: calc(2 * var(--otk-unit));
+  display: grid;
+  grid-template-rows: var(--line-ui);
+  align-items: center;
+  align-self: start;
+  padding: var(--space-3) var(--space-1) 0 0;
+}
+.otk-code-block[data-frame=inherit] > .otk-code-block-actions {
+  grid-area: actions;
+  align-self: stretch;
+  grid-template-rows: auto;
+  padding-block-start: 0;
+}
