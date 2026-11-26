@@ -1,4 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-work-log {
+  --tree-height: var(--control-size);
+}
 .otk-work-fold {
   display: flex;
   align-items: center;
@@ -6,7 +9,7 @@
   width: fit-content;
   min-inline-size: 0;
   max-width: 100%;
-  min-height: var(--tree-height, calc(var(--tree-icon-size) * 2));
+  min-block-size: var(--control-size);
   padding: 0;
   margin-block: 0;
   color: var(--otk-fg-3);

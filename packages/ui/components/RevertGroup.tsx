@@ -18,7 +18,6 @@ import { CloseIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import FailureContent from "./FailureContent.tsx";
 import { branchCopyRecoveryActions } from "./SavedBranches.tsx";
-import FittedActions from "./FittedActions.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
 import ToolPath from "./tools/ToolPath.tsx";
@@ -91,7 +90,6 @@ export default function RevertGroup(props: {
         prefs={{ ...props.prefs, expandRecords: false }}
         collapsible={!props.state.dismissed}
         failed={props.failure?.tone === "error" && !props.state.dismissed}
-        wrapActions
         icon={RevertIcon}
         label={() => (
           <span class="otk-revert-heading-content">
@@ -117,7 +115,7 @@ export default function RevertGroup(props: {
             </Show>
           </span>
         )}
-        trailing={() => (
+        status={() => (
           <Show when={!props.state.dismissed}>
             <Show when={pending()}>
               <ActivityIndicator
@@ -144,58 +142,56 @@ export default function RevertGroup(props: {
             <Show when={props.failureStatus}>
               {(status) => <ChromeMeta>{status()}</ChromeMeta>}
             </Show>
-            <FittedActions
-              inline
-              items={[
-                ...(props.state.phase === "saved" && props.onOpenCopy
-                  ? [{
-                    key: "open",
-                    label: "Open copy",
-                    run: () => props.onOpenCopy?.(),
-                  }]
-                  : []),
-                ...(props.state.phase === "staged" && props.state.copyRemoved
-                  ? [{
-                    key: "save",
-                    label: "Save copy",
-                    run: () => {
-                      void props.owner?.retry();
-                    },
-                  }]
-                  : []),
-                ...(props.recoverCopy && props.history
-                  ? branchCopyRecoveryActions(props.history)
-                  : props.state.phase === "failed" && props.state.record &&
-                      props.owner
-                  ? [{
-                    key: "retry",
-                    label: "Retry",
-                    run: () => {
-                      void props.owner?.retry();
-                    },
-                  }]
-                  : []),
-                ...(!pending() && props.owner
-                  ? [{
-                    key: "restore",
-                    label: "Restore",
-                    class: "otk-revert-restore",
-                    ariaLabel: "Restore conversation",
-                    run: () => {
-                      void props.owner?.restore();
-                    },
-                  }, {
-                    key: "dismiss",
-                    label: "Dismiss revert",
-                    icon: CloseIcon,
-                    title: "Dismiss revert",
-                    run: () => props.owner?.dismiss(),
-                  }]
-                  : []),
-              ]}
-            />
           </Show>
         )}
+        actions={() =>
+          props.state.dismissed ? [] : [
+            ...(props.state.phase === "saved" && props.onOpenCopy
+              ? [{
+                key: "open",
+                label: "Open copy",
+                run: () => props.onOpenCopy?.(),
+              }]
+              : []),
+            ...(props.state.phase === "staged" && props.state.copyRemoved
+              ? [{
+                key: "save",
+                label: "Save copy",
+                run: () => {
+                  void props.owner?.retry();
+                },
+              }]
+              : []),
+            ...(props.recoverCopy && props.history
+              ? branchCopyRecoveryActions(props.history)
+              : props.state.phase === "failed" && props.state.record &&
+                  props.owner
+              ? [{
+                key: "retry",
+                label: "Retry",
+                run: () => {
+                  void props.owner?.retry();
+                },
+              }]
+              : []),
+            ...(!pending() && props.owner
+              ? [{
+                key: "restore",
+                label: "Restore",
+                class: "otk-revert-restore",
+                ariaLabel: "Restore conversation",
+                run: () => {
+                  void props.owner?.restore();
+                },
+              }, {
+                key: "dismiss",
+                label: "Dismiss revert",
+                icon: CloseIcon,
+                title: "Dismiss revert",
+                run: () => props.owner?.dismiss(),
+              }]
+              : []),
+          ]}
         body={() => (
           <TranscriptSnapshot>
             <div class="otk-revert-records">

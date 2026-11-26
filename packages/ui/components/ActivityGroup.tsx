@@ -13,8 +13,9 @@ import { activityTimeRange } from "./activity-time.ts";
 import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
 import { clockText, clockTitle } from "./Clock.tsx";
 import ContentSlot from "./ContentSlot.tsx";
-import FailureSignal from "./FailureSignal.tsx";
 import { ActivityIcon } from "./ChromeIcons.tsx";
+import RecordRow from "./RecordRow.tsx";
+import type { FittedAction } from "./FittedActions.tsx";
 import { discloseInViewport } from "./viewport.ts";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
@@ -25,12 +26,12 @@ export default function ActivityGroup(props: {
   body(): Element;
   breakouts?(): Element;
   label?(open: () => boolean): Element;
-  trailing?(open: () => boolean): Element;
+  status?(open: () => boolean): Element;
+  actions?(open: () => boolean): readonly FittedAction[];
   meta?(primary: () => Element): Element;
   icon?(): Element;
   collapsible?: boolean;
   failed?: boolean;
-  wrapActions?: boolean;
 }): Element {
   const session = useOptionalSessionPorts();
   const [open, setOpen] = retainedDisclosure(
@@ -53,20 +54,19 @@ export default function ActivityGroup(props: {
       event.isTrusted && value !== open(),
     );
   const header = (toggleID: string) => (
-    <FailureSignal
-      as="div"
-      placement="gutter"
-      enabled={props.failed === true}
-      class={props.wrapActions
-        ? "otk-record-group-heading wraps-actions"
-        : "otk-record-group-heading"}
+    <RecordRow
+      class="otk-record-group-heading"
+      failed={props.failed}
+      outgoing={props.group.direction === "outgoing"}
+      icon={() => <TreeIcon>{props.icon?.() ?? <ActivityIcon />}</TreeIcon>}
+      status={props.status ? () => props.status?.(open) : undefined}
+      actions={props.actions?.(open)}
     >
       {heading(toggleID)}
-    </FailureSignal>
+    </RecordRow>
   );
   const heading = (toggleID: string) => (
     <>
-      <TreeIcon>{props.icon?.() ?? <ActivityIcon />}</TreeIcon>
       <Show when={props.group.entity}>
         {(entity) => (
           <EntityPill
@@ -101,11 +101,11 @@ export default function ActivityGroup(props: {
                 <Show
                   when={props.group.interval}
                   fallback={
-                    <span class="otk-tool-verb otk-control-label">
+                    <ChromeMeta class="otk-control-label">
                       {props.group.silent
                         ? "Completion details"
                         : props.group.title}
-                    </span>
+                    </ChromeMeta>
                   }
                 >
                   <ChromeMeta class="otk-control-label">
@@ -154,7 +154,6 @@ export default function ActivityGroup(props: {
           onOpenChild={props.onOpenChild}
         />
       </Show>
-      {props.trailing?.(open)}
     </>
   );
   return (

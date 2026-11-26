@@ -86,7 +86,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   );
   const heading = () => (
     <>
-      <span class="otk-tool-verb otk-control-label" title={label()}>
+      <span class="otk-tool-brief otk-control-label" title={label()}>
         {label()}
       </span>
       <Show
