@@ -100,7 +100,7 @@ test.describe("reconnecting capabilities", () => {
     tag: ["@transport", "@contracts", "@isolated", "@attention"],
   }, async ({ isolatedState: state, page }) => {
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    await page.locator(".otk-permission-actions button").nth(2).click();
+    await page.getByRole("button", { name: "Reject", exact: true }).click();
     await page.locator("textarea[name=rejection]").fill(
       "Keep permission feedback",
     );
@@ -117,6 +117,10 @@ test.describe("reconnecting capabilities", () => {
       .toHaveAttribute("title", /: reconnecting;/);
     await expect(page.locator("textarea[name=rejection]")).toHaveValue(
       "Keep permission feedback",
+    );
+    await expectPrimaryBlocked(
+      page.getByRole("button", { name: "Reject request", exact: true }),
+      "Reconnect to respond",
     );
     await expect(page.locator("textarea[name=question-answer]")).toHaveValue(
       "Keep question answer",
