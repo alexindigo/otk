@@ -2,6 +2,7 @@
 import "./Dialog.css" with { type: "text" };
 import { type Element, onSettled } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
+import { CloseIcon } from "../ChromeIcons.tsx";
 import Surface from "./Surface.tsx";
 
 export default function Dialog(props: {
@@ -58,10 +59,11 @@ export default function Dialog(props: {
             <h2 class="otk-control-label">{props.title}</h2>
             <button
               type="button"
+              class="otk-icon-button"
               onClick={() => void close()}
               aria-label={`Close ${props.title}`}
             >
-              Close
+              <CloseIcon />
             </button>
           </>
         }
