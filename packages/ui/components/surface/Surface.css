@@ -103,3 +103,8 @@
 .otk-surface.has-static-children .otk-surface-body > * {
   flex-shrink: 0;
 }
+.otk-surface-lifted {
+  background: var(--otk-surface);
+  box-shadow: var(--overlay-shadow);
+  border-radius: var(--radius-row);
+}

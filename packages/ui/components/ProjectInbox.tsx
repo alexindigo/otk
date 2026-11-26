@@ -45,6 +45,8 @@ import {
 import StatusLight from "./StatusLight.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
 import { createResize } from "./resize.ts";
+import { createRowReorder } from "./row-reorder.ts";
+import { acquireViewport } from "./viewport.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import {
   KeyboardIcon,
@@ -267,7 +269,11 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       );
   const headings = new Map<string, HTMLDivElement>();
   const focusButtons = new Map<string, HTMLButtonElement>();
+  const rowErrors = new Map<string, (cause: unknown) => void>();
   const [orderStatus, setOrderStatus] = createSignal("");
+  let scroller: HTMLElement | undefined;
+  let scrollLease: ReturnType<typeof acquireViewport> | undefined;
+  onCleanup(() => scrollLease?.release());
   const sections = (): Section[] => ["Active", "Discovered", "Inactive"];
   const reorderable = (node: ProjectBranch<ProjectRow>) =>
     !!node.project.otkProjectID &&
@@ -401,6 +407,37 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       down();
     };
   });
+  const reorder = createRowReorder<Section>({
+    items(section) {
+      return roots(section).map((node) => ({
+        key: node.key,
+        id: node.project.otkProjectID ?? "",
+        sidecar: node.project.sidecarId,
+        element: () => headings.get(node.key),
+      }));
+    },
+    scroller: () => scroller,
+    scrollBy: (delta) => {
+      if (scroller) scrollLease?.owner.input(scroller.scrollTop + delta);
+    },
+    move: commitMove,
+    menu: (key) => {
+      const origin = focusable(key);
+      if (!origin) return;
+      const { left, top, width, height } = origin.getBoundingClientRect();
+      origin.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          composed: true,
+          cancelable: true,
+          button: 2,
+          clientX: left + width / 2,
+          clientY: top + height / 2,
+        }),
+      );
+    },
+    failure: (key, cause) => rowErrors.get(key)?.(cause),
+  });
   const archiveOwners = createMemo(() => {
     const owners = new Map<string, ProjectBranch<ProjectRow>>();
     for (const node of liveRows()) {
@@ -422,24 +459,50 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     const nodes = createMemo(() =>
       section.name ? roots(section.name) : projectTree(section.projects ?? [])
     );
-    return (
+    const drop = () => section.name && reorder.drop(section.name);
+    const branches = (
       <For each={nodes()} keyed={(node) => node.key}>
         {(node) => (
-          <TreeItem
-            connected={!!section.nested}
-            last={node().key === nodes().at(-1)?.key}
-          >
-            <ProjectNode
-              node={node()}
-              section={section.name}
-              archive={section.name === "Active" &&
-                archiveOwners().get(repositoryKey(node().project))?.key ===
-                  node().key}
-            />
-          </TreeItem>
+          <>
+            <Show
+              when={drop() ===
+                nodes().findIndex((item) => item.key === node().key)}
+            >
+              <div class="otk-project-drop" aria-hidden="true">
+                <span />
+              </div>
+            </Show>
+            <TreeItem
+              connected={!!section.nested}
+              last={node().key === nodes().at(-1)?.key}
+            >
+              <ProjectNode
+                node={node()}
+                section={section.name}
+                archive={section.name === "Active" &&
+                  archiveOwners().get(repositoryKey(node().project))?.key ===
+                    node().key}
+              />
+            </TreeItem>
+          </>
         )}
       </For>
     );
+    return section.name
+      ? (
+        <div
+          data-project-section={section.name}
+          class="otk-project-order-section"
+        >
+          {branches}
+          <Show when={drop() === nodes().length}>
+            <div class="otk-project-drop" aria-hidden="true">
+              <span />
+            </div>
+          </Show>
+        </div>
+      )
+      : branches;
   }
   function ProjectNode(
     item: {
@@ -454,6 +517,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     onCleanup(() => {
       headings.delete(key);
       focusButtons.delete(key);
+      rowErrors.delete(key);
     });
     const archive = () =>
       !!item.archive && archivedRows(node().project).length > 0;
@@ -486,15 +550,23 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           heading={movable()
             ? {
               "data-project-root": key,
+              "data-defer-touch-menu": reorder.defersTouchMenu(key)
+                ? ""
+                : undefined,
               ref: (element: HTMLDivElement) => {
                 headings.set(key, element);
               },
+              ...(props.onMove && props.ready
+                ? reorder.handlers(item.section!, key)
+                : {}),
             }
             : undefined}
           compact={collapsed()}
           selected={props.selected?.sidecarId === node().project.sidecarId &&
             props.selected?.directory === node().project.directory}
-          class="otk-project-tree otk-sidebar-tree"
+          class={`otk-project-tree otk-sidebar-tree${
+            reorder.lifted(key) ? " is-lifted otk-surface-lifted" : ""
+          }`}
           label={`Worktrees in ${node().project.displayName}`}
           open={expanded()}
           hasChildren={presentation().hasChildren}
@@ -702,6 +774,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           ref: (element) => {
             root = element;
             contextTarget(target)(element);
+            if (row.reorderKey) {
+              rowErrors.set(row.reorderKey, (cause) =>
+                setRowError(
+                  failureValue(cause, { actionLabel: "Saving project order" }),
+                ));
+            }
           },
           class: `otk-project-row otk-sidebar-selection${
             project().depth ? " is-subproject" : ""
@@ -888,12 +966,17 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   return (
     <SidebarRail
       ref={rootContext}
-      class="otk-project-inbox"
+      class={`otk-project-inbox${reorder.active() ? " is-reordering" : ""}`}
       label="Projects"
       side="left"
       collapsed={collapsed()}
       width={width()}
       bodyClass="otk-inbox-scroll"
+      viewport={(element) => {
+        scrollLease?.release();
+        scroller = element;
+        scrollLease = acquireViewport(element);
+      }}
       header={
         <div class="otk-inbox-brand">
           {props.collapseToggle}

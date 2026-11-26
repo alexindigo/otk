@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Tree.css" with { type: "text" };
+import { nativeAttributes } from "./native-attributes.ts";
 import {
   createContext,
   createUniqueId,
@@ -150,6 +151,10 @@ export function TreeNode(props: {
     !flat() && !!props.body && (props.bodyVisible ?? props.open ?? true);
   const stem = () =>
     flat() ? props.open !== false && !!props.hasChildren : visible();
+  const heading = nativeAttributes(() => props.heading ?? {}, [
+    "class",
+    "onKeyDown",
+  ]);
   return (
     <section
       class={["otk-tree-node", props.class, {
@@ -166,7 +171,15 @@ export function TreeNode(props: {
       data-tree-node=""
     >
       <div
-        {...props.heading}
+        {...heading.attributes}
+        ref={(element) => {
+          heading.ref(element);
+          if (typeof props.heading?.ref === "function") {
+            props.heading.ref(
+              element,
+            );
+          }
+        }}
         class="otk-tree-heading"
         onKeyDown={(event) => {
           if (

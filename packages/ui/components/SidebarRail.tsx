@@ -18,6 +18,7 @@ export default function SidebarRail(props: {
   resizer?: Element;
   bodyClass?: string;
   ref?(element: HTMLElement): void;
+  viewport?(element: HTMLElement): void;
   children?: Element;
 }): Element {
   return (
@@ -32,7 +33,10 @@ export default function SidebarRail(props: {
       <header class="otk-rail-header">{props.header}</header>
       {props.leading}
       {props.body ?? (
-        <ScrollRegion class={`otk-rail-body ${props.bodyClass ?? ""}`}>
+        <ScrollRegion
+          ref={props.viewport}
+          class={`otk-rail-body ${props.bodyClass ?? ""}`}
+        >
           {props.children}
         </ScrollRegion>
       )}
