@@ -328,6 +328,11 @@ function violations(path: string, text: string): string[] {
       // The renderer animates changes to the accepted verdict. A raw native
       // event or metadata timestamp cannot independently flash a lamp.
       if (source.attr(node, "event")) found.add("lamp-event");
+    } else if (
+      uses("LiveLink") &&
+      !selectorInput(source, source.attr(node, "state"), "sessionComposerLink")
+    ) {
+      found.add("composer-link-input");
     }
   }
   if (path !== client && timeAttention(source)) found.add("attention-clock");
@@ -487,6 +492,23 @@ Deno.test("entity state lamps cannot pulse on separately supplied raw events", (
       'import Light from "./StatusLight.tsx"; import {lamp} from "@otk/client"; <Light state={lamp(store,key)} event={entry.timeUpdated} />;',
     ),
     ["lamp-event"],
+  );
+});
+
+Deno.test("composer link only reads its published verdict", () => {
+  assertEquals(
+    violations(
+      "packages/ui/example.tsx",
+      'import Link from "./LiveLink.tsx"; <Link state={shells.length ? "running" : "idle"} />;',
+    ),
+    ["composer-link-input"],
+  );
+  assertEquals(
+    violations(
+      "packages/ui/example.tsx",
+      'import {sessionComposerLink} from "@otk/client"; <LiveLink state={sessionComposerLink(store,id)} />;',
+    ),
+    [],
   );
 });
 

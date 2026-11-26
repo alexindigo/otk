@@ -30,6 +30,7 @@ export interface EntityRequestEvidence {
   arrivedAt?: number;
 }
 export type HelperDisposition = "running" | "needsYou" | "notReturned";
+export type ComposerLinkState = "none" | "idle" | "running";
 export interface EntityLamp {
   state: ProjectStatus;
 }
@@ -63,6 +64,8 @@ export interface SessionEvidence {
   run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
   work: boolean;
+  /** Fresh own native execution, separate from shells and OTK operations. */
+  nativeRun?: true;
   permissions: number;
   questions: number;
   descendants: EntityCounts;
@@ -96,6 +99,8 @@ export interface EntityState {
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";
   evidence?: SessionEvidence;
+  /** Published only for the socket's selected session; independent of its lamp. */
+  composerLink?: ComposerLinkState;
   /** D66/D58: ordered helpers belonging to this task. */
   helpers?: TaskHelpers;
   /** Fresh shell inventory belonging only to this session. */

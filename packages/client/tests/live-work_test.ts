@@ -6,6 +6,7 @@ import {
   createEntityStateStore,
   lamp,
   presentedEntity,
+  sessionComposerLink,
   taskHelpers,
 } from "../entity-state.ts";
 import type {
@@ -79,47 +80,22 @@ Deno.test("live-work helper counts omit zero and agree with their verbs", () => 
   );
 });
 
-Deno.test("composer link is absent without either pill", () => {
-  assertEquals(work.composerLinkState(undefined, 0), "none");
-});
-
-Deno.test("composer link is idle with an undelivered helper and no shells", () => {
+Deno.test("composer link and helper lamp read separate published scopes", () => {
   const store = createEntityStateStore({
     read: () => ({
       "task:root": { ...presentedEntity("task", "root", "working"), helpers },
-      "session:root": presentedEntity("session", "root", "working"),
-      "session:helper": presentedEntity("session", "helper", "finished"),
+      "session:root": {
+        ...presentedEntity("session", "root", "working"),
+        composerLink: "running",
+      },
     }),
   });
   const roster = taskHelpers(store, "task:root");
   assertEquals(lamp(roster?.lamps?.all), "finished");
-  assertEquals(work.composerLinkState(roster, 0), "idle");
-});
-
-Deno.test("composer link runs when one helper works and another is blocked", () => {
-  assertEquals(
-    work.composerLinkState({
-      ids: ["working", "blocked"],
-      counts: { running: 1, needsYou: 1, notReturned: 0 },
-    }, 0),
-    "running",
-  );
-});
-
-Deno.test("composer link runs with shells alone", () => {
-  assertEquals(work.composerLinkState(undefined, 1), "running");
-});
-
-Deno.test("composer link ignores stale task evidence", () => {
-  const store = createEntityStateStore({ read: () => undefined });
+  assertEquals(sessionComposerLink(store, "root"), "running");
+  assertEquals(sessionComposerLink(store, "missing"), "none");
   store.stale(true);
-  assertEquals(
-    work.composerLinkState(
-      taskHelpers(store, "task:session/root"),
-      0,
-    ),
-    "none",
-  );
+  assertEquals(sessionComposerLink(store, "root"), "none");
 });
 
 Deno.test("live-work stop capability and admission survive presentation replacement", async () => {

@@ -90,6 +90,59 @@ function owner() {
   return { entries, published, states, supervision, put, get, mature };
 }
 
+test("composer link owns native work and task helper activity independently of lamps", () => {
+  const o = owner(), link = () => o.states.composerLink(base.id);
+  o.put(base);
+  assertEquals(link(), "none");
+  o.states.operation(base.id, "working");
+  o.put(base);
+  assertEquals(o.get(base.id)?.state, "working");
+  assertEquals(link(), "none");
+  o.states.operation(base.id);
+  o.put({ ...base, activity: { work: keys("native-run") } });
+  assertEquals(o.get(base.id)?.evidence?.nativeRun, true);
+  assertEquals(link(), "running");
+  o.put({
+    ...base,
+    activity: {
+      work: {
+        ...keys("old-shell"),
+        items: [{
+          id: "old-shell",
+          kind: "shell",
+          label: "Shell",
+          title: "sleep",
+          startedAt: Date.now() - 7 * 86_400_000,
+        }],
+      },
+      inputs: keys("live-question"),
+    },
+  });
+  assertEquals(o.get(base.id)?.state, "blocked");
+  assertEquals(o.get(base.id)?.evidence?.nativeRun, undefined);
+  assertEquals(o.get(base.id)?.shells?.state, "working");
+  assertEquals(link(), "running");
+  o.put(base);
+  const helper = { ...base, id: "helper", parentID: base.id, directory: "/q" };
+  o.put({ ...helper, activity: { terminal: 70, outcome: "succeeded" } });
+  assertEquals(link(), "idle");
+  o.put({
+    ...helper,
+    activity: { work: keys("cross-checkout-run") },
+  });
+  o.put({
+    ...helper,
+    id: "waiting",
+    activity: { inputs: keys("another-question") },
+  });
+  assertEquals(o.get(base.id)?.state, "none");
+  assertEquals(link(), "running");
+  o.supervision.freshness(false);
+  o.put({ ...helper, activity: { work: keys("cross-checkout-run") } });
+  o.put({ ...helper, id: "waiting" });
+  assertEquals(link(), "none");
+});
+
 test("terminal dependencies stay independent of freshness and session lamps", () => {
   const o = owner();
   let running = 2;

@@ -78,6 +78,29 @@ test(
 );
 
 test(
+  "composer.header-link-moves-for-own-run-without-helpers-or-shells",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await openSession(state, page, root);
+    await expect(helpers(page)).toHaveCount(0);
+    await expect(shells(page)).toHaveCount(0);
+    await expect(link(page)).toHaveCount(0);
+
+    await activity(state, root, "hold");
+    await expect(page.locator(`[data-crumb="${root}"] .otk-status-light`))
+      .toHaveAttribute("data-state", "working");
+    await expect(helpers(page)).toHaveCount(0);
+    await expect(shells(page)).toHaveCount(0);
+    await expect(link(page)).toHaveAttribute("data-state", "running");
+    await expect.poll(() => animations(page)).toEqual(activeAnimation);
+
+    await activity(state, root, "release");
+    await expect(link(page)).toHaveCount(0);
+  },
+);
+
+test(
   "composer.finished-helper-does-not-inherit-the-running-main-lamp",
   tags,
   async ({ isolatedState: state, page }) => {
@@ -99,8 +122,10 @@ test(
       "data-state",
       /^(?:none|finished)$/,
     );
-    await expect.soft(link(page)).toHaveAttribute("data-state", "idle");
-    await expect.poll(() => animations(page)).toEqual([]);
+    // 2.104: the main's own run animates the connector without changing
+    // the helper pill's independent verdict.
+    await expect.soft(link(page)).toHaveAttribute("data-state", "running");
+    await expect.poll(() => animations(page)).toEqual(activeAnimation);
   },
 );
 

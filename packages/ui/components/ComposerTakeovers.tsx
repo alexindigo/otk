@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { composerLinkState, taskHelpers } from "@otk/client";
+import { sessionComposerLink, taskHelpers } from "@otk/client";
 import "./ComposerTakeovers.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
@@ -37,9 +37,7 @@ export default function ComposerTakeovers(
     const store = entities(), key = trail()?.task;
     return store && taskHelpers(store, key);
   });
-  const link = createMemo(() =>
-    composerLinkState(helpers(), shells()?.count ?? 0)
-  );
+  const link = () => sessionComposerLink(entities(), session.sessionID());
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);

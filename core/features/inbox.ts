@@ -262,6 +262,12 @@ export class InboxFeature implements FrameSource {
       hierarchy: this.index.hierarchy.node(entry.id, view.tasksFollowParent),
     };
   }
+  #sessionForView(id: string, selected?: string): EntityState | undefined {
+    const value = this.states.get(entityKey("session", id));
+    return value && id === selected
+      ? { ...value, composerLink: this.states.composerLink(id) }
+      : value;
+  }
   open(
     view: () => ViewLease,
     id: string,
@@ -303,7 +309,7 @@ export class InboxFeature implements FrameSource {
       seen: this.#seen.get(this.user)?.get(id),
       finish: this.#finishes.get(id),
 
-      entity: this.states.get(entityKey("session", id)),
+      entity: this.#sessionForView(id, view().selected),
     });
     // Facts follow lease admission. Each pass compares only the sessions it
     // names, so work stays proportional to changed rows, not to the lease.
@@ -437,6 +443,14 @@ export class InboxFeature implements FrameSource {
           change.sessionID === undefined ? [] : [change.sessionID]
         ),
       );
+      if (
+        scope.selected &&
+        (listingChanged ||
+          changes.some(({ value }) =>
+            value.op === "entity.upsert" && value.value.kind === "task" ||
+            value.op === "entity.remove" && value.key.startsWith("task:")
+          ))
+      ) sessions.add(scope.selected);
       // Task projection can scan the scope's catalog, so it runs only when a
       // task itself changed, never for every publication.
       emitOps([
@@ -1061,7 +1075,7 @@ export class InboxFeature implements FrameSource {
               (value.kind !== "task" || taskStates.has(value.id))
             ),
             ...[...leased].flatMap((id) => {
-              const value = this.states.get(entityKey("session", id));
+              const value = this.#sessionForView(id, view?.selected);
               return value ? [[entityKey("session", id), value] as const] : [];
             }),
           ]
