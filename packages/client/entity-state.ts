@@ -176,8 +176,15 @@ export function permissionVisible(
   store: EntityStateStore,
   sessionID: string,
   id: string,
+  presentation: "fresh" | "cached-draft" = "fresh",
 ): boolean {
-  return sessionEvidence(store, entityKey("session", sessionID))?.requests
+  // An already-admitted request may keep its unsent draft visible offline.
+  // Never use the cached verdict for notification or action admission.
+  const key = entityKey("session", sessionID);
+  const evidence = presentation === "cached-draft"
+    ? store.get(key)?.evidence
+    : sessionEvidence(store, key);
+  return evidence?.requests
     ?.permissions.some((request) => request.id === id) ?? false;
 }
 

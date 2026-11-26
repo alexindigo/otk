@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import type { CDPSession, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { expect } from "../fixtures/evidence.ts";
@@ -154,6 +155,7 @@ test(
           automaticID: string;
         };
         entries: { id: string; directory: string }[];
+        lists: { entries: IndexEntry[]; inbox: InboxSnapshot };
         content: { sessionID: string };
       }
     >();
@@ -1278,17 +1280,22 @@ test(
           "data-ready",
           "true",
         );
-        const members = Array.from({ length: 10 }, (_, i) => `session-${i}`);
+        const members = facts.lists.entries.map(({ id }) => id);
         for (const theme of manifest.themes) {
           await test.step(theme.id, async () => {
             await paint(theme);
             await page.setViewportSize({ width: 600, height: 800 });
             await page.evaluate(
-              `styleTest.lists(${
-                JSON.stringify(members)
-              },'session-9','session-7')`,
+              `styleTest.lists(...${
+                JSON.stringify([
+                  members,
+                  members[9],
+                  members[7],
+                  facts.lists,
+                ])
+              })`,
             );
-            const edit = page.locator('[data-crumb="session-7"] input');
+            const edit = page.locator(`[data-crumb="${members[7]}"] input`);
             await expect(edit).toHaveValue("session-7");
             await expect(edit).toBeFocused();
             const visible = () =>
@@ -1298,8 +1305,8 @@ test(
                 )
               );
             const shown = await visible();
-            expect(shown).toContain("session-9");
-            expect(shown).toContain("session-7");
+            expect(shown).toContain(members[9]);
+            expect(shown).toContain(members[7]);
             expect(shown).toEqual(members);
             expect(
               await edit.evaluate((el) => {
@@ -1326,7 +1333,7 @@ test(
               expect(Math.abs(actionAfter![key] - actionBefore![key]))
                 .toBeLessThanOrEqual(1);
             }
-            const more = page.locator(".otk-subagents > button"),
+            const more = page.getByRole("button", { name: /^Subagents:/ }),
               before = await more.boundingBox();
             await more.click();
             await expect(
@@ -1338,7 +1345,9 @@ test(
                 1,
               );
             }
-            const omitted = await page.locator("[data-subagent]")
+            const omitted = await page.locator(
+              ".otk-subagents .otk-subagent-row[data-subagent]",
+            )
               .evaluateAll((els) =>
                 els.map((el) => el.getAttribute("data-subagent")!)
               );

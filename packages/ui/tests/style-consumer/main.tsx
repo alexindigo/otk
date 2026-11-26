@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { render } from "@solidjs/web";
 import { CommandHub, SidecarConnection } from "@otk/client";
+import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import { CommandProvider } from "../../keyboard/context.tsx";
 import { createUiRegistries, UiProvider } from "../../registries/context.tsx";
 import { ThemeRegistry } from "../../theme/registry.ts";
@@ -35,7 +36,12 @@ const driver = {
   reserve: (_value: boolean) => {},
   collapse: (_value: boolean) => {},
   conceal: (_value: boolean) => {},
-  lists: (_members: string[], _selected?: string, _editing?: string) => {},
+  lists: (
+    _members: string[],
+    _selected?: string,
+    _editing?: string,
+    _publication?: { entries: IndexEntry[]; inbox: InboxSnapshot },
+  ) => {},
   createdSessions: () => 0,
   menuItems: (_keys: string[]) => {},
   feedback: (_state: "clear" | "pending" | "error") => {},

@@ -324,8 +324,12 @@ export class SidecarConnection {
       socket.onmessage = ({ data }) => {
         if (!current() || socket !== this.#socket) return;
         const frame: ServerFrame = JSON.parse(data);
+        // Inbox patches are one revision stream for this connection, across
+        // view changes. Let the inbox owner check sequence continuity; dropping
+        // an in-flight patch here silently converts later live facts to history.
         if (
-          frame.t !== "load.chunk" && frame.epoch !== undefined &&
+          frame.t !== "load.chunk" && frame.t !== "inbox.patch" &&
+          frame.epoch !== undefined &&
           frame.epoch < this.#view.epoch
         ) return;
         if (this.#policy) {

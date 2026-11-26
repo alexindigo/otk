@@ -40,8 +40,14 @@ for (const kind of ["question", "permission"] as const) {
       );
     }
     const original = await primary.elementHandle();
-    // Native inventory absence can settle the same request independently of its
-    // removal/result. Delay all settlement evidence while probing pending input.
+    // Hold the native permission reply before the owner can clear the request.
+    // Holding only the reply/content frames cannot delay an inbox verdict.
+    if (kind === "permission") {
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "hold",
+      });
+    }
     frames.hold((frame, request) =>
       (frame.t === "request.result" &&
         (request?.method === `${kind}.reply` ||
@@ -63,6 +69,11 @@ for (const kind of ["question", "permission"] as const) {
       frames.sent.filter(({ frame }) => frame.method === `${kind}.reply`);
     // Pending is visible during preparation; measure after the admitted frame.
     await expect.poll(() => replies().length).toBe(1);
+    if (kind === "permission") {
+      await expect.poll(async () =>
+        (await state.observe<{ replying: boolean }>()).replying
+      ).toBe(true);
+    }
     const before = await primary.evaluate(
       (node, original) => ({
         same: node === original,
@@ -108,6 +119,12 @@ for (const kind of ["question", "permission"] as const) {
     expect(before.same).toBe(true);
     expect(afterClick.same).toBe(true);
     frames.release();
+    if (kind === "permission") {
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "release",
+      });
+    }
     await expect(dock).toHaveCount(0);
     expect(replies()).toHaveLength(1);
     await expect(input).toBeVisible();
