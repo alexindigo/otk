@@ -31,7 +31,8 @@ export async function selectionGeometry(
         const p=mark?getComputedStyle(mark):getComputedStyle(this,vertical?'::before':'::after'),s=getComputedStyle(this),selected=this.classList.contains('is-selected');
         if(tree&&tree.classList.contains('has-selection')!==selected)throw Error('External mark selection differs from row');
         this.classList.toggle('is-selected');if(tree)tree.classList.toggle('has-selection');const other=frame.getBoundingClientRect();this.classList.toggle('is-selected');if(tree)tree.classList.toggle('has-selection');
-        return {orientation:this.dataset.otkSelection,external,selected,rect:r.toJSON(),fill:s.backgroundColor,paint:p.backgroundColor,shift:Math.max(Math.abs(r.width-other.width),Math.abs(r.height-other.height)),position:p.position,radius:p.borderRadius,ariaSelected:this.getAttribute('aria-selected'),ariaCurrent:this.getAttribute('aria-current'),ariaPressed:this.getAttribute('aria-pressed')};
+        const rail=tree?.classList.contains('is-flat')?frame.querySelector(':scope > .otk-tree-rails'):null;
+        return {orientation:this.dataset.otkSelection,external,railWidth:rail?.getBoundingClientRect().width??0,selected,rect:r.toJSON(),fill:s.backgroundColor,paint:p.backgroundColor,shift:Math.max(Math.abs(r.width-other.width),Math.abs(r.height-other.height)),position:p.position,radius:p.borderRadius,ariaSelected:this.getAttribute('aria-selected'),ariaCurrent:this.getAttribute('aria-current'),ariaPressed:this.getAttribute('aria-pressed')};
       }`,
       },
     ) as {
@@ -95,6 +96,7 @@ export async function selectionGeometry(
 export interface SelectionGeometry {
   orientation: string;
   external?: boolean;
+  railWidth: number;
   selected: boolean;
   w: number;
   h: number;

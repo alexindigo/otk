@@ -852,12 +852,12 @@ SessionView; Message exposes a reveal control that scrolls and focuses its own
 bubble, while the viewport suspends tail following for that explicit navigation.
 No panel reads another component's DOM or maintains a second transcript store.
 
-Sessions and Timeline use the same `ListRow` frame: shared 30px height,
-selection pointer, highlight bounds, padding and leading/label/trailing slots.
-Consumers inject content and callbacks. Timeline's trailing slot borrows the
-same persistent MessageFooter as the transcript, with no clock/action hover
-swap. Action hit targets do not move, and the label has no independent inset
-hover highlight.
+Projects, Sessions, and Timeline use `SidebarRow` for the row track, highlight,
+and inner gutters. `TreeNode` owns the selection pointer and the indentation of
+nested rows; Timeline prompts are flat. Consumers inject content and callbacks.
+Timeline's meta slot borrows the same persistent MessageFooter as the
+transcript, with no clock/action hover swap. Action hit targets do not move, and
+the label has no independent inset hover highlight.
 
 ListRow's `--list-row-height` is also its editing control track. Primary
 leading, input and trailing slots share that track while validation prose wraps
