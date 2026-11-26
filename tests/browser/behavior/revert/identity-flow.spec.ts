@@ -213,15 +213,16 @@ test("revert.identity-confirmation-preservation-and-in-flow-geometry", {
   await input.press("Enter");
   const choice = page.locator(".otk-permanence-choice");
   await expect(choice).toContainText("Sending makes the revert permanent");
-  await expect(choice.locator(".otk-failure-heading strong")).toHaveText(
+  await expect(choice.locator(".otk-failure-heading")).toHaveText(
     "Sending makes the revert permanent",
   );
   await expect(input).toHaveValue("Replacement after a saved copy");
   await capture("failed-send");
   await choice.getByRole("button", { name: "Save copy", exact: true }).click();
-  await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
-    "The replacement was not sent.",
-  );
+  await expect(choice.locator(".otk-failure-summary-reason:visible"))
+    .toHaveText(
+      "The replacement was not sent.",
+    );
   await expect(choice).not.toContainText(/localStorage|\bbytes\b|5 MB/);
   const failedGroup = page.locator(".otk-revert-group");
   await failedGroup.locator(".otk-record-group-toggle").click();

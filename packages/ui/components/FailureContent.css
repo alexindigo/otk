@@ -110,13 +110,32 @@
   border: 0;
   padding: 0;
 }
-.otk-failure-reference {
+.otk-failure-content.is-reference .otk-failure-reference {
   grid-column: 1 / -1;
   justify-self: start;
   padding: 0;
   text-align: start;
   text-decoration: underline;
   font-weight: inherit;
+}
+.otk-failure-content.is-feedback {
+  container-type: normal;
+}
+.otk-failure-content.is-feedback .otk-failure-heading,
+.otk-failure-content.is-feedback .otk-failure-summary-reason {
+  display: inline;
+  color: var(--otk-fg-2);
+}
+.otk-failure-content.is-feedback .otk-failure-disclosed-reason {
+  display: block;
+}
+.otk-failure-detail-track {
+  display: grid;
+  grid-template-columns: var(--control-size) minmax(0, 1fr);
+  column-gap: var(--space-2);
+}
+.otk-failure-detail-track > * {
+  grid-column: 2;
 }
 .otk-failure-disclosed-reason,
 .otk-failure-content.is-compact .otk-failure-main-reason {
