@@ -14,6 +14,7 @@ import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
 import { clockText, clockTitle } from "./Clock.tsx";
 import ContentSlot from "./ContentSlot.tsx";
 import FailureSignal from "./FailureSignal.tsx";
+import { ActivityIcon } from "./ChromeIcons.tsx";
 import { discloseInViewport } from "./viewport.ts";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
@@ -65,7 +66,7 @@ export default function ActivityGroup(props: {
   );
   const heading = (toggleID: string) => (
     <>
-      <TreeIcon>{props.icon?.()}</TreeIcon>
+      <TreeIcon>{props.icon?.() ?? <ActivityIcon />}</TreeIcon>
       <Show when={props.group.entity}>
         {(entity) => (
           <EntityPill

@@ -54,7 +54,7 @@ import {
   treeLayoutKey,
 } from "@otk/protocol";
 import UsageCost from "./UsageCost.tsx";
-import { PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
+import { PlusIcon, SearchIcon, SessionsIcon } from "./ChromeIcons.tsx";
 import {
   ownedAction,
   ownedCommand,
@@ -304,7 +304,6 @@ export default function ProjectSessions(props: {
         <TreeNode
           path={item().path}
           class="otk-session-tree otk-sidebar-tree"
-          leadingRow
           selected={selected()}
           open={disclosure()?.open() ?? true}
           hasChildren={item().hasChildren}
@@ -331,7 +330,7 @@ export default function ProjectSessions(props: {
               }}
               lamp={
                 <TreeIcon>
-                  <Show when={entry()}>
+                  <Show when={entry()} fallback={<SessionsIcon />}>
                     <StatusLight state={lamp(entities(), stateKey)} />
                   </Show>
                 </TreeIcon>
@@ -523,7 +522,7 @@ export default function ProjectSessions(props: {
                         onOpen={(value) => void disclosure()?.set(value)}
                         leading={() => (
                           <TreeIcon>
-                            <Show when={group}>
+                            <Show when={group} fallback={<SessionsIcon />}>
                               <StatusLight
                                 state={lamp(
                                   entities(),

@@ -17,7 +17,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
-  /** Preserve the full measured row's intrinsic width in a wrapping action strip. */
+  /** Size to the measured items, bounded by the available inline space. */
   intrinsic?: boolean;
   /** Compact navigation trails fold optional items; they never grow more rows. */
   singleLine?: boolean;
@@ -33,12 +33,13 @@ export default function OverflowRow<T extends { key: string }>(props: {
   children(item: () => T, compact: () => boolean): Element;
   more(keys: () => readonly string[]): Element;
 }): Element {
-  let root!: HTMLDivElement, sizing!: HTMLSpanElement;
+  let root!: HTMLDivElement, strip!: HTMLDivElement, sizing!: HTMLSpanElement;
   const frames = new Map<string, HTMLElement>();
   const compactFrames = new Map<string, HTMLElement>();
   const liveFrames = new Map<string, HTMLElement>();
   const [measurements, setMeasurements] = createSignal({
     available: 0,
+    intrinsic: undefined as number | undefined,
     widths: new Map<string, number>(),
     compactWidths: undefined as Map<string, number> | undefined,
     gap: 0,
@@ -73,13 +74,17 @@ export default function OverflowRow<T extends { key: string }>(props: {
     }
     const next = {
       available: root.getBoundingClientRect().width,
+      intrinsic: props.intrinsic
+        ? strip.getBoundingClientRect().width
+        : undefined,
       widths,
       compactWidths,
       gap: parseFloat(css.columnGap) || 0,
       moreWidth: sizing.getBoundingClientRect().width,
     };
     setMeasurements((old) =>
-      old.available === next.available && old.gap === next.gap &&
+      old.available === next.available && old.intrinsic === next.intrinsic &&
+        old.gap === next.gap &&
         old.moreWidth === next.moreWidth && props.items.every((item) =>
           old.widths.get(item.key) === widths.get(item.key) &&
           old.compactWidths?.get(item.key) === next.compactWidths?.get(item.key)
@@ -91,6 +96,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
   onSettled(() => {
     observer = new ResizeObserver(measure);
     observer.observe(root);
+    observer.observe(strip);
     observer.observe(sizing);
     for (const frame of frames.values()) observer.observe(frame);
     for (const frame of compactFrames.values()) observer.observe(frame);
@@ -154,12 +160,22 @@ export default function OverflowRow<T extends { key: string }>(props: {
           snapshot().mode === "collapsed",
         "is-progressive": !!props.compactMeasure,
       }]}
+      style={{
+        "--overflow-intrinsic": measurements().intrinsic === undefined
+          ? undefined
+          : `${measurements().intrinsic}px`,
+      }}
       data-fit-mode={snapshot().mode}
       ref={(e) => root = e}
       onPointerDown={() => setGesture(fitted())}
       onPointerCancel={() => setGesture(undefined)}
     >
-      <div class="otk-overflow-measure" aria-hidden="true" inert>
+      <div
+        class="otk-overflow-measure"
+        ref={(e) => strip = e}
+        aria-hidden="true"
+        inert
+      >
         <For each={props.items} keyed={(item) => item.key}>
           {(item) => {
             let element: HTMLElement;
