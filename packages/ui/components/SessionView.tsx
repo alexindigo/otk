@@ -532,7 +532,7 @@ export default function SessionView(props: {
       const interval = recordGroups().groups[recordOwner];
       const completionOf = interval?.silent ? interval.completionOf : undefined;
       if (completionOf) {
-        interaction.workDisclosure(completionOf, [interval.key]).set(true);
+        interaction.workDisclosure(completionOf).set(true);
       }
       if (recordOwner && part?.kind === "external" && part.activity?.fold) {
         recordKindDisclosure(interaction, recordOwner, part.activity.category)
@@ -997,8 +997,6 @@ export default function SessionView(props: {
                                                         key,
                                                       )
                                                       ? {
-                                                        key: logCompletion(key)!
-                                                          .key,
                                                         body: () =>
                                                           renderRecords(
                                                             () =>

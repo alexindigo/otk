@@ -11,7 +11,6 @@ export default function Scene() {
         <h2>Independent work log</h2>
         <WorkLog
           owner="style-siblings"
-          records={["work"]}
           body={() => <p>Owned work content</p>}
         />
         <RevertGroup

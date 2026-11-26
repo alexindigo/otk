@@ -223,7 +223,6 @@ export default function FailureLayout() {
         <h3>Work and source</h3>
         <WorkLog
           owner="style-failure"
-          records={["work"]}
           body={() => <p>Owned work content remains available.</p>}
         />
         <Reasoning

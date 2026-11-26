@@ -133,6 +133,60 @@ const policy = {
   concurrency: 4,
 };
 
+Deno.test("work-log intent outlives step removal but not deletion of the reply", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    let seq = 0;
+    const apply = (event: ContentOp) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: ++seq },
+        event,
+      }, true);
+    const step: Message = {
+      id: "first",
+      sessionID: "a",
+      role: "assistant",
+      replyTo: "a-079",
+      model: { provider: "test", model: "test" },
+      agent: "build",
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      time: { created: 80 },
+      parts: [],
+    };
+    apply({ op: "message.upsert", message: step });
+    apply({ op: "message.upsert", message: { ...step, id: "last" } });
+    const transcript = f.owner.get(target("a"))!;
+    const key = transcript.projection.entry(step.id)!.key;
+    const disclosure = transcript.interaction.workDisclosure(key);
+    disclosure.set(true);
+    apply({ op: "message.remove", messageID: step.id });
+    assertEquals(disclosure.value(), true);
+    apply({ op: "message.remove", messageID: "last" });
+    assertEquals(disclosure.value(), undefined);
+    apply({ op: "message.upsert", message: step });
+    disclosure.set(true);
+    assertEquals(transcript.interaction.workDisclosure(key).value(), undefined);
+  } finally {
+    f.stop();
+  }
+});
+
 for (
   const replacement of [
     "same",

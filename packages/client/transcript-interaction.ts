@@ -26,7 +26,9 @@ export interface TranscriptInteraction {
     prefs?: Partial<Preferences>,
   ): boolean;
   disclosure(key: string, generation: string): Disclosure;
-  workDisclosure(scope: string, records: readonly string[]): Disclosure;
+  /** Work-log disclosure belongs to the reply's work-log identity;
+   * member records only populate the log. */
+  workDisclosure(scope: string): Disclosure;
   subscribeWork(scope: string, listener: () => void): () => void;
   retire(key: string): void;
   subscribe(listener: () => void, key: string): () => void;
@@ -40,10 +42,12 @@ export interface TranscriptInteraction {
 }
 export function createTranscriptInteraction(): TranscriptInteraction {
   const choices = new Map<string, { generation: string; open?: boolean }>();
-  type WorkIntent = { order: number; open: boolean };
-  const workGroups = new Map<string, Map<string, WorkIntent>>();
+  type WorkIntent = { open: boolean };
+  const workIntents = new Map<string, WorkIntent>();
   const workKey = (scope: string) => JSON.stringify(["work", scope]);
-  let workOrder = 0, lifetime = 0;
+  const workIntentKey = (scope: string, generation: string) =>
+    JSON.stringify([workKey(scope), generation]);
+  let lifetime = 0;
   const generations = new Map<string, number>();
   const windows = new Map<string, Map<string, number>>();
   const listeners = new Map<string, Set<() => void>>();
@@ -119,44 +123,21 @@ export function createTranscriptInteraction(): TranscriptInteraction {
     subscribeWork(scope, listener) {
       return this.subscribe(listener, workKey(scope));
     },
-    workDisclosure(scope, records) {
-      const key = workKey(scope);
+    workDisclosure(scope) {
+      const generation = this.generation(scope);
+      const key = workIntentKey(scope, generation);
       const epoch = lifetime;
-      const members = records.map((id) => ({ id, key: this.generation(id) }));
       const current = () =>
-        epoch === lifetime &&
-        members.every(({ id, key }) => this.generation(id) === key);
-      const value = () => {
-        if (!current()) return;
-        const assigned = workGroups.get(key);
-        if (!assigned) return;
-        let latest: WorkIntent | undefined;
-        for (const member of members) {
-          const intent = assigned.get(member.key);
-          if (intent && (!latest || intent.order > latest.order)) {
-            latest = intent;
-          }
-        }
-        // A newly admitted member borrows the existing group's choice, not
-        // its position in the layout. Unrelated work has no matching member.
-        if (latest) {
-          for (const member of members) {
-            if (!assigned.has(member.key)) assigned.set(member.key, latest);
-          }
-        }
-        return latest?.open;
-      };
+        epoch === lifetime && generation === this.generation(scope);
+      const value = () => current() ? workIntents.get(key)?.open : undefined;
       return {
         value,
         expanded: (category, prefs, required = false) =>
           value() ?? (required || defaultFor(category, prefs)),
         set(open) {
-          if (!members.length || !current()) return;
-          let assigned = workGroups.get(key);
-          if (!assigned) workGroups.set(key, assigned = new Map());
-          const intent = { order: ++workOrder, open };
-          for (const member of members) assigned.set(member.key, intent);
-          publish(key);
+          if (!current()) return;
+          workIntents.set(key, { open });
+          publish(workKey(scope));
         },
       };
     },
@@ -165,6 +146,7 @@ export function createTranscriptInteraction(): TranscriptInteraction {
     },
     generation: (id) => `${id}:${generations.get(id) ?? 0}`,
     retireIdentity(id) {
+      workIntents.delete(workIntentKey(id, this.generation(id)));
       generations.set(id, (generations.get(id) ?? 0) + 1);
     },
     measurements(window) {
@@ -190,7 +172,7 @@ export function createTranscriptInteraction(): TranscriptInteraction {
     },
     clear() {
       choices.clear();
-      workGroups.clear();
+      workIntents.clear();
       lifetime++;
       generations.clear();
       windows.clear();
