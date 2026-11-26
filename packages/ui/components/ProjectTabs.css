@@ -58,6 +58,7 @@
 .otk-breadcrumb-row {
   display: flex;
   flex-wrap: nowrap;
+  container: otk-session-header / inline-size;
   min-height: var(--row-compact);
   padding: 0 var(--lane-gutter);
   color: var(--otk-fg-3);
@@ -81,6 +82,26 @@
   font-size: var(--text-meta);
   margin-left: auto;
   gap: var(--space-3);
+  white-space: nowrap;
+}
+.otk-context-fit {
+  flex: none;
+}
+/* Reserve room for the trail by yielding usage items as complete values. */
+@container otk-session-header (inline-size < 32em) {
+  .otk-context-meter .otk-context-bar {
+    display: none;
+  }
+}
+@container otk-session-header (inline-size < 23em) {
+  .otk-context-meter[data-tokens] .otk-usage-cost {
+    display: none;
+  }
+}
+@container otk-session-header (inline-size < 14em) {
+  .otk-context-fit {
+    display: none;
+  }
 }
 .otk-open-session-title {
   display: flex;
