@@ -12,6 +12,7 @@ import {
 } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { composerHeaderErrors } from "./composer-header.ts";
+import { containerChromeErrors } from "./container-chrome.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
 import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
@@ -1805,6 +1806,31 @@ Deno.test("UI convention: message footer rejects concealed metadata and independ
     ),
     [],
   );
+});
+
+Deno.test("UI convention: container chrome work-log intent belongs to the reply", async () => {
+  const files = (source: string) => new Map([["Fixture.tsx", source]]);
+  assertEquals(
+    containerChromeErrors(files('interaction.workDisclosure("reply", ["a"])')),
+    ["Fixture.tsx:1: workDisclosure must not take members"],
+  );
+  assertEquals(
+    containerChromeErrors(
+      files('retainedWorkDisclosure("reply", members, prefs, required)'),
+    ),
+    ["Fixture.tsx:1: retainedWorkDisclosure must not take members"],
+  );
+  assertEquals(
+    containerChromeErrors(files('interaction.workDisclosure("reply")')),
+    [],
+  );
+  assertEquals(
+    containerChromeErrors(
+      files('retainedWorkDisclosure("reply", prefs, required)'),
+    ),
+    [],
+  );
+  assertEquals(containerChromeErrors(await productionSources()), []);
 });
 
 Deno.test("UI convention: header clock ownership follows component roles and extracted renderers", async () => {

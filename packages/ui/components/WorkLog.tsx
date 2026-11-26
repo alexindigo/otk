@@ -12,7 +12,6 @@ import { discloseInViewport } from "./viewport.ts";
 export default function WorkLog(
   props: {
     owner: string;
-    records: readonly string[];
     prefs?: Preferences;
     required?: boolean;
     meta?(primary: () => Element): Element;
@@ -21,7 +20,6 @@ export default function WorkLog(
 ): Element {
   const [open, setOpen] = retainedWorkDisclosure(
     props.owner,
-    () => props.records,
     () => props.prefs ?? {},
     () => !!props.required,
   );
