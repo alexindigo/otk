@@ -72,7 +72,16 @@ test("messages.historical-reply-facts-keep-scope-while-session-works", {
     });
   }
   await page.keyboard.press("Escape");
-  await replies.last().locator(".otk-entity-pill").first().focus();
+  // Reading history suspended tail following. Return through the viewport
+  // owner so the virtualized prose and its focus target are mounted again.
+  await page.keyboard.press("Control+k");
+  await page.locator("input[name=command-search]").fill("Jump to latest");
+  await page.locator('[data-command="transcript.latest"]').click();
+  const latestReply = replies.filter({
+    hasText: "Second reply still running.",
+  });
+  await expect(latestReply).toBeVisible();
+  await latestReply.locator(".otk-entity-pill").first().focus();
   await expect(page.locator(".otk-entity-facts:visible").last()).toContainText(
     "This reply",
   );
@@ -100,6 +109,8 @@ test(
           exact: true,
         });
         await expect(capsule).toBeVisible();
+        await expect(capsule.locator(".otk-status-light:visible"))
+          .toHaveAttribute("data-state", "working");
         await capsule.click();
         const item = page.locator("[data-running-work^='shell/']");
         await expect(item).toContainText("sleep 120");

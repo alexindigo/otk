@@ -52,14 +52,6 @@ export function createLiveWork(input: {
   };
 }
 
-export function runningWorkLabel(items: readonly RunningWork[]): string {
-  return (["helper", "shell"] as const).flatMap((kind) => {
-    const count = items.filter((item) => item.kind === kind).length;
-    const label = kind === "helper" ? "subagent" : "shell";
-    return count ? [`${count} ${label}${count === 1 ? "" : "s"}`] : [];
-  }).join(", ");
-}
-
 /** Display order and vocabulary shared by every form of the same counts. */
 export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
   kind: HelperDisposition;

@@ -42,6 +42,42 @@ const activeAnimation = [{
 }];
 
 test(
+  "composer.running-shells-do-not-inherit-the-blocked-task-lamp",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const task = await state.product("tasks.create", {
+      directory: state.directory,
+      name: taskName,
+      sessions: [root],
+    });
+    await openSession(state, page, root);
+    await activity(state, root, "freeze");
+    const shellState = (action: "hold" | "release") =>
+      state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action,
+        target: "header-shells",
+      });
+    await shellState("hold");
+    const tabLamp = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
+    await expect(tabLamp).toHaveAttribute("data-state", "blocked");
+    const pill = shells(page);
+    await expect(pill).toHaveAccessibleName("Running work: 2 shells");
+    for (const selector of [".is-full", ".otk-live-count-compact"]) {
+      await expect(pill.locator(`${selector} .otk-status-light`))
+        .toHaveAttribute("data-state", "working");
+    }
+    await pill.click();
+    const list = page.getByRole("list", { name: "Running shells" });
+    await expect(list.getByRole("listitem")).toHaveCount(2);
+    await expect(list).toContainText("sleep 120");
+    await shellState("release");
+    await expect(pill).toHaveCount(0);
+    await expect(tabLamp).toHaveAttribute("data-state", "blocked");
+  },
+);
+
+test(
   "composer.finished-helper-does-not-inherit-the-running-main-lamp",
   tags,
   async ({ isolatedState: state, page }) => {

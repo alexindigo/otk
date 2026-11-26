@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./LiveCount.css" with { type: "text" };
-import { type EntityStateStore, lamp } from "@otk/client";
+import { lamp } from "@otk/client";
+import type { EntityLamp } from "@otk/protocol";
 import { For } from "solid-js";
 import StatusLight from "./StatusLight.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -9,19 +10,18 @@ export const LIVE_COUNT_TRIGGER = "otk-live-count-trigger";
 
 /** Layout shared by the composer's work pills. */
 export default function LiveCount(props: {
-  entities?: EntityStateStore;
-  lampKey?: string | readonly string[];
+  lamp?: EntityLamp;
   label: string;
   compact: readonly {
     id: string;
     count: number;
-    lampKey?: readonly string[];
+    lamp?: EntityLamp;
   }[];
 }) {
   return (
     <>
       <span class="otk-live-count is-full">
-        <StatusLight small state={lamp(props.entities, props.lampKey)} />
+        <StatusLight small state={lamp(props.lamp)} />
         <ChromeMeta class="otk-control-label">{props.label}</ChromeMeta>
       </span>
       <span class="otk-live-count-compact" aria-hidden="true">
@@ -30,7 +30,7 @@ export default function LiveCount(props: {
             <span class="otk-live-count">
               <StatusLight
                 small
-                state={lamp(props.entities, item().lampKey ?? props.lampKey)}
+                state={lamp(item().lamp)}
               />
               <ChromeMeta class="otk-control-label">{item().count}</ChromeMeta>
             </span>
