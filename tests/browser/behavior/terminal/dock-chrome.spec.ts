@@ -197,3 +197,81 @@ test("terminal.dock-chrome.zero-error-keeps-chrome", {
     await cleanup(state, id);
   }
 });
+
+test("terminal.dock-chrome.replace-expanded-with-commands", {
+  tag: "@terminal",
+}, async ({ state, page }) => {
+  const wire = observe(page);
+  const id = await open(state, page, "Replace expanded terminal");
+  try {
+    await viewport(page).click({ position: { x: 8, y: 8 } });
+    await page.keyboard.type("clear; printf 'kept-%s\\n\\n\\n' replacement");
+    await page.keyboard.press("Enter");
+    await expect(viewport(page)).toHaveAttribute(
+      "aria-label",
+      /kept-replacement/,
+    );
+    const expand = frame(page).getByRole("button", { name: "Expand terminal" });
+    await expand.click();
+    const expanded = dialog(page);
+    await expect(expanded.getByRole("textbox", { name: "Terminal input" }))
+      .toBeFocused();
+    await expanded.getByRole("button", { name: "Close Terminal" }).focus();
+    await page.keyboard.press("Control+k");
+
+    const commands = page.getByRole("dialog", {
+      name: "Commands",
+      exact: true,
+    });
+    await expect(commands.getByRole("textbox", { name: "Find a command" }))
+      .toBeFocused();
+    await expect(dock(page)).toBeVisible();
+    await expect(dock(page)).not.toHaveAttribute("hidden", "");
+    // The composer is visually present, but inert until the modal closes.
+    await expect(
+      composer(page).getByRole("button", {
+        name: "Hide terminal",
+        includeHidden: true,
+      }),
+    ).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(commands).toHaveCount(0);
+    await chrome(page, 1, false);
+    await expect(expand).toBeFocused();
+    await expect(viewport(page)).toHaveAttribute(
+      "aria-label",
+      /kept-replacement/,
+    );
+    expect(wire.sockets).toBe(1);
+    expect(wire.attaches).toBe(1);
+  } finally {
+    await cleanup(state, id);
+  }
+});
+
+test("terminal.dock-chrome.dialog-close-command-collapses", {
+  tag: "@terminal",
+}, async ({ state, page }) => {
+  const wire = observe(page);
+  const id = await open(
+    state,
+    page,
+    "Close expanded terminal programmatically",
+  );
+  try {
+    const mount = frame(page).locator(".otk-terminal-mount");
+    const terminal = await mount.getAttribute("data-terminal");
+    expect(terminal).toBeTruthy();
+    await frame(page).getByRole("button", { name: "Expand terminal" }).click();
+    await chrome(page, 1, true);
+    // Close the native dialog directly, bypassing the X and Escape dismissal.
+    await dialog(page).evaluate((node: HTMLDialogElement) => node.close());
+    await chrome(page, 1, false);
+    await expect(mount).toHaveAttribute("data-terminal", terminal!);
+    expect(wire.sockets).toBe(1);
+    expect(wire.attaches).toBe(1);
+  } finally {
+    await cleanup(state, id);
+  }
+});

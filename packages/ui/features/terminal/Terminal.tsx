@@ -52,10 +52,7 @@ export function registerTerminalDialog(dialogs: DialogRegistry): void {
     id: "terminal",
     title: "Terminal",
     size: "editor",
-    dismiss: (input, close) => {
-      input.collapse();
-      close();
-    },
+    ended: (input) => input.collapse(),
     component: (props) => {
       let host!: HTMLDivElement;
       onSettled(() => {
@@ -315,15 +312,22 @@ function OpenTerminal(
   let dock!: HTMLDivElement,
     alive = true,
     dialog: { close(): void } | undefined;
-  let focusFrame = 0, pendingFocus: (() => void) | undefined;
+  let focusFrame = 0, pendingPrompt: (() => void) | undefined;
   const focus = () => {
     cancelAnimationFrame(focusFrame);
     focusFrame = requestAnimationFrame(() => {
       focusFrame = 0;
       if (!alive) return;
-      const action = pendingFocus ?? model.focus;
-      pendingFocus = undefined;
-      action();
+      // Deliver the selection even if a replacement modal now owns focus.
+      if (pendingPrompt) {
+        const add = pendingPrompt;
+        pendingPrompt = undefined;
+        add();
+        return;
+      }
+      const modal = document.querySelector("dialog:modal");
+      if (modal && !modal.contains(destination() ?? null)) return;
+      model.focus();
     });
   };
   const model = createTerminalPanel(
@@ -335,7 +339,7 @@ function OpenTerminal(
         shell.addToPrompt(text, label);
         return;
       }
-      pendingFocus = () => shell.addToPrompt(text, label);
+      pendingPrompt = () => shell.addToPrompt(text, label);
       props.box.collapse();
       focus();
     },

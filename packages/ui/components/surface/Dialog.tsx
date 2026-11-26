@@ -9,7 +9,9 @@ export default function Dialog(props: {
   id: string;
   title: string;
   size?: "form" | "standard" | "editor";
+  origin?: HTMLElement;
   onClose(): void;
+  onClosed?(): void;
   actions?: Element;
   children: Element;
 }): Element {
@@ -22,7 +24,7 @@ export default function Dialog(props: {
     run: () => props.onClose(),
   });
   onSettled(() => {
-    const prior = document.activeElement as HTMLElement | null;
+    const prior = props.origin ?? document.activeElement as HTMLElement | null;
     const originID = prior?.id;
     dialog.showModal();
     const release = ports.keyboard?.layer(`${props.id}.close`, () => true, 30);
@@ -34,6 +36,13 @@ export default function Dialog(props: {
         ? document.getElementById(originID) ?? prior
         : prior;
       if (origin?.isConnected) origin.focus();
+      if (
+        origin &&
+        (!origin.isConnected || document.activeElement === document.body) &&
+        ports.commands.enabled("prompt.focus")
+      ) {
+        void ports.commands.run("prompt.focus").catch(() => {});
+      }
     };
   });
   return (
@@ -49,6 +58,7 @@ export default function Dialog(props: {
         event.preventDefault();
         void close();
       }}
+      onClose={() => props.onClosed?.()}
     >
       <Surface
         layout="dialog"
