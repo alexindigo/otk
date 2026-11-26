@@ -30,10 +30,22 @@ import { authStatus, discoveryFailure } from "./discovery.ts";
 import { actionFeedback } from "./failure-features.ts";
 import { RequestLifetimes } from "./request-lifetime.ts";
 import type { SidecarState } from "./sidecars.ts";
+import { ReloadRefused } from "./reload.ts";
+import {
+  type ContinuityMemory,
+  graceElapsed,
+  lost,
+  outdated,
+  reached,
+  refused,
+  type ServerContinuity,
+  UNREACHABLE_GRACE_MS,
+  welcomed,
+} from "./server-continuity.ts";
 
 export type ConnectionInput = Pick<
   SidecarState,
-  "label" | "status" | "harness" | "error" | "feedback"
+  "label" | "status" | "harness" | "error" | "feedback" | "continuity"
 >;
 export type ConnectionLightState =
   | "updated"
@@ -48,6 +60,7 @@ export function connectionState(
 ): ConnectionLightState {
   if (!connection) return "disconnected";
   if (
+    connection.continuity?.kind === "updated" ||
     connection.status === "client outdated" ||
     connection.status === "protocol mismatch"
   ) return "updated";
@@ -75,6 +88,7 @@ export type ConnectionState =
   | "protocol mismatch";
 export interface ConnectionSink {
   defaults?(value: PublicDefaults): void;
+  continuity?(state: ServerContinuity): void;
   status(
     state: ConnectionState,
     error?: string,
@@ -85,7 +99,9 @@ export interface ConnectionSink {
 }
 export interface ConnectionOptions {
   /** Application-owned lossless reload; the transport never reloads the page. */
-  reload?(): void;
+  reload?(): void | Promise<void>;
+  page?: { build?: string };
+  graceMs?: number;
   /** Application-supplied policy before this server returns its own authority. */
   policy?: ClientRequestPolicy;
   /** UI adapters acknowledge accepted state after its render opportunity. */
@@ -128,6 +144,9 @@ export class SidecarConnection {
   #controller?: AbortController;
   #retry?: ReturnType<typeof setTimeout>;
   #silence?: ReturnType<typeof setTimeout>;
+  #grace?: ReturnType<typeof setTimeout>;
+  #continuity: ServerContinuity = { kind: "away", since: Date.now() };
+  #memory: ContinuityMemory;
   #attempt = 0;
   #invalidFailure?: string;
   #policy?: ClientRequestPolicy;
@@ -197,6 +216,7 @@ export class SidecarConnection {
     readonly options: ConnectionOptions = {},
   ) {
     this.base = options.api ?? apiBase(baseUrl);
+    this.#memory = { page: options.page };
     this.#policy = options.policy && clientRequestPolicyFrom(options.policy);
     const metadata = createRequestMetadata();
     this.requests = new RequestTracker({
@@ -222,6 +242,8 @@ export class SidecarConnection {
       fetcher: options.fetcher,
       policy: this.#policy,
     });
+    this.sink.continuity?.(this.#continuity);
+    this.#startGrace();
   }
   #bootstrap(control: RequestControl): boolean {
     if (control.t === "request") return control.ref.window === "bootstrap";
@@ -295,6 +317,8 @@ export class SidecarConnection {
       this.#policy = clientRequestPolicyFrom(auth.requests.policy);
       this.http.policy(this.#policy);
       if (auth.setupRequired || !auth.authenticated) {
+        this.#clearGrace();
+        this.#publish(reached(this.#continuity));
         this.requests.authenticationRequired();
         this.sink.status(
           auth.setupRequired ? "setup required" : "login required",
@@ -346,8 +370,12 @@ export class SidecarConnection {
           return;
         }
         if (frame.t === "welcome") {
+          const facts = {
+            protocol: frame.protocol,
+            build: frame.sidecar?.build,
+          };
           if (frame.protocol !== PROTOCOL_VERSION) {
-            this.#protocolMismatch();
+            this.#protocolMismatch(facts);
             return;
           }
           try {
@@ -355,9 +383,16 @@ export class SidecarConnection {
             this.#attachments = frame.attachments;
             this.#policy = clientRequestPolicyFrom(frame.requests.policy);
           } catch {
-            this.#protocolMismatch();
+            this.#protocolMismatch(facts);
             return;
           }
+          this.#clearGrace();
+          const result = welcomed(this.#continuity, this.#memory, {
+            build: frame.sidecar.build,
+            instance: frame.sidecar.instance,
+          });
+          this.#memory = result.memory;
+          this.#publish(result.state);
           this.#welcomed = true;
           this.#capabilities = new Set(welcomeCapabilities(frame));
           this.#attempt = 0;
@@ -373,7 +408,10 @@ export class SidecarConnection {
           this.sink.status("connected");
         }
         if (frame.t === "error" && frame.code === "protocol") {
-          this.#protocolMismatch();
+          this.#protocolMismatch({
+            protocol: frame.protocol,
+            build: frame.build,
+          });
           return;
         }
         this.rpc.receive(frame);
@@ -428,6 +466,8 @@ export class SidecarConnection {
   }
   #schedule(retryAfter = 0, feedback?: Feedback): void {
     if (this.#stopped) return;
+    this.#publish(lost(this.#continuity, Date.now()));
+    this.#startGrace();
     const attempt = this.#attempt++;
     if (this.#policy) {
       this.#retry = setTimeout(
@@ -442,6 +482,22 @@ export class SidecarConnection {
       );
     }
     this.sink.status("reconnecting", feedback?.text, undefined, feedback);
+  }
+  #publish(next: ServerContinuity): void {
+    if (next === this.#continuity) return;
+    this.#continuity = next;
+    this.sink.continuity?.(next);
+  }
+  #startGrace(): void {
+    if (this.#continuity.kind !== "away" || this.#grace !== undefined) return;
+    this.#grace = setTimeout(() => {
+      this.#grace = undefined;
+      this.#publish(graceElapsed(this.#continuity));
+    }, this.options.graceMs ?? UNREACHABLE_GRACE_MS);
+  }
+  #clearGrace(): void {
+    clearTimeout(this.#grace);
+    this.#grace = undefined;
   }
   #retire(): void {
     this.#selectionGeneration++;
@@ -460,35 +516,29 @@ export class SidecarConnection {
       socket.close();
     }
   }
-  #protocolMismatch(): void {
+  #protocolMismatch(facts: { protocol?: number; build?: string }): void {
     // Retire transport, not captured mutation/input custody. Reload owns that.
     this.#stopped = true;
     this.#retire();
     this.requests.clientOutdated();
-    const action = this.options.reload
-      ? {
-        label: "Reload",
-        run: () => {
-          try {
-            this.options.reload!();
-          } catch (cause) {
-            console.error("Reload checkpoint diagnostic", cause);
-            this.sink.status("client outdated", undefined, undefined, {
-              kind: "info",
-              text:
-                "OTK was updated. Your work could not be saved for Reload; this page has not reloaded. Finish pending file reads or free browser tab storage, then try again.",
-              action,
-            });
-          }
-        },
-      }
-      : undefined;
-    this.sink.status(
-      "client outdated",
-      undefined,
-      undefined,
-      { kind: "info", text: "OTK was updated", action },
-    );
+    this.#clearGrace();
+    this.#publish(outdated(this.#continuity, facts));
+    this.sink.status("client outdated");
+  }
+  async reload(): Promise<void> {
+    if (!this.options.reload) return;
+    this.#publish(refused(this.#continuity));
+    try {
+      await this.options.reload();
+    } catch (cause) {
+      console.error("Reload checkpoint diagnostic", cause);
+      this.#publish(refused(
+        this.#continuity,
+        cause instanceof ReloadRefused
+          ? cause.message
+          : "Your work could not be saved for Reload. This page has not reloaded.",
+      ));
+    }
   }
   async login(input: { username: string; password: string }): Promise<void> {
     await this.http.start("login", input, { owner: "login" }).result;
@@ -520,6 +570,7 @@ export class SidecarConnection {
   }
   stop(): void {
     this.#stopped = true;
+    this.#clearGrace();
     this.#retire();
     this.#subscriptions.clear();
     this.requests.stop();

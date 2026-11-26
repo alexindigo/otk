@@ -3,6 +3,9 @@ import {
   type ConnectionInput,
   errorFeedback,
   type Feedback,
+  LOCAL_SIDECAR,
+  SERVER_RELOAD_LABEL,
+  serverProblem,
 } from "@otk/client";
 
 export {
@@ -27,8 +30,22 @@ export function connectionLabel(connection?: ConnectionInput): string {
 }
 /** Present the connection owner's state, never invent another retry lifetime. */
 export function connectionFeedback(
-  connection: ConnectionInput,
+  connection: ConnectionInput & { id?: string },
+  reload?: () => void,
 ): Feedback | undefined {
+  const problem = serverProblem(
+    connection.continuity,
+    connection.id === LOCAL_SIDECAR || !connection.id
+      ? "OTK"
+      : connection.label,
+  );
+  if (problem) {
+    return {
+      kind: "info",
+      text: problem.refusal ?? problem.title,
+      action: reload && { label: SERVER_RELOAD_LABEL, run: reload },
+    };
+  }
   if (
     connection.status === "client outdated" ||
     connection.status === "protocol mismatch"

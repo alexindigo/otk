@@ -63,13 +63,15 @@ function decode(node: Encoded): unknown {
 export interface Reload {
   register(key: string, owner: ReloadOwner): () => void;
   checkpoint(): void;
-  run(): void;
+  run(): Promise<void>;
 }
+export class ReloadRefused extends Error {}
 /** A tab-local handoff, not a server receipt or permission to resubmit effects. */
 export function createReload(options: {
   key?: string;
   storage: Pick<Storage, "getItem" | "setItem"> | null;
   navigate(): void;
+  reachable?(): Promise<boolean>;
   owners?: Record<string, ReloadOwner>;
 }): Reload {
   const key = options.key ?? "otk.reload.v1";
@@ -128,8 +130,11 @@ export function createReload(options: {
   return {
     register,
     checkpoint,
-    run() {
+    async run() {
       checkpoint();
+      if (options.reachable && !(await options.reachable())) {
+        throw new ReloadRefused("Still unreachable. Page not reloaded.");
+      }
       options.navigate();
     },
   };

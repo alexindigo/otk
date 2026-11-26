@@ -33,6 +33,8 @@ const welcome: ServerFrame = {
   protocol: 13,
   sidecar: {
     version: "test",
+    build: "test",
+    instance: "test",
     harness: { kind: "test", version: "1", url: "http://127.0.0.1" },
   },
 };

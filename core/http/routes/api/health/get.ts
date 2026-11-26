@@ -10,6 +10,7 @@ const handler: Handler = (request, { app }) =>
       ok: true,
       version: SIDECAR_VERSION,
       protocol: PROTOCOL_VERSION,
+      build: app.build,
       harness: {
         kind: app.backend.core.kind,
         version: app.backend.core.version,

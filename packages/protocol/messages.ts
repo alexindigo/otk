@@ -63,6 +63,8 @@ type ServerMessage =
     };
     sidecar: {
       version: string;
+      build: string;
+      instance: string;
       harness: {
         kind: string;
         version: string;

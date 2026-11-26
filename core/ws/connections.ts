@@ -89,7 +89,9 @@ export class Connections {
     readonly prefs: Prefs<Preferences>,
     readonly rpc: RpcRegistry,
     readonly messages: MessagePolicy,
-    readonly requests: ConnectionRequests,
+    readonly requests: ConnectionRequests & {
+      server: Readonly<{ build: string; instance: string }>;
+    },
     readonly sources: readonly FrameSource[] = [],
     readonly diagnostics?: SectionObserver,
   ) {
@@ -387,7 +389,7 @@ export class Connections {
               code: "protocol",
               reason: "client-outdated",
               protocol: PROTOCOL_VERSION,
-              build: SIDECAR_VERSION,
+              build: this.requests.server.build,
             });
             ws.close(1000, "OTK was updated");
             return;
@@ -423,6 +425,7 @@ export class Connections {
             },
             sidecar: {
               version: SIDECAR_VERSION,
+              ...this.requests.server,
               harness: {
                 kind: this.backend.core.kind,
                 version: this.backend.core.version,

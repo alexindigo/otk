@@ -27,7 +27,7 @@ test("public discovery reports exact fields and existing origin policy without a
   auth.authenticated = () => {
     throw new Error("Discovery must not inspect credentials");
   };
-  const server = await serve({ cfg: config, auth } as App);
+  const server = await serve({ cfg: config, auth, build: "test" } as App);
   const base = `http://127.0.0.1:${server.addr.port}`;
   try {
     for (
@@ -54,6 +54,7 @@ test("public discovery reports exact fields and existing origin policy without a
         product: "otk",
         protocol: PROTOCOL_VERSION,
         version: SIDECAR_VERSION,
+        build: "test",
         originAllowed,
         signIn: "login",
       });
@@ -75,7 +76,7 @@ test("discovery sign-in describes server requirements and never honours credenti
     const token = type === "password"
       ? await auth.local!.login("tester", "private-password")
       : "ignored";
-    const server = await serve({ cfg: config, auth } as App);
+    const server = await serve({ cfg: config, auth, build: "test" } as App);
     const base = `http://127.0.0.1:${server.addr.port}`;
     try {
       for (
@@ -100,6 +101,7 @@ test("discovery sign-in describes server requirements and never honours credenti
           product: "otk",
           protocol: PROTOCOL_VERSION,
           version: SIDECAR_VERSION,
+          build: "test",
           originAllowed: false,
           signIn,
         });
