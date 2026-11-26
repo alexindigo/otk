@@ -125,13 +125,17 @@ selected warm baseline uses the same callback. No view component owns background
 admission.
 
 ServerResources owns project/selection/crumb demand and visible Sessions keys.
-SidecarConnection retains that view across reconnects, sends it with hello and
-fences older scoped frames. Project changes incrementally acquire their entries
-and evict retired entries without deleting native or user metadata. Sessions
-borrows the project's structural catalog, keeps hierarchy/task grouping in its
-shared client owner and reports its VirtualList range; rows acquire scalar
-digests while only selection receives turn summaries. Standalone connections
-call `view({selected, crumbs: [], rows: []})` before connecting. Other projects
+SidecarConnection retains that view across reconnects and fences older scoped
+frames. Hello borrows the current lease; at welcome, the connection reconciles
+any newer intent before replaying subscription and request demand. A fresh index
+baseline and the peer's `view.ready` for the latest epoch precede the recovered
+status. First-page acceptance waits for that lease's acknowledgement before
+settling. Project changes incrementally acquire their entries and evict retired
+entries without deleting native or user metadata. Sessions borrows the project's
+structural catalog, keeps hierarchy/task grouping in its shared client owner and
+reports its VirtualList range; rows acquire scalar digests while only selection
+receives turn summaries. Standalone connections call
+`view({selected, crumbs: [], rows: []})` before connecting. Other projects
 remain visible through P3 summaries. Prompt recall uses only the currently
 viewed server/project.
 

@@ -33,6 +33,8 @@ export interface SidecarSpec {
 }
 export interface SidecarState extends SidecarSpec {
   status: ConnectionState;
+  /** Transport has welcomed; the current view's baselines are still attaching. */
+  attaching?: true;
   harness: HarnessState;
   continuity?: ServerContinuity;
   error?: string;
@@ -183,6 +185,7 @@ export function createSidecars(
             const item = draft.list.find((item) => item.id === spec.id);
             if (item) {
               item.status = status;
+              delete item.attaching;
               if (status === "connected") {
                 item.connectionVersion = (item.connectionVersion ?? 0) + 1;
               }
@@ -200,6 +203,7 @@ export function createSidecars(
               const item = draft.list.find((item) => item.id === spec.id);
               if (item) {
                 item.capabilities = [...welcomeCapabilities(frame)];
+                if (frame.viewAcknowledgements) item.attaching = true;
               }
             });
           }

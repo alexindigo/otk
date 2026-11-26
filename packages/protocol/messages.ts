@@ -54,6 +54,8 @@ type ServerMessage =
   | {
     t: "welcome";
     protocol: number;
+    /** This peer acknowledges each installed view after publishing its baselines. */
+    viewAcknowledgements?: true;
     messages: MessagePolicy;
     attachments?: AttachmentPolicy & { uploadbytes: number };
     requests: {
@@ -74,6 +76,7 @@ type ServerMessage =
     };
   }
   | { t: "harness"; state: HarnessState }
+  | { t: "view.ready"; epoch: number }
   | { t: "storage"; state: StorageState }
   | { t: "digest.progress"; values: import("./progress.ts").ProgressFacts[] }
   | { t: "ping" }

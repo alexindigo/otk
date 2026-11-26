@@ -131,6 +131,9 @@ acquisition and explicit eviction, separately from authoritative deletion. Only
 selection retains turn summaries; other leased entries carry scalar digest
 summaries. Feature-owned connection projections scope inbox tasks/marks and
 approval metadata. All projects retain their server-owned row/lamp summaries.
+The socket acknowledges an installed epoch with `view.ready` after its source
+baselines have been published. An overtaken baseline cannot acknowledge a newer
+lease. That acknowledgement is separate from first-page settlement.
 `sessions.list` supplies bounded project/query pages (20 by default, at most
 200), independently of catalog completeness. Cached rows publish through a
 request-correlated `load.chunk`; the ordinary result completes only that page's
