@@ -499,26 +499,35 @@ export class Transcript {
           ]);
           const anchor = work.anchor;
           const scan = forced || !unchanged;
-          if (scan && anchor && !points.has(anchor)) {
-            // A checkpoint only witnesses that exact head. A new head says
-            // nothing about edits to the previous anchor.
-            if (
-              JSON.stringify(work.checkpoint) === JSON.stringify(head) &&
-              anchor === head.id
-            ) {
-              if (!defer(anchor)) work.deferred.delete(anchor);
-            } else points.add(anchor);
-          }
+          if (scan && anchor) points.add(anchor);
           try {
             // In-place changes may target an older, acquired native identity.
             for (const point of points) {
-              if (!defer(point)) {
-                await publish([
-                  last?.id === point
-                    ? last
-                    : await this.reader.get(id, point, signal),
-                ]);
+              if (defer(point)) continue;
+              const checkpoint = work.checkpoint;
+              if (checkpoint?.id === point) {
+                const current = head.id === point
+                  ? head
+                  : await this.options.digest?.read("opcv2.transcript.head", {
+                    sessionID: id,
+                    cutoff,
+                    messageID: point,
+                  }, { owner: `v2-history:${id}`, priority: "user", signal });
+                if (defer(point)) continue;
+                if (
+                  current?.id === point && current.seq === checkpoint.seq &&
+                  current.updated === checkpoint.updated
+                ) {
+                  work.deferred.delete(point);
+                  work.checkpoint = undefined;
+                  continue;
+                }
               }
+              await publish([
+                last?.id === point
+                  ? last
+                  : await this.reader.get(id, point, signal),
+              ]);
             }
           } catch (error) {
             if (errorTag(error) !== "MessageNotFoundError") throw error;
@@ -683,11 +692,12 @@ export class Transcript {
         let witness: NativeHead | null = null;
         if (work && this.options.digest) {
           try {
-            // Capture before the body read: a later native edit must advance
-            // this witness and remain visible to history's ordinary repair.
+            // Witness the actual record, not the head (which can already be
+            // an idle boundary). A later edit invalidates this handoff.
             witness = await this.options.digest.read("opcv2.transcript.head", {
               sessionID: id,
               cutoff: this.#baselines.get(id)?.raw.revert?.messageID,
+              messageID: message,
             }, { owner: `v2-recovery:${id}`, priority: "user", signal });
           } catch (error) {
             signal.throwIfAborted();

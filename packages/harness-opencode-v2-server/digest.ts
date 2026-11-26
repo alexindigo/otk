@@ -1036,7 +1036,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           this.#source =
             `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
         } else await this.#ensure(input.sessionID, signal, false);
-        return this.transcript.head(input.sessionID, input.cutoff);
+        return this.transcript.head(
+          input.sessionID,
+          input.cutoff,
+          input.messageID,
+        );
       },
       "opcv2.message.prefetch": async (input, signal) => {
         await this.#ensure(input.sessionID, signal);
