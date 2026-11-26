@@ -16,12 +16,12 @@ function rowErrors(text: string, row = "ListRow"): string[] {
     ...(copied ? ["consumer owns row selection"] : []),
   ];
 }
-Deno.test("Timeline delegates to ListRow, and both sidebars delegate to SidebarRow", async () => {
+Deno.test("Timeline and both sidebars delegate to SidebarRow", async () => {
   for (
     const [name, row] of [["ProjectSessions", "SidebarRow"], [
       "ProjectInbox",
       "SidebarRow",
-    ], ["Timeline", "ListRow"]]
+    ], ["Timeline", "SidebarRow"]]
   ) {
     const base = `packages/ui/components/${name}`;
     assertEquals(
@@ -37,9 +37,12 @@ Deno.test("Timeline delegates to ListRow, and both sidebars delegate to SidebarR
       if (!/\.otk-(?:session|timeline)-row/.test(selector)) continue;
       assert(
         ![...declarations.keys()].some((key) =>
-          /^(?:height|min-height|padding)(?:-|$)/.test(key)
+          /^(?:height|min-height|block-size|min-block-size|padding)(?:-|$)/
+            .test(
+              key,
+            )
         ),
-        `${name}: shared row geometry belongs to ListRow`,
+        `${name}: shared row geometry belongs to ${row}`,
       );
     }
   }

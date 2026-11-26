@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import { menuGeometry } from "./overlays.ts";
+import { cssLength } from "../pages/css-length.ts";
 export async function nativeStates({
   state,
   page,
@@ -163,7 +164,7 @@ export async function nativeStates({
             getComputedStyle(el.querySelector(".otk-lamp-body")!).borderRadius,
           ];
         }),
-      ).toEqual([8, 0, "50%"]);
+      ).toEqual([await cssLength(marker, "--lamp-size"), 0, "50%"]);
       await shot(`native-interrupted-marker-${theme.id}`);
     }
   });

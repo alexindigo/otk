@@ -15,6 +15,7 @@ import { supplemental } from "./supplemental.ts";
 import { capture, restoreViewport } from "./capture.ts";
 import { stripGeometry } from "../pages/task-strip.ts";
 import { assertCrumbCoverage } from "../pages/crumbs.ts";
+import { cssLength } from "../pages/css-length.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -805,16 +806,14 @@ test(
           .toBeVisible();
         expect((await page.locator(".otk-task-strip").boundingBox())!.height)
           .toBe(52);
-        expect(
-          (await page.locator(".otk-project-row").first().boundingBox())!
-            .height,
-        ).toBe(32);
-        expect(
-          (await page.locator(".otk-session-row").first().boundingBox())!
-            .height,
-        ).toBe(30);
+        for (const kind of ["project", "session"]) {
+          const row = page.locator(`.otk-${kind}-row`).first();
+          expect((await row.boundingBox())!.height).toBe(
+            await cssLength(row, "--row-project"),
+          );
+        }
         await expect(
-          page.locator(".otk-session-branch, .otk-tree-guide").first(),
+          page.locator(".otk-session-tree .otk-tree-own").first(),
         ).toHaveText(
           "",
         );
@@ -902,14 +901,14 @@ test(
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-list-row-leading",
-                ".otk-list-row-label",
+                ".otk-sidebar-lamp",
+                ".otk-sidebar-label",
               );
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-list-row-leading",
-                ".otk-list-row-trailing",
+                ".otk-sidebar-lamp",
+                ".otk-sidebar-meta",
               );
               expect(
                 await page.locator(".otk-session-row .otk-session-title")
@@ -973,7 +972,7 @@ test(
               exact: true,
             }).fill("Retained editor");
             await page.keyboard.press("Enter");
-            await expect(page.locator(".otk-list-row-feedback [role=alert]"))
+            await expect(page.locator(".otk-sidebar-row-feedback [role=alert]"))
               .toBeVisible();
             await centers(
               page,
@@ -985,7 +984,7 @@ test(
               page,
               ".otk-session-row.is-editing",
               "input",
-              ".otk-list-row-trailing",
+              ".otk-sidebar-meta",
             );
             expect(
               await page.locator(".otk-project-session-tree").evaluate((el) =>
@@ -1073,7 +1072,8 @@ test(
                 const r = el.getBoundingClientRect(),
                   t = el.querySelector(".otk-session-title")!
                     .getBoundingClientRect();
-                return { left: r.left, text: t.left, height: r.height };
+                // Tree depth owns the outer indent; the row owns its gutter.
+                return { gutter: t.left - r.left, height: r.height };
               });
             await page.locator("[data-panel-view=timeline]").click();
             await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
@@ -1083,7 +1083,7 @@ test(
                 const r = el.getBoundingClientRect(),
                   t = el.querySelector(".otk-timeline-preview")!
                     .getBoundingClientRect();
-                return { left: r.left, text: t.left, height: r.height };
+                return { gutter: t.left - r.left, height: r.height };
               }),
             ).toEqual(session);
             const actions = () =>
