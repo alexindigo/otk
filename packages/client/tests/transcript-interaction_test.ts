@@ -34,39 +34,59 @@ Deno.test("disclosure notifications target only changed keys and reveal ancestry
   assertEquals(seen, []);
 });
 
-Deno.test("work intent survives a remount with a newly admitted prefix", () => {
+Deno.test("work intent survives a reply remount and overrides the default", () => {
   const owner = createTranscriptInteraction();
-  owner.workDisclosure("reply", ["edit"]).set(true);
-  const mounted = owner.workDisclosure("reply", ["reasoning", "edit"]);
+  owner.workDisclosure("reply").set(true);
+  const mounted = owner.workDisclosure("reply");
   assertEquals(mounted.expanded("work"), true);
-  assertEquals(
-    owner.workDisclosure("other-reply", ["edit"]).expanded("work"),
-    false,
-  );
-  assertEquals(
-    owner.workDisclosure("reply", ["unrelated"]).expanded("work"),
-    false,
-  );
+  assertEquals(owner.workDisclosure("other-reply").expanded("work"), false);
+  assertEquals(owner.workDisclosure("reply").expanded("work"), true);
   mounted.set(false);
   assertEquals(
-    owner.workDisclosure("reply", ["edit"]).expanded("work", {
+    owner.workDisclosure("reply").expanded("work", {
       expandWork: true,
     }),
     false,
   );
 });
 
-Deno.test("work intent can precede the first viewer and is not inherited by a reused native part", () => {
+Deno.test("work intent belongs to the reply and is retired with it", () => {
   const owner = createTranscriptInteraction();
-  const early = owner.workDisclosure("reply", ["edit"]);
+  const early = owner.workDisclosure("reply");
   early.set(true);
-  const first = owner.workDisclosure("reply", ["reasoning", "edit"]);
-  assertEquals(first.expanded("work"), true);
-  owner.retireIdentity("edit");
+  assertEquals(owner.workDisclosure("reply").expanded("work"), true);
+  owner.retireIdentity("reply");
+  assertEquals(early.value(), undefined);
   early.set(true);
-  assertEquals(owner.workDisclosure("reply", ["edit"]).expanded("work"), false);
+  assertEquals(owner.workDisclosure("reply").expanded("work"), false);
+});
+
+Deno.test("work intent survives zero members", () => {
+  const owner = createTranscriptInteraction();
+  owner.workDisclosure("reply").set(true);
+  // The first work record goes away; the reply identity is still current.
+  owner.retireIdentity("first");
+  assertEquals(owner.workDisclosure("reply").expanded("work"), true);
+  const remounted = owner.workDisclosure("reply");
+  assertEquals(remounted.expanded("work"), true);
+  remounted.set(false);
   assertEquals(
-    owner.workDisclosure("reply", ["reasoning"]).expanded("work"),
-    true,
+    owner.workDisclosure("reply").expanded("work", {
+      expandWork: true,
+    }),
+    false,
   );
+});
+
+Deno.test("clearing retires work handles even if the reply generation is reused", () => {
+  const owner = createTranscriptInteraction();
+  const old = owner.workDisclosure("reply");
+  old.set(true);
+  owner.clear();
+  const fresh = owner.workDisclosure("reply");
+  assertEquals(fresh.value(), undefined);
+  old.set(true);
+  assertEquals(fresh.value(), undefined);
+  fresh.set(true);
+  assertEquals(old.value(), undefined);
 });

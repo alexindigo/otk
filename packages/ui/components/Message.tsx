@@ -170,7 +170,7 @@ export default function Message(
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
     /** Injected disclosure for producer-owned successful completion facts. */
-    completion?: { key: string; body(): import("solid-js").Element };
+    completion?: { body(): import("solid-js").Element };
     usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
@@ -429,10 +429,6 @@ export default function Message(
                       render={(visible, meta) => (
                         <WorkLog
                           owner={props.ownerID ?? props.message.id}
-                          records={[
-                            ...group().parts.map((part) => part.id),
-                            ...(props.completion ? [props.completion.key] : []),
-                          ]}
                           prefs={props.prefs}
                           required={group().required}
                           meta={meta}
@@ -530,7 +526,6 @@ export default function Message(
                   <div class="otk-reply-end-work">
                     <WorkLog
                       owner={props.ownerID ?? props.message.id}
-                      records={[completion().key]}
                       prefs={props.prefs}
                       body={() => completion().body()}
                     />

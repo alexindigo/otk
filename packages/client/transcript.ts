@@ -386,6 +386,9 @@ export function createTranscript(
       outsideAcquiredRange(op, firstRetained(), acquired.next !== null)
     ) return content;
     if (op.op === "part.remove") interaction.retireIdentity(op.partID);
+    const removedReply = op.op === "message.remove"
+      ? projection.entry(op.messageID)?.key
+      : undefined;
     if (op.op === "message.remove") {
       interaction.retireIdentity(op.messageID);
       for (
@@ -417,6 +420,13 @@ export function createTranscript(
     }
     const recordBefore = projection.state.records;
     const projected = projection.apply(op);
+    // A native message may be one step of a reply. Retire the logical key
+    // only when the reply itself is deleted, not when one step is removed.
+    if (
+      op.op === "message.remove" && removedReply !== undefined &&
+      removedReply !== op.messageID &&
+      !projection.state.repliesByID[removedReply]
+    ) interaction.retireIdentity(removedReply);
     if (recordBefore !== projection.state.records) {
       const before = new Set(Object.values(recordBefore.parents).flat());
       const after = new Set(
