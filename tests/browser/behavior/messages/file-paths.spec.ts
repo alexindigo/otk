@@ -55,6 +55,29 @@ test(
     }
     await expect(dialog.getByRole("button", { name: "Open preview" }))
       .toHaveCount(0);
+    const close = dialog.getByRole("button", { name: /^Close / });
+    const geometry = await close.evaluate((button) => {
+      const control = button.getBoundingClientRect();
+      const frame = button.closest("dialog")!.getBoundingClientRect();
+      const probe = document.createElement("span");
+      probe.style.cssText = "position:absolute;inline-size:var(--control-size)";
+      button.append(probe);
+      const size = probe.getBoundingClientRect().width;
+      probe.remove();
+      return {
+        height: control.height,
+        width: control.width,
+        size,
+        insetDifference: Math.abs(
+          control.top - frame.top -
+            (frame.right - control.right),
+        ),
+      };
+    });
+    expect.soft(geometry.width).toBeCloseTo(geometry.size, 1);
+    expect.soft(geometry.height).toBeCloseTo(geometry.size, 1);
+    expect.soft(geometry.insetDifference).toBeLessThanOrEqual(1);
+    await expect(close.locator("svg")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(link).toBeFocused();
@@ -63,7 +86,7 @@ test(
     await expect(link).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(dialog).toBeVisible();
-    await page.keyboard.press("Escape");
+    await close.click();
     await expect(link).toBeFocused();
   },
 );
