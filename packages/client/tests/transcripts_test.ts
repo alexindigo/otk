@@ -262,6 +262,104 @@ Deno.test("reload retains removed-server sends without creating a transcript or 
   }
 });
 
+Deno.test("refetch reacquires older source after a same-version clock gap", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    assert(a.state.messagesByID["a-060"]);
+    const messages = f.messages("a");
+    messages[60].parts = [{
+      id: "edited",
+      kind: "text",
+      synthetic: false,
+      blocks: [{ b: "paragraph", inline: [{ i: "text", text: "edited" }] }],
+    }];
+    const page = (before?: string) =>
+      fixturePage("a", messages, before, undefined, {
+        epoch: "fixture",
+        seq: 40,
+      });
+    const refetch = a.refetch();
+    replyRequest(f.connection.rpc, f.requests.shift()!, page());
+    await refetch;
+    assertEquals(a.state.messagesByID["a-060"], undefined, "stale body");
+
+    const source = a.source("a-060", (part) => part.id);
+    const older = f.requests.shift()!;
+    assertEquals((older.params as { before?: string }).before, "fixture:70");
+    replyRequest(f.connection.rpc, older, page("fixture:70"));
+    assertEquals(await source, "edited");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("refetch reads every missing page before joining a disjoint range", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    assert(a.state.messagesByID["a-060"]);
+    const refetch = a.refetch();
+    await f.reply(0, 110);
+    await refetch;
+    const ids = f.messages("a", 110).map((m) => m.id);
+    assertEquals(a.state.messageIDs, ids.slice(100), "unproven join");
+
+    const history = a.ensure("a-060");
+    for (let start = 90; start >= 60; start -= 10) {
+      assertEquals(
+        (f.requests[0]?.params as { before?: string })?.before,
+        `fixture:${start + 10}`,
+      );
+      await f.reply(0, 110);
+      assertEquals(a.state.messageIDs, ids.slice(start));
+    }
+    await history;
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("native overlap preserves the acquired frontier when the head cursor shifts", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    const work = a.refetch();
+    // Newest 75..84 overlaps 70..79 without repeating its cursor (70).
+    await f.reply(0, 85);
+    await work;
+    assertEquals(
+      a.state.messageIDs,
+      f.messages("a", 85).slice(60).map((m) => m.id),
+    );
+    assertEquals(a.state.olderCursor, "fixture:60");
+    assertEquals(f.requests.length, 0);
+  } finally {
+    f.stop();
+  }
+});
+
 for (const boundary of ["baseline", "projection"]) {
   Deno.test(`content ${boundary} exceptions preserve their reason and reacquire canonical authority`, async () => {
     const f = fixture(policy);
@@ -1184,6 +1282,11 @@ Deno.test("warm live tails stay bounded, visited pages survive until cooling and
       "only visited identities plus the live tail survive",
     );
     assert(a.state.messagesByID["a-070"]);
+    assertEquals(
+      a.state.messageIDs,
+      f.messages("a", 180).slice(160).map((message) => message.id),
+      "warm custody does not join visited bodies across an evicted interval",
+    );
     f.time.advance(100);
     assertEquals(a.state.messageIDs, []);
     assertEquals(Object.keys(a.state.messagesByID), []);
