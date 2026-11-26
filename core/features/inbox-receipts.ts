@@ -38,7 +38,6 @@ function project(value: unknown): ProjectRecord {
   }
   return {
     directory: text(row, "directory")!,
-    order: number(row.order),
     added: row.added,
     inactive: row.inactive,
     lastVisit: number(row.lastVisit),

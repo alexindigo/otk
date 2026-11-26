@@ -18,6 +18,7 @@ import {
   upgradedManifest,
   userSnapshot,
 } from "../support/beta1-state.ts";
+import { withoutLegacyPositions } from "./project-order-upgrade.ts";
 import { DatabaseSync } from "node:sqlite";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
@@ -169,7 +170,9 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       // Native discovery may add current-user projects during ordinary startup;
       // every historical row must still match the independent upgrade manifest.
       for (
-        const [table, rows] of Object.entries(upgradedManifest(original.before))
+        const [table, rows] of Object.entries(
+          withoutLegacyPositions(upgradedManifest(original.before)),
+        )
       ) {
         for (const row of rows) {
           assert(

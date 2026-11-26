@@ -92,6 +92,7 @@ export class ProjectSummaries {
     }
     const affected = this.#reconcile(change, dirty);
     for (const seed of values) dirty.add(this.leaf(seed.directory));
+    this.admit?.(dirty, change.directories);
     this.#flush(dirty);
     this.retain(this.#known);
     return affected;
@@ -186,6 +187,10 @@ export class ProjectSummaries {
     readonly hierarchy?: SessionHierarchy,
     states?: EntityStates,
     clock?: EntityStates["clock"],
+    readonly admit?: (
+      directories: Iterable<string>,
+      revised?: Iterable<string>,
+    ) => void,
   ) {
     // Standalone summaries own a private, unpublished entity-state owner.
     this.states = states ?? new EntityStates(
@@ -264,6 +269,7 @@ export class ProjectSummaries {
     this.#contribute(entry, 1, directory);
     const dirty = new Set([directory, ...before ? [before.leaf] : []]);
     const affected = change.repos.size ? this.#reconcile(change, dirty) : [];
+    if (change.directories.size) this.admit?.([], change.directories);
     this.#flush(dirty);
     if (change.repos.size) this.retain(this.#known);
     return affected;
@@ -516,6 +522,7 @@ export class ProjectSummaries {
     if (
       JSON.stringify(summary) === JSON.stringify(this.values.get(directory))
     ) return;
+    if (!this.values.has(directory)) this.admit?.([directory]);
     this.values.set(directory, summary);
     this.publish(summary);
   }

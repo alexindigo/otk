@@ -7,11 +7,16 @@ export const projectsMigrations: FeatureMigrations = {
   migrations: [{
     version: 1,
     sql: new URL("./migrations/projects/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./migrations/projects/002.sql", import.meta.url),
+  }, {
+    version: 3,
+    sql: new URL("./migrations/projects/003.sql", import.meta.url),
   }],
 };
 export interface ProjectRecord {
   directory: string;
-  order: number;
   added: boolean;
   inactive: boolean;
   lastVisit: number;
@@ -45,7 +50,6 @@ export class Projects extends MetadataChanges<ProjectChange> {
   #record(r: Record<string, unknown>): ProjectRecord {
     return {
       directory: String(r.directory),
-      order: Number(r.position),
       added: !!r.added,
       inactive: !!r.inactive,
       lastVisit: Number(r.last_visit),
@@ -55,7 +59,7 @@ export class Projects extends MetadataChanges<ProjectChange> {
   discover(directory: string, tx?: StoreWrite): void {
     this.db.write((scope) => {
       const result = this.db.connection.prepare(
-        "INSERT OR IGNORE INTO project_directories SELECT ?, COALESCE(MAX(position)+1,0), ? FROM project_directories",
+        "INSERT OR IGNORE INTO project_directories(directory,discovered) VALUES (?,?)",
       ).run(key(directory), this.now());
       if (result.changes) {
         for (const user of new Set([...this.users(), ...this.#users])) {
@@ -70,8 +74,8 @@ export class Projects extends MetadataChanges<ProjectChange> {
     this.#users.add(user);
     this.db.write((scope) => {
       const rows = this.db.connection.prepare(
-        "WITH missing AS (SELECT d.directory,d.discovered,ROW_NUMBER() OVER (ORDER BY d.position,d.directory) AS ordinal FROM project_directories d WHERE NOT EXISTS (SELECT 1 FROM projects p WHERE p.user=? AND p.directory=d.directory)) INSERT INTO projects(user,directory,position,last_visit) SELECT ?,directory,COALESCE((SELECT MAX(position) FROM projects WHERE user=?),-1)+ordinal,discovered FROM missing RETURNING *",
-      ).all(user, user, user);
+        "INSERT INTO projects(user,directory,last_visit) SELECT ?,d.directory,d.discovered FROM project_directories d WHERE NOT EXISTS (SELECT 1 FROM projects p WHERE p.user=? AND p.directory=d.directory) ORDER BY d.discovered,d.directory RETURNING *",
+      ).all(user, user);
       if (rows.length) {
         this.changed({
           user,
@@ -83,7 +87,7 @@ export class Projects extends MetadataChanges<ProjectChange> {
   }
   list(user: string): ProjectRecord[] {
     return this.db.connection.prepare(
-      "SELECT * FROM projects WHERE user=? ORDER BY position, directory",
+      "SELECT * FROM projects WHERE user=? ORDER BY directory",
     ).all(key(user)).map((r) => this.#record(r));
   }
   get(user: string, directory: string): ProjectRecord {
@@ -105,8 +109,8 @@ export class Projects extends MetadataChanges<ProjectChange> {
     return this.db.write((scope) => {
       this.materialize(user, scope);
       this.db.connection.prepare(
-        "INSERT INTO projects(user,directory,position,added,last_visit) SELECT ?,?,COALESCE(MAX(position)+1,0),1,? FROM projects WHERE user=? ON CONFLICT(user,directory) DO UPDATE SET added=1",
-      ).run(user, key(directory), this.now(), user);
+        "INSERT INTO projects(user,directory,added,last_visit) VALUES (?,?,1,?) ON CONFLICT(user,directory) DO UPDATE SET added=1",
+      ).run(user, key(directory), this.now());
       const project = this.get(user, directory);
       this.#upsert(user, project, scope);
       return project;

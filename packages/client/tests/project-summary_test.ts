@@ -18,7 +18,6 @@ Deno.test("archive is independent of inactive policy; only live attention escape
       const inbox: InboxSnapshot = {
         projects: [{
           directory: "/tree",
-          order: 0,
           added: true,
           inactive,
           lastVisit: 0,
@@ -104,7 +103,6 @@ Deno.test("INV-A records have identical section and annotation in both projectio
           inactive,
           added: true,
           lastVisit: 1,
-          order: 0,
         });
         inbox.summaries![directory] = {
           directory,
@@ -189,7 +187,6 @@ Deno.test("deleted family members cannot keep project unread contributions", () 
         projects: tracked
           ? [{
             directory: "/p",
-            order: 0,
             added: true,
             inactive: false,
             lastVisit: 0,

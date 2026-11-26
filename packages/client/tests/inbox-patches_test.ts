@@ -9,7 +9,6 @@ import { createSessionTree } from "../session-tree.ts";
 const snapshot = (): InboxSnapshot => ({
   projects: [{
     directory: "/p",
-    order: 0,
     added: true,
     inactive: false,
     lastVisit: 1,

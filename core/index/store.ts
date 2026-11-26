@@ -60,6 +60,14 @@ export class IndexStore extends SessionIndex {
     (entry: IndexEntry, previous?: IndexEntry, delta?: DigestIndexDelta) => void
   >();
   #removals = new Set<(id: string) => void>();
+  #directories = new Set<(directories: Iterable<string>) => void>();
+  /** Admission runs after identity observation and before socket publication. */
+  observeDirectories(
+    listener: (directories: Iterable<string>) => void,
+  ): () => void {
+    this.#directories.add(listener);
+    return () => this.#directories.delete(listener);
+  }
   /** Explicit evictions are observed at their owner before wire publication. */
   observeRemoval(listener: (id: string) => void): () => void {
     this.#removals.add(listener);
@@ -115,6 +123,8 @@ export class IndexStore extends SessionIndex {
         listener(entry, previous);
       }
     }
+    const directories = new Set(entries.map((entry) => entry.directory));
+    for (const listen of this.#directories) listen(directories);
     this.rev++;
     // Observer writes are represented by this replacement snapshot too.
     this.#pending = [];
@@ -137,6 +147,9 @@ export class IndexStore extends SessionIndex {
     }
     for (const listener of this.#observers) {
       listener(entry, previous, delta);
+    }
+    if (entry.directory !== previous?.directory) {
+      for (const listen of this.#directories) listen([entry.directory]);
     }
     this.#queue(
       delta ? { op: "digest", ...delta } : { op: "upsert", entry },
