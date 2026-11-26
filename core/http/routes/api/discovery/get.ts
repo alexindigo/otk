@@ -9,6 +9,7 @@ const handler: Handler = (request, { app }) =>
     product: "otk",
     protocol: PROTOCOL_VERSION,
     version: SIDECAR_VERSION,
+    build: app.build,
     originAllowed: allowedOrigin(request._raw, app.cfg),
     signIn: app.auth.setupRequired
       ? "setup"

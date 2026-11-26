@@ -48,7 +48,7 @@ test("shared broadcasts and subscribed content encode once for sixteen consumers
     new Prefs(db, prefsOptions),
     rpc,
     fixtureMessagePolicy,
-    requests,
+    { ...requests, server: { build: "test", instance: "test" } },
     [],
     (name) => sections.push(name),
   );

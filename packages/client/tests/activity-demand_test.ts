@@ -55,6 +55,8 @@ Deno.test("Activity demand releases reads, ignores hidden invalidations and fenc
     messages: fixtureMessagePolicy,
     sidecar: {
       version: "test",
+      build: "test",
+      instance: "test",
       harness: { kind: "test", version: "1", url: "http://127.0.0.1" },
     },
   });

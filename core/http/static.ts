@@ -11,7 +11,7 @@ const types: Record<string, string> = {
   ".woff": "font/woff",
   ".json": "application/json",
 };
-async function staticFile(
+export async function staticFile(
   path: string,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   try {
@@ -29,6 +29,7 @@ export async function staticResponse(
   app: {
     staticRoot: string;
     cfg?: Pick<ServiceConfig, "requests" | "connection">;
+    build?: string;
   },
 ): Promise<Response> {
   if (path === "/api" || path.startsWith("/api/")) {
@@ -51,9 +52,13 @@ export async function staticResponse(
     const depth = safe.split("/").filter(Boolean).length -
       (safe.endsWith("/") ? 0 : 1);
     const base = depth > 0 ? "../".repeat(depth) : "./";
-    const bootstrap = app.cfg
+    const facts = {
+      ...(app.cfg ? { policy: clientRequestPolicy(app.cfg) } : {}),
+      ...(app.build ? { build: app.build } : {}),
+    };
+    const bootstrap = Object.keys(facts).length
       ? `<script type="application/json" id="otk-bootstrap">${
-        JSON.stringify({ policy: clientRequestPolicy(app.cfg) })
+        JSON.stringify(facts)
       }</script>`
       : "";
     const text = new TextDecoder().decode(bytes).replace(
@@ -80,8 +85,10 @@ export async function staticResponse(
   }
   const index = await staticFile(join(root, "index.html"));
   if (index !== null) return html(index);
-  return new Response(
-    await Deno.readFile(new URL("../static/index.html", import.meta.url)),
-    { headers: { "content-type": types[".html"] } },
+  const fallback = await Deno.readFile(
+    new URL("../static/index.html", import.meta.url),
   );
+  return app.build
+    ? html(fallback)
+    : new Response(fallback, { headers: { "content-type": types[".html"] } });
 }
