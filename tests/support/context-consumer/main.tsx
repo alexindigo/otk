@@ -5,6 +5,7 @@ import {
   age,
   type CommandDefinition,
   CommandHub,
+  createTreeDisclosure,
   SidecarConnection,
 } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
@@ -22,6 +23,7 @@ import {
   ProjectInbox,
   registerOtkThemes,
   registerTextPart,
+  solidState,
   ThemeEngine,
   ThemeRegistry,
   TranscriptContext,
@@ -129,6 +131,7 @@ function TranscriptProbe() {
   );
 }
 function ProjectProbe() {
+  const tree = createTreeDisclosure(solidState);
   const [ready, setReady] = createSignal(true);
   return (
     <section id="project-probe">
@@ -140,6 +143,7 @@ function ProjectProbe() {
         Disconnect project
       </button>
       <ProjectInbox
+        disclosure={tree}
         projects={[{
           directory: "/probe",
           sidecarId: "probe-sidecar",

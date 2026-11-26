@@ -784,7 +784,7 @@ test(
       ).toHaveText(warmState.expectedCosts[last.id]);
       observations.window = await windowBound();
       await page.evaluate(
-        `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"]');pinnedScale.focus()`,
+        `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"] .otk-session-open');pinnedScale.focus()`,
       );
       await expect(page.locator(`[data-session="${last.id}"]`)).toBeFocused();
       await page.evaluate(framesAhead);

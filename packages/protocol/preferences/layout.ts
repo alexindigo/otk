@@ -9,6 +9,11 @@ export const layoutRequestMetadata: Readonly<Record<string, RequestMetadata>> =
       pending: "Saving project tree",
       presentation: "bookkeeping",
     },
+    "layout.tree": {
+      kind: "mutation",
+      pending: "Saving session tree",
+      presentation: "bookkeeping",
+    },
     "layout.location": {
       kind: "mutation",
       pending: "Saving location",
@@ -42,7 +47,20 @@ export interface ShellLayout {
   rightView?: string;
   discoveredCollapsed?: boolean;
   projectCollapsed?: Record<string, boolean>;
+  treeCollapsed?: Record<string, true>;
   projectLocations?: ProjectLocation[];
+}
+export type SessionTreeKind = "task" | "ungrouped" | "session";
+export function isSessionTreeKind(value: unknown): value is SessionTreeKind {
+  return value === "task" || value === "ungrouped" || value === "session";
+}
+export interface SessionTreeTarget {
+  sidecarId: string;
+  kind: SessionTreeKind;
+  id: string;
+}
+export function treeLayoutKey(target: SessionTreeTarget): string {
+  return JSON.stringify([target.sidecarId, target.kind, target.id]);
 }
 export interface LayoutPreferences {
   shellLayout: ShellLayout;
@@ -58,6 +76,10 @@ export interface LayoutRpcMethods {
     result: Preferences;
   };
   "layout.location": { params: ProjectLocation; result: Preferences };
+  "layout.tree": {
+    params: SessionTreeTarget & { collapsed: boolean };
+    result: Preferences;
+  };
 }
 export function isProjectLocation(value: unknown): value is ProjectLocation {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -94,6 +116,7 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
           "rightView",
           "discoveredCollapsed",
           "projectCollapsed",
+          "treeCollapsed",
           "projectLocations",
         ].includes(key)
       ) &&
@@ -123,6 +146,13 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
             new Set(
                 layout.projectLocations.map((p) => projectLayoutKey(p)),
               ).size === layout.projectLocations.length)) &&
+        (layout.treeCollapsed === undefined ||
+          (!!layout.treeCollapsed &&
+            typeof layout.treeCollapsed === "object" &&
+            !Array.isArray(layout.treeCollapsed) &&
+            Object.values(layout.treeCollapsed).every((value) =>
+              value === true
+            ))) &&
         (layout.rightView === undefined ||
           (typeof layout.rightView === "string" &&
             layout.rightView.length <= 128));

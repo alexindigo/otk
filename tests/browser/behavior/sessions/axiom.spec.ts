@@ -47,11 +47,14 @@ test.describe("inactive supervision", () => {
           ),
         ).toHaveAttribute("data-rollup", states[i]);
       }
-      expect(
-        (await state.product("inbox.get", {})).inbox.projects.every((p) =>
-          !p.inactive
-        ),
-      ).toBe(true);
+      // The rollup can render from the entity feed before the inactive policy
+      // update is published in the inbox. Observe that separate contract before
+      // testing the collapsed layout on both sides of the reload.
+      await expect.poll(async () =>
+        (await state.product("inbox.get", {})).inbox.projects.filter((p) =>
+          p.inactive
+        ).map((p) => p.directory)
+      ).toEqual([]);
       await page.getByRole("button", { name: "Collapse projects", exact: true })
         .click();
       for (let reload = 0; reload < 2; reload++) {

@@ -8,6 +8,8 @@ import {
   presentFailure,
   type SidecarState,
 } from "@otk/client";
+import { createTreeDisclosure } from "@otk/client";
+import { solidState } from "../../state/binding.ts";
 import { DEFAULT_PREFS, type PublicFailure } from "@otk/protocol";
 import ProjectInbox from "../../components/ProjectInbox.tsx";
 import ComposerNotice from "../../components/ComposerNotice.tsx";
@@ -76,6 +78,7 @@ const save = errorFeedback(
 
 /** Production components with controlled failure facts; no duplicate error markup. */
 export default function ErrorSurfaces() {
+  const tree = createTreeDisclosure(solidState);
   const surface = new URL(location.href).searchParams.get("surface") ?? "main";
   const failureTime = Date.parse("2026-11-20T01:23:00-08:00");
   const clockKnown =
@@ -212,6 +215,7 @@ export default function ErrorSurfaces() {
     >
       <div class="error-review-layout">
         <ProjectInbox
+          disclosure={tree}
           projects={[]}
           duplicateName={() => false}
           servers={[server]}

@@ -1,50 +1,108 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { Source, uiSources } from "./analysis.ts";
+import { Source } from "./analysis.ts";
+import { rules } from "./styles.ts";
 
-export function nestingErrors(path: string, text: string): string[] {
-  if (path.endsWith("/Tree.css") || path.endsWith("/Tree.tsx")) return [];
-  return [
-    /border-(?:inline-start|inline-end|left|right)\s*:\s*[^;]*dotted/.test(
-      text,
-    ),
-    /otk-(?:project-branch|session-branch|session-indent|record-list-connector|work-chevron|reasoning-chevron|native-chevron)/
-      .test(text),
-    text.includes("M4 0v10a5"),
-    text.includes("∟"),
-  ].flatMap((bad, index) =>
-    bad ? [`${path}: duplicate nesting paint ${index}`] : []
+const components = "packages/ui/components";
+const sidebars = ["ProjectInbox", "ProjectSessions"];
+
+Deno.test("both sidebars render hierarchy through TreeNode and SidebarRow", async () => {
+  for (const name of sidebars) {
+    const source = new Source(
+      await Deno.readTextFile(`${components}/${name}.tsx`),
+    );
+    const renders = new Set(
+      source.all.filter((n) => n.type === "JSXOpeningElement").map((n) =>
+        source.name(n.name)
+      ),
+    );
+    for (const shared of ["TreeNode", "SectionHeader", "SidebarRow"]) {
+      assert(renders.has(shared), `${name}: ${shared}`);
+    }
+    assert(
+      !source.all.some((n) =>
+        n.type === "ImportDeclaration" && /ListRow/.test(n.source.value)
+      ),
+      name,
+    );
+  }
+  assert(
+    !(await Deno.readTextFile(`${components}/Tree.tsx`)).includes("TreeGuide"),
   );
-}
-Deno.test("one Tree component owns every nesting rail and junction", async () => {
-  const failures: string[] = [];
-  for (const [path, text] of await uiSources()) {
-    if (path.includes("/components/")) {
-      failures.push(...nestingErrors(path, text));
+});
+
+Deno.test("sidebar CSS does not own tree tracks or row geometry", async () => {
+  for (const name of sidebars) {
+    for (
+      const { selector, declarations } of rules(
+        await Deno.readTextFile(`${components}/${name}.css`),
+      )
+    ) {
+      assert(!selector.includes(".otk-tree-"), `${name}: ${selector}`);
+      for (const key of declarations.keys()) {
+        assert(!key.startsWith("--tree-"), `${name}: ${key}`);
+        if (
+          /otk-(?:session-row|session-group|project-row|project-tree)\b/.test(
+            selector,
+          ) && !selector.includes(".otk-session-title")
+        ) {
+          assert(
+            !/^(?:(?:min-)?height|(?:min-)?block-size|padding(?:-|$))/.test(
+              key,
+            ),
+            `${name}: ${selector} ${key}`,
+          );
+        }
+      }
     }
   }
-  assertEquals(failures, []);
 });
-Deno.test("tree architecture guard rejects copied rails and elbows", () => {
-  for (
-    const source of [
-      ".branch { border-inline-start: 1px dotted var(--line); }",
-      '<span class="otk-project-branch"/>',
-      '<path d="M4 0v10a5"/>',
-      'const elbow = "∟";',
-    ]
-  ) assert(nestingErrors("/components/Invented.tsx", source).length);
+
+Deno.test("the only live tree disclosure instance is owned by shell state", async () => {
+  const owners: string[] = [];
+  async function walk(dir: string) {
+    for await (const entry of Deno.readDir(dir)) {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory) {
+        if (!["tests", "node_modules", ".test-state"].includes(entry.name)) {
+          await walk(path);
+        }
+      } else if (/\.tsx?$/.test(path)) {
+        const text = await Deno.readTextFile(path);
+        assert(
+          !/\bcreate(?:Project|SessionGroup)Disclosure\b/.test(text),
+          path,
+        );
+        if (text.includes("createTreeDisclosure")) {
+          const source = new Source(text);
+          for (const node of source.all) {
+            if (
+              node.type === "CallExpression" &&
+              source.name(node.callee) === "createTreeDisclosure"
+            ) owners.push(path);
+          }
+        }
+      }
+    }
+  }
+  await walk("packages/ui");
+  await walk("packages/client");
+  await walk("web/src");
+  assertEquals(owners, ["packages/ui/state/shell.ts"]);
 });
-Deno.test("nested and virtual trees construct one shared junction cell", async () => {
-  const source = new Source(
-    await Deno.readTextFile(
-      new URL("../../packages/ui/components/Tree.tsx", import.meta.url),
-    ),
-  );
+
+Deno.test("flat TreeNode paths share the nested junction and disclosure control", async () => {
+  const text = await Deno.readTextFile("packages/ui/components/Tree.tsx");
+  const node = text.slice(text.indexOf("export function TreeNode"));
+  assert(node.includes("path?: readonly boolean[]"));
+  const source = new Source(node);
+  const elements = source.all.filter((n) => n.type === "JSXOpeningElement")
+    .map((n) => source.name(n.name));
+  assertEquals(elements.filter((name) => name === "Junction").length, 1);
   assertEquals(
-    source.all.filter((node) =>
-      node.type === "StringLiteral" && node.value === "otk-tree-junction"
-    ).length,
+    elements.filter((name) => name === "DisclosureToggle").length,
     1,
   );
+  assertEquals(elements.filter((name) => name === "TreeRails").length, 1);
+  assert(node.includes("<IconStemContext value={stem}>"));
 });

@@ -2,7 +2,7 @@
 export { createReload, type Reload, type ReloadOwner } from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
-export * from "./project-disclosure.ts";
+export * from "./tree-disclosure.ts";
 export * from "./project-placement.ts";
 export {
   type EntityFact,
@@ -181,7 +181,12 @@ export * from "./requests.ts";
 export * from "./failures.ts";
 export * from "./failure-features.ts";
 export * from "./http-requests.ts";
-export { createSessionTree, type SessionListRow } from "./session-tree.ts";
+export {
+  createSessionTree,
+  type SessionListRow,
+  type SessionTreeItem,
+  sessionTreeView,
+} from "./session-tree.ts";
 export * from "./forms.ts";
 export * from "./request-lifetime.ts";
 export {

@@ -97,6 +97,7 @@ export default function Shell(
     guard,
     navigation,
     listInteraction,
+    tree,
     interact,
     confirmCommand,
   } = createShellState({
@@ -618,6 +619,8 @@ export default function Shell(
             visibleRows: resources.visibleRows,
             projectProgress: resources.projectProgress,
             listInteraction,
+            tree,
+            treeCollapse: resources.treeCollapse,
             selection: () => session.state.selection,
           }}
         >
@@ -673,6 +676,7 @@ export default function Shell(
               </button>
             </Show>
             <ProjectInbox
+              disclosure={tree}
               history={
                 <HistoryButtons
                   back={backTarget()}

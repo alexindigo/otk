@@ -6,6 +6,7 @@ import type {
   ProjectLocation,
   ServerFrame,
   SessionStructure,
+  SessionTreeTarget,
   ShellLayout,
 } from "@otk/protocol";
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
@@ -153,6 +154,7 @@ export interface ServerResources {
   remove(id: string): void;
   layout(patch: Partial<ShellLayout>): Promise<void>;
   projectCollapse(project: ProjectSelection, collapsed: boolean): Promise<void>;
+  treeCollapse(target: SessionTreeTarget, collapsed: boolean): Promise<void>;
   rememberLocation(location: ProjectLocation): Promise<void>;
   inactive(project: ProjectSelection, inactive: boolean): Promise<void>;
   setPreference(key: keyof Preferences, value: unknown): Promise<void>;
@@ -1182,6 +1184,12 @@ export function createServerResources(o: {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.project", {
         sidecarId: project.sidecarId,
         directory: project.directory,
+        collapsed,
+      });
+    },
+    async treeCollapse(target, collapsed) {
+      await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.tree", {
+        ...target,
         collapsed,
       });
     },

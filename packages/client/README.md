@@ -1386,8 +1386,8 @@ their own checkout basename and never receive project avatars, including when
 their root is absent. Native repository names remain project-only.
 `projectBranchPresentation` hides all descendants and the archive when
 collapsed, regardless of attention, from one topology/disclosure snapshot.
-`createProjectDisclosure` retains immediate local choices by kind, server and
-directory. Per-key saves are ordered, old outcomes cannot overwrite newer
+`createTreeDisclosure` retains immediate local choices by kind, server and
+stable ID. Per-key saves are ordered, old outcomes cannot overwrite newer
 intent, and the affected branch retains a refusal and explicit retry. Archive
 and Inactive borrow the same owner without adding persistence; Discovered and
 project choices retain their existing preference stores. A matching

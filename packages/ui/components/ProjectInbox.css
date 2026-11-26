@@ -35,14 +35,9 @@
   padding: 0 var(--space-2);
 }
 .otk-project-row {
-  min-height: var(--row-project);
   color: var(--otk-fg-2);
 }
 .otk-project-open {
-  color: inherit;
-}
-.otk-project-open:hover {
-  background: transparent;
   color: inherit;
 }
 .otk-project-name-line {
@@ -185,19 +180,6 @@
   margin-inline: auto;
   justify-content: center;
   padding: 0;
-}
-.otk-project-tree {
-  --tree-height: var(--row-project);
-}
-/* The project row is one control: focus paints the whole row, never only
-   its open button between the selection bar and the menu. */
-.otk-project-row .otk-project-open:focus-visible {
-  outline: none;
-}
-.otk-project-row:has(.otk-project-open:focus-visible) {
-  outline: 2px solid var(--control-focus);
-  outline-offset: var(--focus-ring-offset);
-  border-radius: var(--radius-row);
 }
 .otk-project-attention {
   display: grid;

@@ -8,7 +8,8 @@ import type { Page } from "@playwright/test";
 const viewport = ".otk-project-session-tree";
 async function scroll(page: Page, top: number | "end") {
   const pane = page.locator(viewport);
-  await pane.hover();
+  // Aim at the list surface, not the context menu anchored over its rows.
+  await pane.hover({ position: { x: 2, y: 2 } });
   // Acquiring another page can extend the physical end. Keep requesting the
   // original target through real wheel input instead of assuming full catalog
   // geometry was present before the first gesture. Each gesture at the end
@@ -83,7 +84,7 @@ test.describe("direct route", () => {
       await expect(page.locator(".otk-session-row")).toHaveCount(1);
       await expect(
         page.locator(
-          ".otk-session-group-heading[data-session-group] .otk-control-label",
+          ".otk-session-group[data-session-group] .otk-control-label",
         ).first(),
       ).toHaveText("Initial grouped work");
       await expect(page.locator("body")).not.toContainText("Core transcript");
@@ -209,7 +210,7 @@ test.describe("measured Sessions", () => {
       ).toEqual(["302", "302"]);
       await expect(last.locator(".otk-session-cost")).toHaveText("$0.13");
       expect(await page.locator(".otk-session-row").count()).toBeLessThan(40);
-      await last.evaluate((e) => {
+      await last.locator(".otk-session-open").evaluate((e) => {
         Object.assign(globalThis, { pinnedSessionRow: e });
         (e as HTMLElement).focus();
       });
@@ -314,7 +315,7 @@ test.describe("measured Sessions", () => {
       await input.press("Enter");
       // FP1's shared row track owns the alert, not the editor's internal subtree.
       const failure = page.locator(
-        ".otk-session-row.is-editing .otk-list-row-feedback [role=alert]",
+        ".otk-session-row.is-editing .otk-sidebar-row-feedback [role=alert]",
       );
       await expect(failure).toHaveCount(1);
       await expect(failure).toBeVisible();
@@ -358,7 +359,7 @@ test.describe("measured Sessions", () => {
           const selectors = [
             "input",
             ".otk-status-light",
-            ".otk-list-row-trailing",
+            ".otk-sidebar-meta",
           ];
           const ys = selectors.map((s) => {
             const r = row.querySelector(s)!.getBoundingClientRect();

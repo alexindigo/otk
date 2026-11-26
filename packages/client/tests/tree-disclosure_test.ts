@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { age } from "../format.ts";
 import { assertEquals, assertStrictEquals } from "@std/assert";
-import { createProjectDisclosure } from "../project-disclosure.ts";
+import { createTreeDisclosure } from "../tree-disclosure.ts";
 import { projectHierarchy } from "../inbox.ts";
 import { projectBranchPresentation, projectTree } from "../project-tree.ts";
 
@@ -13,8 +13,8 @@ Deno.test("project disclosure paints before persistence, orders opposing saves a
   }[] = [];
   const retried = Promise.withResolvers<void>();
   let persisted = true;
-  const owner = createProjectDisclosure();
-  const target = { sidecarId: "one", directory: "/repo" };
+  const owner = createTreeDisclosure();
+  const target = { sidecarId: "one", id: "/repo" };
   const branch = owner.bind(
     "project",
     target,
@@ -52,14 +52,14 @@ Deno.test("project disclosure paints before persistence, orders opposing saves a
   assertEquals(branch.error(), undefined);
   assertEquals(owner.bind("project", target, () => persisted).open(), true);
   assertEquals(
-    createProjectDisclosure().bind("project", target, () => persisted).open(),
+    createTreeDisclosure().bind("project", target, () => persisted).open(),
     true,
   );
 });
 
 Deno.test("every section shares disclosure identity without aliasing servers or row kinds", async () => {
-  const owner = createProjectDisclosure();
-  const target = { sidecarId: "one", directory: "/repo" };
+  const owner = createTreeDisclosure();
+  const target = { sidecarId: "one", id: "/repo" };
   for (
     const kind of ["project", "archive", "discovered", "inactive"] as const
   ) {
@@ -70,6 +70,24 @@ Deno.test("every section shares disclosure identity without aliasing servers or 
       owner.bind(kind, { ...target, sidecarId: "two" }, () => false).open(),
       false,
     );
+  }
+});
+
+Deno.test("task and session disclosure identities isolate kind, server and id", async () => {
+  const owner = createTreeDisclosure();
+  const target = { sidecarId: "one", id: "shared-id" };
+  const branch = owner.bind("task", target, () => true);
+  await branch.set(false);
+  assertEquals(owner.bind("task", target, () => true).open(), false);
+  for (
+    const [kind, other] of [
+      ["session", target],
+      ["ungrouped", target],
+      ["task", { ...target, sidecarId: "two" }],
+      ["task", { ...target, id: "another-id" }],
+    ] as const
+  ) {
+    assertEquals(owner.bind(kind, other, () => true).open(), true);
   }
 });
 

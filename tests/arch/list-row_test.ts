@@ -3,10 +3,10 @@ import { assert, assertEquals } from "@std/assert";
 import { Source } from "./analysis.ts";
 import { rules } from "./styles.ts";
 
-function rowErrors(text: string): string[] {
+function rowErrors(text: string, row = "ListRow"): string[] {
   const source = new Source(text);
   const shared = source.all.some((node) =>
-    node.type === "JSXOpeningElement" && source.name(node.name) === "ListRow"
+    node.type === "JSXOpeningElement" && source.name(node.name) === row
   );
   const copied = source.all.some((node) =>
     node.type === "CallExpression" && source.name(node.callee) === "selection"
@@ -16,10 +16,19 @@ function rowErrors(text: string): string[] {
     ...(copied ? ["consumer owns row selection"] : []),
   ];
 }
-Deno.test("Sessions and Timeline delegate row geometry and selection to the same list-row frame", async () => {
-  for (const name of ["ProjectSessions", "Timeline"]) {
+Deno.test("Timeline delegates to ListRow, and both sidebars delegate to SidebarRow", async () => {
+  for (
+    const [name, row] of [["ProjectSessions", "SidebarRow"], [
+      "ProjectInbox",
+      "SidebarRow",
+    ], ["Timeline", "ListRow"]]
+  ) {
     const base = `packages/ui/components/${name}`;
-    assertEquals(rowErrors(await Deno.readTextFile(`${base}.tsx`)), [], name);
+    assertEquals(
+      rowErrors(await Deno.readTextFile(`${base}.tsx`), row),
+      [],
+      name,
+    );
     for (
       const { selector, declarations } of rules(
         await Deno.readTextFile(`${base}.css`),
