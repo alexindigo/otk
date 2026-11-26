@@ -108,6 +108,7 @@ export interface MessageSnapshotInput extends MessagePageInput {
 }
 /** Values come only from the composing application's layered config. */
 export interface MessagePolicy {
+  bridgepages: number;
   prefetchms: number;
   prefetchbytes: number;
   coolms: number;
@@ -125,6 +126,7 @@ export function messagePolicy(value: unknown): MessagePolicy {
   }
   const object = value as Record<string, unknown>;
   const keys = [
+    "bridgepages",
     "prefetchms",
     "prefetchbytes",
     "coolms",
@@ -154,6 +156,7 @@ export function messagePolicy(value: unknown): MessagePolicy {
     );
   }
   return {
+    bridgepages: Number(object.bridgepages),
     prefetchms: Number(object.prefetchms),
     prefetchbytes: Number(object.prefetchbytes),
     coolms: Number(object.coolms),
