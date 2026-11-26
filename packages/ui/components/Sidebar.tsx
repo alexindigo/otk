@@ -165,7 +165,6 @@ export default function Sidebar(
                                   entities(entry().sidecarId),
                                   entityKey("session", entry().id),
                                 )}
-                                event={entry().timeUpdated}
                               />
                               {stateLabel(
                                 lamp(
