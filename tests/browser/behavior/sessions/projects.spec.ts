@@ -101,6 +101,23 @@ test.describe("project catalog", () => {
     await activity(state, "tstv1-atmosphera", "release");
     await page.locator(".otk-discovered-toggle").click();
     await expect(row(empty)).toBeVisible();
+    // D71 (4d810f0f): in the compact rail Back/Forward stack above Search,
+    // moving the viewport as a whole. Project markers and lamps must keep
+    // their slots within it, not their absolute coordinates on the page.
+    const positions = (selector: string) =>
+      page.locator(".otk-inbox-scroll").locator(selector).evaluateAll((
+        elements,
+      ) =>
+        elements.map((element) => {
+          const box = element.getBoundingClientRect();
+          const viewport = element.closest(".otk-inbox-scroll")!;
+          const row = element.closest("[data-project]")!;
+          return {
+            project: row.getAttribute("data-project"),
+            y: box.y + box.height / 2 - viewport.getBoundingClientRect().top,
+          };
+        })
+      );
     for (
       const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
         "otk-light-stone",
@@ -126,23 +143,19 @@ test.describe("project catalog", () => {
         path: info.outputPath(`q1-${name}-column.png`),
         fullPage: true,
       });
-      const centers = () =>
-        page.locator(
+      const markers = () =>
+        positions(
           ".otk-project-row:not([data-inactive=true]) .otk-project-marker",
-        ).evaluateAll((elements) =>
-          elements.map((element) => {
-            const box = element.getBoundingClientRect();
-            return box.y + box.height / 2;
-          })
         );
-      const column = await centers();
+      const column = await markers();
+      expect(column.length).toBeGreaterThan(0);
       await page.getByRole("button", { name: "Collapse projects", exact: true })
         .click();
       await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
         "data-collapsed",
         "true",
       );
-      expect(await centers()).toEqual(column);
+      expect(await markers()).toEqual(column);
       // Rows are never lampless; discovered rows carry no evidence, so grey.
       await expect(
         page.locator(
@@ -164,22 +177,17 @@ test.describe("project catalog", () => {
         "false",
       );
     }
-    const positions = () =>
-      page.locator(".otk-project-row[data-inactive=false] .otk-status-light")
-        .evaluateAll((es) =>
-          es.map((e) => {
-            const r = e.getBoundingClientRect();
-            return r.y + r.height / 2;
-          })
-        );
-    const before = await positions();
+    const lamps = () =>
+      positions(".otk-project-row[data-inactive=false] .otk-status-light");
+    const before = await lamps();
+    expect(before.length).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Collapse projects", exact: true })
       .click();
     await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
       "data-collapsed",
       "true",
     );
-    expect(await positions()).toEqual(before);
+    expect(await lamps()).toEqual(before);
     await expect(
       row(empty).getByRole("img", { name: "No known activity", exact: true }),
     ).toBeVisible();
