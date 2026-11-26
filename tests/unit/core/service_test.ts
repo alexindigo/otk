@@ -101,7 +101,10 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     assertEquals(
       await spa.text(),
       '<head><base href="../"><script type="application/json" id="otk-bootstrap">' +
-        JSON.stringify({ policy: clientRequestPolicy(settings) }) +
+        JSON.stringify({
+          policy: clientRequestPolicy(settings),
+          build: "df3a787fb7808bfb",
+        }) +
         "</script></head><p>Caller assets</p>",
     );
     const missingApi = await fetch(base + "/api/missing");

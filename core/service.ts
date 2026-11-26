@@ -13,6 +13,7 @@ import { Connections } from "./ws/connections.ts";
 import type { FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
 import { bind } from "./http/server.ts";
+import { servedBuild } from "./http/served-build.ts";
 import { diagnosticsLog } from "./diagnostics-log.ts";
 import type { SectionObserver } from "./diagnostics.ts";
 import { RequestCoordinator } from "./requests/coordinator.ts";
@@ -145,6 +146,10 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   };
   options.signal?.addEventListener("abort", cancelled, { once: true });
   try {
+    const identity = {
+      build: await servedBuild(staticRoot),
+      instance: crypto.randomUUID(),
+    };
     check();
     const listener = bind(cfg, undefined, diagnostic, options.requested);
     server = listener.server;
@@ -158,6 +163,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       cfg.messages,
       {
         coordinator: requests,
+        server: identity,
         identity: () => cfg.auth.username.toLowerCase() || "local",
         policy: clientRequestPolicy(cfg),
         helloms: cfg.connection.helloms,
@@ -199,6 +205,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       backend,
       connections: transport,
       staticRoot,
+      ...identity,
       terminals: options.terminals,
     });
     check();

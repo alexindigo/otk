@@ -13,6 +13,8 @@ declare module "@pathfinder/pathfinder" {
     connections: Connections;
     backend: Harness;
     staticRoot: string;
+    build: string;
+    instance: string;
     terminals?: TerminalSockets;
   }
 }

@@ -9,7 +9,13 @@ export interface NoteAction {
 }
 export interface Note {
   readonly id: string;
-  readonly kind: "done" | "permission" | "question" | "error" | "info";
+  readonly kind:
+    | "done"
+    | "permission"
+    | "question"
+    | "error"
+    | "info"
+    | "server";
   readonly sessionRef?: { readonly sidecar: string; readonly session: string };
   readonly title: string;
   readonly body?: string;

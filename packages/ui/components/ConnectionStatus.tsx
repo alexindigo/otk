@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
+import { SERVER_RELOAD } from "@otk/client";
+import { useCommandPorts } from "../keyboard/context.tsx";
 import {
   connectionFeedback,
   type ConnectionInput,
@@ -10,13 +12,23 @@ import "./ConnectionStatus.css" with { type: "text" };
 
 export default function ConnectionStatus(
   props: {
-    connection: ConnectionInput;
+    connection: ConnectionInput & { id?: string };
     compact?: boolean;
     onSettings?(): void;
     subgrid?: boolean;
     unlabelled?: boolean;
   },
 ) {
+  const { commands } = useCommandPorts();
+  const feedback = () => {
+    const sidecarId = props.connection.id;
+    return connectionFeedback(
+      props.connection,
+      sidecarId && commands.has(SERVER_RELOAD)
+        ? () => void commands.run(SERVER_RELOAD, { sidecarId })
+        : undefined,
+    );
+  };
   const classes = () =>
     [
       "otk-connection-status",
@@ -24,7 +36,7 @@ export default function ConnectionStatus(
       props.unlabelled ? "is-unlabelled" : "",
     ].filter(Boolean).join(" ");
   return (
-    <Show when={connectionFeedback(props.connection)}>
+    <Show when={feedback()}>
       {(feedback) => (
         <Show
           when={feedback().failure || feedback().action}

@@ -1,13 +1,34 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { createDrafts, type Draft } from "../drafts.ts";
-import { createReload } from "../reload.ts";
+import { createReload, ReloadRefused } from "../reload.ts";
 import { RequestTracker } from "../requests.ts";
 import { RequestLifetimes } from "../request-lifetime.ts";
 import { createTranscriptProjection } from "../transcript-projection.ts";
 import { pendingMessage } from "../pending-send.ts";
 import { fixtureRequests } from "../../../tests/support/request-wire.ts";
 import { RequestFailure } from "../failures.ts";
+
+Deno.test("Reload checkpoints before probing and stays put when unreachable", async () => {
+  const steps: string[] = [];
+  let saved: string | null = null;
+  const reload = createReload({
+    storage: {
+      getItem: () => saved,
+      setItem: (_key: string, value: string) => {
+        steps.push("checkpoint");
+        saved = value;
+      },
+    },
+    reachable: () => {
+      steps.push("probe");
+      return Promise.resolve(false);
+    },
+    navigate: () => steps.push("navigate"),
+  });
+  await assertRejects(() => reload.run(), ReloadRefused);
+  assertEquals(steps, ["checkpoint", "probe"]);
+});
 
 Deno.test("reload restores a definitive rejection as the same settled receipt", async () => {
   const requests = new RequestTracker({ clientID: "tab", send() {} });
@@ -39,7 +60,7 @@ Deno.test("reload restores a definitive rejection as the same settled receipt", 
   restored.stop();
 });
 
-Deno.test("unreadable checkpoint leaves startup usable and blocks overwriting retained work", () => {
+Deno.test("unreadable checkpoint leaves startup usable and blocks overwriting retained work", async () => {
   let writes = 0;
   const reload = createReload({
     storage: {
@@ -52,11 +73,11 @@ Deno.test("unreadable checkpoint leaves startup usable and blocks overwriting re
       throw new Error("Must not reload");
     },
   });
-  assertThrows(() => reload.run());
+  await assertRejects(() => reload.run());
   assertEquals(writes, 0);
 });
 
-Deno.test("Reload retains pending-send payload and its original custody identity, without a new send", () => {
+Deno.test("Reload retains pending-send payload and its original custody identity, without a new send", async () => {
   const data = new Map<string, string>();
   const storage = {
     getItem: (k: string) => data.get(k) ?? null,
@@ -102,7 +123,7 @@ Deno.test("Reload retains pending-send payload and its original custody identity
       sends: { snapshot: () => projection.pendingSends(), restore() {} },
     },
   });
-  reload.run();
+  await reload.run();
   requests.stop();
   const resumed: unknown[] = [];
   const next = new RequestTracker({
@@ -146,7 +167,7 @@ Deno.test("Reload retains pending-send payload and its original custody identity
   next.stop();
 });
 
-Deno.test("Reload checkpoints all drafts, editor bytes and explicit Default before navigation", () => {
+Deno.test("Reload checkpoints all drafts, editor bytes and explicit Default before navigation", async () => {
   const data = new Map<string, string>();
   const storage = {
     getItem: (k: string) => data.get(k) ?? null,
@@ -170,7 +191,7 @@ Deno.test("Reload checkpoints all drafts, editor bytes and explicit Default befo
     },
     owners: { drafts },
   });
-  reload.run();
+  await reload.run();
   assertEquals(navigations, 1);
   const restored = createDrafts();
   createReload({ storage, navigate() {}, owners: { drafts: restored } });
@@ -184,7 +205,7 @@ Deno.test("Reload checkpoints all drafts, editor bytes and explicit Default befo
   );
 });
 
-Deno.test("storage refusal prevents Reload and retains input", () => {
+Deno.test("storage refusal prevents Reload and retains input", async () => {
   const drafts = createDrafts();
   drafts.writer("session")({ input: "keep me", chips: [], mode: "normal" });
   let navigations = 0;
@@ -200,7 +221,7 @@ Deno.test("storage refusal prevents Reload and retains input", () => {
     },
     owners: { drafts },
   });
-  assertThrows(() => reload.run());
+  await assertRejects(() => reload.run());
   assertEquals(navigations, 0);
   assertEquals(drafts.current("session").input, "keep me");
 });

@@ -204,13 +204,14 @@ upgrade instructions.
 ## Public discovery
 
 Served HTML extends the existing mount-relative base transform with one inert
-`otk-bootstrap` JSON value containing only `clientRequestPolicy(cfg)`. This safe
-numeric projection supplies the application's initial connection policy before
-any local or saved remote session read succeeds. It never serializes operator
-config, auth credentials or backend identity. The browser composition validates
-it and injects it into the shell; reusable client/UI packages do not read HTML
-or invent defaults. A remote's checked session and welcome replace this initial
-policy with that remote's authority. Static-only callers may omit config.
+`otk-bootstrap` JSON value containing the served `build` and
+`clientRequestPolicy(cfg)`. This safe numeric projection supplies the initial
+connection policy before any local or saved remote session read succeeds. It
+never serializes operator config, auth credentials or backend identity. The
+browser composition validates it and injects it into the shell; reusable
+client/UI packages do not read HTML or invent defaults. A remote's checked
+session and welcome replace this initial policy with that remote's authority.
+Static-only callers may omit config.
 
 The existing plain and tracked `/api/session` responses also carry `defaults`,
 an allowlisted `{ defaultPort }` projection from the shipped
@@ -219,12 +220,14 @@ Listener overrides do not change the advertised default; discovery's exact
 response and CORS stay unchanged.
 
 `GET /api/discovery` is reflectively discovered and returns only
-`{ product: "otk", protocol, version, originAllowed, signIn }`. Versions come
-from the protocol owner. `originAllowed` evaluates the request's Origin through
-the same origin predicate as normal API admission; missing and opaque (`null`)
-origins are not allowed. `signIn` describes the server requirement: `setup` for
-unconfigured auth, `login` for password/TOTP, and `none` for auth disabled. It
-does not describe or validate the caller's session.
+`{ product: "otk", protocol, version, build, originAllowed, signIn }`. Versions
+come from the protocol owner; `build` is computed once from the served index and
+shared with the HTML bootstrap, health and WebSocket handshake. `originAllowed`
+evaluates the request's Origin through the same origin predicate as normal API
+admission; missing and opaque (`null`) origins are not allowed. `signIn`
+describes the server requirement: `setup` for unconfigured auth, `login` for
+password/TOTP, and `none` for auth disabled. It does not describe or validate
+the caller's session.
 
 This metadata is public even to a refused Origin. GET and OPTIONS on this exact
 path alone use wildcard CORS without credentialed mode. Clients fetch it with

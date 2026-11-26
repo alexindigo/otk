@@ -19,6 +19,7 @@ import { HttpRequests } from "./http-requests.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { browserStorage } from "./browser-storage.ts";
 import type { PublicDefaults } from "./public-defaults.ts";
+import type { ServerContinuity } from "./server-continuity.ts";
 import {
   type ConnectionOptions,
   type ConnectionState,
@@ -33,6 +34,7 @@ export interface SidecarSpec {
 export interface SidecarState extends SidecarSpec {
   status: ConnectionState;
   harness: HarnessState;
+  continuity?: ServerContinuity;
   error?: string;
   /** Retain the owner's facts instead of reparsing the compatibility text. */
   feedback?: Feedback;
@@ -164,6 +166,12 @@ export function createSidecars(
     const connection = new SidecarConnection(
       spec.baseUrl,
       {
+        continuity(value) {
+          setState((draft) => {
+            const item = draft.list.find((item) => item.id === spec.id);
+            if (item) item.continuity = value;
+          });
+        },
         defaults(value) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);

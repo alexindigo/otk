@@ -40,6 +40,7 @@ import { registerSessionActionCommands } from "./commands/session-actions.ts";
 import { registerCodeBlockCommands } from "../features/code-blocks.tsx";
 import { registerFileCommands } from "../features/file-paths.tsx";
 import { applicationNotifications } from "./notifications.ts";
+import { registerServerCommands } from "./commands/server.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
 import { createShellState } from "../state/shell.ts";
@@ -82,6 +83,7 @@ export default function Shell(
     theme: ThemeEngine;
     api: URL;
     policy?: import("@otk/protocol").ClientRequestPolicy;
+    build?: string;
     promptBlocks?(text: string): import("@otk/protocol").Block[];
   },
 ): import("solid-js").Element {
@@ -105,6 +107,7 @@ export default function Shell(
   } = createShellState({
     api: props.api,
     policy: props.policy,
+    build: props.build,
     promptBlocks: props.promptBlocks,
     promptCommitted: (message) => recentModel(message),
   });
@@ -199,6 +202,15 @@ export default function Shell(
     entities: resources.entities,
     observeEntries: resources.observeEntries,
   });
+  createEffect(
+    () =>
+      sidecars.state.list.map(({ id, label, continuity }) => ({
+        id,
+        label,
+        continuity,
+      })),
+    (list) => notifications.servers(list),
+  );
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {
       if (accepted) notifications.receive(id, frame);
@@ -440,6 +452,7 @@ export default function Shell(
         "Discard unsaved permission input before enabling auto-approve for this session and its helpers?",
       ),
   }));
+  onCleanup(registerServerCommands(commands, (id) => sidecars.connection(id)));
   onCleanup(registerSessionCommands(commands, {
     available: navigation.available,
     create: navigation.create,

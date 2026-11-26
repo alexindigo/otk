@@ -5,6 +5,7 @@ import {
   type EntityStateStore,
   type EntryChanges,
   failureNote,
+  LOCAL_SIDECAR,
   type Note,
   notificationFailure,
   NotificationHub,
@@ -15,7 +16,9 @@ import {
   permissionVisible,
   requestIdle,
   type Selection,
+  serverNote,
   type SidecarConnection,
+  type SidecarState,
   storageFailureNote,
 } from "@otk/client";
 import type {
@@ -28,6 +31,41 @@ import { registerBadgeChannel } from "../features/notify/badge.ts";
 import { registerOsChannel } from "../features/notify/os.ts";
 import { registerSoundChannel } from "../features/notify/sound.ts";
 import { registerToastChannel } from "../features/notify/toast.ts";
+
+/** Retain delivery receipts, not a second copy of server continuity. */
+export function serverNotifications(hub: NotificationHub) {
+  const published = new Map<string, Note>();
+  const remove = (id: string) => {
+    const previous = published.get(id);
+    if (!previous) return;
+    published.delete(id);
+    hub.retract(previous.id);
+  };
+  return {
+    remove,
+    update(list: readonly Pick<SidecarState, "id" | "label" | "continuity">[]) {
+      const present = new Set<string>();
+      for (const sidecar of list) {
+        const { id } = sidecar;
+        const note = serverNote(sidecar, id === LOCAL_SIDECAR);
+        if (!note) continue;
+        present.add(id);
+        const previous = published.get(id);
+        if (previous && previous.dismissalKey === note.dismissalKey) {
+          if (previous.title === note.title && previous.body === note.body) {
+            continue;
+          }
+          const next = hub.replace(previous, note);
+          if (next) published.set(id, next);
+        } else published.set(id, hub.publish(note));
+      }
+      for (const id of published.keys()) {
+        if (!present.has(id)) remove(id);
+      }
+    },
+  };
+}
+
 /** The application selects channels and supplies live host/selection/RPC ports. */
 export function applicationNotifications(input: {
   commands: CommandHub;
@@ -260,6 +298,7 @@ export function applicationNotifications(input: {
     hub.refresh();
   };
   const observed = new Map<string, () => void>();
+  const servers = serverNotifications(hub);
   return {
     hub,
     toast: toast.model,
@@ -267,6 +306,7 @@ export function applicationNotifications(input: {
     update,
     info: (text: string) => message(text),
     error: fail,
+    servers: servers.update,
     receive(sidecar: string, frame: ServerFrame) {
       if (!observed.has(sidecar)) {
         observed.set(
@@ -295,6 +335,7 @@ export function applicationNotifications(input: {
       }
     },
     remove(sidecar: string) {
+      servers.remove(sidecar);
       hub.retract(`storage/${sidecar}`);
       observed.get(sidecar)?.();
       observed.delete(sidecar);
@@ -320,6 +361,7 @@ export function applicationNotifications(input: {
       observed.clear();
       candidates.clear();
       receipts.clear();
+      servers.update([]);
       hub.stop();
       toast.stop();
       os.stop();
