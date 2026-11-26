@@ -65,7 +65,9 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     .toHaveCount(0);
   const geometry = await page.evaluate(() => {
     const p = document.querySelector("[data-message=step-1] .otk-text p")!,
-      c = document.querySelector("[data-message=step-1] .otk-code")!,
+      // The shared CodeBlock frame owns the reading track; its renderer is inset.
+      c = document.querySelector("[data-message=step-1] .otk-code-block")!,
+      renderer = c.querySelector(".otk-code")!.getBoundingClientRect(),
       a = p.getBoundingClientRect(),
       z = c.getBoundingClientRect(),
       s = getComputedStyle(p);
@@ -74,6 +76,8 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       code: z.width,
       left: a.left,
       codeLeft: z.left,
+      containsRenderer: renderer.width > 0 && renderer.left >= z.left &&
+        renderer.right <= z.right,
       font: s.fontFamily,
       size: s.fontSize,
       line: s.lineHeight,
@@ -82,6 +86,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(geometry.prose).toBeLessThanOrEqual(736);
   expect(Math.abs(geometry.code - geometry.prose)).toBeLessThan(.5);
   expect(Math.abs(geometry.left - geometry.codeLeft)).toBeLessThan(.5);
+  expect(geometry.containsRenderer).toBe(true);
   expect(geometry.font).toContain("IBM Plex Sans");
   expect([geometry.size, geometry.line]).toEqual(["14px", "24px"]);
   await expect(page.locator("[data-tool=bash] .otk-tool-toggle"))
@@ -94,14 +99,23 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await page.locator("[data-tool=read] .otk-tool-toggle").click();
   await expect(page.locator("[data-tool=edit] .otk-tool-body")).toHaveCount(0);
   await page.locator("[data-tool=edit] .otk-tool-toggle").click();
-  await expect(page.locator("[data-tool=read] .otk-tool-output"))
+  // Opening Edit can window Read out of the DOM. Return to Read without
+  // toggling it: the output and disclosure must survive that remount.
+  const read = "[data-tool=read]";
+  await revealAcquired(page, `${read} .otk-tool-toggle`);
+  await expect(page.locator(`${read} .otk-tool-toggle`)).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.locator(`${read} .otk-tool-output`))
     .toHaveJSProperty(
       "textContent",
       "Unrecognized read result\n<literal>keep me</literal>",
     );
-  await expect(page.locator("[data-tool=read] .otk-tool-output literal"))
+  await expect(page.locator(`${read} .otk-tool-output literal`))
     .toHaveCount(0);
-  await page.locator("[data-tool=read] .otk-tool-toggle").click();
+  await page.locator(`${read} .otk-tool-toggle`).click();
+  await revealAcquired(page, "[data-tool=edit] .otk-tool-toggle");
   await expect(page.locator("[data-tool=edit] .otk-tool-toggle"))
     .toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("[data-tool=edit] .otk-diff")).toContainText(
@@ -205,7 +219,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  // WP12 centers the disclosure, kind icon and label in adjacent shared slots.
+  // TreeNode and RecordRow own adjacent disclosure, kind and label slots.
   await revealAcquired(page, ".otk-work-fold");
   const fold = page.locator(".otk-work-fold");
   await expect(fold.locator(".otk-work-label")).toHaveCSS(
@@ -219,13 +233,17 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     const icon = heading.querySelector(".otk-tree-toggle")!
         .getBoundingClientRect(),
       label = el.querySelector(".otk-work-label")!.getBoundingClientRect();
-    const kind = el.querySelector(".otk-tree-icon")!.getBoundingClientRect();
+    const row = el.closest(".otk-record-row")!;
+    const kind = row.querySelector(".otk-tree-icon")!.getBoundingClientRect();
     return {
       center: (icon.top + icon.bottom - label.top - label.bottom) / 2,
       gap: kind.left - icon.right,
       expected: (rail.width - icon.width) / 2,
       labelGap: label.left - kind.right,
-      expectedLabelGap: parseFloat(getComputedStyle(el).columnGap),
+      expectedLabelGap: parseFloat(
+        getComputedStyle(row.querySelector(".otk-record-row-label")!)
+          .marginInlineStart,
+      ),
     };
   });
   expect(Math.abs(disclosure.center)).toBeLessThan(.5);
