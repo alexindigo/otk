@@ -23,6 +23,7 @@ import {
   type Drafts,
   type ForkNotes,
   type InputGuard,
+  keyedReload,
   type ListInteraction,
   type ProjectSelection,
   route,
@@ -108,6 +109,8 @@ export function createShellState(
     (id) => resources.inbox(id).entities,
   );
   const drafts = createDrafts(solidState);
+  const hasServer = (id: string) =>
+    sidecars.state.list.some((server) => server.id === id);
   let tabStorage: Storage | null = null;
   try {
     tabStorage = globalThis.sessionStorage;
@@ -118,29 +121,22 @@ export function createShellState(
     navigate: () => globalThis.location.reload(),
     owners: {
       drafts,
-      connections: {
-        snapshot: () =>
-          sidecars.state.list.map(({ id }) => ({
+      connections: keyedReload({
+        ids: () => sidecars.state.list.map(({ id }) => id),
+        snapshot(id) {
+          const { attention, requests } = sidecars.connection(id);
+          return {
             id,
-            attention: sidecars.connection(id).attention.snapshot(),
-            requests: sidecars.connection(id).requests.snapshot(),
-          })),
-        restore(value) {
-          for (
-            const saved of value as {
-              id: string;
-              attention: unknown;
-              requests: unknown;
-            }[]
-          ) {
-            if (
-              !sidecars.state.list.some(({ id }) => id === saved.id)
-            ) continue;
-            sidecars.connection(saved.id).attention.restore(saved.attention);
-            sidecars.connection(saved.id).requests.restore(saved.requests);
-          }
+            attention: attention.snapshot(),
+            requests: requests.snapshot(),
+          };
         },
-      },
+        restore({ id, attention, requests }) {
+          const connection = sidecars.connection(id);
+          connection.attention.restore(attention);
+          connection.requests.restore(requests);
+        },
+      }),
     },
   });
   const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -183,25 +179,55 @@ export function createShellState(
         action,
       ),
   });
+  const restoreSend = (
+    target: import("@otk/client").Selection,
+    saved: Parameters<ReturnType<typeof actions.delivery>["resume"]>[0],
+    intent?: import("@otk/client").ClientIntent,
+  ) => {
+    const delivery = actions.delivery(target);
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    const id = "message" in saved ? saved.message.id : saved.messageID;
+    const outcome = drafts.resumeSend(key, id, () => void delivery.reload());
+    const operation = intent && sidecars.connection(target.sidecarId).requests
+      .operations(target.sessionID)
+      .find(({ state }) =>
+        state.ref.clientID === intent.clientID && state.ref.key === intent.key
+      );
+    delivery.resume(
+      saved,
+      operation?.result as
+        | Promise<import("@otk/protocol").SubmissionReceipt | null>
+        | undefined,
+      outcome && { outcome },
+    );
+  };
   reload.register("transcripts", {
     snapshot: () => session.transcripts.snapshot(),
     restore(value) {
-      session.transcripts.restore(value, (target, send) => {
-        const operation = sidecars.connection(target.sidecarId).requests
-          .operations()
-          .find(({ state }) =>
-            state.ref.clientID === send.intent.clientID &&
-            state.ref.key === send.intent.key
-          );
-        actions.delivery(target).resume(
-          send,
-          operation?.result as
-            | Promise<import("@otk/protocol").PromptReceipt | null>
-            | undefined,
+      const unavailable = session.transcripts.restore(
+        value,
+        (target, send) => restoreSend(target, send, send.intent),
+        hasServer,
+      );
+      if (unavailable) {
+        queueMicrotask(() =>
+          navigation.fail(
+            new Error(
+              "Saved sends for removed servers are kept in this tab but cannot be checked.",
+            ),
+          )
         );
-      });
+      }
     },
   });
+  for (const { key, messageID, intent } of drafts.pendingSends()) {
+    const separator = key.indexOf("/");
+    const sidecarId = key.slice(0, separator);
+    if (separator < 0 || !hasServer(sidecarId)) continue;
+    restoreSend({ sidecarId, sessionID: key.slice(separator + 1) }, {
+      messageID,
+    }, intent);
+  }
   const rename = createSessionRename({
     rename: actions.rename,
     title: (target) =>

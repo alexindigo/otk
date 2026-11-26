@@ -226,6 +226,42 @@ for (
   });
 }
 
+Deno.test("reload retains removed-server sends without creating a transcript or blocking another server", () => {
+  const f = fixture(policy);
+  const send = {
+    intent: { clientID: "tab", key: "send" },
+    message: f.messages("a", 1)[0],
+    phase: "pending" as const,
+    dispatched: true,
+  };
+  const removed = {
+    target: { sidecarId: "removed", sessionID: "a" },
+    sends: [send],
+  };
+  try {
+    const resumed: string[] = [];
+    assertEquals(
+      f.owner.restore(
+        [removed, { target: target("a"), sends: [send] }],
+        (target) => {
+          resumed.push(target.sidecarId);
+        },
+        (id) => id === "server",
+      ),
+      1,
+    );
+    assertEquals(resumed, ["server"]);
+    assertEquals(f.owner.get(removed.target), undefined);
+    assert(
+      (f.owner.snapshot() as typeof removed[]).some(({ target }) =>
+        target.sidecarId === "removed"
+      ),
+    );
+  } finally {
+    f.stop();
+  }
+});
+
 for (const boundary of ["baseline", "projection"]) {
   Deno.test(`content ${boundary} exceptions preserve their reason and reacquire canonical authority`, async () => {
     const f = fixture(policy);

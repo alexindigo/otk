@@ -37,6 +37,15 @@ export interface TranscriptClock {
   set(run: () => void, ms: number): unknown;
   clear(timer: unknown): void;
 }
+type SavedSend =
+  & Pick<
+    import("./pending-send.ts").PendingSend,
+    "intent" | "message" | "phase" | "dispatched"
+  >
+  & {
+    failure?: import("@otk/protocol").PublicFailure;
+  };
+type SavedTranscript = { target: BodyTarget; sends: SavedSend[] };
 export interface TranscriptsOwner {
   snapshot(): unknown;
   restore(
@@ -45,7 +54,8 @@ export interface TranscriptsOwner {
       target: BodyTarget,
       send: import("./pending-send.ts").PendingSend,
     ) => void,
-  ): void;
+    hasServer: (sidecarId: string) => boolean,
+  ): number;
   setDemand(value: TranscriptDemand): void;
   interact(scope: ScopeRef): void;
   preload(
@@ -107,6 +117,7 @@ export function createTranscripts(o: {
   >();
   const scopes = new Map<string, Scope>(),
     policies = new Map<string, MessagePolicy>();
+  const detached = new Map<string, SavedTranscript>();
   const queue: Job[] = [], active = new Map<string, number>();
   const queued = new Map<string, number>(),
     priorities = new Map<string, number>();
@@ -269,8 +280,9 @@ export function createTranscripts(o: {
     pump();
   };
   return {
-    snapshot: () =>
-      [...resources.values()].flatMap(({ target, owner }) => {
+    snapshot: () => [
+      ...detached.values(),
+      ...[...resources.values()].flatMap(({ target, owner }) => {
         const sends = owner.projection.pendingSends().map((
           { intent, message, phase, dispatched, feedback },
         ) => ({
@@ -282,15 +294,17 @@ export function createTranscripts(o: {
         }));
         return sends.length ? [{ target, sends }] : [];
       }),
-    restore(value, resume) {
-      for (
-        const { target, sends } of value as {
-          target: BodyTarget;
-          sends: (import("./pending-send.ts").PendingSend & {
-            failure?: import("@otk/protocol").PublicFailure;
-          })[];
-        }[]
-      ) {
+    ],
+    restore(value, resume, hasServer) {
+      let unavailable = 0;
+      for (const saved of value as SavedTranscript[]) {
+        const { target, sends } = saved;
+        if (!hasServer(target.sidecarId)) {
+          detached.set(key(target), saved);
+          unavailable += sends.length;
+          continue;
+        }
+        detached.delete(key(target));
         const owner = resource(target);
         for (const send of sends) {
           const restored = {
@@ -306,6 +320,7 @@ export function createTranscripts(o: {
           resume(target, restored);
         }
       }
+      return unavailable;
     },
     setDemand(value) {
       if (stopped) return;
