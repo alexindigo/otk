@@ -226,6 +226,7 @@ export interface Commands {
       | "delivery-helpers"
       | "header-shells"
       | "helper-dispositions"
+      | "helper-review"
       | "trail-decisions"
       | "trail-delivery"
       | "trail-overflow";
@@ -444,6 +445,7 @@ export function request(value: unknown): ControlRequest {
           "delivery-helpers",
           "header-shells",
           "helper-dispositions",
+          "helper-review",
           "trail-decisions",
           "trail-delivery",
           "trail-overflow",
