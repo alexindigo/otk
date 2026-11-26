@@ -60,9 +60,9 @@ test(
     expect(batches[0].frame.params!.refs).toHaveLength(2);
     await expect(chips(page)).toHaveCount(0);
     await expect(prompt(page)).toHaveValue("");
-    const storage = `${state.controller.info!.root}/otk-${
-      new URL(state.url).port
-    }`;
+    const storage = state.controller.info!.statePath;
+    expect(storage, "fixture must publish its actual state directory")
+      .toBeTruthy();
     for (const name of ["otk.db", "digest.db", "otk.db-wal", "digest.db-wal"]) {
       try {
         const persisted = await readFile(`${storage}/${name}`, "utf8");
