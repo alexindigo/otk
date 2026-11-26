@@ -29,6 +29,7 @@ interface Facts {
   permissions: number;
   permissionIDs: readonly string[];
   questions: number;
+  questionIDs: readonly string[];
   errorIdentity: string;
   error?: string;
   observations?: ErrorObservation[];
@@ -46,6 +47,7 @@ const facts = (entry?: IndexEntry): Facts | undefined =>
     permissions: entry.attention.permissions,
     permissionIDs: entry.activity?.permissions?.keys ?? [],
     questions: entry.attention.questions,
+    questionIDs: entry.activity?.inputs?.keys ?? [],
     error: entry.attention.error,
     observations: entry.attention.errorState?.observations.filter((item) =>
       !item.cleared
@@ -205,6 +207,7 @@ export class NotificationTriggers {
         nativeLive
           ? current?.terminal
           : entry.completedAt || (baseline ? current?.terminal : undefined),
+        !replaced,
       );
     }
   }
@@ -264,6 +267,7 @@ export class NotificationTriggers {
     entry: Facts | undefined,
     baseline: boolean,
     completedAt?: number,
+    connected = false,
   ): void {
     const state = this.#connections.get(sidecar)!;
     const previous = state.roots.get(session),
@@ -274,6 +278,7 @@ export class NotificationTriggers {
         permissions: 0,
         permissionIDs: [],
         questions: 0,
+        questionIDs: [],
         errorIdentity: "",
         title: "",
       };
@@ -325,31 +330,31 @@ export class NotificationTriggers {
         this.retract(note.id);
       }
     }
+    if (baseline) {
+      // A scope snapshot can be the first accepted frame to carry a live input
+      // edge for a known session. It is not a reconnect or a historical admission.
+      if (connected && previous) {
+        this.#compareInput(
+          sidecar,
+          session,
+          id,
+          entry,
+          old,
+          this.#resolveInput(id, entry),
+        );
+      }
+      return;
+    }
     if (
-      baseline ||
       !previous && !finished && !entry.permissions && !entry.questions &&
-        !entry.error
+      !entry.error
     ) return;
     const priorOutcome = this.#outcomes.get(id);
     if (old.status === "idle" && entry.status !== "idle" && priorOutcome) {
       this.#outcomes.delete(id);
       this.retract(priorOutcome.id);
     }
-    const pending = this.#kinds.get(id);
-    const resolved = (pending === "permission" && !entry.permissions) ||
-      (pending === "question" && !entry.questions);
-    const remaining = resolved
-      ? entry.permissions
-        ? "permission"
-        : entry.questions
-        ? "question"
-        : undefined
-      : undefined;
-    // Retire the old input before its root ID can acquire a completion owner.
-    if (resolved && !remaining) {
-      this.#kinds.delete(id);
-      this.#retractInput(id);
-    }
+    const remaining = this.#resolveInput(id, entry);
     const publishOutcome = (note: Note) => {
       const previous = this.#outcomes.get(id);
       const beforeCause = previous &&
@@ -473,14 +478,45 @@ export class NotificationTriggers {
         });
       }
     }
+    this.#compareInput(sidecar, session, id, entry, old, remaining);
+  }
+  #resolveInput(
+    id: string,
+    entry: Facts,
+  ): "permission" | "question" | undefined {
+    const pending = this.#kinds.get(id);
+    const resolved = (pending === "permission" && !entry.permissions) ||
+      (pending === "question" && !entry.questions);
+    if (!resolved) return undefined;
+    if (entry.permissions) return "permission";
+    if (entry.questions) return "question";
+    // Retire the old input before its root ID can acquire a completion owner.
+    this.#kinds.delete(id);
+    this.#retractInput(id);
+  }
+  #compareInput(
+    sidecar: string,
+    session: string,
+    id: string,
+    entry: Facts,
+    old: Pick<
+      Facts,
+      "permissions" | "permissionIDs" | "questions" | "questionIDs"
+    >,
+    remaining?: "permission" | "question",
+  ): void {
+    const newQuestion = entry.questionIDs.find((id) =>
+      !old.questionIDs.includes(id)
+    );
     const newPermission = entry.permissions > old.permissions ||
       entry.permissions > 0 &&
         entry.permissionIDs.some((id) => !old.permissionIDs.includes(id));
-    const kind: Note["kind"] | undefined = entry.questions > old.questions
-      ? "question"
-      : newPermission || this.#held.has(id) && entry.permissions > 0
-      ? "permission"
-      : remaining;
+    const kind: Note["kind"] | undefined =
+      entry.questions > 0 && (newQuestion || entry.questions > old.questions)
+        ? "question"
+        : newPermission || this.#held.has(id) && entry.permissions > 0
+        ? "permission"
+        : remaining;
     if (kind) {
       // Ordinary completion and input attention historically replace one root
       // note. Do not retain a stale alias that could later retract its input.
@@ -490,6 +526,11 @@ export class NotificationTriggers {
         {
           id,
           kind,
+          ...(kind === "question" && (newQuestion ?? entry.questionIDs[0])
+            ? {
+              dismissalKey: `question/${newQuestion ?? entry.questionIDs[0]}`,
+            }
+            : {}),
           sessionRef: { sidecar, session },
           title: kind === "permission"
             ? "Permission needed"
