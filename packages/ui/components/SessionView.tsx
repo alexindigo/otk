@@ -135,6 +135,7 @@ export default function SessionView(props: {
   prefs: Preferences;
   permissions: PermissionRequest[];
   siblings: import("@otk/protocol").SessionStructure[];
+  onMoveSibling?(delta: number): void | Promise<void>;
   onOpenChild(id: string): void;
   child: boolean;
   revert: RevertInfo | null;
@@ -687,17 +688,17 @@ export default function SessionView(props: {
             aria-busy={transcriptBusy() ? "true" : "false"}
           >
             {props.displayMenu}
-            <Show when={props.info?.parentID}>
+            <Show
+              when={props.info?.parentID &&
+                (props.transcript || props.onMoveSibling)}
+            >
               <SubagentBar
-                info={props.info!}
-                siblings={props.siblings}
-                onMove={props.transcript
-                  ? async (delta) => {
-                    const id = await props.transcript!.sibling(delta);
-                    if (id) props.onOpenChild(id);
-                  }
-                  : undefined}
-                onOpen={props.onOpenChild}
+                available={props.siblings.length > 1}
+                onMove={async (delta) => {
+                  if (!props.transcript) return props.onMoveSibling?.(delta);
+                  const id = await props.transcript.sibling(delta);
+                  if (id) props.onOpenChild(id);
+                }}
               />
             </Show>
             <div

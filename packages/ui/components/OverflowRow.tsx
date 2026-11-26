@@ -30,7 +30,11 @@ export default function OverflowRow<T extends { key: string }>(props: {
   /** Readable content floor; required items reflow instead of clipping it. */
   minimumItemSize?(item: T): string;
   measure(item: T): Element;
-  children(item: () => T, compact: () => boolean): Element;
+  children(
+    item: () => T,
+    compact: () => boolean,
+    scrolling: () => boolean,
+  ): Element;
   more(keys: () => readonly string[]): Element;
 }): Element {
   let root!: HTMLDivElement, strip!: HTMLDivElement, sizing!: HTMLSpanElement;
@@ -54,6 +58,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
       ) => [key, element.getBoundingClientRect().width]),
     );
     for (const key of props.required) {
+      // In a progressive row only editors can exceed their measured title.
+      if (props.compactMeasure && !props.uncompacted?.includes(key)) continue;
       const current = liveFrames.get(key)?.getBoundingClientRect().width;
       // A required item may already have shrunk to make room for its optional
       // neighbours. Feeding that compressed width back into fitting lets those
@@ -126,21 +132,23 @@ export default function OverflowRow<T extends { key: string }>(props: {
     };
   });
   const fitSnapshot = () => {
-    if (props.reveal) {
-      queueMicrotask(() =>
-        liveFrames.get(props.reveal!)?.scrollIntoView({
-          inline: "nearest",
-          block: "nearest",
-        })
-      );
-    }
     const items = props.items,
       fit = fitOverflow({
         ...measurements(),
         keys: items.map((item) => item.key),
         required: props.required,
         preferred: props.preferred,
+        scrollRequired: props.singleLine,
       });
+    const reveal = props.reveal;
+    if (reveal) {
+      queueMicrotask(() =>
+        liveFrames.get(reveal)?.scrollIntoView({
+          inline: fit.mode === "scroll" ? "end" : "nearest",
+          block: "nearest",
+        })
+      );
+    }
     return {
       visible: items.filter((item) => fit.visible.includes(item.key)),
       overflow: fit.overflow,
@@ -159,6 +167,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
         "is-compact": snapshot().mode === "compact" ||
           snapshot().mode === "collapsed",
         "is-progressive": !!props.compactMeasure,
+        "is-paged": snapshot().mode === "scroll",
       }]}
       style={{
         "--overflow-intrinsic": measurements().intrinsic === undefined
@@ -269,6 +278,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
                         item,
                         () => snapshot().mode === "compact" ||
                           snapshot().mode === "collapsed",
+                        () => snapshot().mode === "scroll",
                       )}
                   />
                 </div>

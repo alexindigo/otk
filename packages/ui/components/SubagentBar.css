@@ -2,13 +2,11 @@
 .otk-subagent-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-6);
+  padding-inline: var(--lane-gutter);
   border-bottom: 1px solid var(--muted);
 }
-.otk-subagent-bar > div {
-  display: flex;
-  gap: var(--space-2);
+.otk-subagent-bar > button {
+  block-size: var(--control-size);
 }
