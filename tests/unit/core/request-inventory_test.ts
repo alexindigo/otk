@@ -143,6 +143,7 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "tasks.addSession",
     "tasks.sessions",
     "sessions.seen",
+    "sessions.acknowledge",
     "frecency.bump",
   ];
   const reads = [
@@ -400,6 +401,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "projects.scan",
     "projects.templates",
     "sessions.seen",
+    "sessions.acknowledge",
     "sessions.finishes",
     "digests.scope",
     "terminal.list",
@@ -434,7 +436,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       read: 34,
       native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
       local: 12,
-      "prepared-local": 6,
+      "prepared-local": 7,
       lease: 2,
     });
   } finally {
@@ -741,6 +743,13 @@ test("real metadata actions settle with their writes and replay original results
     await execute("projects.visit", { directory: "/p", active: true });
     await execute("projects.templates", { templates: ["/p/{project}"] });
     await execute("sessions.seen", { sessionID: "tstv1-two", terminal: 0 });
+    assertEquals(
+      await execute("sessions.acknowledge", {
+        scope: "subtree",
+        sessionID: "tstv1-two",
+      }),
+      { sessions: [] },
+    );
     await execute("prefs.set", { key: "showCost", value: false });
     await execute("layout.patch", { rightCollapsed: false });
     await execute("layout.location", {

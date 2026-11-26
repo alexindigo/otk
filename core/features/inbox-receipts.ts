@@ -76,3 +76,21 @@ export const visitReceipt = metadataReceipt(
 );
 export const templatesReceipt = metadataReceipt("project-templates", strings);
 export const seenReceipt = metadataReceipt("session-seen", number);
+export const acknowledgeReceipt = metadataReceipt(
+  "session-acknowledge",
+  (value) => {
+    const row = object(value);
+    if (!Array.isArray(row.sessions)) {
+      throw new TypeError("Invalid acknowledgement receipt");
+    }
+    return {
+      sessions: row.sessions.map((value) => {
+        const row = object(value), terminal = number(row.terminal);
+        if (!Number.isSafeInteger(terminal)) {
+          throw new TypeError("Invalid terminal in acknowledgement receipt");
+        }
+        return { sessionID: sessionID(row)!, terminal };
+      }),
+    };
+  },
+);

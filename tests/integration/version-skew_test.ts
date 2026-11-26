@@ -14,7 +14,7 @@ test("incompatible hello retains the legacy protocol discriminator and supplies 
   });
   const reply = Promise.withResolvers<Record<string, unknown>>();
   const closed = Promise.withResolvers<{ code: number; reason: string }>();
-  ws.onopen = () => ws.send(JSON.stringify({ t: "hello", protocol: 20 }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: "hello", protocol: 24 }));
   ws.on("message", (data) => reply.resolve(JSON.parse(data.toString())));
   ws.on(
     "close",
@@ -22,7 +22,7 @@ test("incompatible hello retains the legacy protocol discriminator and supplies 
   );
   try {
     const frame = await bounded("protocol reply", reply.promise, 5000);
-    console.log("Protocol-20 reply:", JSON.stringify(frame));
+    console.log("Protocol-24 reply:", JSON.stringify(frame));
     const health = await (await fetch(`${app.url}/api/health`)).json();
     assertEquals(frame, {
       t: "error",

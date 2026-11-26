@@ -6,8 +6,8 @@ import { openSession } from "../../fixtures/wire.ts";
 test.use({ profile: "contract-sessions-hierarchy" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
 const main = "tstv1-otk";
-const pillText = "2 running · 1 needs you · 3 not returned";
-const rowsInOrder = [0, 1, 2, 6, 4, 3].map((n) => `tstv1-disp-${n}`);
+const pillText = /^\s*1\s*2\s*3\s*$/;
+const rowsInOrder = [2, 0, 1, 6, 4, 3].map((n) => `tstv1-disp-${n}`);
 const longTitle =
   "Disposition helper 7 checking every checkout of the task for guest inventory drift before the merge queue runs";
 const themes = [["otk-dark", "dark"], ["otk-light", "linen"], [
@@ -78,15 +78,20 @@ test(
     await page.setViewportSize({ width: 1440, height: 900 });
     const task = await openTask(state, page);
     const pill = page.getByRole("button", {
-      name: "Subagents: 2 running, 1 needs you, 3 not returned",
+      name: "Subagents: 1 needs you, 2 running, 3 finished",
     });
     await expect(pill).toHaveText(pillText, { useInnerText: true });
     const tab = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
     const lamp = pill.locator(".otk-status-light:visible");
     await expect(tab).toHaveAttribute("data-state", "blocked");
-    await expect(lamp).toHaveAttribute("data-state", "blocked");
+    await expect(lamp).toHaveCount(3);
+    await expect(lamp.nth(0)).toHaveAttribute("data-state", "blocked");
+    await expect(lamp.nth(1)).toHaveAttribute("data-state", "working");
+    await expect(lamp.nth(2)).toHaveAttribute("data-state", "finished");
     const paint = (node: Element) => getComputedStyle(node).backgroundImage;
-    expect(await lamp.evaluate(paint)).toEqual(await tab.evaluate(paint));
+    expect(await lamp.first().evaluate(paint)).toEqual(
+      await tab.evaluate(paint),
+    );
   },
 );
 
@@ -105,10 +110,11 @@ test(
         // Zero-blur spread extends the painted button, not its layout box.
         const css = getComputedStyle(button);
         const spread = Number(css.boxShadow.match(/(-?[\d.]+)px$/)?.[1] ?? 0);
-        const content = button.querySelector(".otk-live-count.is-full")!;
+        const content = button.querySelector(".otk-live-count-compact")!;
         const lamp = content.querySelector(".otk-status-light")!
           .getBoundingClientRect();
-        const label = content.querySelector(".otk-control-label")!
+        const label = Array.from(content.querySelectorAll(".otk-control-label"))
+          .at(-1)!
           .getBoundingClientRect();
         const probe = document.createElement("span");
         probe.style.inlineSize = "var(--pill-work-inset, var(--space-2))";
@@ -183,9 +189,9 @@ test(
     await page.locator(".otk-subagents-trigger").click();
     const menu = page.getByRole("menu", { name: "Subagents", exact: true });
     await expect(menu.locator(".otk-subagent-heading")).toHaveText([
-      "Running 2",
       "Needs you 1",
-      "Not returned 3",
+      "Running 2",
+      "Finished 3",
     ]);
     const rows = menu.locator("[data-subagent]");
     await expect(rows).toHaveCount(rowsInOrder.length);
@@ -199,7 +205,7 @@ test(
         menu.locator(`[data-subagent="${id}"]`).getByRole("menuitem", {
           name: /^Stop /,
         }),
-      ).toHaveCount(index < 2 ? 1 : 0);
+      ).toHaveCount(index === 1 || index === 2 ? 1 : 0);
     }
     const time = (n: number) =>
       menu.locator(`[data-subagent="tstv1-disp-${n}"] .otk-subagent-time`);
@@ -281,7 +287,7 @@ test(
             ? longTitle
             : `Disposition helper ${Number(rowsInOrder[index].at(-1)) + 1}`,
         );
-        if (index < 2) {
+        if (index === 1 || index === 2) {
           expect(pos.gaps, context).toBeDefined();
           expect.soft(Math.max(...pos.gaps!) - Math.min(...pos.gaps!), context)
             .toBeLessThanOrEqual(1);

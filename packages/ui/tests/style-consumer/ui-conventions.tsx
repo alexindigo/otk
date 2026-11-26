@@ -61,10 +61,10 @@ function SubagentTimes() {
       ...presentedEntity(
         "session",
         id,
-        run ? "working" : id === blocked ? "blocked" : "none",
+        run ? "working" : id === blocked ? "blocked" : "finished",
       ),
       evidence: {
-        helper: run ? "running" : id === blocked ? "needsYou" : "notReturned",
+        helper: run ? "running" : id === blocked ? "needsYou" : "finished",
         work: !!run,
         permissions: 0,
         questions: 0,
@@ -93,7 +93,15 @@ function SubagentTimes() {
         entities={entities}
         helpers={{
           ids,
-          counts: { running: running.length, needsYou: 1, notReturned: 1 },
+          counts: { running: running.length, needsYou: 1, finished: 1 },
+          lamps: {
+            all: { state: "blocked" },
+            groups: {
+              running: { state: "working" },
+              needsYou: { state: "blocked" },
+              finished: { state: "finished" },
+            },
+          },
         }}
         current={running[1][0]}
         owner={owner}

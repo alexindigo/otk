@@ -60,7 +60,7 @@ export default function Subagents(
     const byState: Record<HelperDisposition, string[]> = {
       running: [],
       needsYou: [],
-      notReturned: [],
+      finished: [],
     };
     const store = entities();
     if (store) {
@@ -126,9 +126,7 @@ export default function Subagents(
           triggerClass={`${LIVE_COUNT_TRIGGER} otk-subagents-trigger`}
           label="Subagents"
           title="Subagents"
-          triggerLabel={`Subagents: ${
-            helperCountsLabel(publication().counts, "spoken")
-          }`}
+          triggerLabel={`Subagents: ${helperCountsLabel(publication().counts)}`}
           size="fit"
           control={(control) => menu = control}
           dismissOnAction={false}
@@ -140,12 +138,10 @@ export default function Subagents(
           onClose={stop}
           trigger={
             <LiveCount
-              lamp={publication().lamps?.all}
-              label={helperCountsLabel(publication().counts)}
-              compact={grouped().map((group) => ({
-                id: group.kind,
-                count: group.count,
-                lamp: publication().lamps?.groups[group.kind],
+              compact={helperCountParts(publication().counts).map((part) => ({
+                id: part.kind,
+                count: part.count,
+                lamp: publication().lamps?.groups[part.kind],
               }))}
             />
           }
@@ -160,6 +156,10 @@ export default function Subagents(
                 >
                   <div class="otk-subagent-heading">
                     <ChromeMeta id={`${headingID}-${group().kind}`}>
+                      <StatusLight
+                        small
+                        state={lamp(publication().lamps?.groups[group().kind])}
+                      />
                       {group().title} {group().count}
                     </ChromeMeta>
                   </div>

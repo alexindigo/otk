@@ -28,7 +28,7 @@ test(
     // D70: the legacy helper-only task in the other checkout cannot take
     // either helper out of the human root's task.
     await expect(inventory).toHaveAccessibleName(
-      "Subagents: 1 running, 3 need you",
+      "Subagents: 3 need you, 1 running",
     );
     // D67 ancestry is independent of D66's in-task helper inventory.
     for (let n = 0; n < 4; n++) {
@@ -102,20 +102,14 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
   await expect(page).toHaveURL(new RegExp(`${nested}$`));
   await activity(state, helper, "release");
   await activity(state, nested, "release");
-  // D66: completion without delivery retains helpers, even after human seen.
+  // D72: a viewed finish leaves the list; the other finished helper stays.
   await visibleOnScreen(crumb(root));
   await visibleOnScreen(crumb(helper));
   await visibleOnScreen(crumb(nested));
   await crumb(root).click();
   await inventory.click();
   await visibleOnScreen(agent(helper));
-  await visibleOnScreen(agent(nested));
-  await viewByUrl(state, page, helper);
-  await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
-    "data-state",
-    "none",
-  );
-  await crumb(root).click();
+  await expect(agent(nested)).toHaveCount(0);
   for (const sessionID of [helper, nested]) {
     await state.controller.call("scenario", {
       lease: state.lease.lease,
@@ -143,6 +137,7 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
     "none",
   );
   await crumb(root).click();
+  await expect(inventory).toHaveCount(0);
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "release",

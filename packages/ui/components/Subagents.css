@@ -47,3 +47,8 @@
 .otk-subagent-name {
   inline-size: 100%;
 }
+.otk-subagent-heading > * {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}

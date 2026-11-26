@@ -52,7 +52,7 @@ export function entitySnapshot(
           terminalOrigin: verdict.terminalOrigin,
           evidence: {
             failure: verdict.terminalFailure,
-            awaitingDelivery: verdict.state === "finishedUnseen",
+            helper: verdict.state === "finishedUnseen" ? "finished" : undefined,
             work: activity
               ? activity.fresh && activity.keys.length > 0
               : verdict.state === "working",

@@ -22,7 +22,7 @@ clients. `build` is the served bundle identity (a hash of `index.html`), also
 provided in the page bootstrap and welcome as `sidecar.build`. The welcome's
 `sidecar.instance` changes per process start. The connection owner compares
 them: a different build of the page's server means its code is outdated; a new
-instance with the same build is a restart. Protocol 24 lets older tabs that
+instance with the same build is a restart. Protocol 25 lets older tabs that
 check only the protocol receive the legacy error once and Reload through their
 existing path. Reload checkpoints feature-owned unsaved state, checks that the
 server is reachable, then navigates. Refusal leaves the page and work intact.
@@ -200,6 +200,12 @@ token. Adapters contribute neutral `SupervisionEvidence` identities and
 inventory freshness; only the core supervision owner interprets them. Legacy
 lifecycle status is not a lamp input. `sessions.seen` requires the captured
 displayed terminal, so delayed acknowledgement cannot consume a newer finish.
+Protocol 25 adds `sessions.acknowledge`: the server captures published unseen
+terminals for a task's Finished helpers or the full session subtree across
+checkouts, then returns the acknowledged session IDs and terminals. The same
+per-user watermarks back both methods. `SessionEvidence.helper` replaces
+`awaitingDelivery`; the three helper dispositions are `running`, `needsYou`, and
+`finished`. Seen helpers leave the roster unless they are working or need input.
 
 `SupervisionEvidence.delivered` carries a proven parent receipt and exact
 covered terminal. The supervision owner's explicit `unseen` fact includes this
