@@ -54,14 +54,18 @@ test(
       }
       await expect(entry.locator(".otk-failure-content")).toHaveCount(1);
       const geometry = await entry.evaluate((el) => {
-        const row = el.closest(".otk-list-row")!;
-        const content = row.querySelector(".otk-list-row-content")!
+        // Issue 2.96: the shared sidebar row owns both the content tracks
+        // and its full-width feedback track below them.
+        const row = el.closest(".otk-sidebar-row-grid")!;
+        const content = row.getBoundingClientRect();
+        const action = row.querySelector(".otk-sidebar-row-main")!
           .getBoundingClientRect();
         const feedback = el.getBoundingClientRect();
         return {
           width: Math.abs(content.width - feedback.width),
           left: Math.abs(content.left - feedback.left),
-          separate: !!el.closest(".otk-list-row-feedback"),
+          separate: !!el.closest(".otk-sidebar-row-feedback") &&
+            feedback.top >= action.bottom - .5,
         };
       });
       expect(geometry.separate).toBe(true);
