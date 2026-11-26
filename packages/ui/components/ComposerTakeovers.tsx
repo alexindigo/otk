@@ -26,6 +26,8 @@ export default function ComposerTakeovers(
 ): Element {
   const { takeovers } = useUiRegistries(), session = useSessionPorts();
   const { commands } = useCommandPorts();
+  let activity: HTMLDivElement | undefined;
+  const focusHome = () => activity?.focus();
   const shells = () => session.shells?.();
   const title = (id: string) =>
     session.entry(id)?.title ?? "Session unavailable";
@@ -58,7 +60,13 @@ export default function ComposerTakeovers(
           data-read-only={props.readOnly ? "true" : "false"}
         >
           <div class="otk-composer-activity-slot">
-            <div class="otk-composer-activity" aria-label="Message destination">
+            <div
+              class="otk-composer-activity"
+              role="region"
+              aria-label="Message destination"
+              tabindex={-1}
+              ref={(region) => activity = region}
+            >
               <div class={`otk-composer-activity-line ${POPOVER_BOUNDS}`}>
                 <span
                   class="otk-composer-target"
@@ -90,6 +98,7 @@ export default function ComposerTakeovers(
                     current={session.sessionID()}
                     entities={entities()}
                     owner={session.liveWork}
+                    focusHome={focusHome}
                     title={title}
                     agent={(id) => session.entry(id)?.agent}
                     openAction={(id) =>
@@ -98,14 +107,11 @@ export default function ComposerTakeovers(
                         sessionID: id,
                       }, title(id))}
                   />
-                  <Show when={shells()?.count ? shells() : undefined}>
-                    {(scope) => (
-                      <LiveWork
-                        shells={scope()}
-                        sessionID={session.sessionID()}
-                      />
-                    )}
-                  </Show>
+                  <LiveWork
+                    shells={shells()}
+                    sessionID={session.sessionID()}
+                    focusHome={focusHome}
+                  />
                 </span>
               </div>
             </div>
