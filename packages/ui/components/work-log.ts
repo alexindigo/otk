@@ -57,15 +57,24 @@ export function partFrames(
   reply = false,
 ): PartFrame[] {
   const frames: PartFrame[] = [];
+  const work: Part[] = [];
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
-    // Inside a reply, work belongs to the reply's own flow and work log.
-    const transcript = value.frame === "transcript" && !(reply && value.work),
+    if (reply && value.work) {
+      work.push(part);
+      continue;
+    }
+    const transcript = value.frame === "transcript",
       previous = frames.at(-1);
     if (!transcript && previous && !previous.transcript) {
       previous.parts.push(part);
     } else frames.push({ id: part.id, parts: [part], transcript });
+  }
+  if (work.length) {
+    const last = frames.at(-1);
+    if (last && !last.transcript) last.parts.push(...work);
+    else frames.push({ id: work[0].id, parts: work, transcript: false });
   }
   return frames;
 }
@@ -107,30 +116,26 @@ export function partGroups(
   replyStart?: (part: Part) => ReplyStart | undefined,
 ): PartGroup[] {
   const groups: PartGroup[] = [];
+  let work: PartGroup | undefined;
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
-    const work = !!value.work, previous = groups.at(-1);
-    if (work && previous?.work) {
-      previous.parts.push(part);
-      if (value.required) previous.required = true;
+    if (value.work) {
+      work ??= { id: part.id, parts: [], work: true };
+      work.parts.push(part);
+      if (value.required) work.required = true;
     } else {groups.push({
         id: part.id,
         parts: [part],
-        work,
-        ...(!work && value.prose ? { replyStart: replyStart?.(part) } : {}),
+        work: false,
+        ...(value.prose ? { replyStart: replyStart?.(part) } : {}),
         ...(value.required ? { required: true } : {}),
       });}
   }
-  for (const group of groups) {
-    if (group.work) {
-      const workingMs = segmentWorkingTime(
-        group.parts,
-        presentation,
-        timingParts,
-      );
-      if (workingMs !== undefined) group.workingMs = workingMs;
-    }
+  if (work) {
+    const workingMs = segmentWorkingTime(work.parts, presentation, timingParts);
+    if (workingMs !== undefined) work.workingMs = workingMs;
+    groups.push(work);
   }
   return groups;
 }

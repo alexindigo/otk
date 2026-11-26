@@ -47,27 +47,24 @@ Deno.test("hidden wait replacement invalidates dependent segment timing without 
     );
   const first = update(wait(1500)), stable = first.frames[0].groups[0];
   assertEquals(first.frames[0].groups.map((group) => group.workingMs), [
-    700,
     undefined,
-    900,
+    1600,
   ]);
   const next = update(wait(1600));
   assertEquals(next.frames[0].groups.map((group) => group.workingMs), [
-    700,
     undefined,
-    800,
+    1500,
   ]);
   assertStrictEquals(next.frames[0].groups[0], stable);
-  assertEquals(next.frames[0].groups[2].id, first.frames[0].groups[2].id);
+  assertEquals(next.frames[0].groups[1].id, first.frames[0].groups[1].id);
   assertEquals(
     update(wait()).frames[0].groups.map((group) => group.workingMs),
-    [undefined, undefined, undefined],
+    [undefined, undefined],
     "incomplete waits are not known zero",
   );
   assertEquals(update().frames[0].groups.map((group) => group.workingMs), [
-    700,
     undefined,
-    1200,
+    1900,
   ]);
 });
 
@@ -98,16 +95,15 @@ Deno.test("segment timing follows cached part evidence across clock updates and 
     );
   assertEquals(
     update(part("last", 1000)).frames[0].groups.map((g) => g.workingMs),
-    [400, undefined, 900],
+    [undefined, 900],
   );
   assertEquals(presented, 3);
   assertEquals(
     update(part("last", 1300)).frames[0].groups.map((g) => g.workingMs),
-    [400, undefined, 1200],
+    [undefined, 1200],
   );
   assertEquals(presented, 4);
   assertEquals(update(part("last")).frames[0].groups.map((g) => g.workingMs), [
-    400,
     undefined,
     undefined,
   ]);
@@ -200,7 +196,7 @@ Deno.test("live failure presentation rebuilds the enclosing work group's require
   }
 });
 
-Deno.test("bookkeeping after reply text keeps its own fold across reload and required changes", () => {
+Deno.test("bookkeeping after reply text joins the existing fold across reload and required changes", () => {
   const make = (required: boolean) =>
     [
       { id: "start", kind: "meta" },
@@ -237,16 +233,20 @@ Deno.test("bookkeeping after reply text keeps its own fold across reload and req
   const owner = createMessageLayout();
   const initial = shape(owner, false);
   assertEquals(initial, [
-    { id: "start", parts: ["start", "reasoning"], work: true, required: false },
     { id: "answer", parts: ["answer"], work: false, required: false },
-    { id: "finish", parts: ["finish"], work: true, required: false },
+    {
+      id: "start",
+      parts: ["start", "reasoning", "finish"],
+      work: true,
+      required: false,
+    },
   ]);
   const failed = shape(owner, true);
   assertEquals(
     failed.map(({ required: _required, ...group }) => group),
     initial.map(({ required: _required, ...group }) => group),
   );
-  assertEquals(failed.map((group) => group.required), [false, false, true]);
+  assertEquals(failed.map((group) => group.required), [false, true]);
   assertEquals(shape(owner, false), initial);
   assertEquals(shape(createMessageLayout(), false), initial);
 });
@@ -280,7 +280,7 @@ Deno.test("render layout reprojects only changed source parts and keeps historic
   const after = owner.update("reply", "assistant", next, "prefs", present);
   assertEquals(visits, 1);
   assertStrictEquals(after.frames[0].groups[0], historical);
-  assertEquals(after.frames[0].groups.length, 204);
+  assertEquals(after.frames[0].groups.length, 103);
   const extended = owner.update(
     "reply",
     "assistant",
@@ -288,6 +288,10 @@ Deno.test("render layout reprojects only changed source parts and keeps historic
     "prefs",
     present,
   );
-  assertEquals(extended.frames[0].groups.length, 205);
-  assertEquals(extended.frames[0].groups[1].id, historical.id);
+  assertEquals(extended.frames[0].groups.length, 103);
+  assertEquals(extended.frames[0].groups[0].id, historical.id);
+  assertEquals(
+    extended.frames[0].groups[102].id,
+    after.frames[0].groups[102].id,
+  );
 });
