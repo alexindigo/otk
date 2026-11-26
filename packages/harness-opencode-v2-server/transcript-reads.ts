@@ -547,11 +547,23 @@ export class TranscriptReads {
         ).get(sid);
     return row ? { seq: Number(row.seq) } : {};
   }
-  head(sessionID: string, cutoff?: string): NativeHead | null {
+  head(
+    sessionID: string,
+    cutoff?: string,
+    messageID?: string,
+  ): NativeHead | null {
     const sql = this.native();
     if (!sql) return null;
     const sid = ids.decode(sessionID);
-    const row = cutoff
+    const row = messageID !== undefined
+      ? cutoff
+        ? sql.prepare(
+          "SELECT id,seq,time_updated FROM session_message WHERE session_id=? AND id=? AND seq<(SELECT seq FROM session_message WHERE session_id=? AND id=?)",
+        ).get(sid, messageID, sid, cutoff)
+        : sql.prepare(
+          "SELECT id,seq,time_updated FROM session_message WHERE session_id=? AND id=?",
+        ).get(sid, messageID)
+      : cutoff
       ? sql.prepare(
         "SELECT id,seq,time_updated FROM session_message WHERE session_id=? AND seq<(SELECT seq FROM session_message WHERE session_id=? AND id=?) ORDER BY seq DESC LIMIT 1",
       ).get(sid, sid, cutoff)
