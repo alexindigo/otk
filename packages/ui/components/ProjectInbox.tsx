@@ -67,7 +67,6 @@ import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
 import ChromeMeta, {
   MetaItem,
   metaList,
-  MetaRow,
   MetaText,
   SectionHeader,
 } from "./ChromeMeta.tsx";
@@ -889,45 +888,46 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
             />
           </Show>
         }
+        metaClass="otk-project-trailing"
         meta={
           <Show when={!collapsed() && !editing()}>
-            <div class="otk-project-trailing">
-              <MetaRow whole intrinsic>
-                <Show when={(project().source ?? "tracked") === "tracked"}>
-                  <MetaItem rank={1}>
-                    <ChromeMeta
-                      class="otk-project-visit"
-                      title="Availability and time since last visit"
-                    >
-                      <Show
-                        when={project().annotation}
-                        fallback={
-                          <Show when={project().visit}>
-                            {(visit) => <TimeText time={visit()} />}
-                          </Show>
-                        }
-                      >
-                        <span class="otk-project-availability">
-                          <MetaText
-                            items={[project().annotation, project().visit]}
-                          />
-                        </span>
+            <Show when={(project().source ?? "tracked") === "tracked"}>
+              <MetaItem rank={1}>
+                <ChromeMeta
+                  class="otk-project-visit"
+                  title="Availability and time since last visit"
+                >
+                  <Show
+                    when={project().annotation}
+                    fallback={
+                      <Show when={project().visit}>
+                        {(visit) => <TimeText time={visit()} />}
                       </Show>
-                    </ChromeMeta>
-                  </MetaItem>
-                </Show>
-              </MetaRow>
-              <CommandMenu
-                class="otk-project-menu"
-                triggerClass="otk-project-menu-trigger"
-                label={`Project menu for ${name()}`}
-                trigger="⋯"
-                targets={() => [target()]}
-                beforeRun={() => setRowError("")}
-                onError={setRowError}
-                feedbackID={rowErrorID}
-              />
-            </div>
+                    }
+                  >
+                    <span class="otk-project-availability">
+                      <MetaText
+                        items={[project().annotation, project().visit]}
+                      />
+                    </span>
+                  </Show>
+                </ChromeMeta>
+              </MetaItem>
+            </Show>
+          </Show>
+        }
+        metaControl={
+          <Show when={!collapsed() && !editing()}>
+            <CommandMenu
+              class="otk-project-menu"
+              triggerClass="otk-project-menu-trigger"
+              label={`Project menu for ${name()}`}
+              trigger="⋯"
+              targets={() => [target()]}
+              beforeRun={() => setRowError("")}
+              onError={setRowError}
+              feedbackID={rowErrorID}
+            />
           </Show>
         }
         feedback={

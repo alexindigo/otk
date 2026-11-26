@@ -15,7 +15,7 @@ import MessageFooter from "./MessageFooter.tsx";
 import SidebarRow from "./SidebarRow.tsx";
 import { EmptyState } from "./View.tsx";
 import VirtualList from "./VirtualList.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 
 function PromptRow(props: {
   prompt: TimelinePrompt;
@@ -42,18 +42,25 @@ function PromptRow(props: {
         label={
           <span class="otk-timeline-preview">
             {props.target.text || "Prompt"}
-            <Show when={props.prompt.queued}>
-              {" "}
-              <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
-            </Show>
           </span>
         }
         meta={
-          <MessageFooter
-            class="otk-timeline-trailing"
-            at={props.prompt.time}
-            actions={{ kind: "prompt", target: props.target }}
-          />
+          <>
+            <Show when={props.prompt.queued}>
+              <MetaItem rank={2}>
+                <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
+              </MetaItem>
+            </Show>
+            <MetaItem rank={1}>
+              <MessageFooter
+                whole
+                intrinsic
+                class="otk-timeline-trailing"
+                at={props.prompt.time}
+                actions={{ kind: "prompt", target: props.target }}
+              />
+            </MetaItem>
+          </>
         }
       />
     </li>

@@ -5,6 +5,7 @@ import { META_SEPARATOR, metaParts, type TimeText as Time } from "@otk/client";
 import TimeText from "./TimeText.tsx";
 import { TreeNode } from "./Tree.tsx";
 import SidebarRow from "./SidebarRow.tsx";
+import { MetaItem } from "./MetaRow.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import "./ChromeMeta.css" with { type: "text" };
 
@@ -145,13 +146,18 @@ export function SectionHeader(props: {
                 lamp={props.leading?.()}
                 label={
                   <span class="otk-section-row-label">
-                    <SectionHeaderMeta
-                      label={props.label}
-                      count={props.count}
-                      metaClass={props.metaClass}
-                    />
+                    <span class="otk-control-label">{props.label}</span>
                     <span class="otk-section-header-rule" aria-hidden="true" />
                   </span>
+                }
+                meta={
+                  <Show when={props.count !== undefined}>
+                    <MetaItem rank={1}>
+                      <ChromeMeta class={props.metaClass}>
+                        {props.count}
+                      </ChromeMeta>
+                    </MetaItem>
+                  </Show>
                 }
               />
             </Show>

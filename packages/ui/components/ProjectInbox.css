@@ -66,17 +66,6 @@
 .otk-project-name[data-unread=true] {
   font-weight: 600;
 }
-.otk-project-trailing {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  justify-items: end;
-  flex: none;
-  min-inline-size: 0;
-}
-.otk-project-trailing > * {
-  grid-area: 1 / 1;
-}
 .otk-project-menu {
   opacity: 0;
 }
