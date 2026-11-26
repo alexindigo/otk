@@ -52,3 +52,16 @@
   align-items: center;
   gap: var(--space-1);
 }
+button.otk-subagents-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  font-size: var(--text-meta);
+  line-height: var(--icon-compact);
+}
+.otk-subagents-clear > svg {
+  flex: none;
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
