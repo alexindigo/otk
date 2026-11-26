@@ -167,8 +167,9 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   expect(
     await page.locator(".otk-turn-usage").evaluate((u) => {
       const a = u.getBoundingClientRect(),
-        r = u.previousElementSibling!.getBoundingClientRect();
-      return r.right <= a.left &&
+        r = u.closest(".otk-meta-item")!.previousElementSibling!
+          .getBoundingClientRect();
+      return r.width > 0 && r.right <= a.left &&
         Math.abs(r.y + r.height / 2 - a.y - a.height / 2) <= .5;
     }),
   ).toBe(true);
