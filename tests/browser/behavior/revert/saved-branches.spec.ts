@@ -297,6 +297,9 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
     .click();
   await expect(input).toHaveValue("Current edited draft");
   await page.reload();
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Restored native reply.",
+  );
   await rightClick(page, ".otk-messages");
   await pick(page, "Saved conversation copies (1)");
   const saved = page.getByRole("region", {
