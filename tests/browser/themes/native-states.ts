@@ -86,11 +86,11 @@ export async function nativeStates({
       await expect(page.locator(".otk-permission-activity")).not.toContainText(
         "Stored failure fixture",
       );
-      await expect(
-        page.locator(
-          ".otk-permission-activity [role=status]:not([aria-hidden=true])",
-        ),
-      ).toHaveCount(0);
+      // Record-owned status labels are valid; the ready journal has no
+      // remaining pane-level loading status.
+      await expect(page.locator(
+        ".otk-permission-activity [role=status]:not([aria-hidden=true],[data-activity] *)",
+      )).toHaveCount(0);
       await shot(`native-auto-activity-${theme.id}`);
     }
     // Sidebar measurements own the Sessions projection, never the Activity

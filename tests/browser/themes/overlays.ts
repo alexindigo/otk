@@ -147,8 +147,10 @@ export async function menuGeometry(page: Page) {
   const g = await page.locator(":popover-open [role=menu]").evaluate((menu) => {
     const panel = menu.closest(".otk-surface")!,
       r = panel.getBoundingClientRect(),
-      first = menu.parentElement!.firstElementChild!.getBoundingClientRect(),
-      last = menu.parentElement!.lastElementChild!.getBoundingClientRect();
+      // A named menu includes the title in its chrome, outside the body.
+      // Measure both insets at the surface slots, not at the menu rows.
+      first = panel.firstElementChild!.getBoundingClientRect(),
+      last = panel.lastElementChild!.getBoundingClientRect();
     return {
       inside: r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
         r.right <= innerWidth + .5 && r.bottom <= innerHeight + .5,
