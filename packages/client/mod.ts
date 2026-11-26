@@ -50,6 +50,7 @@ export * from "./format.ts";
 export * from "./progress.ts";
 export * from "./paths.ts";
 export * from "./project-navigation.ts";
+export * from "./project-names.ts";
 export * from "./project-picker.ts";
 /** Framework-free OTK transport, observable state and navigation models. */
 export * from "./auth.ts";
@@ -145,6 +146,8 @@ export * from "./session-submission.ts";
 export * from "./session-actions.ts";
 export * from "./session-revert.ts";
 export * from "./session-rename.ts";
+export * from "./inline-rename.ts";
+export * from "./project-rename.ts";
 export * from "./session-title.ts";
 export * from "./input-guard.ts";
 export * from "./shell-navigation.ts";

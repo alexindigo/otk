@@ -15,7 +15,9 @@ export default function SidebarRow(props: {
   meta?: Element;
   feedback?: Element;
   compact?: boolean;
+  editing?: boolean;
   detailedMeta?: boolean;
+  mainRef?(element: HTMLButtonElement): void;
   action?: Omit<ComponentProps<"button">, "children">;
   frame?: {
     selected: boolean;
@@ -54,7 +56,7 @@ export default function SidebarRow(props: {
       <span class="otk-sidebar-row-grid">
         <span class="otk-sidebar-slot otk-sidebar-lamp">{props.lamp}</span>
         <Show
-          when={props.action}
+          when={props.action && !props.editing}
           fallback={
             <span class="otk-sidebar-row-main">
               <Main />
@@ -62,7 +64,10 @@ export default function SidebarRow(props: {
           }
         >
           <button
-            ref={native.ref}
+            ref={(element) => {
+              native.ref(element);
+              props.mainRef?.(element);
+            }}
             {...native.attributes}
             type="button"
             class={["otk-sidebar-row-main", props.action?.class]}

@@ -21,7 +21,7 @@ import {
   projectDirectory,
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
-import { projectName } from "./project-navigation.ts";
+import { checkoutLabel, projectLabel } from "./project-names.ts";
 import { projectPlacement } from "./project-placement.ts";
 import { age } from "./format.ts";
 
@@ -37,7 +37,7 @@ export function createProjectProjection(o: {
   inbox?(): InboxSnapshot;
   taskActivity?(): Readonly<Record<string, InboxStatus>>;
   factory?: StateFactory;
-  membership?(directory: string, present: boolean): void;
+  labelChanged?(directory: string, label: string | undefined): void;
   /** The connection's entity states: the only source of row attention. */
   entities?(): EntityStateStore;
 }) {
@@ -81,6 +81,12 @@ export function createProjectProjection(o: {
     void clock.state.revision;
     return projectDirectory(directory, summaries, repoID);
   };
+  const facts = (directory: string) => {
+    void clock.state.keys[directory];
+    return summaries[directory];
+  };
+  const label = (directory: string) =>
+    checkoutLabel(directory, facts(directory));
   const scopes = (directory: string): readonly string[] => {
     void clock.state.keys[directory];
     const p = projects.get(directory);
@@ -128,8 +134,11 @@ export function createProjectProjection(o: {
       if (visible.has(directory) !== present) {
         if (present) visible.add(directory);
         else visible.delete(directory);
-        o.membership?.(directory, present);
       }
+      o.labelChanged?.(
+        directory,
+        present ? checkoutLabel(directory, p.summary) : undefined,
+      );
     }
     clock.update((draft) => {
       draft.revision++;
@@ -208,6 +217,16 @@ export function createProjectProjection(o: {
     update,
     resolve,
     scopes,
+    label(directory: string) {
+      return label(resolve(directory));
+    },
+    projectLabel(directory: string) {
+      const leaf = resolve(directory), summary = facts(leaf);
+      const root = summary?.topology?.canonicalRoot;
+      return root && root !== leaf && facts(root)
+        ? label(root)
+        : projectLabel(leaf, summary);
+    },
     entry(id: string) {
       void entryClock.state.keys[id];
       return sessions.get(id)?.entry;
@@ -406,6 +425,8 @@ export function createProjectProjection(o: {
       const p = projects.get(directory);
       if (!p) return undefined;
       const summary = p.summary;
+      const parent = summary?.topology?.parentDirectory;
+      const parentLabel = parent ? label(parent) : undefined;
       const summaryReady = summary !== undefined;
       // Decision 62: the project entity is the row's state; absent or stale
       // state is grey (D6).
@@ -439,7 +460,8 @@ export function createProjectProjection(o: {
         !p.row || p.row.visit?.text !== visit?.text ||
         p.row.visit?.iso !== visit?.iso ||
         p.row.visit?.spoken !== visit?.spoken || p.row.status !== status ||
-        p.row.unread !== unread || p.row.dependencies !== dependencies
+        p.row.unread !== unread || p.row.dependencies !== dependencies ||
+        p.row.parentLabel !== parentLabel
       ) {
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
@@ -471,12 +493,7 @@ export function createProjectProjection(o: {
           summary: p.summary,
           topology: p.summary?.topology,
           availability: p.summary?.availability,
-          ...(p.summary?.topology?.parentDirectory
-            ? {
-              depth: 1,
-              parentLabel: projectName(p.summary.topology.parentDirectory),
-            }
-            : {}),
+          ...(parent ? { depth: 1, parentLabel } : {}),
         };
       }
       return p.row;

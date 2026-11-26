@@ -18,11 +18,11 @@ import {
 } from "solid-js";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import {
+  canRenameProject,
   CommandHub,
   FeedbackFailure,
   historyTarget,
   LOCAL_SIDECAR,
-  projectName,
   shellTitle,
 } from "@otk/client";
 import {
@@ -92,6 +92,7 @@ export default function Shell(
     branchHistory,
     actions,
     rename,
+    projectRename,
     revert,
     forkNotes,
     guard,
@@ -142,7 +143,8 @@ export default function Shell(
         if (!entry) return;
         return {
           title: entry.title,
-          project: projectName(
+          project: resources.checkoutLabel(
+            sidecarId,
             resources.projectDirectory?.(
               sidecarId,
               entry.directory,
@@ -152,6 +154,8 @@ export default function Shell(
           deleted: !!entry.deleted,
         };
       },
+      ({ sidecarId, directory }) =>
+        resources.checkoutLabel(sidecarId, directory),
     );
   const backTarget = createMemo(() => target("back"));
   const forwardTarget = createMemo(() => target("forward"));
@@ -493,9 +497,16 @@ export default function Shell(
   const projects = createMemo(() => resources.projects(now()));
   const originalTitle = document.title;
   createEffect(
-    () => [info()?.title, project()] as const,
-    ([title, selected]) => {
-      document.title = shellTitle(title, selected);
+    () => {
+      const selected = project();
+      return shellTitle(
+        info()?.title,
+        selected &&
+          resources.checkoutLabel(selected.sidecarId, selected.directory),
+      );
+    },
+    (title) => {
+      document.title = title;
     },
   );
   onCleanup(() => {
@@ -575,6 +586,7 @@ export default function Shell(
             toggles,
             usage: session.usage,
             rename,
+            projectRename,
             transcript: {
               messages: () => session.state.content.messages,
               exhausted: () => session.state.exhausted,
@@ -609,6 +621,7 @@ export default function Shell(
             entries,
             entry,
             projectEntries: resources.projectEntries,
+            projectLabel: resources.projectLabel,
             projectMetadata: resources.projectMetadata,
             metadataEntry: resources.metadataEntry,
             sessionRows: resources.sessionRows,
@@ -695,6 +708,13 @@ export default function Shell(
               holdOrder={resources.holdProjectOrder}
               projects={projects()}
               duplicateName={resources.duplicateProjectName}
+              projectLabel={resources.projectLabel}
+              projectRename={projectRename}
+              canRename={(row) =>
+                canRenameProject(
+                  row,
+                  resources.server(row.sidecarId)?.capabilities ?? [],
+                )}
               entities={resources.entities}
               servers={sidecars.state.list}
               selected={project()}

@@ -10,6 +10,7 @@ import {
   createForkNotes,
   createInputGuard,
   createListScopes,
+  createProjectRename,
   createReload,
   createServerResources,
   createSessionActions,
@@ -50,6 +51,7 @@ export interface ShellState {
   current: CurrentClient;
   actions: SessionActions;
   rename: SessionRename;
+  projectRename: import("@otk/client").ProjectRename;
   revert: SessionRevert;
   forkNotes: ForkNotes;
   guard: InputGuard;
@@ -207,6 +209,13 @@ export function createShellState(
     factory: solidState,
   });
   reload.register("rename", rename);
+  const projectRename = createProjectRename({
+    update: (target, name) => resources.updateProject(target, { name }),
+    label: (target) =>
+      resources.checkoutLabel(target.sidecarId, target.directory),
+    factory: solidState,
+  });
+  reload.register("project-rename", projectRename);
   reload.register("server-addition", {
     snapshot: () => sidecars.state.addition,
     restore(value) {
@@ -236,6 +245,11 @@ export function createShellState(
     const target = rename.state.editing;
     return target && resources.entry(target.sidecarId, target.sessionID)?.title;
   }, () => rename.observe());
+  createEffect(() => {
+    const target = projectRename.state.editing;
+    return target &&
+      resources.checkoutLabel(target.sidecarId, target.directory);
+  }, () => projectRename.observe());
   const guard = createInputGuard({
     drafts,
     key: actions.key,
@@ -346,6 +360,7 @@ export function createShellState(
     current,
     actions,
     rename,
+    projectRename,
     revert,
     forkNotes,
     guard,

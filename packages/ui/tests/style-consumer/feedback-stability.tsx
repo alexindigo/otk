@@ -103,10 +103,21 @@ function InlineScene() {
         as="div"
         selected
         editing
-        feedback={<TitleFeedback owner={owner} id="rename-feedback" />}
+        feedback={
+          <TitleFeedback
+            owner={owner}
+            id="rename-feedback"
+            pendingText="Renaming session..."
+          />
+        }
         trailing={<button type="button">Session actions</button>}
       >
-        <TitleEditor owner={owner} feedbackID="rename-feedback" />
+        <TitleEditor
+          owner={owner}
+          feedbackID="rename-feedback"
+          label="Rename session"
+          pendingText="Renaming session..."
+        />
       </ListRow>
     </section>
   );

@@ -115,10 +115,11 @@ export function registerProjectEdit(rpc: RpcRegistry, harness: Harness): void {
       return { ...target(p), patch: patch as ProjectPatch };
     },
     async handler(ctx, p) {
-      const snapshot = await capability.read(
+      const ready = capability.read(
         p.directory,
         ctx.execution?.signal,
       );
+      const snapshot = await (ctx.execution?.wait?.(ready) ?? ready);
       if (
         snapshot.projectID !== p.projectID ||
         Object.keys(p.patch).some((key) =>
