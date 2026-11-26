@@ -51,6 +51,7 @@ import type {
   TranscriptRange,
 } from "./transcripts.ts";
 import { MESSAGE_ADMISSION_WATERMARK } from "./message-policy.ts";
+import { createAcquiredRange } from "./acquired-range.ts";
 import {
   createTranscriptInteraction,
   type TranscriptInteraction,
@@ -181,6 +182,7 @@ export function createTranscript(
   const requests = connection(target.sidecarId).attention;
   const requestEntry = (id: string) => entry(target.sidecarId, id);
   const projection = createTranscriptProjection();
+  const acquired = createAcquiredRange();
   const deliveryDiagnostics = new ContentDeliveryDiagnostics("browser");
   const sources = createNativeSources({
     messages: () => projection.state.messagesByID,
@@ -361,7 +363,9 @@ export function createTranscript(
     return content as ContentState;
   };
   const firstRetained = () =>
-    projection.state.messagesByID[projection.state.messageIDs[0]];
+    projection.state.messagesByID[
+      projection.state.messageIDs.find((id) => projection.committed(id))!
+    ];
   // Source clocks may trail a page read. Updates can change the acquired range,
   // but only the cursor admits older history, including page-captured events.
   const outsideAcquiredRange = (
@@ -379,7 +383,7 @@ export function createTranscript(
     }
     if (
       op.op === "message.upsert" && hasBaseline &&
-      outsideAcquiredRange(op, firstRetained(), cursor !== null || tailDirty)
+      outsideAcquiredRange(op, firstRetained(), acquired.next !== null)
     ) return content;
     if (op.op === "part.remove") interaction.retireIdentity(op.partID);
     if (op.op === "message.remove") {
@@ -472,7 +476,8 @@ export function createTranscript(
     state.appendRevision = projection.state.appendRevision;
     sources.sync();
     state.recovering = state.content.recovering ?? [];
-    state.olderCursor = cursor;
+    state.olderCursor = acquired.next ?? null;
+    state.exhausted = state.view === "deleted" || acquired.next === null;
     state.pageLoading = state.paging || state.loading;
     state.session = state.info;
     state.revision++;
@@ -484,7 +489,7 @@ export function createTranscript(
   let view: "content" | "deleted" = "content";
   let subscribed = false;
   let buffer: ClockedContent[] = [], bufferBytes = 0, fetching = false;
-  let clock: ContentClock | undefined, cursor: MessageCursor | null = null;
+  let clock: ContentClock | undefined;
   let missing = false, retry: ReturnType<typeof setTimeout> | undefined;
   let recoveryAttempted = false;
   let hasBaseline = false;
@@ -503,16 +508,10 @@ export function createTranscript(
   let attentionController: AbortController | undefined;
   let range: TranscriptRange | undefined;
   const visited = new Set<string>(), pins = new Map<string, number>();
-  const pages = new Map<string | undefined, {
-    requestCursor?: string;
-    ids: string[];
-    older: string | null;
-    clock: ContentClock;
-  }>();
   let inFlight: Promise<void> | undefined;
+  let repairingHead: Promise<void> | undefined;
   let reconciling: Promise<void> | undefined;
   let automatic = false;
-  let tailDirty = false;
   let toolGeneration = 0;
   let selectedForTools = false;
   // IDs only: the selected transcript remains the sole owner of part data.
@@ -718,7 +717,6 @@ export function createTranscript(
         ? "ready"
         : "loading";
       draft.error = undefined;
-      draft.exhausted = false;
       draft.pageError = undefined;
     });
     try {
@@ -771,17 +769,14 @@ export function createTranscript(
         nextClock = frame.clock;
         replay.push(frame);
       }
-      // A newest page covers only its suffix, not already acquired history.
-      // Retain the uncovered prefix only under the exact same source authority;
-      // a complete page, new epoch or boundary revision remains a replacement.
-      const prefix = hasBaseline && page.older !== null && messages[0] &&
-          state.clock?.epoch === page.clock.epoch && state.version &&
-          compareTranscriptVersion(state.version, page.version) === 0
-        ? projection.messages().filter((message) =>
-          projection.committed(message.id) &&
-          compareMessages(message, messages[0]) < 0
-        )
-        : [];
+      const { prefix, exact } = acquired.replace(
+        page,
+        projection.messages().filter((message) =>
+          projection.committed(message.id)
+        ),
+        authority,
+        recovering ? undefined : clock,
+      );
       const retainedIDs = new Set(prefix.map((message) => message.id));
       const boundaries = prefix.flatMap((message) => {
         const boundary = projection.boundary(
@@ -796,14 +791,6 @@ export function createTranscript(
       );
       clock = nextClock;
       authority = minimum = page.version;
-      cursor = page.older;
-      tailDirty = false;
-      pages.clear();
-      pages.set(undefined, {
-        ids: messages.map((m) => m.id),
-        older: page.older,
-        clock: page.clock,
-      });
       if (info.parentID && state.temperature === "screen") {
         void rpc.call(
           "session.children",
@@ -817,9 +804,7 @@ export function createTranscript(
             });
           }
         }).catch(diagnostic);
-      } else {setState((draft) => {
-          draft.siblings = [];
-        });}
+      }
       baseline(messages);
       buffer = [];
       bufferBytes = 0;
@@ -827,7 +812,13 @@ export function createTranscript(
       hasBaseline = true;
       initialResync = false;
       setState((draft) => {
-        projection.replace([...prefix, ...messages]);
+        if (!info.parentID || draft.temperature !== "screen") {
+          draft.siblings = [];
+        }
+        projection.replace([...prefix, ...messages], {
+          sameSource: exact,
+          keepParked: exact && page.older !== null,
+        });
         projection.helpers(helper);
         projection.boundaries(
           [
@@ -879,7 +870,6 @@ export function createTranscript(
         draft.content = content;
         draft.loading = false;
         draft.continuity = "ready";
-        draft.exhausted = page.older === null;
       });
       recoveryAttempted = false;
       queueMicrotask(reserve);
@@ -954,7 +944,7 @@ export function createTranscript(
     clock = undefined;
     authority = minimum = undefined;
     retriedVersion = undefined;
-    cursor = null;
+    acquired.clear();
     missing = false;
     fetching = false;
     hasBaseline = false;
@@ -978,7 +968,6 @@ export function createTranscript(
       draft.loading = !!selection;
       draft.continuity = selection ? "loading" : "ready";
       draft.paging = false;
-      draft.exhausted = false;
       draft.error = undefined;
       if (deleted?.deleted) {
         draft.info = {
@@ -992,7 +981,6 @@ export function createTranscript(
         };
         draft.loading = false;
         draft.continuity = "ready";
-        draft.exhausted = true;
       }
     });
     if (selection && !deleted?.deleted) {
@@ -1009,43 +997,11 @@ export function createTranscript(
           m.id
         ),
       );
-      const messages = draft.content.messages.filter((m) =>
-        tail.has(m.id) || visited.has(m.id) || pins.has(m.id)
-      );
-      if (messages.length !== draft.content.messages.length) {
-        const retained = new Set(messages.map((message) => message.id));
-        const removed = new Set(
-          draft.content.messages.filter((message) => !retained.has(message.id))
-            .map((message) => message.id),
-        );
-        const covered = new Set(
-          [...pages.values()].flatMap((page) => page.ids),
-        );
-        if (
-          [...removed].some((id) => !covered.has(id)) ||
-          pages.get(undefined)?.ids.some((id) => removed.has(id))
-        ) {
-          // Losing live-tail topology requires a new native tail cursor. Merely
-          // evicting historical reserve does not invalidate that current tail.
-          tailDirty = true;
-        } else if (!tailDirty) {
-          const seen = new Set<string | undefined>();
-          let before: string | undefined;
-          while (!seen.has(before)) {
-            seen.add(before);
-            const page = pages.get(before);
-            if (!page) break;
-            if (page.ids.some((id) => removed.has(id))) {
-              cursor = page.requestCursor!;
-              break;
-            }
-            if (page.older === null) break;
-            before = page.older;
-          }
-        }
-        draft.exhausted = false;
-        projection.retain(retained);
-      }
+      const retained = new Set([...tail, ...visited, ...pins.keys()]);
+      const ordered = draft.messageIDs.filter(projection.committed);
+      const removed = new Set(ordered.filter((id) => !retained.has(id)));
+      if (removed.size) projection.park(acquired.evict(ordered, removed));
+      projection.retain(retained);
     });
   };
   const reserve = () => {
@@ -1054,11 +1010,11 @@ export function createTranscript(
       state.pageError || state.continuity !== "ready" ||
       state.load?.state === "loading"
     ) return;
-    const ids = state.content.messages.map((m) => m.id);
+    const ids = state.messageIDs;
     const first = range ? ids.indexOf(range.first) : -1;
     if (
       ids.length < MESSAGE_ADMISSION_WATERMARK ||
-      (tailDirty && state.temperature === "screen") ||
+      (acquired.next === undefined && state.temperature === "screen") ||
       (state.temperature === "screen" && first >= 0 &&
         first <= MESSAGE_ADMISSION_WATERMARK)
     ) {
@@ -1124,8 +1080,12 @@ export function createTranscript(
           const reply = state.repliesByID[key];
           if (!reply) throw new Error("Reply is no longer available");
           const boundary = projection.boundary(turnID);
-          if (boundary?.firstID && state.messagesByID[boundary.firstID]) break;
-          if (message.replyTo && state.messagesByID[message.replyTo]) break;
+          if (boundary?.firstID && projection.materialized(boundary.firstID)) {
+            break;
+          }
+          if (message.replyTo && projection.materialized(message.replyTo)) {
+            break;
+          }
           if (state.exhausted) break;
           await owner.older();
           if (state.pageError) throw feedbackError(state.pageError);
@@ -1177,13 +1137,10 @@ export function createTranscript(
         readProgress.stop();
         projection.releaseCommittedSends();
         open();
-        cursor = null;
         setState((draft) => {
           draft.recovering = [];
         });
         range = undefined;
-        tailDirty = false;
-        pages.clear();
         visited.clear();
         pins.clear();
         toolListeners.clear();
@@ -1215,20 +1172,15 @@ export function createTranscript(
         const first = ids.indexOf(value.first), last = ids.indexOf(value.last);
         if (first >= 0 && last >= first) {
           const visible = new Set(ids.slice(first, last + 1));
-          for (const page of pages.values()) {
-            if (page.ids.some((id) => visible.has(id))) {
-              for (const id of page.ids) {
-                visited.add(id);
-              }
-            }
-          }
+          acquired.visit(visible, visited);
         }
       }
       reserve();
     },
     async ensure(messageID, signal) {
       while (
-        selected && !state.content.messages.some((m) => m.id === messageID)
+        selected && (state.loading || missing ||
+          !projection.materialized(messageID))
       ) {
         signal?.throwIfAborted();
         if (state.loading) {
@@ -1240,13 +1192,14 @@ export function createTranscript(
               }
             });
           });
-        } else if (state.exhausted) {
+        } else if (state.exhausted && !missing) {
           throw new RequestFailure({
             code: "message.missing",
             retry: "none",
             diagnosticID: randomID(),
           });
-        } else await owner.older();
+        } else if (missing) await owner.latest(signal);
+        else await owner.older();
         if (state.pageError) throw feedbackError(state.pageError);
       }
       if (!selected) {
@@ -1551,13 +1504,7 @@ export function createTranscript(
             state.temperature === "warm" &&
             frame.event.op === "message.upsert" &&
             !state.messagesByID[frame.event.message.id] &&
-            ([...pages.values()].some((page) =>
-              page.ids.includes(
-                frame.event.op === "message.upsert"
-                  ? frame.event.message.id
-                  : "",
-              )
-            ) ||
+            (acquired.known(frame.event.message.id) ||
               (() => {
                 const first = state.content.messages.at(
                   -MESSAGE_ADMISSION_WATERMARK,
@@ -1678,17 +1625,47 @@ export function createTranscript(
         : state.siblings[(at + delta + size) % size]?.id;
     },
     older(): Promise<void> {
+      if (repairingHead) return repairingHead;
+      return pagination.older();
+    },
+    stop(): void {
+      stopEntities?.();
+      releaseRequests();
+      snapshotLifetime.abort();
+      readProgress.stop();
+      interaction.clear();
+      sources.stop();
+      owner.temperature("cold");
+    },
+  };
+  const pagination = {
+    older(): Promise<void> {
       if (inFlight) return inFlight;
-      if (
-        !selected || state.loading || state.paging ||
-        (!tailDirty && (state.exhausted || cursor === null))
-      ) return Promise.resolve();
+      if (!selected || state.loading || state.paging) return Promise.resolve();
+      if (acquired.next === undefined || missing) {
+        // A retired tail has no trustworthy cursor; use the same replacement
+        // path as every other newest-page read. The old window's first identity
+        // describes demand, not coverage: refill to its immediate predecessor.
+        const first = firstRetained(), lifetime = generation;
+        const work = refetch().then(async () => {
+          while (
+            generation === lifetime && !state.loading && !missing &&
+            acquired.next != null && !state.pageError
+          ) {
+            await pagination.older();
+            const current = firstRetained();
+            if (!first || current && compareMessages(current, first) < 0) break;
+          }
+        }).finally(() => {
+          if (repairingHead === work) repairingHead = undefined;
+        });
+        return repairingHead = work;
+      }
+      if (acquired.next === null) return Promise.resolve();
       const target = selected,
         id = generation,
         request = load;
-      let before: string | undefined = tailDirty
-        ? undefined
-        : cursor ?? undefined;
+      let before: string = acquired.next;
       const retain = !automatic;
       if (retain) {
         for (const message of state.content.messages) visited.add(message.id);
@@ -1721,7 +1698,10 @@ export function createTranscript(
             }
             if (
               page.sessionID !== target.sessionID ||
-              page.clock.epoch !== clock?.epoch
+              page.from.epoch !== page.clock.epoch ||
+              page.from.seq > page.clock.seq ||
+              page.clock.epoch !== clock?.epoch || !authority ||
+              compareTranscriptVersion(page.version, authority) !== 0
             ) {
               invalidate();
               return;
@@ -1729,7 +1709,7 @@ export function createTranscript(
             let loaded = { ...emptyContent(), messages: page.items };
             const retained = firstRetained(), pageFirst = page.items[0];
             const first = retained &&
-                (!pageFirst || retained.time.created < pageFirst.time.created)
+                (!pageFirst || compareMessages(retained, pageFirst) < 0)
               ? retained
               : pageFirst;
             for (const { event } of page.catchup) {
@@ -1739,22 +1719,14 @@ export function createTranscript(
               loaded = reduce(loaded, event);
             }
             const messages = loaded.messages;
-            if (page.older !== null && page.older === before) {
-              throw new Error("Message cursor did not advance");
-            }
+            acquired.extend(before, page.older, messages);
             if (retain) {
               for (const message of messages) visited.add(message.id);
             }
-            cursor = page.older;
-            tailDirty = false;
-            pages.set(before, {
-              requestCursor: before,
-              ids: messages.map((m) => m.id),
-              older: page.older,
-              clock: page.clock,
-            });
             baseline(messages);
-            const added = messages.filter((m) => !state.messagesByID[m.id]);
+            const added = messages.filter((m) =>
+              !projection.materialized(m.id)
+            );
             setState((draft) => {
               projection.merge(added);
               projection.helpers(helper);
@@ -1774,7 +1746,6 @@ export function createTranscript(
                 }
               }
               draft.content = attach(metadata);
-              draft.exhausted = page.older === null;
               draft.paging = !added.length && page.older !== null;
             });
             if (!page.load || page.load.state === "complete") {
@@ -1800,15 +1771,6 @@ export function createTranscript(
       });
       inFlight = work;
       return work;
-    },
-    stop(): void {
-      stopEntities?.();
-      releaseRequests();
-      snapshotLifetime.abort();
-      readProgress.stop();
-      interaction.clear();
-      sources.stop();
-      owner.temperature("cold");
     },
   };
   const refreshWork = () => {
