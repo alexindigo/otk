@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 test.use({ profile: "contract-messages-public-ui" });
@@ -328,7 +329,7 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
     "outline-style",
     "solid",
   );
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue("");
   await expect.poll(() =>
     page.locator("#submitted").textContent().then((s) => JSON.parse(s!))

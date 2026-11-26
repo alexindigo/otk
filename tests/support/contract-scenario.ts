@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { coreBackendFixture } from "./core-backend.ts";
+import {
+  coreBackendFixture,
+  publishFixturePermissions,
+} from "./core-backend.ts";
 import { typedFormScenario } from "./typed-form-scenario.ts";
 import { messagesScenario } from "./messages-scenario.ts";
 import { composerContractScenario } from "./composer-contract-scenario.ts";
@@ -103,6 +106,7 @@ export async function contractScenario(profile: Profile) {
     }],
   };
   const capabilities: Capabilities = {};
+  const pendingPermissions = () => done ? [] : [permission];
   const reply = async () => {
     calls++;
     await held.promise;
@@ -114,6 +118,9 @@ export async function contractScenario(profile: Profile) {
       );
     }
     done = true;
+    if (capabilities.permissions) {
+      publishFixturePermissions(f.app, sessionID, pendingPermissions());
+    }
     f.app.connections.content(sessionID, {
       op: profile === "contract-permission-feedback"
         ? "permission.remove"
@@ -129,7 +136,7 @@ export async function contractScenario(profile: Profile) {
     profile === "contract-permission-feedback"
   ) {
     capabilities.permissions = {
-      listPermissions: () => Promise.resolve(done ? [] : [permission]),
+      listPermissions: () => Promise.resolve(pendingPermissions()),
       replyPermission: reply,
     };
   }
@@ -174,6 +181,9 @@ export async function contractScenario(profile: Profile) {
   const f = inbox
     ? await inboxBrowserFixture(root)
     : await coreBackendFixture(root, capabilities);
+  if (capabilities.permissions) {
+    publishFixturePermissions(f.app, sessionID, pendingPermissions());
+  }
   resources().defer("release contract scenario", () => {
     held.resolve();
   });

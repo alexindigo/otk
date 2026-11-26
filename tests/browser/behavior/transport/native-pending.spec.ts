@@ -151,7 +151,10 @@ test.describe("native shell", () => {
     await expect(page.locator(".otk-composer-dock [role=alert]"))
       .toHaveCount(0);
     // The resumed receipt still owns the send; the new draft cannot add one.
-    await expectPrimaryBlocked(composerSend(page), "Sending");
+    await expectPrimaryBlocked(
+      composerSend(page),
+      "Previous message still sending",
+    );
     expect(
       (await state.observe<{ transport: { effects: number } }>()).transport
         .effects,
@@ -163,8 +166,7 @@ test.describe("native shell", () => {
     await expect(page.locator(".otk-operation-feedback.is-pending"))
       .toHaveCount(0);
     try {
-      await expect(page.locator(".otk-prompt button[type=submit]"))
-        .toBeVisible();
+      await expect(composerSend(page)).toBeEnabled();
     } finally {
       await info.attach("shell-wire", {
         body: JSON.stringify({ sent: frames.sent, received: frames.received }),

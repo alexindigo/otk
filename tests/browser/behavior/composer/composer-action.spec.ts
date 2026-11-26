@@ -5,6 +5,7 @@ import type { TestState } from "../../fixtures/test-state.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
 import { messages, reply } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 
 async function waitForProvider(state: TestState, prompt: string) {
   await expect.poll(async () => {
@@ -28,7 +29,7 @@ for (const source of ["enter", "click"] as const) {
       const frames = await wire(page);
       const parent = await seed(state, "Composer activation");
       await openSession(state, page, parent.id);
-      const button = page.locator(".otk-send-button");
+      const button = send(page);
       const input = page.locator("textarea[name=prompt]");
       const notice = page.locator(".otk-composer-notice [role=status]");
       const activate = async () => {
@@ -107,7 +108,7 @@ for (const source of ["enter", "click"] as const) {
     const parent = await seed(state, "Composer activation during delegation");
     await openSession(state, page, parent.id);
     const input = page.locator("textarea[name=prompt]");
-    const button = page.locator(".otk-send-button");
+    const button = send(page);
     const status = (id: string) => page.locator(`[data-session="${id}"]`);
     const activation = () =>
       source === "enter" ? input.press("Enter") : button.click();

@@ -126,7 +126,7 @@ test(
     await expect(prompt(page)).toHaveValue("Describe these shapes.");
     await expect(chips(page).locator("img")).toHaveCount(1);
     await state.queue(["The image contains a square and a circle."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await composerSend(page).click();
     await reply(
       state,
       page,
@@ -175,10 +175,10 @@ test(
     ).toBe(640);
     await add("drop", "second.png");
     await expect(chips(page).locator("img")).toHaveCount(1);
-    await expect(page.locator(".otk-prompt button[type=submit]")).toBeEnabled();
+    await expect(composerSend(page)).toBeEnabled();
     await expect(prompt(page)).toHaveValue("");
     await state.queue(["Second image received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await composerSend(page).click();
     await expect(chips(page)).toHaveCount(0);
     await reply(state, page, session.id, "Second image received.");
     const prompts = frames.sent.filter(({ frame }) =>
@@ -204,7 +204,7 @@ test(
       frames.sent.filter(({ frame }) => frame.method === "history.attachments"),
     ).toHaveLength(0);
     await state.queue(["Recalled image received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await composerSend(page).click();
     await reply(state, page, session.id, "Recalled image received.");
     expect(
       frames.sent.filter(({ frame }) => frame.method === "history.attachments"),
@@ -216,9 +216,9 @@ test(
     await expect(chips(page)).toHaveCount(0);
     await expectPrimaryBlocked(composerSend(page), "Write a message");
     await upload(page, [{ name: "notes.txt", bytes: btoa("plain bytes") }]);
-    await expect(page.locator(".otk-prompt button[type=submit]")).toBeEnabled();
+    await expect(composerSend(page)).toBeEnabled();
     await state.queue(["File received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await composerSend(page).click();
     await expect(
       page.locator("[data-role=user] .otk-chip").filter({
         hasText: "notes.txt",

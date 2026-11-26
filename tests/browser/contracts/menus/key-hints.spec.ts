@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
+import { expectPrimaryBlocked, send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -13,7 +13,7 @@ test.describe("live hints", () => {
       await openSession(state, page, "tstv1-core");
       const lamp = page.locator('[data-crumb="tstv1-core"] .otk-status-light');
       await expect(lamp).toHaveAttribute("data-state", "none");
-      const button = page.locator(".otk-prompt button[type=submit]");
+      const button = send(page);
       const defaultTitle =
         "Send (Enter); Shift+Enter for newline; Esc twice to interrupt";
       const reboundTitle =

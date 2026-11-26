@@ -594,5 +594,6 @@ export interface QuestionRequest {
 }
 export function isAttentionOp(op: ContentOp): boolean {
   return isPermissionOp(op) || op.op === "question.upsert" ||
-    op.op === "question.remove";
+    op.op === "question.remove" || op.op === "form.upsert" ||
+    op.op === "form.remove";
 }

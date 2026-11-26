@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { chmod, unlink, writeFile } from "node:fs/promises";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
@@ -51,7 +52,7 @@ for (const mode of ["prompt", "command"] as const) {
         if (fault === "missing") await unlink(path);
         else await chmod(path, 0);
         try {
-          await page.locator(".otk-prompt button[type=submit]").click();
+          await send(page).click();
           await expect(page.locator(".otk-composer-notice [role=alert]"))
             .toHaveCount(1);
           await expect(page.locator(".otk-composer-notice [role=alert]"))
@@ -93,7 +94,7 @@ for (const mode of ["prompt", "command"] as const) {
             await writeFile(path, "selected attachment bytes");
           } else await chmod(path, 0o600);
           await state.queue(["Every attachment received."]);
-          await page.locator(".otk-prompt button[type=submit]").click();
+          await send(page).click();
           await reply(state, page, session.id, "Every attachment received.");
           if (
             mode === "command" &&

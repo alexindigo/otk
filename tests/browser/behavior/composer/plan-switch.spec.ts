@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send as composerSend } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -47,7 +48,7 @@ test(
     };
     const send = async (text: string) => {
       await prompt(page).fill(text);
-      await page.locator(".otk-prompt button[type=submit]").click();
+      await composerSend(page).click();
     };
     const nativeUser = async (text: string, agent: string, variant: string) => {
       await expect.poll(async () =>

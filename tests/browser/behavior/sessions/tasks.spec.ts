@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, revealAcquired } from "../../pages/transcript.ts";
+import { send } from "../../pages/primary-action.ts";
 
 test.use({ profile: "sessions-tasks" });
 test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
@@ -91,7 +92,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   const first = children.find((c) => c.title.includes("First inspection"))!,
     second = children.find((c) => c.title.includes("Second inspection"))!;
   await page.locator("textarea[name=prompt]").fill("Unsent parent work");
-  await expect(page.locator(".otk-send-button")).toBeEnabled();
+  await expect(send(page)).toBeEnabled();
   const card =
     '[data-tool=task]:has(.otk-tool-brief[title="First inspection"]) .otk-task-card';
   await revealAcquired(page, card);

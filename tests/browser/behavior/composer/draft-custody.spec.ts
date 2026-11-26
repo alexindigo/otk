@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -62,7 +63,7 @@ for (const mode of ["normal", "shell", "slash"] as const) {
     }
     try {
       await input.fill(text);
-      await page.locator(".otk-prompt button[type=submit]").click();
+      await send(page).click();
       await expect.poll(() =>
         frames.sent.some(({ frame }) => frame.method === method)
       ).toBe(true);
@@ -130,7 +131,7 @@ test.describe("choice-only custody", () => {
     );
     await state.queue(["Choice reply."]);
     await prompt(page).fill("Captured before changing agent");
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
     try {
       await page.locator(".otk-agent-picker > button").click();
@@ -178,7 +179,7 @@ test("composer.custody-refusal-retains-both-drafts-across-session-switch", {
   }], "paste");
   await expect(readyChips(page)).toHaveCount(1);
   await prompt(page).fill("Original with an attachment");
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect.poll(() => frames.held.length).toBeGreaterThan(0);
   await info.attach("refusal-outcome", {
     body: JSON.stringify(frames.held.map(({ frame }) => frame)),
@@ -222,7 +223,7 @@ test("composer.custody-uncertain-retry-checks-the-original-native-send", {
   );
   await state.queue(["Late commitment stayed authoritative."]);
   await prompt(page).fill("Submitted once before uncertainty");
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   const entry = page.locator("[data-send-key]");
   await expect(entry).toHaveAttribute("data-send-state", "failed", {
     timeout: 20_000,

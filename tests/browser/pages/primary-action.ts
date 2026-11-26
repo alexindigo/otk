@@ -83,7 +83,7 @@ export async function expectPrimaryBlocked(
   await expect(control).toBeDisabled();
   await expect(control).toHaveAttribute("aria-description", reason);
 }
-/** The ordinary composer Send, located by its declared marker. */
+/** The composer's primary control, whether it currently offers Send or Stop. */
 export const send = (page: Page): Locator =>
   page.locator(`.otk-prompt ${PRIMARY_ACTION}`);
 

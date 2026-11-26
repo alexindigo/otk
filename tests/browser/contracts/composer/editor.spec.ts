@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { send } from "../../pages/primary-action.ts";
 import {
   chips,
   holdUploads,
@@ -32,8 +33,8 @@ test(
     await expect.poll(() =>
       action.boundingBox().then((r) => r && [r.width, r.height])
     ).toEqual([28, 28]);
-    await expect(page.locator(".otk-send-button")).toBeVisible();
-    await expect(page.locator(".otk-send-button")).toBeDisabled();
+    await expect(send(page)).toBeVisible();
+    await expect(send(page)).toBeDisabled();
     await page.evaluate(() =>
       (globalThis as unknown as Window).composerReads[0].complete()
     );

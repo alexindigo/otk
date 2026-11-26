@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { selectionMarks } from "../../pages/selection-marks.ts";
+import { send } from "../../pages/primary-action.ts";
 
 test.use({ profile: "contract-messages-public-ui" });
 test(
@@ -11,7 +12,7 @@ test(
     await page.goto(`${state.url}/?secondary-failures`);
     await page.locator("[data-dark]").click();
     await page.locator(".otk-prompt textarea").fill("Submit exactly once");
-    await page.locator(".otk-send-button").click();
+    await send(page).click();
     await expect(page.locator("[data-sent]")).toHaveText("1");
     await expect(page.locator(".otk-prompt textarea")).toHaveValue("");
     await expect(page.locator("[data-bookkeeping]")).toContainText(
