@@ -32,7 +32,7 @@ function record(id: string, activity: Partial<Activity> = {}): Message {
 }
 function group(messages: Message[]) {
   const projection = createTranscriptProjection();
-  projection.replace(messages);
+  projection.reset(messages);
   return activitySpans(
     projection.state.replyIDs,
     projection.state.repliesByID,
@@ -42,11 +42,11 @@ function group(messages: Message[]) {
 Deno.test("prepending and splitting an activity interval never reuse its live key", () => {
   const projection = createTranscriptProjection();
   const left = record("r1"), right = record("r3");
-  projection.replace([right]);
+  projection.reset([right]);
   const [key] = projection.state.records.keys;
-  projection.replace([left, right]);
+  projection.reset([left, right]);
   assertEquals(projection.state.records.keys, [key]);
-  projection.replace([
+  projection.reset([
     left,
     { ...record("r2"), role: "user", parts: [] },
     right,

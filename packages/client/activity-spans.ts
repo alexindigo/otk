@@ -261,8 +261,20 @@ export function createRecordProjection(): {
           group.breakouts,
           group.children,
           group.failureTitle,
+          group.completionOf,
         ]);
         next.revisions[group.key] = group.revision;
+        const previous = value.groups[group.key];
+        if (previous?.revision === group.revision) {
+          next.groups[group.key] = previous;
+        }
+      }
+      const groupKeys = Object.keys(next.groups);
+      if (
+        groupKeys.length === Object.keys(value.groups).length &&
+        groupKeys.every((key) => next.groups[key] === value.groups[key])
+      ) {
+        next.groups = value.groups;
       }
       const retained = new Set([
         ...next.keys,

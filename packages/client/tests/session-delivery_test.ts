@@ -671,7 +671,7 @@ Deno.test("pending input is visible before acknowledgement and commits by identi
   assertEquals(f.projection.state.replyIDs, ["send-key"]);
   assertEquals(f.projection.entry("msg_local")?.send?.phase, "pending");
   assertEquals(f.owner.state.receipts[0].phase, "submitted");
-  f.projection.replace([]); // reconnect/server restart replacement
+  f.projection.reset([]); // reconnect/server restart replacement
   assertEquals(f.projection.state.replyIDs, ["send-key"]);
   f.message("msg_local");
   f.owner.presented(["msg_local"]);

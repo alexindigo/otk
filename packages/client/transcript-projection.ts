@@ -3,10 +3,12 @@ import type {
   AssistantMessage,
   ContentOp,
   Message,
+  MessagePage,
   Part,
   ReplyBoundary,
 } from "@otk/protocol";
 import {
+  canonicalRequest,
   compareMessages,
   isAssistantTerminal,
   isRealPrompt,
@@ -104,6 +106,23 @@ export function createRevertRecordProjection(): (
 }
 const compare = compareMessages;
 const dictionary = <T>(): Record<string, T> => Object.create(null);
+const sameJSON = (a: Message | Part, b: Message | Part): boolean =>
+  a === b || canonicalRequest(JSON.parse(JSON.stringify(a))) ===
+    canonicalRequest(JSON.parse(JSON.stringify(b)));
+const sameMessage = (a: Message, b: Message): boolean =>
+  a.id === b.id && sameJSON(a, b);
+
+function retainParts(previous: Message, next: Message): Message {
+  const byID = new Map(previous.parts.map((part) => [part.id, part]));
+  let reused = false;
+  const parts = next.parts.map((part) => {
+    const old = byID.get(part.id);
+    if (!old || !sameJSON(old, part)) return part;
+    reused ||= old !== part;
+    return old;
+  });
+  return reused ? { ...next, parts } : next;
+}
 /** Explicit neutral activity facts, shared by queue admission and presentation. */
 export function hasActiveRecord(message: Message): boolean {
   return message.role === "context" &&
@@ -139,10 +158,13 @@ export interface TranscriptProjection {
   materialized(messageID: string): boolean;
   releaseCommittedSends(): void;
   messages(): Message[];
-  clear(): void;
-  replace(
+  reset(
     messages: readonly Message[],
     source?: { sameSource: boolean; keepParked: boolean },
+  ): void;
+  reconcile(
+    messages: readonly Message[],
+    source?: Pick<MessagePage, "clock" | "revisions">,
   ): void;
   merge(messages: readonly Message[]): void;
   retain(ids: Set<string>): void;
@@ -168,6 +190,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     records: records.reconcile([], {}),
   };
   const parts = new Map<string, Map<string, number>>();
+  const witnesses = new Map<string, { epoch: string; revision: number }>();
   const sends = new Map<string, PendingSend>();
   const localParts = new Set<string>();
   // A parked warm body stays in the canonical map but owns no ordered row or
@@ -526,6 +549,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       oldKey = previous && entryKey(previous),
       key = entryKey(message);
     if (previous === message) return;
+    witnesses.delete(message.id);
     if (parked.has(message.id)) {
       state.messagesByID[message.id] = message;
       if (!preservePartIndex && previous?.parts !== message.parts) {
@@ -607,6 +631,7 @@ export function createTranscriptProjection(): TranscriptProjection {
   const remove = (id: string) => {
     const previous = read(id);
     if (!previous) return;
+    witnesses.delete(id);
     if (parked.delete(id)) {
       delete state.messagesByID[id];
       parts.delete(id);
@@ -632,6 +657,10 @@ export function createTranscriptProjection(): TranscriptProjection {
     group(key, state.repliesByID[key].messageIDs.filter((key) => key !== id));
     if (causalKey) orderGroup(causalKey);
     detached = undefined;
+  };
+  const merge = (message: Message) => {
+    if (parked.has(message.id)) remove(message.id);
+    if (!read(message.id) || sends.has(message.id)) put(message, false, true);
   };
   const owner = {
     state,
@@ -694,19 +723,22 @@ export function createTranscriptProjection(): TranscriptProjection {
       for (const id of ids) if (helperChildren.has(id)) return true;
       return false;
     },
-    clear(resetRecords = true) {
+    reset(
+      messages: readonly Message[],
+      source?: { sameSource: boolean; keepParked: boolean },
+    ) {
+      const previous = state.messagesByID;
+      const inactive = source?.keepParked ? [...parked] : [];
+      const last = read(state.messageIDs.at(-1) ?? "");
       state.messageIDs = [];
       state.messagesByID = dictionary<Message>();
       state.replyIDs = [];
       state.repliesByID = dictionary<TranscriptReply>();
       state.queuedIDs = new Set();
-      if (resetRecords) {
-        records.clear();
-        state.records = records.reconcile([], {});
-      }
       recordOrder = undefined;
       recordsDirty = true;
       parts.clear();
+      witnesses.clear();
       parked.clear();
       helperLinks.clear();
       helperChildren.clear();
@@ -725,15 +757,6 @@ export function createTranscriptProjection(): TranscriptProjection {
       userOrder = [];
       unfinishedOrder = [];
       detached = undefined;
-    },
-    replace(
-      messages: readonly Message[],
-      source?: { sameSource: boolean; keepParked: boolean },
-    ) {
-      const previous = state.messagesByID;
-      const inactive = source?.keepParked ? [...parked] : [];
-      const last = read(state.messageIDs.at(-1) ?? "");
-      owner.clear(false);
       replacing = true;
       try {
         for (const message of messages) {
@@ -769,13 +792,28 @@ export function createTranscriptProjection(): TranscriptProjection {
       }
       queues();
     },
-    merge(messages: readonly Message[]) {
+    reconcile(
+      messages: readonly Message[],
+      source?: Pick<MessagePage, "clock" | "revisions">,
+    ) {
       for (const message of messages) {
-        if (parked.has(message.id)) remove(message.id);
-        if (!read(message.id) || sends.has(message.id)) {
-          put(message, false, true);
+        const { id } = message;
+        const previous = read(id), known = witnesses.get(id);
+        const epoch = source?.clock.epoch, revision = source?.revisions?.[id];
+        const equal = previous && (known && known.epoch === epoch &&
+            known.revision === revision || sameMessage(previous, message));
+        const next = equal ? previous : retainStreamMessage(previous, message);
+        const body = !equal && previous ? retainParts(previous, next) : next;
+        if (parked.has(id)) merge(body);
+        else if (!equal || !owner.committed(id)) put(body, false, true);
+        if (epoch !== undefined && revision !== undefined) {
+          witnesses.set(id, { epoch, revision });
         }
       }
+      queues();
+    },
+    merge(messages: readonly Message[]) {
+      for (const message of messages) merge(message);
       queues();
     },
     retain(ids: Set<string>) {
@@ -933,7 +971,7 @@ export function projectReplies(
   }
   return [...sessions.values()].flatMap((items) => {
     const owner = createTranscriptProjection();
-    owner.replace(items);
+    owner.reset(items);
     owner.busy(busy);
     return owner.state.replyIDs.map((id) => owner.state.repliesByID[id]);
   }).sort((a, b) =>

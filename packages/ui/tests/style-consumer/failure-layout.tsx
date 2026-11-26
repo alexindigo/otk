@@ -359,7 +359,7 @@ export default function FailureLayout() {
   }
   if (surface === "interval") {
     const projection = createTranscriptProjection();
-    projection.replace(records);
+    projection.reset(records);
     const group =
       projection.state.records.groups[projection.state.records.keys[0]];
     return (

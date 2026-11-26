@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertStrictEquals,
+} from "@std/assert";
 import type { Activity, Message } from "@otk/protocol";
 import {
   createTranscriptInteraction,
@@ -36,7 +41,7 @@ function record(
 }
 Deno.test("record projection mints multi-record spans and preserves append topology", () => {
   const p = createTranscriptProjection();
-  p.replace([record(1), record(2)]);
+  p.reset([record(1), record(2)]);
   const first = p.state.records;
   const key = first.keys[0], child = first.groups[key].children![0].key;
   assertNotEquals(key, "r1");
@@ -56,8 +61,8 @@ Deno.test("record projection mints multi-record spans and preserves append topol
   });
   assertEquals(p.state.records.keys, [key]);
   assertEquals(p.state.records.owners.r16, key);
-  p.replace([]);
-  p.replace([record(15)]);
+  p.reset([]);
+  p.reset([record(15)]);
   assertEquals(p.state.records.keys, [key]);
   p.merge(Array.from({ length: 14 }, (_, n) => record(n + 1)));
   assertEquals(p.state.records.keys, [key]);
@@ -76,7 +81,7 @@ Deno.test("record projection mints multi-record spans and preserves append topol
 });
 Deno.test("terminal transitions rejoin the existing interval", () => {
   const p = createTranscriptProjection();
-  p.replace([
+  p.reset([
     record(1),
     record(2, {
       state: {
@@ -91,12 +96,12 @@ Deno.test("terminal transitions rejoin the existing interval", () => {
   p.apply({ op: "message.upsert", message: record(3) });
   assertEquals(p.state.records.keys.slice(0, 2), keys);
   assertEquals(p.state.records.owners.r2, keys[0]);
-  p.replace(p.messages());
+  p.reset(p.messages());
   assertEquals(p.state.records.keys.slice(0, 2), keys);
 });
 Deno.test("failure breaks out and full record facts prevent title-only folding", () => {
   const p = createTranscriptProjection();
-  p.replace([
+  p.reset([
     record(1),
     record(2, {}, "different facts"),
     record(3),
@@ -116,7 +121,7 @@ Deno.test("failure breaks out and full record facts prevent title-only folding",
 Deno.test("record reveal opens retained ancestry through the interaction owner", () => {
   const p = createTranscriptProjection(),
     interaction = createTranscriptInteraction();
-  p.replace([record(1), record(2)]);
+  p.reset([record(1), record(2)]);
   const ancestry = p.state.records.parents.r2;
   interaction.reveal(ancestry);
   for (const key of ancestry) {
@@ -134,7 +139,7 @@ Deno.test("record reveal opens retained ancestry through the interaction owner",
 
 Deno.test("a changed middle record splits identical folds without reordering source", () => {
   const p = createTranscriptProjection();
-  p.replace([record(1), record(2), record(3), record(4)]);
+  p.reset([record(1), record(2), record(3), record(4)]);
   const key = p.state.records.keys[0];
   p.apply({ op: "message.upsert", message: record(2, {}, "changed facts") });
   assertEquals(
@@ -146,7 +151,7 @@ Deno.test("a changed middle record splits identical folds without reordering sou
     ],
   );
   const children = p.state.records.groups[key].children!.map((row) => row.key);
-  p.replace(p.messages());
+  p.reset(p.messages());
   p.apply({ op: "message.upsert", message: record(5) });
   assertEquals(
     p.state.records.groups[key].children!.map((row) => row.key),
@@ -158,9 +163,27 @@ Deno.test("a changed middle record splits identical folds without reordering sou
   );
 });
 
+Deno.test("reconcile keeps unchanged activity groups when the page changes topology", () => {
+  const p = createTranscriptProjection();
+  const older = record(1);
+  p.reset([older]);
+  const groups = p.state.records.groups;
+  const key = p.state.records.keys[0];
+  p.reconcile([structuredClone(older), {
+    id: "prompt",
+    role: "user",
+    sessionID: older.sessionID,
+    time: { created: 2 },
+    parts: [],
+  }]);
+  assertStrictEquals(p.state.records.groups, groups);
+  p.reconcile([record(3)]);
+  assertStrictEquals(p.state.records.groups[key], groups[key]);
+});
+
 Deno.test("ordinary streamed rows publish new measurement revisions without regrouping", () => {
   const p = createTranscriptProjection();
-  p.replace([{
+  p.reset([{
     id: "r1",
     sessionID: "session",
     role: "assistant",
@@ -192,7 +215,7 @@ Deno.test("ordinary streamed rows publish new measurement revisions without regr
 
 Deno.test("records without producer summary facts remain visible within the frame", () => {
   const p = createTranscriptProjection();
-  p.replace([
+  p.reset([
     record(1, { summary: undefined }),
     record(2, { summary: undefined }),
   ]);

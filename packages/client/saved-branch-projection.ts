@@ -18,7 +18,7 @@ export function savedBranchProjection(
   presentations: Record<string, MessagePresentation>;
 } {
   const owner = createTranscriptProjection();
-  owner.replace(branch?.messages ?? []);
+  owner.reset(branch?.messages ?? []);
   owner.boundaries(
     Object.values(branch?.turns ?? {}).map((turn) => turn.boundary),
   );
