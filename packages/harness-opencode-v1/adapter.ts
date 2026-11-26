@@ -1313,34 +1313,11 @@ export class OpencodeV1Adapter implements Harness {
         outcome: error.outcome,
       },
     };
-    const prior = recordID
-      ? this.#retention.get(sessionID, recordID)?.message
-      : undefined;
-    const priorPart = prior?.parts.find((part) =>
-      part.kind === "external" && part.failure
-    );
-    const priorFailure = priorPart?.kind === "external"
-      ? priorPart.failure
-      : undefined;
-    if (priorFailure?.facts) {
-      failure.facts = {
-        ...failure.facts,
-        outcome: priorFailure.facts.outcome === "rejected"
-          ? "rejected"
-          : failure.facts.outcome,
-        status: failure.facts.status ?? priorFailure.facts.status,
-        reason: [
-          ...new Set(
-            [priorFailure.facts.reason, failure.facts.reason].filter(Boolean),
-          ),
-        ].join("\n"),
-      };
-    }
     const message = requestFailureRecord(
       sessionID,
       failure,
       this.#failureCreated(sessionID, recordID),
-      prior?.role === "context" ? prior.replyTo : undefined,
+      undefined,
       recordID,
     );
     // Keep the original native failure class/certainty and diagnostic identity;
@@ -1402,27 +1379,22 @@ export class OpencodeV1Adapter implements Harness {
       operation,
       options?.operation?.key.key,
     );
-    const failureAttempt = this.#failureAttempts.begin(
-      sessionID,
-      token.id,
-      options?.operation?.key.origin,
-    );
-    const settled = this.client.json(path, {
+    // V1 session.error has no request key. Only this HTTP continuation owns
+    // the launch record; the event path can only borrow observed prompt facts.
+    const recordID = `request:failure:launch:${token.id}`;
+    const settled = this.client.json<void>(path, {
       ...options,
       signal: controller.signal,
       classification: "effect",
-    }).then(() => {
-      this.#failureAttempts.settle(failureAttempt);
     });
     const request = settled.then(() => this.#errors.settled(token)).catch(
       (error) => {
         if (!this.#stopped && !controller.signal.aborted) {
-          this.#failureAttempts.settle(failureAttempt);
           this.#requestFailure(
             sessionID,
             operation,
             error,
-            failureAttempt.recordID,
+            recordID,
             options?.operation?.key.origin,
             token,
           );
@@ -1447,7 +1419,6 @@ export class OpencodeV1Adapter implements Harness {
         }
       },
     ).finally(() => {
-      this.#failureAttempts.settle(failureAttempt);
       this.#errors.settled(token);
       this.#commands.delete(controller);
     });
@@ -2582,13 +2553,12 @@ export class OpencodeV1Adapter implements Harness {
         facts: {
           ...this.client.failureFacts(error),
           actionLabel: "Running session",
-          origin: this.#failureAttempts.origin(sessionID) ??
-            this.#retention.get(
-              sessionID,
-              `submission:${this.#failureTurns.get(sessionID)?.prompt}`,
-            )?.request?.origin as
-              | import("@otk/protocol").RequestOrigin
-              | undefined,
+          origin: this.#retention.get(
+            sessionID,
+            `submission:${this.#failureTurns.get(sessionID)?.prompt}`,
+          )?.request?.origin as
+            | import("@otk/protocol").RequestOrigin
+            | undefined,
           target: { sessionID, label: entry?.title },
           outcome: "rejected" as const,
         },
