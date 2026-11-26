@@ -22,6 +22,8 @@ import {
   createSignal,
   createUniqueId,
   For,
+  onCleanup,
+  onSettled,
   Show,
 } from "solid-js";
 import {
@@ -35,6 +37,8 @@ import {
 } from "@otk/client";
 import {
   type Preferences,
+  type ProjectMove,
+  type ProjectMoveTarget,
   SHELL_WIDTHS,
   type ShellLayout,
 } from "@otk/protocol";
@@ -71,6 +75,7 @@ const RENAMING_PROJECT = "Renaming project...";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
+  otkProjectID?: string;
 }
 export default function ProjectInbox<T extends ProjectRow>(props: {
   disclosure: TreeDisclosures;
@@ -88,6 +93,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   onOpen(project: ProjectSelection): void;
   onAttention?(project: ProjectSelection): void;
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
+  onMove?(id: string, move: ProjectMove): Promise<void>;
   onLayout(patch: Partial<ShellLayout>): Promise<void>;
   onProjectCollapse?(
     project: ProjectSelection,
@@ -250,6 +256,151 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   const repositoryKey = (p: ProjectRow) =>
     JSON.stringify([p.sidecarId, repository(p)]);
   const liveRows = createMemo(() => projectTree(rows()));
+  type Section = "Active" | "Inactive" | "Discovered";
+  const roots = (section: Section) =>
+    section === "Active"
+      ? liveRows()
+      : section === "Inactive"
+      ? projectTree(inactiveRows())
+      : projectTree(
+        discovered().filter((p) => discoveredOpen() || p.status !== "none"),
+      );
+  const headings = new Map<string, HTMLDivElement>();
+  const focusButtons = new Map<string, HTMLButtonElement>();
+  const [orderStatus, setOrderStatus] = createSignal("");
+  const sections = (): Section[] => ["Active", "Discovered", "Inactive"];
+  const reorderable = (node: ProjectBranch<ProjectRow>) =>
+    !!node.project.otkProjectID &&
+    node.project.level !== "worktree" && !node.project.archived;
+  const sectionOf = (key: string) =>
+    sections().find((section) =>
+      roots(section).some((node) => node.key === key && reorderable(node))
+    );
+  const focusable = (key: string) => focusButtons.get(key);
+  const focusedRoot = () =>
+    [...headings.keys()].find((key) =>
+      focusable(key) === document.activeElement
+    );
+  const selectionKey = (input: { directory?: string; sidecarId?: string }) =>
+    input.directory && input.sidecarId
+      ? JSON.stringify([input.sidecarId, input.directory])
+      : focusedRoot();
+  const peers = (section: Section, sidecar: string) =>
+    roots(section).filter((node) =>
+      node.project.sidecarId === sidecar && reorderable(node)
+    );
+  async function commitMove(key: string, target: ProjectMoveTarget) {
+    const section = sectionOf(key);
+    const row = section &&
+      roots(section).find((node) => node.key === key)?.project;
+    if (!section || !row?.otkProjectID || !props.onMove) return;
+    const anchor = "before" in target ? target.before : target.after;
+    if (
+      !peers(section, row.sidecarId).some((node) =>
+        node.project.otkProjectID === anchor
+      )
+    ) return;
+    const focus = document.activeElement === focusable(key);
+    setOrderStatus("");
+    await props.onMove(row.sidecarId, { id: row.otkProjectID, ...target });
+    queueMicrotask(() => {
+      if (
+        focus &&
+        (document.activeElement === document.body ||
+          document.activeElement === focusable(key))
+      ) focusable(key)?.focus();
+      const nodes = roots(section).filter(reorderable);
+      const index = nodes.findIndex((node) => node.key === key);
+      if (index >= 0) {
+        setOrderStatus(
+          `${
+            row.displayName ?? checkoutLabel(row.directory, row.summary)
+          } moved to position ${index + 1} of ${nodes.length} in ${section}`,
+        );
+      }
+    });
+  }
+  type Step = { sidecarId?: string; directory?: string; delta: -1 | 1 };
+  const neighbor = (input: Step) => {
+    const key = selectionKey(input), section = key && sectionOf(key);
+    const anchor = section && roots(section).find((node) => node.key === key);
+    if (!key || !section || !anchor || !props.ready || !props.onMove) return;
+    const candidates = peers(section, anchor.project.sidecarId);
+    const next = candidates[
+      candidates.findIndex((node) => node.key === key) + input.delta
+    ];
+    if (next?.project.otkProjectID) {
+      return { key, id: next.project.otkProjectID };
+    }
+  };
+  const moveCommand = `project.move@${createUniqueId()}`;
+  ownedCommand<Step, void>(ports, {
+    id: moveCommand,
+    name: "project.move",
+    scope: "control",
+    title: "Move project",
+    category: "Controls",
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string", optional: true },
+        directory: { type: "string", optional: true },
+        delta: { type: "number", enum: [-1, 1] },
+      },
+    },
+    context: {
+      kind: "project",
+      order: -5,
+      group: "position",
+      showUnavailable: true,
+      arguments: renameArgs,
+      items(input) {
+        const key = selectionKey(input);
+        if (!props.onMove || !key || !sectionOf(key)) return [];
+        return ([-1, 1] as const).map((delta) => ({
+          key: String(delta),
+          title: delta < 0 ? "Move up" : "Move down",
+          args: { ...input, delta },
+        }));
+      },
+    },
+    availability: (_ctx, input) =>
+      input && neighbor(input)
+        ? { available: true }
+        : { available: false, reason: "No project in that direction" },
+    run: async (_ctx, input) => {
+      const next = neighbor(input);
+      if (next) {
+        await commitMove(
+          next.key,
+          input.delta < 0 ? { before: next.id } : { after: next.id },
+        );
+      }
+    },
+  });
+  onSettled(() => {
+    const keys = ports.keyboard?.keymap;
+    if (!keys) return;
+    const when = () => !!focusedRoot();
+    const up = keys.bind({
+      id: "project.moveUp",
+      command: moveCommand,
+      args: { delta: -1 },
+      key: "Alt+ArrowUp",
+      ctx: "sidebar",
+    }, when);
+    const down = keys.bind({
+      id: "project.moveDown",
+      command: moveCommand,
+      args: { delta: 1 },
+      key: "Alt+ArrowDown",
+      ctx: "sidebar",
+    }, when);
+    return () => {
+      up();
+      down();
+    };
+  });
   const archiveOwners = createMemo(() => {
     const owners = new Map<string, ProjectBranch<ProjectRow>>();
     for (const node of liveRows()) {
@@ -265,8 +416,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       projectGroup(p) === "archived" && p.sidecarId === repo.sidecarId &&
       repository(p) === repository(repo)
     );
-  function Branches(section: { projects: ProjectRow[]; nested?: boolean }) {
-    const nodes = createMemo(() => projectTree(section.projects));
+  function Branches(
+    section: { projects?: ProjectRow[]; name?: Section; nested?: boolean },
+  ) {
+    const nodes = createMemo(() =>
+      section.name ? roots(section.name) : projectTree(section.projects ?? [])
+    );
     return (
       <For each={nodes()} keyed={(node) => node.key}>
         {(node) => (
@@ -274,16 +429,32 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
             connected={!!section.nested}
             last={node().key === nodes().at(-1)?.key}
           >
-            <ProjectNode node={node()} />
+            <ProjectNode
+              node={node()}
+              section={section.name}
+              archive={section.name === "Active" &&
+                archiveOwners().get(repositoryKey(node().project))?.key ===
+                  node().key}
+            />
           </TreeItem>
         )}
       </For>
     );
   }
   function ProjectNode(
-    item: { node: ProjectBranch<ProjectRow>; archive?: boolean },
+    item: {
+      node: ProjectBranch<ProjectRow>;
+      archive?: boolean;
+      section?: Section;
+    },
   ) {
     const node = () => item.node;
+    const key = item.node.key;
+    const movable = () => !!item.section && reorderable(node());
+    onCleanup(() => {
+      headings.delete(key);
+      focusButtons.delete(key);
+    });
     const archive = () =>
       !!item.archive && archivedRows(node().project).length > 0;
     const ownsNestedArchive = () =>
@@ -312,6 +483,14 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     return (
       <>
         <TreeNode
+          heading={movable()
+            ? {
+              "data-project-root": key,
+              ref: (element: HTMLDivElement) => {
+                headings.set(key, element);
+              },
+            }
+            : undefined}
           compact={collapsed()}
           selected={props.selected?.sidecarId === node().project.sidecarId &&
             props.selected?.directory === node().project.directory}
@@ -325,6 +504,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           header={(connected) => (
             <Row
               project={node().project}
+              reorderKey={movable() ? key : undefined}
               connected={connected}
             />
           )}
@@ -475,7 +655,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     { arguments: { type: "boolean" } },
   );
   function Row(
-    row: { project: ProjectRow; connected?: boolean },
+    row: { project: ProjectRow; connected?: boolean; reorderKey?: string },
   ) {
     const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
@@ -544,7 +724,10 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           },
         }}
         editing={editing()}
-        mainRef={(element) => openButton = element}
+        mainRef={(element) => {
+          openButton = element;
+          if (row.reorderKey) focusButtons.set(row.reorderKey, element);
+        }}
         compact={collapsed()}
         detailedMeta={!!project().annotation ||
           (project().visit?.parts.length ?? 0) > 1}
@@ -823,18 +1006,10 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
         </Show>
       }
     >
-      <For
-        each={liveRows()}
-        keyed={(p) => p.key}
-      >
-        {(p) => (
-          <ProjectNode
-            node={p()}
-            archive={archiveOwners().get(repositoryKey(p().project))?.key ===
-              p().key}
-          />
-        )}
-      </For>
+      <span role="status" aria-live="polite" class="otk-project-order-status">
+        {orderStatus()}
+      </span>
+      <Branches name="Active" />
       <For each={orphanArchives()} keyed={repositoryKey}>
         {(repo) => <Archive repo={repo()} />}
       </For>
@@ -864,11 +1039,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           aria-label="Discovered projects"
           class="otk-discovered-projects"
         >
-          <Branches
-            projects={discovered().filter((p) =>
-              discoveredOpen() || p.status !== "none"
-            )}
-          />
+          <Branches name="Discovered" />
         </section>
       </Show>
       <Show when={!collapsed() && inactiveRows().length}>
@@ -890,12 +1061,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
         />
         <Show when={inactiveOpen()}>
           <section aria-label="Inactive projects" class="otk-inactive-projects">
-            <Branches projects={inactiveRows()} />
+            <Branches name="Inactive" />
           </section>
         </Show>
       </Show>
       <Show when={collapsed()}>
-        <Branches projects={inactiveRows()} />
+        <Branches name="Inactive" />
       </Show>
       <Show when={!collapsed() && !props.projects.length}>
         <EmptyState>Add a project to get started.</EmptyState>

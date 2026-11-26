@@ -127,6 +127,9 @@ export function TreeNode(props: {
   outgoing?: boolean;
   compact?: boolean;
   selected?: boolean;
+  heading?:
+    & import("@solidjs/web").ComponentProps<"div">
+    & Partial<Record<`data-${string}`, string>>;
   /** Virtual row topology: ancestor continuation flags, then this row's flag.
    * A root has an empty path. A flat row never renders a nested body. */
   path?: readonly boolean[];
@@ -163,6 +166,7 @@ export function TreeNode(props: {
       data-tree-node=""
     >
       <div
+        {...props.heading}
         class="otk-tree-heading"
         onKeyDown={(event) => {
           if (
@@ -193,7 +197,7 @@ export function TreeNode(props: {
             when={props.onOpen &&
               ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
           >
-            <span class="otk-tree-toggle-slot">
+            <span class="otk-tree-toggle-slot" data-no-reorder="">
               <Show
                 when={props.toggleHeader}
                 fallback={

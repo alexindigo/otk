@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { WebSocketRoute } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 
@@ -236,3 +237,47 @@ test("sessions.project-order-no-reorder-on-load", {
     message: "replacement checkout inherits the project's slot",
   }).toEqual([a, replacement, b]);
 });
+
+const tags = { tag: ["@sessions", "@contracts", "@isolated"] };
+const active = (page: Page) =>
+  page.locator('.otk-project-row[data-group="active"]:not(.is-subproject)');
+const activeOrder = (page: Page) =>
+  active(page).evaluateAll((rows) =>
+    rows.map((row) => row.getAttribute("data-project"))
+  );
+async function sidebar(page: Page, url: string) {
+  await page.goto(url);
+  await expect.poll(async () => (await activeOrder(page)).length)
+    .toBeGreaterThanOrEqual(3);
+}
+
+test(
+  "sessions.project-order-keyboard-and-menu-move",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await state.product("layout.patch", { leftCollapsed: false });
+    await sidebar(page, state.url);
+    const initial = await activeOrder(page);
+    const moved = [initial[0], initial[2], initial[1], ...initial.slice(3)];
+    const row = page.locator(
+      `.otk-project-row[data-project=${JSON.stringify(initial[2])}]`,
+    );
+    const button = row.locator(".otk-project-open");
+    await button.focus();
+    await button.press("Alt+ArrowUp");
+    await expect.poll(() => activeOrder(page)).toEqual(moved);
+    await expect(button).toBeFocused();
+    await expect(page.locator(".otk-project-order-status")).toContainText(
+      `moved to position 2 of ${initial.length} in Active`,
+    );
+    await row.locator(".otk-project-menu > button").click();
+    await page.getByRole("menuitem", { name: "Move down", exact: true })
+      .click();
+    await expect.poll(() => activeOrder(page)).toEqual(initial);
+    await active(page).first().locator(".otk-project-menu > button").click();
+    await expect(page.getByRole("menuitem", { name: "Move up", exact: true }))
+      .toBeDisabled();
+    await page.reload();
+    await expect.poll(() => activeOrder(page)).toEqual(initial);
+  },
+);
