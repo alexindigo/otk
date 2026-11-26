@@ -113,6 +113,22 @@ export default function ContextMenu(
     };
     const pointer = (event: MouseEvent) => {
       if (event.shiftKey) return;
+      // A registered touch gesture may own the long press, not the menu.
+      // Its completion may request this same menu with a plain MouseEvent.
+      const { sourceCapabilities } = event as MouseEvent & {
+        sourceCapabilities?: { firesTouchEvents: boolean } | null;
+      };
+      if (
+        (event instanceof PointerEvent && event.pointerType === "touch" ||
+          sourceCapabilities?.firesTouchEvents) &&
+        event.composedPath().some((node) =>
+          node instanceof HTMLElement &&
+          node.hasAttribute("data-defer-touch-menu")
+        )
+      ) {
+        event.preventDefault();
+        return;
+      }
       if (nativeTextContext(event.composedPath())) {
         pending = undefined;
         clearTimeout(opening);

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { WebSocketRoute } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 
@@ -236,3 +239,220 @@ test("sessions.project-order-no-reorder-on-load", {
     message: "replacement checkout inherits the project's slot",
   }).toEqual([a, replacement, b]);
 });
+
+const tags = { tag: ["@sessions", "@contracts", "@isolated"] };
+const active = (page: Page) =>
+  page.locator('.otk-project-row[data-group="active"]:not(.is-subproject)');
+const activeOrder = (page: Page) =>
+  active(page).evaluateAll((rows) =>
+    rows.map((row) => row.getAttribute("data-project"))
+  );
+async function sidebar(page: Page, url: string) {
+  await page.goto(url);
+  await expect.poll(async () => (await activeOrder(page)).length)
+    .toBeGreaterThanOrEqual(3);
+}
+
+test(
+  "sessions.project-order-drag-edges-and-touch",
+  tags,
+  async ({ isolatedState: state, page }, info) => {
+    const { root } = await state.observe<{ root: string }>();
+    const parents = join(root, "order-fixture");
+    for (let i = 0; i < 20; i++) {
+      await mkdir(join(parents, `project-${String(i).padStart(2, "0")}`), {
+        recursive: true,
+      });
+    }
+    await state.product("projects.templates", {
+      templates: [join(parents, "{project}")],
+    });
+    await state.product("layout.patch", { leftCollapsed: false });
+    await page.setViewportSize({ width: 1280, height: 400 });
+    await sidebar(page, state.url);
+    const original = await activeOrder(page);
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      const box =
+        (await active(page).nth(2).locator(".otk-project-open").boundingBox())!;
+      const to = (await active(page).nth(1).boundingBox())!;
+      const x = Math.round(box.x + box.width / 2),
+        y = Math.round(box.y + box.height / 2);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y }],
+      });
+      await expect(page.locator(".is-lifted")).toHaveCount(1);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x, y: Math.round(to.y + 2) }],
+      });
+      await expect(page.locator(".otk-project-drop")).toHaveCount(1);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await expect.poll(() => activeOrder(page)).toEqual([
+        original[0],
+        original[2],
+        original[1],
+        ...original.slice(3),
+      ]);
+      await expect(page.locator(".is-lifted")).toHaveCount(0);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y }],
+      });
+      await expect(page.locator(".is-lifted")).toHaveCount(1);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await expect(page.getByRole("menuitem", { name: "Move up", exact: true }))
+        .toBeVisible();
+      await page.keyboard.press("Escape");
+    } finally {
+      await cdp.detach();
+    }
+    const discoveredToggle = page.locator(".otk-discovered-toggle");
+    if (await discoveredToggle.getAttribute("aria-expanded") === "false") {
+      await discoveredToggle.click();
+    }
+    const projects = page.locator(
+      '[data-project-section="Discovered"] [data-project-root]',
+    );
+    await expect(projects).toHaveCount(20);
+    const source = (await projects.first().boundingBox())!;
+    const viewport = page.locator(".otk-inbox-scroll");
+    const view = (await viewport.boundingBox())!;
+    const x = source.x + source.width / 2, y = view.y + view.height - 5;
+    await page.mouse.move(x, source.y + source.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, y, { steps: 5 });
+    await expect.poll(() => viewport.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(100);
+    await expect.poll(() =>
+      viewport.evaluate((el) =>
+        el.scrollHeight - el.clientHeight - el.scrollTop
+      )
+    ).toBeLessThanOrEqual(1);
+    await expect(page.locator(".otk-project-drop")).toHaveCount(1);
+    await page.mouse.up();
+    await expect(projects.last()).toHaveAttribute(
+      "data-project-root",
+      /project-00/,
+    );
+    await expect(page.locator(".is-lifted")).toHaveCount(0);
+    await projects.first().scrollIntoViewIfNeeded();
+    const next = (await projects.first().boundingBox())!;
+    await page.mouse.move(x, next.y + next.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, next.y + next.height * 2);
+    await expect(page.locator(".is-lifted")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    await expect(page.locator(".is-lifted, .otk-project-drop")).toHaveCount(0);
+    await expect(projects.first()).toHaveAttribute(
+      "data-project-root",
+      /project-01/,
+    );
+    await state.product("projects.inactive", {
+      directory: join(parents, "project-00"),
+      inactive: true,
+    });
+    await expect(projects).toHaveCount(19);
+    const inactiveToggle = page.locator(".otk-inactive-toggle");
+    if (
+      await inactiveToggle.getAttribute("aria-expanded") === "false"
+    ) await inactiveToggle.click();
+    const inactive = page.locator(
+      '[data-project-section="Inactive"] [data-project-root]',
+    ).last();
+    await inactive.scrollIntoViewIfNeeded();
+    const before = await projects.evaluateAll((rows) =>
+      rows.map((row) => row.getAttribute("data-project-root"))
+    );
+    const start = (await projects.last().boundingBox())!;
+    const target = (await inactive.boundingBox())!;
+    await page.mouse.move(x, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, target.y + target.height / 2, { steps: 4 });
+    await expect(page.locator(".is-lifted")).toHaveCount(1);
+    await expect(page.locator(".otk-project-drop")).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.locator(".is-lifted")).toHaveCount(0);
+    expect(
+      await projects.evaluateAll((rows) =>
+        rows.map((row) => row.getAttribute("data-project-root"))
+      ),
+    ).toEqual(before);
+    await info.attach("project-order-boundaries", {
+      body: "Touch lift/move/menu, scroll edge, Escape",
+      contentType: "text/plain",
+    });
+  },
+);
+
+test(
+  "sessions.project-order-keyboard-and-menu-move",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await state.product("layout.patch", { leftCollapsed: false });
+    await sidebar(page, state.url);
+    const initial = await activeOrder(page);
+    const moved = [initial[0], initial[2], initial[1], ...initial.slice(3)];
+    const row = page.locator(
+      `.otk-project-row[data-project=${JSON.stringify(initial[2])}]`,
+    );
+    const button = row.locator(".otk-project-open");
+    await button.focus();
+    await button.press("Alt+ArrowUp");
+    await expect.poll(() => activeOrder(page)).toEqual(moved);
+    await expect(button).toBeFocused();
+    await expect(page.locator(".otk-project-order-status")).toContainText(
+      `moved to position 2 of ${initial.length} in Active`,
+    );
+    await row.locator(".otk-project-menu > button").click();
+    await page.getByRole("menuitem", { name: "Move down", exact: true })
+      .click();
+    await expect.poll(() => activeOrder(page)).toEqual(initial);
+    await active(page).first().locator(".otk-project-menu > button").click();
+    await expect(page.getByRole("menuitem", { name: "Move up", exact: true }))
+      .toBeDisabled();
+    await page.reload();
+    await expect.poll(() => activeOrder(page)).toEqual(initial);
+  },
+);
+
+test(
+  "sessions.project-order-drag-persists-across-reload-and-second-browser",
+  tags,
+  async ({ isolatedState: state, page, browser }) => {
+    await state.product("layout.patch", { leftCollapsed: false });
+    await sidebar(page, state.url);
+    const initial = await activeOrder(page);
+    const moved = [initial[0], initial[2], initial[1], ...initial.slice(3)];
+    const from =
+      (await active(page).nth(2).locator(".otk-project-open").boundingBox())!;
+    const to = (await active(page).nth(1).boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2, to.y + 3, { steps: 8 });
+    await expect(page.locator(".otk-project-tree.is-lifted")).toHaveCount(1);
+    await expect(page.locator(".otk-project-drop")).toHaveCount(1);
+    expect(await activeOrder(page)).toEqual(initial);
+    await page.mouse.up();
+    await expect.poll(() => activeOrder(page)).toEqual(moved);
+    await expect(page.locator(".otk-project-drop")).toHaveCount(0);
+    await page.reload();
+    await expect.poll(() => activeOrder(page)).toEqual(moved);
+    const other = await browser.newContext();
+    try {
+      const second = await other.newPage();
+      await second.goto(state.url);
+      await expect.poll(() => activeOrder(second)).toEqual(moved);
+    } finally {
+      await other.close();
+    }
+  },
+);

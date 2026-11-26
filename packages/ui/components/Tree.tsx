@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Tree.css" with { type: "text" };
+import { nativeAttributes } from "./native-attributes.ts";
 import {
   createContext,
   createUniqueId,
@@ -127,6 +128,9 @@ export function TreeNode(props: {
   outgoing?: boolean;
   compact?: boolean;
   selected?: boolean;
+  heading?:
+    & import("@solidjs/web").ComponentProps<"div">
+    & Partial<Record<`data-${string}`, string>>;
   /** Virtual row topology: ancestor continuation flags, then this row's flag.
    * A root has an empty path. A flat row never renders a nested body. */
   path?: readonly boolean[];
@@ -147,6 +151,10 @@ export function TreeNode(props: {
     !flat() && !!props.body && (props.bodyVisible ?? props.open ?? true);
   const stem = () =>
     flat() ? props.open !== false && !!props.hasChildren : visible();
+  const heading = nativeAttributes(() => props.heading ?? {}, [
+    "class",
+    "onKeyDown",
+  ]);
   return (
     <section
       class={["otk-tree-node", props.class, {
@@ -163,6 +171,15 @@ export function TreeNode(props: {
       data-tree-node=""
     >
       <div
+        {...heading.attributes}
+        ref={(element) => {
+          heading.ref(element);
+          if (typeof props.heading?.ref === "function") {
+            props.heading.ref(
+              element,
+            );
+          }
+        }}
         class="otk-tree-heading"
         onKeyDown={(event) => {
           if (
@@ -193,7 +210,7 @@ export function TreeNode(props: {
             when={props.onOpen &&
               ((props.hasChildren ?? !!props.body) || props.showEmptyToggle)}
           >
-            <span class="otk-tree-toggle-slot">
+            <span class="otk-tree-toggle-slot" data-no-reorder="">
               <Show
                 when={props.toggleHeader}
                 fallback={

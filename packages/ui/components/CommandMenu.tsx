@@ -231,6 +231,9 @@ export default function CommandMenu(props: {
                           ref={(element) => button = element}
                           type="button"
                           role="menuitem"
+                          aria-disabled={action().unavailable
+                            ? "true"
+                            : undefined}
                           data-context-command={action().id}
                           data-context-command-name={commands.metadata(
                             action().id,
@@ -249,7 +252,8 @@ export default function CommandMenu(props: {
                             armed()?.key === action().key ? "is-armed" : "",
                           ].filter(Boolean).join(" ")}
                           onClick={() =>
-                            void run(action(), () => status?.focus(), () =>
+                            !action().unavailable && void run(action(), () =>
+                              status?.focus(), () =>
                               button.focus())}
                         >
                           <span

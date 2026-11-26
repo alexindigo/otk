@@ -742,6 +742,7 @@ export default function Shell(
               onOpen={openProject}
               onAttention={navigation.openAttention}
               onInactive={resources.inactive}
+              onMove={resources.moveProject}
               onLayout={saveLayout}
               onProjectCollapse={resources.projectCollapse}
             />
