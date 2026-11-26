@@ -12,6 +12,7 @@ import type { SessionContextTarget } from "../features/session-context.ts";
 import OverflowRow from "./OverflowRow.tsx";
 import StatusLight from "./StatusLight.tsx";
 import TitleEditor from "./TitleEditor.tsx";
+import { MAX_SESSION_TITLE } from "@otk/protocol";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { location } from "./selection.ts";
 import { contextTarget } from "./context-target.ts";
@@ -157,6 +158,9 @@ export default function TaskTrail(props: {
                   {crumbContent(
                     row,
                     <TitleEditor
+                      label="Rename session"
+                      pendingText="Renaming session..."
+                      maxLength={MAX_SESSION_TITLE}
                       owner={props.rename!}
                       feedbackID={props.feedbackID}
                     />,

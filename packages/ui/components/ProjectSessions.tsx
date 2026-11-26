@@ -47,7 +47,12 @@ import {
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import SessionStateMeta from "./SessionStateMeta.tsx";
-import { entityKey, taskEntityID, treeLayoutKey } from "@otk/protocol";
+import {
+  entityKey,
+  MAX_SESSION_TITLE,
+  taskEntityID,
+  treeLayoutKey,
+} from "@otk/protocol";
 import UsageCost from "./UsageCost.tsx";
 import { PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import {
@@ -349,12 +354,21 @@ export default function ProjectSessions(props: {
                     <TitleEditor
                       owner={props.rename!}
                       feedbackID={feedbackID}
+                      label="Rename session"
+                      pendingText="Renaming session..."
+                      maxLength={MAX_SESSION_TITLE}
                     />
                   </Show>
                 </span>
               }
               feedback={editing()
-                ? <TitleFeedback owner={props.rename!} id={feedbackID} />
+                ? (
+                  <TitleFeedback
+                    owner={props.rename!}
+                    id={feedbackID}
+                    pendingText="Renaming session..."
+                  />
+                )
                 : undefined}
               meta={
                 <Show when={entry()}>

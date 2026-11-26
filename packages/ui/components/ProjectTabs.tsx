@@ -5,6 +5,7 @@ import {
   exactCount,
   type FailureValue,
   failureValue,
+  folderName,
 } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectTabs.css" with { type: "text" };
@@ -43,7 +44,7 @@ import {
   type TaskActions,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
-import { entityKey } from "@otk/protocol";
+import { entityKey, MAX_SESSION_TITLE } from "@otk/protocol";
 import EdgeTriangle from "./EdgeTriangle.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import UsageCost from "./UsageCost.tsx";
@@ -401,7 +402,10 @@ export default function ProjectTabs(props: {
       </Show>
       <div class="otk-task-strip">
         {props.projectChip ?? (
-          <ProjectChip directory={props.project.directory} />
+          <ProjectChip
+            directory={props.project.directory}
+            name={folderName(props.project.directory)}
+          />
         )}
         <EdgeTriangle
           direction="previous"
@@ -515,7 +519,12 @@ export default function ProjectTabs(props: {
                           when={editing()}
                           fallback={tab().title || "Session"}
                         >
-                          <TitleEditor owner={props.rename!} />
+                          <TitleEditor
+                            owner={props.rename!}
+                            label="Rename session"
+                            pendingText="Renaming session..."
+                            maxLength={MAX_SESSION_TITLE}
+                          />
                         </Show>
                       </span>
                       <Show when={tab().preview}>
@@ -639,7 +648,11 @@ export default function ProjectTabs(props: {
         )}
       >
         <div class="otk-crumb-feedback">
-          <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />
+          <TitleFeedback
+            owner={props.rename!}
+            id={crumbFeedbackID}
+            pendingText="Renaming session..."
+          />
         </div>
       </Show>
     </section>

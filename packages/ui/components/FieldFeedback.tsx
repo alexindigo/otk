@@ -8,7 +8,9 @@ export default function FieldFeedback(
   props: {
     id?: string;
     feedback?: Feedback;
+    validation?: string;
     action?: boolean;
+    expanded?: boolean;
     placement?: "record";
   },
 ): Element {
@@ -17,6 +19,8 @@ export default function FieldFeedback(
       id={props.id}
       class={`otk-field-feedback${props.action ? " is-action" : ""}`}
       feedback={props.feedback}
+      validation={props.validation}
+      expanded={props.expanded}
       placement={props.placement}
     />
   );

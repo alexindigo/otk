@@ -162,6 +162,11 @@ export function attachmentFailure(cause: unknown, name: string): FailureValue {
     ? errorFeedback(cause, facts) ?? ""
     : failureValue(cause, facts);
 }
+/** Inline input guidance is not an operation failure or a diagnostic. */
+export function validationFeedback(text: string): Feedback {
+  return { kind: "error", text };
+}
+
 /** A feature-authored validation reason or an already-owned failure value. */
 export function errorFeedback(
   value: string | Feedback | undefined,
