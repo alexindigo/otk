@@ -245,7 +245,14 @@ Deno.test("UI convention: breadcrumb trails use one compact overflow row", async
     (await Deno.readTextFile("packages/ui/components/OverflowRow.tsx"))
       .includes("<ScrollRegion"),
   );
-  assert(/\.otk-breadcrumb-row\s*\{[^}]*flex-wrap:\s*nowrap/.test(chrome));
+  const header =
+    rules(chrome).find((rule) => rule.selector === ".otk-breadcrumb-row")!
+      .declarations;
+  assertEquals(header.get("display"), "grid");
+  assertEquals(
+    header.get("grid-template-columns"),
+    "minmax(min(var(--trail-current-min),100%),1fr) minmax(0,max-content)",
+  );
   assert(!component.includes("props.model.helpers"));
   const subagents = await Deno.readTextFile(
     "packages/ui/components/Subagents.tsx",
@@ -780,7 +787,7 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
   assertEquals(row.get("justify-content"), "space-between");
   const label =
     css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
-  assertEquals(label.get("min-inline-size"), "min(8ch,100%)");
+  assertEquals(label.get("min-inline-size"), "min(var(--row-title-min),100%)");
   assertEquals(label.get("flex"), "0 1 auto");
   assert(
     css.some((rule) =>

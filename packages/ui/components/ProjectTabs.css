@@ -30,13 +30,14 @@
 }
 .otk-tab {
   flex: 1 1 0;
-  min-width: 90px;
+  min-inline-size: min(var(--row-title-min), 100%);
+  max-inline-size: 100%;
   gap: 0;
   border-radius: var(--radius-row);
 }
 .otk-tab-open {
   width: 100%;
-  --selection-padding: 0 var(--chrome-inset) 0 0;
+  --selection-padding: 0 var(--space-2);
   height: var(--control-size);
   max-width: 100%;
   padding: 0;
@@ -56,8 +57,10 @@
   flex: none;
 }
 .otk-breadcrumb-row {
-  display: flex;
-  flex-wrap: nowrap;
+  --trail-current-min: calc(var(--row-title-min) + var(--control-size));
+  display: grid;
+  grid-template-columns: minmax(min(var(--trail-current-min), 100%), 1fr)
+    minmax(0, max-content);
   container: otk-session-header / inline-size;
   min-height: var(--row-compact);
   padding: 0 var(--lane-gutter);
@@ -65,10 +68,8 @@
   font-size: var(--text-ui);
 }
 .otk-task-crumbs {
-  flex: 1 1 20em;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-1);
+  grid-template-columns: minmax(0, 1fr);
 }
 .otk-new-session {
   display: inline-flex;
@@ -85,7 +86,8 @@
   white-space: nowrap;
 }
 .otk-context-fit {
-  flex: none;
+  justify-self: end;
+  --meta-row-gap: var(--space-2);
 }
 /* Reserve room for the trail by yielding usage items as complete values. */
 @container otk-session-header (inline-size < 32em) {
@@ -99,7 +101,7 @@
   }
 }
 @container otk-session-header (inline-size < 14em) {
-  .otk-context-fit {
+  .otk-context-meter {
     display: none;
   }
 }
@@ -142,9 +144,16 @@
   padding-inline: var(--lane-gutter);
 }
 .otk-session-selection {
-  gap: 0;
-  padding-inline-end: var(--chrome-inset);
+  gap: var(--space-1);
 }
-.otk-tab-open .otk-control-label {
-  flex: 1;
+.otk-tab-text {
+  display: grid;
+  grid-template-columns: minmax(min(var(--row-title-min), 100%), 1fr)
+    minmax(0, max-content);
+  align-items: center;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.otk-tab-meta {
+  justify-self: end;
 }

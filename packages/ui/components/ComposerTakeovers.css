@@ -68,7 +68,7 @@
 }
 .otk-composer-target {
   flex: 0 1 auto;
-  min-inline-size: min(8ch, 100%);
+  min-inline-size: min(var(--row-title-min), 100%);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -83,7 +83,7 @@
 }
 .otk-composer-task {
   flex: 0 1 auto;
-  min-inline-size: min(8ch, 100%);
+  min-inline-size: min(var(--row-title-min), 100%);
 }
 .otk-composer-destination {
   flex: none;
@@ -120,7 +120,7 @@
     max-inline-size: 100%;
   }
   .otk-composer-destination {
-    max-inline-size: min(8ch, 100%);
+    max-inline-size: min(var(--row-title-min), 100%);
   }
   .otk-composer-task {
     flex: 1 1 0;

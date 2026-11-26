@@ -45,9 +45,21 @@ const registry = [
     meta: ".otk-subagent-meta .otk-meta-item:not([hidden])",
   },
   {
+    id: "R7",
+    row: ".otk-composer-activity-line",
+    title: ".otk-composer-task, .otk-composer-destination",
+    meta: ".otk-composer-live-slot > :not([hidden])",
+  },
+  {
+    id: "R8",
+    row: ".otk-breadcrumb-row",
+    title: ".otk-session-crumb.is-current .otk-trail-title",
+    meta: ".otk-context-fit .otk-meta-item:not([hidden])",
+  },
+  {
     id: "R9",
     row: ".otk-tab, .otk-tabs-item",
-    title: "[role=tab]",
+    title: ".otk-tab-title, .otk-tabs-item [role=tab] .otk-control-label",
     meta: ".otk-meta-item:not([hidden])",
   },
 ];
@@ -322,6 +334,9 @@ test("visual.row-title-min", { tag: ["@visual", "@isolated"] }, async (
         "data-otk-theme",
         theme,
       );
+      await inspect(page, "R7", `${width} ${label}`);
+      await inspect(page, "R8", `${width} ${label}`);
+      await capture(`composer-${width}-${label}`);
       await subagents(page).click();
       await expect(page.locator(".otk-subagent-row").first()).toBeVisible();
       await inspect(page, "R5", `${width} ${label}`);
@@ -335,3 +350,75 @@ test("visual.row-title-min", { tag: ["@visual", "@isolated"] }, async (
     JSON.stringify(await state.native(`/session/${child.id}/message`))
   ).toContain("The configuration is ready.");
 });
+
+test(
+  "visual.header-title-end-truncation",
+  { tag: ["@visual", "@isolated"] },
+  async (
+    { isolatedState: state, page },
+    info,
+  ) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await state.product("prefs.set", { key: "textSize", value: "125" });
+    await state.product("layout.patch", { leftWidth: 248, rightWidth: 300 });
+    const session = await seed(state, "Prepare facade rollout");
+    await openSession(state, page, session.id);
+    const current = page.locator(
+      '.otk-trail [aria-current="page"] .otk-trail-title',
+    );
+    const tab = page.locator(
+      '.otk-task-list [role="tab"][aria-selected="true"]',
+    );
+    await expect(current).toBeVisible();
+    await expect(tab).toBeVisible();
+    for (const width of [1280, 900]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const [theme, label] of themes) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        if (process.env.OTK_ROW_META_CAPTURE) {
+          await page.screenshot({
+            path: info.outputPath(`header-${width}-${label}.png`),
+            animations: "disabled",
+          });
+        }
+        await expect.soft(current).toHaveText("Prepare facade rollout");
+        await expect.soft(current).toHaveCSS("text-overflow", "ellipsis");
+        const frame = await tab.evaluate((el) => {
+          const track = el.closest(".otk-task-list")!.getBoundingClientRect();
+          const box = el.getBoundingClientRect();
+          const title = el.querySelector(".otk-tab-title")!;
+          const text = title.getBoundingClientRect();
+          const sample = document.createElement("span");
+          sample.style.cssText = "position:absolute;inline-size:max-content";
+          sample.textContent = `${title.textContent?.trim().slice(0, 1)}…`;
+          title.append(sample);
+          const minimum = sample.getBoundingClientRect().width;
+          sample.remove();
+          const inner = getComputedStyle(
+            el.querySelector(".otk-session-selection")!,
+          );
+          return {
+            clipped: box.left < track.left - .5 || box.right > track.right + .5,
+            inkRoom: text.width >= minimum,
+            padded:
+              box.right - text.right >= parseFloat(inner.paddingInlineEnd) - .5,
+          };
+        });
+        expect.soft(frame, `selected tab frame at ${width}/${label}`).toEqual({
+          clipped: false,
+          inkRoom: true,
+          padded: true,
+        });
+        await expect.soft(tab.locator(".otk-tab-title")).toHaveCSS(
+          "text-overflow",
+          "ellipsis",
+        );
+        await inspect(page, "R8", `reported header ${width}/${label}`);
+      }
+    }
+  },
+);
