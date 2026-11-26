@@ -10,6 +10,7 @@ import {
 } from "solid-js";
 import { Portal } from "@solidjs/web";
 import {
+  FeedbackFailure,
   type SidecarConnection,
   type TerminalBox,
   terminalBoxFor,
@@ -27,9 +28,10 @@ import {
   ExpandIcon,
   PlusIcon,
 } from "../../components/ChromeIcons.tsx";
-import Tabs from "../../components/Tabs.tsx";
+import { TabPanels, TabStrip } from "../../components/Tabs.tsx";
 import ActionButton from "../../components/ActionButton.tsx";
 import PaneState from "../../components/PaneState.tsx";
+import Surface from "../../components/surface/Surface.tsx";
 import { contextTarget } from "../../components/context-target.ts";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import { solidState } from "../../state/binding.ts";
@@ -161,6 +163,7 @@ function TerminalContent(
     "Hide terminal",
     () => props.box.close(),
   );
+  let resizeButton: HTMLElement | undefined;
   const closeID = `terminal.close@${owner}`;
   ownedCommand(commands, {
     id: closeID,
@@ -168,11 +171,15 @@ function TerminalContent(
     category: "Terminal",
     scope: "control",
     arguments: { type: "string" },
-    run: (_context, id: string) =>
-      model.closeIndex(
+    run: (_context, id: string) => {
+      // Move focus off the disappearing X onto a persistent frame control.
+      resizeButton?.focus();
+      return model.closeIndex(
         model.terminals.state.list.findIndex((item) => item.id === id),
-      ),
+      );
+    },
   });
+  /** Closes one shell. The box mode is the TerminalBox's alone. */
   const close = (id: string) =>
     commands.commands.control(closeID, id, {
       target: { label: model.title(id) },
@@ -198,84 +205,104 @@ function TerminalContent(
       aria-label="Terminal"
       ref={contextTarget(() => ({ kind: "terminal", data: undefined }))}
     >
-      <Show when={model.state.error || model.terminals.state.error}>
-        {(feedback) => <PaneState feedback={feedback() || undefined} />}
-      </Show>
-      <Show
-        when={model.terminals.state.list.length}
-        fallback={
-          <PaneState>
-            <Show
-              when={!model.terminals.state.loading && !model.state.creating}
-              fallback={<p role="status">Opening terminal...</p>}
-            >
-              <ActionButton
-                action={create}
-                pendingLabel="Opening terminal..."
-              >
-                New terminal
+      <Surface
+        density="panel"
+        layout="fill"
+        scrollable={false}
+        title={
+          <>
+            <Show when={props.box.mode !== "expanded"}>
+              <h2 class="otk-control-label">Terminal</h2>
+            </Show>
+            <TabStrip
+              label="Terminals"
+              compact
+              tabs={tabs()}
+              selected={model.selectedIndex()}
+              onSelect={model.selectIndex}
+              closeAction={close}
+            />
+          </>
+        }
+        titleAction={
+          <div class="otk-terminal-actions">
+            <Show when={model.state.selection}>
+              <ActionButton action={add}>
+                Add to prompt
               </ActionButton>
             </Show>
-          </PaneState>
+            <ActionButton
+              action={create}
+              class="otk-icon-button"
+              label="New terminal"
+              title="New terminal"
+              busy={model.state.creating}
+              onFeedback={(outcome) =>
+                model.failure(new FeedbackFailure(outcome.feedback))}
+            >
+              <PlusIcon />
+            </ActionButton>
+            <ActionButton
+              action={resize}
+              class="otk-icon-button"
+              label={sizeLabel()}
+              title={sizeLabel()}
+              ref={(element) => {
+                resizeButton = element;
+              }}
+            >
+              <Show
+                when={props.box.mode === "expanded"}
+                fallback={<ExpandIcon />}
+              >
+                <CollapseIcon />
+              </Show>
+            </ActionButton>
+            <ActionButton
+              action={hide}
+              class="otk-icon-button"
+              label="Hide terminal"
+              title="Hide terminal"
+            >
+              <ChevronDownIcon />
+            </ActionButton>
+          </div>
         }
       >
-        <Tabs
-          label="Terminals"
-          compact
-          tabs={tabs()}
-          selected={model.selectedIndex()}
-          onSelect={model.selectIndex}
-          closeAction={close}
-          leading={() => (
-            <Show when={props.box.mode !== "expanded"}>
-              <h2 class="otk-terminal-heading">Terminal</h2>
-            </Show>
-          )}
-          actions={() => (
-            <>
-              <Show when={model.state.selection}>
-                <ActionButton action={add}>
-                  Add to prompt
-                </ActionButton>
-              </Show>
-              <Show when={model.state.creating}>
-                <span role="status">Opening terminal...</span>
-              </Show>
-              <Show when={!model.state.creating}>
-                <ActionButton
-                  action={create}
-                  class="otk-icon-button"
-                  label="New terminal"
-                  title="New terminal"
-                >
-                  <PlusIcon />
-                </ActionButton>
-              </Show>
-              <ActionButton
-                action={resize}
-                class="otk-icon-button"
-                label={sizeLabel()}
-                title={sizeLabel()}
-              >
-                <Show
-                  when={props.box.mode === "expanded"}
-                  fallback={<ExpandIcon />}
-                >
-                  <CollapseIcon />
-                </Show>
-              </ActionButton>
-              <ActionButton
-                action={hide}
-                class="otk-icon-button"
-                label="Hide terminal"
-                title="Hide terminal"
-              >
-                <ChevronDownIcon />
-              </ActionButton>
-            </>
-          )}
-        />
-      </Show>
+        <Show when={model.state.error || model.terminals.state.error}>
+          {(feedback) => <PaneState feedback={feedback() || undefined} />}
+        </Show>
+        <Show
+          when={model.terminals.state.list.length}
+          fallback={
+            <div class="otk-terminal-empty-body">
+              <PaneState>
+                <div class="otk-terminal-empty">
+                  <Show
+                    when={!model.terminals.state.loading &&
+                      !model.state.creating}
+                    fallback={<p role="status">Opening terminal...</p>}
+                  >
+                    <p class="otk-terminal-empty-note">
+                      No terminals in this session
+                    </p>
+                    <ActionButton
+                      action={create}
+                      class="otk-terminal-empty-action"
+                      pendingLabel="Opening terminal..."
+                    >
+                      <PlusIcon />
+                      <span class="otk-control-label">New terminal</span>
+                    </ActionButton>
+                  </Show>
+                </div>
+              </PaneState>
+            </div>
+          }
+        >
+          <TabPanels tabs={tabs()} selected={model.selectedIndex()} />
+        </Show>
+      </Surface>
     </section>
   );
 }

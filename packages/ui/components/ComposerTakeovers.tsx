@@ -25,8 +25,7 @@ export default function ComposerTakeovers(
     readOnly?: boolean;
   },
 ): Element {
-  const { takeovers, composerDocks } = useUiRegistries(),
-    session = useSessionPorts();
+  const { takeovers } = useUiRegistries(), session = useSessionPorts();
   const { commands } = useCommandPorts();
   const shells = () => session.shells?.();
   const title = (id: string) =>
@@ -116,14 +115,6 @@ export default function ComposerTakeovers(
           >
             <ContentSlot content={!active() ? props.notice : undefined} />
           </ScrollRegion>
-          <Show when={hasComposer()}>
-            <For
-              each={composerDocks.available(session.supports)}
-              keyed={(item) => item.id}
-            >
-              {(item) => item().component()}
-            </For>
-          </Show>
           <div class="otk-composer-reopen">
             <RequestReopen />
           </div>

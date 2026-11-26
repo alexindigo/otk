@@ -24,6 +24,32 @@ import {
 
 const popoverCSS = "packages/ui/components/surface/Popover.css";
 
+Deno.test("UI convention: container chrome stays off item collections", async () => {
+  const tabs = "packages/ui/components/Tabs.tsx";
+  const view = "packages/ui/Fixture.tsx";
+  const rejected = new Map([
+    [tabs, 'interface TabStripProps { "titleAction"?: () => unknown }'],
+    [
+      view,
+      `<Show when={list.length}><Tabs label="T" tabs={t()} selected={0} onSelect={f} actions={() => <B/>} /></Show>;
+      <TabStrip leading={<B/>} trailing={<B/>} header={<B/>} titleAction={<B/>} />;`,
+    ],
+  ]);
+  assertEquals(containerChromeErrors(rejected).length, 6);
+  const accepted = new Map([
+    [tabs, "interface TabStripProps { closeAction?: (id: string) => unknown }"],
+    [
+      view,
+      `<Surface title={<h2>T</h2>} titleAction={<B/>}>
+      <TabStrip tabs={t()} selected={0} onSelect={f} closeAction={close} />
+      <TabPanels tabs={t()} selected={0} />
+    </Surface>;`,
+    ],
+  ]);
+  assertEquals(containerChromeErrors(accepted), []);
+  assertEquals(containerChromeErrors(await productionSources()), []);
+});
+
 // Offsets may use the containing edge and spacing tokens, not other boxes'
 // dimensions. Follow custom property aliases so naming a calculation doesn't
 // make a positional relationship structural.
