@@ -120,6 +120,10 @@ export type ConnectionAttempt =
   | { kind: "checked"; auth: AuthStatus }
   | { kind: "failed"; cause: unknown }
   | { kind: "superseded" };
+export type RecoveredConnection = {
+  instance: string;
+  replaced: boolean;
+};
 function browserStorage(server: string): RequestTrackerOptions["storage"] {
   if (
     typeof globalThis.document === "undefined" ||
@@ -159,25 +163,53 @@ export class SidecarConnection {
   #auth?: AuthStatus;
   #view: ViewLease = { epoch: 0, crumbs: [], rows: [] };
   #selectionGeneration = 0;
-  #pageSettled = false;
+  #page: "waiting" | "accepted" | "settled" = "waiting";
+  #attachment?: {
+    sentEpoch: number;
+    baseline: boolean;
+    acknowledgedEpoch?: number;
+    confirmsViews?: true;
+    recovered: boolean;
+    welcome?: {
+      state: ServerContinuity;
+      memory: ContinuityMemory;
+      connection: RecoveredConnection;
+    };
+  };
+  #recoveredListeners = new Set<(connection: RecoveredConnection) => void>();
+  onRecovered(listener: (connection: RecoveredConnection) => void): () => void {
+    this.#recoveredListeners.add(listener);
+    return () => this.#recoveredListeners.delete(listener);
+  }
   /** Capture selection and transport generations before acquiring its first page. */
   firstPage(sessionID: string): () => void {
-    if (this.#pageSettled || this.#view.selected !== sessionID) return () => {};
+    if (this.#page !== "waiting" || this.#view.selected !== sessionID) {
+      return () => {};
+    }
     const generation = this.#selectionGeneration, controller = this.#controller;
     return () => {
       const accepted = () => {
         if (
           generation !== this.#selectionGeneration ||
           controller !== this.#controller ||
-          this.#view.selected !== sessionID || !this.#welcomed ||
-          this.#pageSettled
+          this.#view.selected !== sessionID || this.#page !== "waiting"
         ) return;
-        this.#pageSettled = true;
-        this.send({ t: "view.settled", epoch: this.#view.epoch, sessionID });
+        this.#page = "accepted";
+        this.#settlePage();
       };
       if (this.options.afterRender) this.options.afterRender(accepted);
       else queueMicrotask(accepted);
     };
+  }
+  #settlePage(): void {
+    const attachment = this.#attachment, { epoch, selected } = this.#view;
+    if (
+      this.#page !== "accepted" || !selected || !attachment ||
+      !this.connected ||
+      (attachment.confirmsViews && attachment.acknowledgedEpoch !== epoch)
+    ) return;
+    this.#page = "settled";
+    this.send({ t: "view.settled", epoch, sessionID: selected });
   }
   get viewEpoch(): number {
     return this.#view.epoch;
@@ -194,7 +226,7 @@ export class SidecarConnection {
     ) return;
     if (value.selected !== this.#view.selected) {
       this.#selectionGeneration++;
-      this.#pageSettled = false;
+      this.#page = "waiting";
     }
     this.#view = {
       ...value,
@@ -202,7 +234,41 @@ export class SidecarConnection {
       rows: [...value.rows],
       epoch: this.#view.epoch + 1,
     };
-    if (this.#welcomed) this.send({ t: "view", ...this.#view });
+    this.#reconcileView();
+  }
+  #reconcileView(): void {
+    const attachment = this.#attachment;
+    if (
+      !this.connected || !attachment ||
+      attachment.sentEpoch === this.#view.epoch
+    ) return;
+    attachment.sentEpoch = this.#view.epoch;
+    this.send({ t: "view", ...this.#view });
+    // An overtaken hello can only have published a baseline for the old
+    // epoch. A patch cannot initialize a replacement socket's index replica.
+    if (attachment.confirmsViews && !attachment.baseline) {
+      this.send({ t: "resnapshot" });
+    }
+  }
+  #recover(): void {
+    const attachment = this.#attachment, welcome = attachment?.welcome;
+    if (
+      !attachment || !welcome || attachment.recovered ||
+      (attachment.confirmsViews &&
+        (!attachment.baseline ||
+          attachment.acknowledgedEpoch !== this.#view.epoch))
+    ) return;
+    attachment.recovered = true;
+    this.#clearGrace();
+    this.#attempt = 0;
+    this.#memory = welcome.memory;
+    this.#publish(welcome.state);
+    if (this.#attachment !== attachment) return;
+    this.sink.status("connected");
+    for (const listener of this.#recoveredListeners) {
+      if (this.#attachment !== attachment) break;
+      listener(welcome.connection);
+    }
   }
   get attachments(): import("@otk/protocol").AttachmentPolicy | undefined {
     return this.#attachments ?? this.options.attachments;
@@ -336,6 +402,11 @@ export class SidecarConnection {
         new WebSocket(url);
       socket.onopen = () => {
         if (current() && socket === this.#socket) {
+          this.#attachment = {
+            sentEpoch: this.#view.epoch,
+            baseline: false,
+            recovered: false,
+          };
           socket.send(
             JSON.stringify({
               t: "hello",
@@ -346,7 +417,8 @@ export class SidecarConnection {
         }
       };
       socket.onmessage = ({ data }) => {
-        if (!current() || socket !== this.#socket) return;
+        const attachment = this.#attachment;
+        if (!current() || socket !== this.#socket || !attachment) return;
         const frame: ServerFrame = JSON.parse(data);
         // Inbox patches are one revision stream for this connection, across
         // view changes. Let the inbox owner check sequence continuity; dropping
@@ -370,6 +442,7 @@ export class SidecarConnection {
           return;
         }
         if (frame.t === "welcome") {
+          if (this.#welcomed) return;
           const facts = {
             protocol: frame.protocol,
             build: frame.sidecar?.build,
@@ -386,17 +459,25 @@ export class SidecarConnection {
             this.#protocolMismatch(facts);
             return;
           }
-          this.#clearGrace();
           const result = welcomed(this.#continuity, this.#memory, {
             build: frame.sidecar.build,
             instance: frame.sidecar.instance,
           });
-          this.#memory = result.memory;
-          this.#publish(result.state);
+          attachment.welcome = {
+            ...result,
+            connection: {
+              instance: frame.sidecar.instance,
+              replaced: this.#memory.current?.instance !== undefined &&
+                this.#memory.current.instance !== frame.sidecar.instance,
+            },
+          };
+          attachment.confirmsViews = frame.viewAcknowledgements;
+          if (result.state.kind === "updated") this.#publish(result.state);
+          if (!current()) return;
           this.#welcomed = true;
           this.#capabilities = new Set(welcomeCapabilities(frame));
-          this.#attempt = 0;
           this.http.policy(this.#policy);
+          this.#reconcileView();
           for (const id of this.#subscriptions) {
             this.send({ t: "subscribe", sessionID: id });
           }
@@ -405,7 +486,9 @@ export class SidecarConnection {
             this.#policy.resumebatch,
             frame.requests.principal,
           );
-          this.sink.status("connected");
+          if (!current()) return;
+          if (!attachment.confirmsViews) this.#recover();
+          this.#settlePage();
         }
         if (frame.t === "error" && frame.code === "protocol") {
           this.#protocolMismatch({
@@ -414,13 +497,31 @@ export class SidecarConnection {
           });
           return;
         }
+        if (!this.#welcomed) return;
+        if (frame.t === "view.ready") {
+          if (frame.epoch === attachment.sentEpoch) {
+            attachment.acknowledgedEpoch = frame.epoch;
+            this.#settlePage();
+            this.#recover();
+          }
+          return;
+        }
+        if (
+          attachment.confirmsViews && !attachment.baseline &&
+          frame.t === "index.patch"
+        ) return;
         this.rpc.receive(frame);
         const accepted = this.sink.frame(frame);
+        if (!current() || socket !== this.#socket) return;
         if (
           accepted !== false && frame.epoch !== undefined &&
           (frame.t === "index.snapshot" || frame.t === "index.patch")
         ) {
           this.send({ t: "index.applied", epoch: frame.epoch, rev: frame.rev });
+          if (frame.t === "index.snapshot") {
+            attachment.baseline = true;
+            this.#recover();
+          }
         }
       };
       socket.onclose = () => {
@@ -501,7 +602,8 @@ export class SidecarConnection {
   }
   #retire(): void {
     this.#selectionGeneration++;
-    this.#pageSettled = false;
+    this.#page = "waiting";
+    this.#attachment = undefined;
     this.#controller?.abort();
     this.#controller = undefined;
     clearTimeout(this.#retry);
@@ -573,6 +675,7 @@ export class SidecarConnection {
     this.#clearGrace();
     this.#retire();
     this.#subscriptions.clear();
+    this.#recoveredListeners.clear();
     this.requests.stop();
     void this.http.stop();
   }

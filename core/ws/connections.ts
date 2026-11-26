@@ -284,6 +284,7 @@ export class Connections {
         if (controller.signal.aborted || c.view.epoch !== epoch) return;
         this.#send(c, { ...frame, epoch });
       }
+      this.#send(c, { t: "view.ready", epoch });
     };
     let selectionGeneration = 0;
     const changed = () => {
@@ -409,6 +410,7 @@ export class Connections {
           this.#send(c, {
             t: "welcome",
             protocol: PROTOCOL_VERSION,
+            viewAcknowledgements: true,
             messages: this.messages,
             ...(this.requests.attachments
               ? {

@@ -69,6 +69,7 @@ type MetadataRefresh = {
 export class OpencodeV2ServerAdapter implements Harness {
   storage(storage: import("@otk/harness").PluginStorage): void {
     this.transcript.requests.bind(storage);
+    this.transcript.helperEdges.bind(storage);
   }
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;

@@ -18,6 +18,7 @@ Deno.test("one grace timer across refused socket attempts, with welcome and Relo
     using _timers = clock.install();
     const states: ServerContinuity[] = [];
     let socket: {
+      onopen?: () => void;
       onmessage?: (event: { data: string }) => void;
       onclose?: () => void;
       readyState: number;
@@ -41,7 +42,8 @@ Deno.test("one grace timer across refused socket attempts, with welcome and Relo
           new ReloadRefused("Still unreachable. Page not reloaded."),
         ),
     });
-    const welcome = (build: string) =>
+    const welcome = (build: string) => {
+      socket.onopen!();
       socket.onmessage!({
         data: JSON.stringify({
           t: "welcome",
@@ -56,6 +58,7 @@ Deno.test("one grace timer across refused socket attempts, with welcome and Relo
           },
         }),
       });
+    };
     const refusal = () => {
       const latest = states.at(-1);
       return latest?.kind !== "live" ? latest?.refused : undefined;

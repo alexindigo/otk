@@ -475,8 +475,9 @@ export function createServerResources(o: {
     id: string,
     value: { directory?: string; sessions: string[] },
   ) => {
-    if (advertised(id, "digests")) {
-      void sidecars.connection(id).rpc.call("digests.scope", value).catch(
+    const connection = sidecars.connection(id);
+    if (attached(id) && declares(id, "digests")) {
+      void connection.rpc.call("digests.scope", value).catch(
         o.error ?? console.warn,
       );
     }
@@ -489,6 +490,10 @@ export function createServerResources(o: {
   const server = (id: string): SidecarState | undefined =>
     sidecars.state.list.find((s) => s.id === id);
   const connected = (id: string): boolean => server(id)?.status === "connected";
+  const attached = (id: string): boolean => {
+    const value = server(id);
+    return value?.status === "connected" || value?.attaching === true;
+  };
   const linked = (id: string): boolean =>
     connected(id) && server(id)?.harness === "connected";
   const declares = (id: string, capability: CapabilityName): boolean =>
@@ -598,14 +603,14 @@ export function createServerResources(o: {
         factory,
         o.error,
         () => sidecars.connection(id).viewEpoch,
-        () => connected(id),
+        () => attached(id),
       );
       inboxes.set(id, model);
       const current = model;
-      current.entities.stale(!connected(id));
+      current.entities.stale(!attached(id));
       current.observeChanges((changes) => {
         if (changes.baseline || changes.entities) {
-          current.entities.stale(!connected(id));
+          current.entities.stale(!attached(id));
         }
         for (const cache of tabInputs.values()) {
           if (cache.server !== id) continue;
@@ -898,7 +903,7 @@ export function createServerResources(o: {
     // Reconnection alone cannot revive old evidence. Accepted entity changes
     // or a baseline make the replica fresh again in observeChanges above.
     for (const [id, model] of inboxes) {
-      if (!connected(id)) model.entities.stale(true);
+      if (!attached(id)) model.entities.stale(true);
     }
     for (const id of projections.keys()) projection(id);
   });
