@@ -34,7 +34,6 @@ function snapshot(): InboxSnapshot {
   return {
     projects: [{
       directory: "/p",
-      order: 0,
       added: true,
       inactive: false,
       lastVisit: 0,
@@ -209,7 +208,6 @@ Deno.test("project projections keep stored order, freeze inactive visits and exp
   };
   inbox.projects.unshift({
     directory: "/q",
-    order: 1,
     added: false,
     inactive: false,
     lastVisit: 0,

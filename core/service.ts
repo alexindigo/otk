@@ -10,7 +10,7 @@ import { AuthState } from "./auth/state.ts";
 import type { ServiceConfig } from "./config/schema.ts";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
-import type { FrameSource } from "./ws/connections.ts";
+import type { ConnectionRequests, FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
 import { bind } from "./http/server.ts";
 import { servedBuild } from "./http/served-build.ts";
@@ -32,6 +32,7 @@ export interface CoreOptions {
   staticRoot: string;
   index?: IndexStore;
   sources?: readonly FrameSource[];
+  projectOrder?: ConnectionRequests["projectOrder"];
   diagnostics?: SectionObserver;
   diagnostic?: DiagnosticSink;
   signal?: AbortSignal;
@@ -169,6 +170,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         helloms: cfg.connection.helloms,
         attachments: cfg.attachments,
         requested: options.requested,
+        projectOrder: options.projectOrder,
       },
       sources,
       options.diagnostics,

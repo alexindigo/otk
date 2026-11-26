@@ -65,7 +65,6 @@ import ChromeMeta, {
 } from "./ChromeMeta.tsx";
 import TimeText from "./TimeText.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
-import { orderInteraction } from "./order-interaction.ts";
 import { connectionFeedback } from "./connection-light.ts";
 import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 const RENAMING_PROJECT = "Renaming project...";
@@ -73,9 +72,9 @@ export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
 }
-export default function ProjectInbox(props: {
+export default function ProjectInbox<T extends ProjectRow>(props: {
   disclosure: TreeDisclosures;
-  projects: ProjectRow[];
+  projects: T[];
   duplicateName(name: string): boolean;
   projectLabel?(sidecarId: string, directory: string): string;
   projectRename?: ProjectRename;
@@ -86,7 +85,6 @@ export default function ProjectInbox(props: {
   ready: boolean;
   history?: import("solid-js").Element;
   collapseToggle?: import("solid-js").Element;
-  holdOrder?(): () => void;
   onOpen(project: ProjectSelection): void;
   onAttention?(project: ProjectSelection): void;
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
@@ -99,7 +97,6 @@ export default function ProjectInbox(props: {
   entities?(server: string): EntityStateStore;
 }): import("solid-js").Element {
   const disclosure = props.disclosure;
-  const orderInput = orderInteraction(() => props.holdOrder?.() ?? (() => {}));
   const inactiveDisclosure = disclosure.bind(
     "inactive",
     { id: "" },
@@ -707,10 +704,7 @@ export default function ProjectInbox(props: {
   }));
   return (
     <SidebarRail
-      ref={(element) => {
-        rootContext(element);
-        orderInput(element);
-      }}
+      ref={rootContext}
       class="otk-project-inbox"
       label="Projects"
       side="left"

@@ -49,3 +49,9 @@ export * from "./hash.ts";
 export * from "./project-edit.ts";
 export * from "./terminals.ts";
 export * from "./local-files.ts";
+export type {
+  ProjectMove,
+  ProjectMoveTarget,
+  ProjectOrderEntry,
+  ProjectOrderFrame,
+} from "./project-order.ts";

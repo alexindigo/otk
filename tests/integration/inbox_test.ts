@@ -8,7 +8,11 @@ import {
   inboxProjects,
   SidecarConnection,
 } from "@otk/client";
-import type { InboxSnapshot } from "@otk/protocol";
+import type {
+  InboxSnapshot,
+  ProjectOrderFrame,
+  ServerFrame,
+} from "@otk/protocol";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { cfg, fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
@@ -18,9 +22,11 @@ import { originFetch } from "../support/request-wire.ts";
 
 async function consumer(url: string, directory: string) {
   let latest: InboxSnapshot | undefined, socket: WebSocket | undefined;
+  const frames: ServerFrame[] = [];
   const connection = new SidecarConnection(url, {
     status() {},
     frame(frame) {
+      frames.push(structuredClone(frame));
       model.receive(frame);
       if (model.state.ready) latest = model.state.inbox;
     },
@@ -38,6 +44,7 @@ async function consumer(url: string, directory: string) {
   return {
     connection,
     model,
+    frames,
     inbox: () => latest!,
     async stop() {
       const closed = new Promise<void>((resolve) =>
@@ -68,7 +75,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
   try {
     const rpc = a.connection.rpc;
     assertEquals(
-      a.inbox().projects.map((p) => [p.directory, p.added, p.order]),
+      a.inbox().projects.map((p) => [p.directory, p.added]),
       [],
     );
     await a.model.openSession("tstv1-core", root);
@@ -190,10 +197,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     assertEquals(a.inbox().finishes["tstv1-core"], finish);
     assert(a.inbox().seen["tstv1-core"] >= finish);
     assertEquals(a.inbox().tasks.map((t) => t.id), [second.id]);
-    assertEquals(a.inbox().projects.map((p) => [p.directory, p.order]), [[
-      root,
-      0,
-    ], [empty, 1]]);
+    assertEquals(a.inbox().projects.map((p) => p.directory), [root, empty]);
     assertEquals(a.inbox().pathTemplates, [join(root, "{project}")]);
     await waitFor(
       async () =>
@@ -201,6 +205,125 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
           JSON.stringify(a.inbox()),
       Boolean,
     );
+  } finally {
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+  }
+});
+
+test("project order precedes rows, broadcasts moves and survives a server restart", async () => {
+  const root = await fixture();
+  const extra = join(root, "discovered"), worktree = join(root, "worktree");
+  await Deno.mkdir(extra);
+  let app = await coreBackendFixture(root);
+  let a = await consumer(app.url, root), b = await consumer(app.url, root);
+  function latest(frames: ServerFrame[]): ProjectOrderFrame | undefined {
+    return frames.findLast((frame) => frame.t === "projects.order");
+  }
+  function assertOrderBeforeRows(frames: ServerFrame[]) {
+    let admitted: Set<string> | undefined;
+    let revision = 0;
+    for (const frame of frames) {
+      if (frame.t === "projects.order") {
+        revision = frame.revision;
+        admitted = new Set(
+          frame.projects.flatMap((project) => project.directories),
+        );
+      }
+      let rows: string[] | undefined;
+      if (frame.t === "index.snapshot") {
+        rows = frame.entries.map((p) => p.directory);
+      }
+      if (frame.t === "index.patch") {
+        rows = frame.ops.flatMap((op) =>
+          op.op === "upsert" ? [op.entry.directory] : []
+        );
+      }
+      if (frame.t === "inbox.snapshot") {
+        rows = [
+          ...frame.inbox.projects.map((p) => p.directory),
+          ...Object.keys(frame.inbox.summaries ?? {}),
+          ...frame.inbox.discovered ?? [],
+        ];
+      }
+      if (frame.t === "inbox.patch") {
+        rows = frame.ops.flatMap((op) =>
+          op.op === "project.upsert"
+            ? [op.project.directory]
+            : op.op === "discovery"
+            ? op.directories
+            : []
+        );
+      }
+      if (frame.t === "inbox.summaries") {
+        rows = frame.summaries.map((p) => p.directory);
+      }
+      if (rows) {
+        assert(admitted, `No order before ${frame.t}`);
+        for (const directory of rows) {
+          assert(
+            admitted.has(directory),
+            `${frame.t}: ${directory} not admitted at revision ${revision}; admitted: ${
+              [...admitted].join(", ")
+            }`,
+          );
+        }
+      }
+    }
+  }
+  try {
+    assertOrderBeforeRows(a.frames);
+    app.app.index.projectSeeds([{
+      directory: worktree,
+      authority: "current",
+      sessionCount: 1,
+      lastActivity: 1,
+      topology: {
+        canonicalRoot: root,
+        leafDirectory: worktree,
+        repoID: "project",
+        parentDirectory: root,
+      },
+    }]);
+    const entry = app.app.index.get("tstv1-core")!;
+    app.app.index.upsert({
+      ...entry,
+      id: "tstv1-worktree",
+      directory: worktree,
+    });
+    await a.connection.rpc.call("projects.templates", {
+      templates: [join(root, "{project}")],
+    });
+    await waitFor(() => b.inbox().discovered?.includes(extra), Boolean);
+    const frame = latest(a.frames)!;
+    const original = frame.projects.find((p) => p.directories.includes(root))!;
+    const discovered = frame.projects.find((p) =>
+      p.directories.includes(extra)
+    )!;
+    assert(original.directories.includes(worktree));
+    const { revision } = await a.connection.rpc.call("projects.move", {
+      id: discovered.id,
+      before: original.id,
+    });
+    const moved = await waitFor(
+      () => latest(b.frames),
+      (frame) => frame?.revision === revision,
+    );
+    assertEquals(moved?.projects.map((p) => p.id).slice(0, 2), [
+      discovered.id,
+      original.id,
+    ]);
+    assertOrderBeforeRows(a.frames);
+    assertOrderBeforeRows(b.frames);
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+    app = await coreBackendFixture(root);
+    a = await consumer(app.url, root);
+    b = await consumer(app.url, root);
+    assertEquals(latest(a.frames)?.projects, moved?.projects);
+    assertOrderBeforeRows(a.frames);
   } finally {
     await a.stop();
     await b.stop();

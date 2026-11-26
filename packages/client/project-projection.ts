@@ -470,7 +470,6 @@ export function createProjectProjection(o: {
             added: false,
             inactive: false,
             lastVisit: 0,
-            order: 0,
           }),
           source: record ? "tracked" : p.summary?.hasSessions ||
               (p.summary?.sessionCount ?? p.members.size) > 0 ||

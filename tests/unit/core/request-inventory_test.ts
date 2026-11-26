@@ -130,6 +130,7 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "tasks.close",
     "tasks.removeSession",
     "projects.inactive",
+    "projects.move",
     "projects.visit",
     "projects.templates",
     "prefs.set",
@@ -397,6 +398,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "project.settings",
     "project.update",
     "projects.inactive",
+    "projects.move",
     "projects.visit",
     "projects.scan",
     "projects.templates",
@@ -435,7 +437,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     assertEquals(counts, {
       read: 34,
       native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
-      local: 12,
+      local: 13,
       "prepared-local": 7,
       lease: 2,
     });
