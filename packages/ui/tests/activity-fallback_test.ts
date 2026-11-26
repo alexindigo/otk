@@ -280,10 +280,14 @@ Deno.test("reply copy carries only producer-declared content; row records join t
     "",
     (part) => parts.presentation(part, DEFAULT_PREFS),
   );
-  assertEquals(reply.frames.map((frame) => frame.transcript), [false, true]);
+  assertEquals(reply.frames.map((frame) => frame.transcript), [
+    false,
+    true,
+    false,
+  ]);
   assertEquals(
-    reply.frames[0].groups.map((group) => group.work),
-    [true, false, true],
+    reply.frames[2].groups.map((group) => group.parts.map((part) => part.id)),
+    [["start", "finish"]],
   );
   assertEquals(reply.copyable, true);
   // Outside replies, records keep their transcript frame and no work log.

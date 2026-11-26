@@ -205,31 +205,3 @@ export default function ActivityGroup(props: {
     </Show>
   );
 }
-
-/** A normal completion borrows the footer, with no standalone status label. */
-export function CompletionToggle(
-  props: { group: Group; prefs: Preferences; onReveal?(user: boolean): void },
-): Element {
-  const [open, setOpen] = retainedDisclosure(
-    "records",
-    "record",
-    () => ({ ...props.prefs, expandRecords: false }),
-    undefined,
-    undefined,
-    props.group.key,
-  );
-  return (
-    <span class="otk-record-completion">
-      <TreeNode
-        label="Completion details"
-        open={open()}
-        onOpen={(open, event) => {
-          setOpen(open);
-          if (open) props.onReveal?.(event.isTrusted);
-        }}
-        hasChildren
-        header={() => null}
-      />
-    </span>
-  );
-}

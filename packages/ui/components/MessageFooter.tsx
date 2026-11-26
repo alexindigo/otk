@@ -10,14 +10,22 @@ import type { ContentTarget } from "../features/transcript-context.tsx";
 export default function MessageFooter(props: {
   at?: number;
   duration?: Element;
+  leading?: Element;
+  whole?: boolean;
   children?: Element;
   class?: string;
   ref?(element: HTMLElement): void;
   actions?: { kind: "prompt" | "reply"; target: ContentTarget };
 }) {
   return (
-    <footer ref={props.ref} class={["otk-message-footer", props.class]}>
-      <MetaRow class="otk-message-details">
+    <footer
+      ref={props.ref}
+      class={["otk-message-footer", props.class, {
+        "has-whole-details": props.whole,
+      }]}
+    >
+      <MetaRow class="otk-message-details" whole={props.whole}>
+        {props.leading}
         <Show when={props.at !== undefined}>
           <Clock at={props.at!} />
         </Show>
