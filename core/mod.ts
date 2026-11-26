@@ -41,6 +41,8 @@ export { register as registerShell } from "./features/shell.ts";
 export { register as registerCommands } from "./features/commands.ts";
 export { register as registerHistory } from "./features/history.ts";
 export { register as registerFiles } from "./features/files.ts";
+export { registerLocalFiles } from "./features/local-files.ts";
+export { LocalFiles } from "./files/local-files.ts";
 export { register as registerAgents } from "./features/agents.ts";
 export { register as registerModels } from "./features/models.ts";
 export { register as registerUsage } from "./features/usage.ts";

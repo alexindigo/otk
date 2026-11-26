@@ -16,6 +16,10 @@ import type { Toggles } from "../components/Toggles.ts";
 import type { IndexEntry, Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
 import { ReloadProvider } from "../state/reload.tsx";
+import {
+  type FilePathPorts,
+  FilePathServices,
+} from "../components/PathLink.tsx";
 export type { ProjectSelection } from "@otk/client";
 /** Live shell resources passed to features, never a component's internal state. */
 export interface ShellPorts {
@@ -31,6 +35,7 @@ export interface ShellPorts {
   };
   servers(): SidecarState[];
   forms?: import("@otk/client").ServerResources["forms"];
+  filePaths?: FilePathPorts;
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;
   approvals(id: string): ApprovalModel;
@@ -63,7 +68,9 @@ export function ShellProvider(
 ): Element {
   return (
     <ReloadProvider owner={props.reload}>
-      <Context value={props.ports}>{props.children}</Context>
+      <FilePathServices value={props.ports.filePaths ?? null}>
+        <Context value={props.ports}>{props.children}</Context>
+      </FilePathServices>
     </ReloadProvider>
   );
 }

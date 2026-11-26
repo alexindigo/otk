@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { fileLanguage } from "./language.ts";
+import { fileLanguage } from "@otk/content";
 import type {
   Diagnostic,
   FileDiff,

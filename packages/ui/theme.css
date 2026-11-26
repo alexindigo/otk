@@ -259,6 +259,10 @@ small {
   overflow-wrap: normal;
   flex-shrink: 0;
 }
+[data-inline-action] {
+  white-space: inherit;
+  overflow-wrap: inherit;
+}
 .otk-control-row {
   display: flex;
   align-items: center;

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { extname } from "@std/path";
+/** A filename selects its source highlighting language. */
 export function fileLanguage(path: string): string | undefined {
-  const extension = extname(path).slice(1);
+  const name = path.replace(/[/\\]+$/, "").split(/[/\\]/).at(-1)!;
+  const dot = name.lastIndexOf(".");
+  const extension = dot > 0 ? name.slice(dot + 1) : "";
   return ({
     mjs: "js",
     cjs: "js",

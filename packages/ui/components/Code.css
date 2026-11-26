@@ -60,3 +60,8 @@
   display: block;
   color: var(--secondary);
 }
+.otk-code-number.is-marked {
+  color: var(--otk-action-text);
+  padding-inline-start: var(--space-1);
+  box-shadow: inset calc(2 * var(--otk-unit)) 0 0 var(--otk-action-text);
+}

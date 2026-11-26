@@ -19,6 +19,8 @@ export default function ActionButton(props: {
   class?: string;
   label?: string;
   title?: string;
+  id?: string;
+  inline?: { popup?: "dialog" | "menu"; description?: string };
   expanded?: boolean;
   href?: string;
   ref?(element: HTMLElement): void;
@@ -55,18 +57,22 @@ export default function ActionButton(props: {
   const disabled = () => busy() || !availability().available;
   const described = () =>
     !props.onFeedback && (!!unavailable() || busy() || !!feedback());
-  const activate = (event: MouseEvent) => {
+  const activate = (event: MouseEvent | KeyboardEvent) => {
+    if (disabled()) {
+      event.preventDefault();
+      return;
+    }
     if (props.href !== undefined) {
-      if (disabled()) {
-        event.preventDefault();
-        return;
-      }
       if (
-        event.button !== 0 || event.ctrlKey || event.metaKey ||
+        !(event instanceof MouseEvent) || event.button !== 0 || event.ctrlKey ||
+        event.metaKey ||
         event.shiftKey ||
         event.altKey
       ) return;
       event.preventDefault();
+    }
+    if (props.inline && event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.focus({ preventScroll: true });
     }
     event.stopPropagation();
     setPending(true);
@@ -83,13 +89,29 @@ export default function ActionButton(props: {
     ...props.location,
     class: props.location?.class ?? props.selection?.class ?? props.class,
     onClick: activate,
+    onKeyDown: props.inline
+      ? (event: KeyboardEvent) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        if (!event.repeat) activate(event);
+      }
+      : undefined,
   }));
-  const Control = dynamic(() => props.href === undefined ? "button" : "a");
+  // Text-flow actions need a non-atomic inline box; activation stays here.
+  const Control = dynamic(() =>
+    props.inline ? "span" : props.href === undefined ? "button" : "a"
+  );
   return (
     <Show when={!unavailable()?.hidden || busy() || !!feedback()}>
       <Control
-        type={props.href === undefined ? "button" : undefined}
+        id={props.id}
+        type={!props.inline && props.href === undefined ? "button" : undefined}
         href={props.href}
+        role={props.inline ? "button" : undefined}
+        tabindex={props.inline ? 0 : undefined}
+        data-inline-action={props.inline ? "true" : undefined}
+        aria-haspopup={props.inline?.popup}
+        aria-description={props.inline?.description}
         ref={[(element: HTMLElement) => props.ref?.(element), native.ref]}
         {...native.attributes}
         aria-label={props.label}
@@ -99,8 +121,10 @@ export default function ActionButton(props: {
           ? "true"
           : "false"}
         title={unavailable()?.reason ?? props.title}
-        disabled={props.href === undefined ? disabled() : undefined}
-        aria-disabled={props.href !== undefined && disabled()
+        disabled={!props.inline && props.href === undefined
+          ? disabled()
+          : undefined}
+        aria-disabled={(props.inline || props.href !== undefined) && disabled()
           ? "true"
           : undefined}
         aria-busy={busy() ? "true" : "false"}

@@ -192,3 +192,5 @@ export {
 } from "./project-tree.ts";
 export { treePaths } from "./tree-paths.ts";
 export * from "./terminals.ts";
+export * from "./file-paths.ts";
+export * from "./file-facts.ts";

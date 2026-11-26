@@ -42,6 +42,7 @@ export default function DialogHost(
     <For each={opened() ? [opened()!] : []} keyed={(value) => value}>
       {(value) => {
         const owner = value(), definition = dialogs.resolve(owner.id)!;
+        const dialogProps = { input: owner.input, close: () => close(owner) };
         return (
           <Dialog
             size={definition.size}
@@ -49,6 +50,7 @@ export default function DialogHost(
             title={typeof definition.title === "function"
               ? definition.title(owner.input)
               : definition.title ?? definition.id}
+            actions={definition.actions?.(dialogProps)}
             onClose={() => {
               if (opened() !== owner) return;
               if (definition.dismiss) {
@@ -56,10 +58,7 @@ export default function DialogHost(
               } else close(owner);
             }}
           >
-            {definition.component({
-              input: owner.input,
-              close: () => close(owner),
-            })}
+            {definition.component(dialogProps)}
           </Dialog>
         );
       }}

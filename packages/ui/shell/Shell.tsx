@@ -37,6 +37,7 @@ import { registerAttentionCommands } from "./commands/attention.ts";
 import { registerApprovalCommands } from "./commands/approvals.ts";
 import { registerSessionActionCommands } from "./commands/session-actions.ts";
 import { registerCodeBlockCommands } from "../features/code-blocks.tsx";
+import { registerFileCommands } from "../features/file-paths.tsx";
 import { applicationNotifications } from "./notifications.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
@@ -449,6 +450,14 @@ export default function Shell(
   onCleanup(
     registerCodeBlockCommands(commands, (id) => sidecars.connection(id)),
   );
+  onCleanup(
+    registerFileCommands(
+      commands,
+      (id) => sidecars.connection(id),
+      resources.fileFacts,
+    ),
+  );
+  let openFileMenu: ((element: HTMLElement) => void) | undefined;
   onCleanup(commands.register({
     id: "session.title.copy",
     title: "Copy session title",
@@ -573,6 +582,11 @@ export default function Shell(
             },
             servers: () => sidecars.state.list,
             forms: resources.forms,
+            filePaths: {
+              facts: resources.fileFacts,
+              openMenu: (element) => openFileMenu?.(element),
+              fail,
+            },
             connection: (id) => sidecars.connection(id),
             inbox,
             approvals,
@@ -1058,7 +1072,10 @@ export default function Shell(
                   .catch(fail)}
             />
             <DialogHost onChange={setDialog} />
-            <ContextMenu root={root} />
+            <ContextMenu
+              root={root}
+              control={(openFor) => openFileMenu = openFor}
+            />
           </div>
         </ShellProvider>
       </CommandProvider>

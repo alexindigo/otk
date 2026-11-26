@@ -118,6 +118,13 @@ export interface LoadSources {
   authState?: Tree;
   env: Record<string, string>;
 }
+export function operatorConfigDirectory(
+  env: Readonly<Record<string, string>>,
+): string | undefined {
+  const configHome = env.XDG_CONFIG_HOME ||
+    (env.HOME ? join(env.HOME, ".config") : undefined);
+  return configHome ? join(configHome, "otk") : undefined;
+}
 export function loadServiceConfig(
   sources: LoadSources,
   schema = SERVICE_SCHEMA,
@@ -145,11 +152,10 @@ export function loadServiceConfig(
       errors,
     );
   }
-  const configHome = sources.env.XDG_CONFIG_HOME ||
-    (sources.env.HOME ? join(sources.env.HOME, ".config") : undefined);
+  const configDir = operatorConfigDirectory(sources.env);
   const explicit = sources.env.OTK_CONFIG;
   const candidates = explicit !== undefined ? [explicit] : [
-    configHome ? join(configHome, "otk/otk.toml") : undefined,
+    configDir ? join(configDir, "otk.toml") : undefined,
     sources.overlayPath,
   ];
   for (const overlay of candidates) {

@@ -233,3 +233,4 @@ export {
   registerFormTakeover,
   registerGlobalForms,
 } from "./components/FormDock.tsx";
+export { registerFilePreviewDialog } from "./components/FilePreview.tsx";

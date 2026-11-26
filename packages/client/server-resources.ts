@@ -54,6 +54,8 @@ import {
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
 import { createStableOrder } from "./stable-order.ts";
+import { createFileFacts, type FileFacts } from "./file-facts.ts";
+import { reportDiagnostic } from "./diagnostics.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -89,6 +91,7 @@ export interface ServerResources {
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
   directoryCatalog(id: string, directory: string): DirectoryCatalogLease;
+  fileFacts(id: string): FileFacts;
   frecencyCatalog(id: string, directory: string): FrecencyCatalogLease;
   approvals(id: string): ApprovalModel;
   tabs(project: ProjectSelection): ClientTabs;
@@ -210,6 +213,18 @@ export function createServerResources(o: {
     return owner;
   };
   const inboxes = new Map<string, InboxModel>();
+  const fileFactOwners = new Map<string, FileFacts>();
+  const fileFacts = (id: string) => {
+    let owner = fileFactOwners.get(id);
+    if (!owner) {
+      owner = createFileFacts(sidecars.connection(id).rpc, undefined, {
+        factory,
+        diagnostic: (cause) => reportDiagnostic(console.debug, cause),
+      });
+      fileFactOwners.set(id, owner);
+    }
+    return owner;
+  };
   const catalogs = new Map<string, ClientDirectoryCatalogs>();
   const frecencies = new Map<
     string,
@@ -949,6 +964,7 @@ export function createServerResources(o: {
     projectDirectory: (sidecar, directory, repoID) =>
       projectOwner(sidecar).resolve(directory, repoID),
     inbox,
+    fileFacts,
     directoryCatalog: (id, directory) => {
       live();
       return directoryOwner(id).acquire(directory);
@@ -1138,6 +1154,8 @@ export function createServerResources(o: {
       for (const [key, cache] of tabInputs) {
         if (cache.server === id) tabInputs.delete(key);
       }
+      fileFactOwners.get(id)?.stop();
+      fileFactOwners.delete(id);
       catalogs.get(id)?.stop();
       catalogs.delete(id);
       frecencies.get(id)?.stop();
@@ -1208,6 +1226,8 @@ export function createServerResources(o: {
       visibleCatalog?.directory.release();
       visibleCatalog?.frecency.release();
       visibleCatalog = undefined;
+      for (const owner of fileFactOwners.values()) owner.stop();
+      fileFactOwners.clear();
       for (const owner of catalogs.values()) owner.stop();
       for (const owner of frecencies.values()) owner.stop();
       catalogs.clear();

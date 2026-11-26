@@ -32,6 +32,8 @@ import {
   type FrameSource,
   frecencyOptions,
   IndexStore,
+  LocalFiles,
+  operatorConfigDirectory,
   prefsOptions,
   registerAgents,
   registerCommands,
@@ -40,6 +42,7 @@ import {
   registerFrecency,
   registerHistory,
   registerLayout,
+  registerLocalFiles,
   registerModels,
   registerPermissions,
   registerPrefs,
@@ -247,6 +250,18 @@ export async function startApplication(
       publishRows: cfg.digest.publishrows,
     });
     registerTerminals(rpc, terminals);
+    registerLocalFiles(
+      rpc,
+      new LocalFiles({
+        home: environment.HOME ?? "",
+        deny: [
+          cfg.state.path,
+          operatorConfigDirectory(environment),
+          environment.OTK_CONFIG,
+        ]
+          .filter((path): path is string => !!path),
+      }),
+    );
     inbox.terminalDependencies(terminals.tracking);
     terminalSockets = new TerminalMux(
       terminals,
