@@ -4,9 +4,11 @@ import {
   codeRunAvailability,
   codeRunText,
   type CommandHub,
+  runLabel,
   type SidecarConnection,
   TERMINAL_RUN_LABEL,
   terminalBoxFor,
+  terminalRunAvailability,
 } from "@otk/client";
 import { copyText } from "../clipboard.ts";
 import type { ContentTarget } from "./transcript-context.tsx";
@@ -61,7 +63,28 @@ export function registerCodeBlockCommands(
     run: (_context, target: ContentTarget) =>
       box(target)!.run(codeRunText(target.code!)!),
   });
+  const runText = commands.register({
+    id: "transcript.run-text",
+    title: TERMINAL_RUN_LABEL,
+    category: "Transcript",
+    arguments: { type: "object" },
+    context: {
+      kind: "reply",
+      order: 1,
+      title: (target: ContentTarget) => runLabel(target.runText ?? ""),
+    },
+    availability: (_context, target?: ContentTarget) =>
+      target?.runText
+        ? terminalRunAvailability({
+          sessionID: target.sessionID,
+          unavailable: box(target)?.unavailable,
+        })
+        : { available: false, hidden: true, reason: "No text to run" },
+    run: (_context, target: ContentTarget) =>
+      box(target)!.paste(target.runText!),
+  });
   return () => {
+    runText();
     run();
     copy();
   };
