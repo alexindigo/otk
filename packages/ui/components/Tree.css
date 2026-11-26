@@ -2,6 +2,7 @@
 :root {
   --tree-icon-size: var(--icon-compact);
   --tree-default-row-height: calc(var(--tree-icon-size) * 2);
+  --selection-mark: calc(3 * var(--otk-unit));
 }
 .otk-tree-node {
   min-inline-size: 0;
@@ -197,7 +198,7 @@
   align-items: center;
 }
 .otk-tree-selection-mark {
-  inline-size: calc(3 * var(--otk-unit));
+  inline-size: var(--selection-mark);
   block-size: calc(14 * var(--otk-unit));
   border-radius: 2px;
   background: transparent;
@@ -233,4 +234,44 @@
 .otk-tree-node.is-flat.is-connected > .otk-tree-heading > .otk-tree-rails::before {
   content: "";
   flex: 0 0 var(--tree-indent);
+}
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > :is(.otk-tree-heading, .otk-tree-feedback) {
+  grid-template-columns: var(--selection-mark) var(--tree-indent) minmax(0,
+    1fr);
+}
+.otk-tree-node.has-selection-slot.is-flat > .otk-tree-heading {
+  grid-template-columns: var(--selection-mark) auto var(--tree-indent) minmax(0,
+    1fr);
+}
+.otk-tree-node.has-selection-slot.is-flat > .otk-tree-heading > .otk-tree-rails,
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-heading > .otk-tree-own {
+  grid-column: 2;
+}
+.otk-tree-node.has-selection-slot.is-flat > .otk-tree-heading > .otk-tree-own,
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-heading > .otk-tree-label,
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-feedback > .otk-tree-feedback-content {
+  grid-column: 3;
+}
+.otk-tree-node.has-selection-slot.is-flat > .otk-tree-heading > .otk-tree-label {
+  grid-column: 4;
+}
+.otk-tree-node.has-selection-slot > .otk-tree-heading > .otk-tree-selection {
+  grid-column: 1;
+}
+/* A nested sidebar row reserves its own selection track. Indent the body
+   by one junction; let the ancestor guide also span the selection track. */
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body {
+  grid-template-columns: var(--tree-indent) var(--selection-mark) minmax(0,
+    1fr);
+}
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body > .otk-tree-children {
+  grid-column: 2 / -1;
+}
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body > .otk-tree-continuation {
+  grid-column: 1 / 3;
+  grid-template-columns: var(--selection-mark) 1fr 1fr;
+  pointer-events: none;
+}
+.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body > .otk-tree-continuation::before {
+  grid-column: 2;
 }

@@ -32,7 +32,8 @@
   height: var(--icon-compact);
 }
 .otk-inbox-scroll {
-  padding: 0 var(--space-2);
+  /* Tree headings provide a leading selection track inside the list. */
+  padding-inline: var(--space-1) var(--space-2);
 }
 .otk-project-row {
   color: var(--otk-fg-2);

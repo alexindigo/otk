@@ -157,6 +157,7 @@ export function TreeNode(props: {
         "has-body": visible(),
         "has-header-toggle": props.toggleHeader,
         "is-compact": props.compact,
+        "has-selection-slot": props.selected !== undefined,
         "has-selection": props.selected,
       }]}
       data-tree-node=""

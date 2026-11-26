@@ -70,3 +70,37 @@ test.describe("work log", () => {
     await expect(page.locator(".otk-tree-icon-art:empty")).toHaveCount(0);
   });
 });
+
+test.describe("sidebar", () => {
+  test.use({ profile: "contract-sessions-hierarchy" });
+  test("sessions.tree-selection-mark-clears-the-junction", {
+    tag: ["@sessions", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    await openSession(state, page, "tstv1-otk");
+    const row = page.locator('.otk-session-row[data-session="tstv1-otk"]');
+    await expect(row).toHaveAttribute("aria-current", "page");
+    const heading = row.locator(
+      "xpath=ancestor::*[contains(@class, 'otk-tree-heading')][1]",
+    );
+    await expect(heading.locator(".otk-tree-selection-mark")).toBeVisible();
+    const gaps = await heading.evaluate((node) => {
+      const mark = node.querySelector(".otk-tree-selection-mark")!;
+      const rail = node.querySelector(".otk-tree-own")!;
+      const box = rail.querySelector(".otk-tree-toggle")!;
+      const ruler = document.createElement("span");
+      ruler.style.cssText = "position:absolute;inline-size:var(--space-1)";
+      node.append(ruler);
+      const min = ruler.getBoundingClientRect().width;
+      ruler.remove();
+      return {
+        min,
+        box: box.getBoundingClientRect().left -
+          mark.getBoundingClientRect().right,
+        rail: rail.getBoundingClientRect().left -
+          mark.getBoundingClientRect().right,
+      };
+    });
+    expect(gaps.rail).toBeGreaterThanOrEqual(0);
+    expect(gaps.box).toBeGreaterThanOrEqual(gaps.min);
+  });
+});
