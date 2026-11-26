@@ -17,7 +17,7 @@ import WorkLog from "./WorkLog.tsx";
 import RecordKinds from "./RecordKinds.tsx";
 import { TreeItem } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 import TimeValue from "./TimeValue.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
@@ -258,10 +258,21 @@ export default function Message(
   });
   let footerControl: VirtualListControl | undefined;
   let usageControl: { open(): void } | undefined;
-  const replySources = () =>
+  const replySources = createMemo(() =>
     frames().flatMap((frame) =>
       frame.groups.flatMap((group) => group.replyStart ?? [])
-    );
+    )
+  );
+  const replySource = (source: () => ReplyStartData) => (
+    <ReplyStart
+      source={{
+        ...source(),
+        timing: presentation().time?.timing,
+        outcomeTime: presentation().time?.outcome,
+      }}
+      sessionID={props.message.sessionID}
+    />
+  );
   const workGroup = () => frames().at(-1)?.groups.at(-1)?.work;
   const segmentWindows = new Map<string, VirtualListControl>();
   contentOwner(identity, {
@@ -559,21 +570,9 @@ export default function Message(
                   <MessageFooter
                     whole
                     leading={
-                      <For
-                        each={replySources()}
-                        keyed={(source) => source.messageID}
-                      >
-                        {(source) => (
-                          <ReplyStart
-                            source={{
-                              ...source(),
-                              timing: presentation().time?.timing,
-                              outcomeTime: presentation().time?.outcome,
-                            }}
-                            sessionID={props.message.sessionID}
-                          />
-                        )}
-                      </For>
+                      <Show when={replySources()[0]}>
+                        {replySource}
+                      </Show>
                     }
                     ref={sourceRegion(() => props.lastID ?? props.message.id)}
                     at={outcomeClock()?.at}
@@ -597,16 +596,20 @@ export default function Message(
                     </span>
                     <Show when={presentation().usage}>
                       {(usage) => (
-                        <TurnUsage
-                          summary={usage().summary}
-                          detail={() => props.usage}
-                          error={props.usageError}
-                          open={props.openUsage}
-                          control={(control) => {
-                            usageControl = control;
-                          }}
-                          showCost={props.prefs.showCost}
-                        />
+                        // Keep the usage disclosure ahead of descriptive meta
+                        // when the duration's counting cue needs more room.
+                        <MetaItem rank={2}>
+                          <TurnUsage
+                            summary={usage().summary}
+                            detail={() => props.usage}
+                            error={props.usageError}
+                            open={props.openUsage}
+                            control={(control) => {
+                              usageControl = control;
+                            }}
+                            showCost={props.prefs.showCost}
+                          />
+                        </MetaItem>
                       )}
                     </Show>
                     <For each={presentation().facts}>
@@ -615,6 +618,13 @@ export default function Message(
                     <Show when={message().interrupted}>
                       <span>interrupted</span>
                     </Show>
+                    {/* Fit turn-level metadata before the per-source details. */}
+                    <For
+                      each={replySources().slice(1)}
+                      keyed={(source) => source.messageID}
+                    >
+                      {replySource}
+                    </For>
                   </MessageFooter>
                 )}
               />

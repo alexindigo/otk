@@ -237,11 +237,19 @@ isolatedTest.describe("configured message details", () => {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Shift+Tab");
     await expect(agent).toBeFocused();
+    // 2.105 WP6 moves the chip into muted footer metadata, but the shared
+    // EntityPill keeps the regular foreground when it has keyboard focus.
+    const foreground = await agent.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--otk-fg)";
+      el.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
     await expect(agent).toHaveCSS(
       "color",
-      await page.locator(".otk-reply-start").evaluate((el) =>
-        getComputedStyle(el).color
-      ),
+      foreground,
     );
     await expect(page.locator("[data-role=user]").first()).toHaveCSS(
       "border-left-width",
