@@ -13,11 +13,12 @@ interface Watch {
   latePublications: number;
 }
 test.use({ profile: "contract-scale-files" });
+// The existing scale budget covers the costly isolated fixture as well.
+test.describe.configure({ timeout: 600_000 });
 test(
   "scale.complete-catalogs-keyed-tasks-provider",
   { tag: ["@scale"] },
   async ({ isolatedState: state, page }, info) => {
-    test.setTimeout(600_000);
     const initial = await state.observe<
       {
         counts: unknown;
