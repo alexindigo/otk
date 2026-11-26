@@ -43,6 +43,7 @@
 }
 .otk-overflow-measure {
   position: absolute;
+  inset-inline-start: 0;
   visibility: hidden;
   pointer-events: none;
   display: flex;
@@ -63,15 +64,12 @@
   block-size: var(--control-size);
   padding: 0;
 }
-.otk-overflow-row.is-intrinsic > .otk-overflow-measure {
-  position: static;
-  block-size: 0;
-  grid-column: 1 / -1;
-  grid-row: 1;
-  gap: inherit;
+.otk-overflow-row.is-intrinsic {
+  inline-size: var(--overflow-intrinsic, max-content);
+  max-inline-size: 100%;
 }
-.otk-overflow-row.is-intrinsic > :is(.otk-overflow-items, .otk-overflow-more) {
-  grid-row: 1;
+.otk-overflow-row.is-intrinsic > .otk-overflow-measure {
+  gap: inherit;
 }
 .otk-overflow-row.is-intrinsic > .otk-overflow-measure > span:last-child {
   position: absolute;
