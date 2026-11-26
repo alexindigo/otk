@@ -4,6 +4,7 @@ import type { Element } from "solid-js";
 import { retainedWorkDisclosure } from "../features/transcript-context.tsx";
 import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
 import { WorkLogIcon } from "./ChromeIcons.tsx";
+import RecordRow from "./RecordRow.tsx";
 import { TreeIcon, TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 import { discloseInViewport } from "./viewport.ts";
@@ -33,19 +34,24 @@ export default function WorkLog(
       event.isTrusted && value !== open(),
     );
   const primary = (toggleID: string) => (
-    <button
-      id={toggleID}
-      type="button"
-      title="Work log"
-      class="otk-work-fold otk-tree-control"
-      aria-expanded={open() ? "true" : "false"}
-      onClick={(event) => change(!open(), event)}
+    <RecordRow
+      icon={() => (
+        <TreeIcon>
+          <WorkLogIcon />
+        </TreeIcon>
+      )}
     >
-      <TreeIcon>
-        <WorkLogIcon />
-      </TreeIcon>
-      <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
-    </button>
+      <button
+        id={toggleID}
+        type="button"
+        title="Work log"
+        class="otk-work-fold otk-tree-control"
+        aria-expanded={open() ? "true" : "false"}
+        onClick={(event) => change(!open(), event)}
+      >
+        <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
+      </button>
+    </RecordRow>
   );
   return (
     <section ref={(element) => frame = element} class="otk-work-log">

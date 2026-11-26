@@ -24,6 +24,7 @@ export default function FittedActions(
         items={props.items}
         required={[]}
         intrinsic={props.inline}
+        singleLine={props.inline}
         measure={(item) => (
           <span class={item.icon ? "otk-icon-button" : "otk-pill"}>
             <Show when={item.icon} fallback={item.label}>

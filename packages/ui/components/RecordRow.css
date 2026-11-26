@@ -1,0 +1,67 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-record-row {
+  flex: 1;
+  min-inline-size: 0;
+}
+.otk-record-row.has-action-slot {
+  container: record-row / inline-size;
+}
+.otk-record-row-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  min-block-size: var(--control-size);
+}
+.otk-record-row-label {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: var(--space-2);
+  margin-inline-start: var(--space-2);
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+.otk-record-row-status {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+.otk-record-row-status:not(:empty),
+.otk-record-row-actions {
+  margin-inline-start: var(--space-2);
+}
+.otk-record-row.is-outgoing > .otk-record-row-grid {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+.otk-record-row.is-outgoing > .otk-record-row-grid > :first-child {
+  grid-area: 1 / 4;
+}
+.otk-record-row.is-outgoing .otk-record-row-label {
+  grid-area: 1 / 3;
+  margin-inline: 0 var(--space-2);
+  justify-content: end;
+}
+.otk-record-row.is-outgoing .otk-record-row-status {
+  grid-area: 1 / 2;
+}
+.otk-record-row.is-outgoing .otk-record-row-actions {
+  grid-area: 1 / 1;
+}
+.otk-record-row-actions {
+  grid-column: 4;
+  /* Long action labels must not take the preview's share of the row. */
+  max-inline-size: max(var(--control-size), 34cqi);
+}
+@container record-row (inline-size < 32em) {
+  .otk-record-row-status {
+    display: none;
+  }
+}
+@container record-row (inline-size < 22em) {
+  .otk-record-row-actions {
+    max-inline-size: var(--control-size);
+  }
+}
