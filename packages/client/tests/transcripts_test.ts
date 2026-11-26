@@ -3,6 +3,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import type {
   ClientFrame,
   ContentOp,
+  FormRequest,
   Message,
   MessagePolicy,
   PermissionRequest,
@@ -803,6 +804,47 @@ Deno.test("warm transcripts reduce permission and question replacement before re
       [next],
       "Reselection cannot expose the previous approval target",
     );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("form publication leaves the transcript clock and live reply intact", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    while (f.requests.length) await f.reply();
+    const transcript = f.owner.get(target("a"))!;
+    const form: FormRequest = {
+      id: "form",
+      owner: { kind: "session", sessionID: "a" },
+      directory: "/a",
+      title: "Plan approval",
+      fields: [],
+    };
+    const receive = (event: ContentOp, seq?: number) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        event,
+        ...(seq === undefined ? {} : { clock: { epoch: "fixture", seq } }),
+      }, true);
+    receive({ op: "form.upsert", request: form });
+    assertEquals(transcript.state.content.forms, [form]);
+    receive({ op: "form.remove", requestID: form.id });
+    assertEquals(transcript.state.content.forms, []);
+    const message = {
+      ...f.messages("a")[79],
+      id: "a-080",
+      time: { created: 80 },
+    };
+    receive({ op: "message.upsert", message }, 1);
+    assertEquals(transcript.state.messagesByID[message.id], message);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
