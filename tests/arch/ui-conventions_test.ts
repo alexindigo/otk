@@ -3,7 +3,13 @@ import { assert, assertEquals } from "@std/assert";
 import { FailurePresenter } from "../../packages/client/failures.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { nodes, property, type t } from "./syntax.ts";
-import { outOfFlow, rules, selectorAlternatives } from "./styles.ts";
+import {
+  cssTree,
+  outOfFlow,
+  rules,
+  selectorAlternatives,
+  variables,
+} from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { composerHeaderErrors } from "./composer-header.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
@@ -16,6 +22,110 @@ import {
 } from "./style-boundaries.ts";
 
 const popoverCSS = "packages/ui/components/surface/Popover.css";
+
+// Offsets may use the containing edge and spacing tokens, not other boxes'
+// dimensions. Follow custom property aliases so naming a calculation doesn't
+// make a positional relationship structural.
+function arithmeticOffsetErrors(files: ReadonlyMap<string, string>): string[] {
+  const styles = [...files].flatMap(([path, css]) =>
+    rules(css).map((rule) => ({ path, ...rule }))
+  );
+  const definitions = new Map<string, string[]>();
+  for (const { declarations } of styles) {
+    for (const [prop, value] of declarations) {
+      if (!prop.startsWith("--")) continue;
+      const values = definitions.get(prop) ?? [];
+      values.push(value);
+      definitions.set(prop, values);
+    }
+  }
+  const spacing =
+    /^(?:--otk-(?:unit|scale)|--space-\d+|--(?:overlay|popover|lane)-gutter)$/;
+  const calculated = (value: string, visited: ReadonlySet<string>): boolean => {
+    let offset = false;
+    cssTree.walk(
+      cssTree.parse(value.replace(/\s*!important$/, ""), { context: "value" }),
+      (node) => {
+        if (node.type !== "Function" || node.name.toLowerCase() !== "calc") {
+          return;
+        }
+        const expression = cssTree.generate(node);
+        let lengths = 0;
+        cssTree.walk(node, (part) => {
+          if (part.type === "Dimension") lengths++;
+          if (
+            part.type === "Percentage" || part.type === "Function" &&
+              /^anchor(?:-size)?$/.test(part.name)
+          ) offset = true;
+        });
+        if (
+          lengths > 1 ||
+          variables(expression).some(({ name }) => !spacing.test(name))
+        ) {
+          offset = true;
+        }
+      },
+    );
+    if (offset) return true;
+    return variables(value).some(({ name }) =>
+      !spacing.test(name) && !visited.has(name) &&
+      definitions.get(name)?.some((next) =>
+        calculated(next, new Set([...visited, name]))
+      )
+    );
+  };
+  return styles.flatMap(({ path, selector, declarations }) =>
+    [...declarations].filter(([prop, value]) =>
+      /^(?:top|bottom|left|right|inset(?:-(?:block|inline)(?:-(?:start|end))?)?)$/
+        .test(prop) &&
+      calculated(value, new Set())
+    ).map(([prop, value]) => `${path}: ${selector}: ${prop}: ${value}`)
+  );
+}
+
+Deno.test("UI convention: positional offsets do not reconstruct other boxes", async () => {
+  const productionCSS = new Map(
+    [...await productionSources()].filter(([path]) =>
+      /^(?:packages\/ui|web\/src)\/.*\.css$/.test(path)
+    ),
+  );
+  assertEquals(arithmeticOffsetErrors(productionCSS), []);
+  for (
+    const value of [
+      "calc(100% + 12px)",
+      "calc(42px - 18px / 2)",
+      "max(0px, calc(var(--dock-height) + var(--space-2)))",
+      "var(--position)",
+    ]
+  ) {
+    assertEquals(
+      arithmeticOffsetErrors(
+        new Map([
+          [
+            "tokens.css",
+            ":root{--position:var(--clearance);--clearance:calc(var(--dock-size) - 4px)}",
+          ],
+          ["stack.css", `.stack { inset-block-end: ${value} }`],
+        ]),
+      ).length,
+      1,
+      value,
+    );
+  }
+  assertEquals(
+    arithmeticOffsetErrors(
+      new Map([[
+        "example.css",
+        ".lane{display:flex;align-items:center;gap:var(--space-2)}" +
+        ".overlay{inset:0;bottom:var(--overlay-gutter);max-block-size:calc(100vh - var(--space-2))}" +
+        ".popover{top:100%;margin-top:var(--space-2)}" +
+        ".icon{inset-block-end:calc(4 * var(--otk-unit))}",
+      ]]),
+    ),
+    [],
+  );
+});
+
 function popoverPlacementErrors(path: string, text: string): string[] {
   if (!path.startsWith("packages/ui/") || !path.endsWith(".css")) return [];
   return rules(text).flatMap(({ selector, declarations }) => {
