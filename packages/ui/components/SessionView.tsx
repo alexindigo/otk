@@ -689,11 +689,13 @@ export default function SessionView(props: {
               }}
             >
               <Show when={props.branchHistory?.state.opened}>
-                <SavedBranches
-                  owner={props.branchHistory!}
-                  prefs={props.prefs}
-                  onOpenChild={props.onOpenChild}
-                />
+                <div class="otk-transcript-viewport">
+                  <SavedBranches
+                    owner={props.branchHistory!}
+                    prefs={props.prefs}
+                    onOpenChild={props.onOpenChild}
+                  />
+                </div>
               </Show>
               <Show when={!props.branchHistory?.state.opened}>
                 {(_live) => {
