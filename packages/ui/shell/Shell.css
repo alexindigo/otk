@@ -39,15 +39,7 @@
   padding: var(--space-6);
 }
 .otk-corner {
-  position: absolute;
-  top: var(--corner);
-  z-index: 10;
-}
-.otk-corner-left {
-  left: var(--corner);
-}
-.otk-corner-right {
-  right: var(--corner);
+  flex: none;
 }
 .otk-shell-progress {
   padding: var(--space-1) var(--lane-gutter);

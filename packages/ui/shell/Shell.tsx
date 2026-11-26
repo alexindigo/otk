@@ -675,40 +675,27 @@ export default function Shell(
             data-left-collapsed={String(layout().leftCollapsed)}
             data-right-collapsed={String(layout().rightCollapsed)}
           >
-            <Show when={toggles.state.ready}>
-              <button
-                type="button"
-                class="otk-icon-button otk-corner otk-corner-left"
-                aria-label={layout().leftCollapsed
-                  ? "Expand projects"
-                  : "Collapse projects"}
-                aria-expanded={layout().leftCollapsed ? "false" : "true"}
-                title={layout().leftCollapsed
-                  ? "Expand projects"
-                  : "Collapse projects"}
-                onClick={() =>
-                  void commands.run("layout.projects.toggle").catch(fail)}
-              >
-                <PanelLeftIcon />
-              </button>
-              <button
-                type="button"
-                class="otk-icon-button otk-corner otk-corner-right otk-panel-collapse"
-                aria-label={layout().rightCollapsed
-                  ? "Open right panel"
-                  : "Collapse right panel"}
-                aria-expanded={layout().rightCollapsed ? "false" : "true"}
-                title={layout().rightCollapsed
-                  ? "Open right panel"
-                  : "Collapse right panel"}
-                onClick={() =>
-                  void commands.run("layout.panel.toggle").catch(fail)}
-              >
-                <PanelRightIcon />
-              </button>
-            </Show>
             <ProjectInbox
               disclosure={tree}
+              collapseToggle={
+                <Show when={toggles.state.ready}>
+                  <button
+                    type="button"
+                    class="otk-icon-button otk-corner otk-corner-left"
+                    aria-label={layout().leftCollapsed
+                      ? "Expand projects"
+                      : "Collapse projects"}
+                    aria-expanded={layout().leftCollapsed ? "false" : "true"}
+                    title={layout().leftCollapsed
+                      ? "Expand projects"
+                      : "Collapse projects"}
+                    onClick={() =>
+                      void commands.run("layout.projects.toggle").catch(fail)}
+                  >
+                    <PanelLeftIcon />
+                  </button>
+                </Show>
+              }
               history={
                 <HistoryButtons
                   back={backTarget()}
@@ -787,7 +774,6 @@ export default function Shell(
                         {(owner) => (
                           <>
                             <ProjectTabs
-                              reserveTrailing={layout().rightCollapsed}
                               project={owner}
                               projectChip={
                                 <ProjectLocation
@@ -1077,6 +1063,25 @@ export default function Shell(
               <GlobalSurfaces />
             </main>
             <RightPanel
+              collapseToggle={
+                <Show when={toggles.state.ready}>
+                  <button
+                    type="button"
+                    class="otk-icon-button otk-corner otk-corner-right otk-panel-collapse"
+                    aria-label={layout().rightCollapsed
+                      ? "Open right panel"
+                      : "Collapse right panel"}
+                    aria-expanded={layout().rightCollapsed ? "false" : "true"}
+                    title={layout().rightCollapsed
+                      ? "Open right panel"
+                      : "Collapse right panel"}
+                    onClick={() =>
+                      void commands.run("layout.panel.toggle").catch(fail)}
+                  >
+                    <PanelRightIcon />
+                  </button>
+                </Show>
+              }
               layout={layout()}
               ready={toggles.state.ready}
               supports={(capability) =>

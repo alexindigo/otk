@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
+import { cssLength } from "../../pages/css-length.ts";
 import { badge, focusNotifications, toast } from "../../pages/notifications.ts";
 
 test.use({ profile: "contract-attention-native" });
@@ -107,6 +108,7 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
     true,
   );
   const measurements = [];
+  const stage = page.locator(".otk-transcript-stage");
   for (const width of [600, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await expect(page.locator(".otk-toast")).toHaveCount(3);
@@ -123,6 +125,8 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
       const foot = stack.querySelector(".otk-toast-foot")!
         .getBoundingClientRect();
       return {
+        cardBottom: Array.from(stack.querySelectorAll(".otk-toast")).at(-1)!
+          .getBoundingClientRect().bottom,
         contained: box.left >= 0 && box.top >= 0 && box.right <= innerWidth &&
           box.bottom <= innerHeight,
         scrollports:
@@ -149,6 +153,12 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
       };
     });
     expect(geometry.contained).toBe(true);
+    const bounds = (await stage.boundingBox())!;
+    const gutter = await cssLength(stage, "--overlay-gutter");
+    expect.soft(
+      Math.abs(bounds.y + bounds.height - gutter - geometry.cardBottom),
+      `${width}px: overflow must not displace the bottom toast`,
+    ).toBeLessThanOrEqual(0.5);
     expect(geometry.scrollports).toBe(0);
     expect(geometry.cards).toBe(3);
     expect(Math.max(...geometry.gaps) - Math.min(...geometry.gaps))
