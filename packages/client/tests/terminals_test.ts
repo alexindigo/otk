@@ -97,6 +97,35 @@ function frame(ch: number, bytes: Uint8Array): Uint8Array {
   value.set(bytes, 4);
   return value;
 }
+Deno.test("control recovery joins a terminal mux already restored by its own socket", () => {
+  const sockets = [new Socket(), new Socket()], clock = new Clock();
+  let next = 0;
+  let recovered!: Parameters<SidecarConnection["onRecovered"]>[0];
+  const terminal = new TerminalSocket({
+    base: new URL("http://otk.test/api/"),
+    options: { socket: () => sockets[next++] as unknown as WebSocket },
+    onRecovered(listener) {
+      recovered = listener;
+      return () => {};
+    },
+  }, clock);
+  try {
+    const lease = terminal.attach("session", "pty", sink());
+    sockets[0].open();
+    sockets[0].snapshot(1);
+    sockets[0].fail();
+    clock.tick(1000);
+    sockets[1].open();
+    sockets[1].snapshot(1);
+    recovered({ instance: "replacement", replaced: true });
+    lease.input(new TextEncoder().encode("\r"));
+    assertEquals(next, 2);
+    assertEquals(sockets[1].closed, 0);
+    assertEquals(sockets[1].sent.at(-1), frame(1, new Uint8Array([13])));
+  } finally {
+    terminal.stop();
+  }
+});
 function sink() {
   const events: unknown[] = [], metas: TerminalMeta[] = [];
   return {

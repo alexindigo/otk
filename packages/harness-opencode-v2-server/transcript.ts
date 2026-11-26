@@ -51,6 +51,7 @@ import {
   text,
 } from "./map.ts";
 import { mapTool } from "./tool-interpretation.ts";
+import { HelperEdges } from "./helper-edges.ts";
 import { requestFailureRecord } from "./request-failure.ts";
 import {
   nativeSource,
@@ -597,6 +598,7 @@ export class Transcript {
     return task;
   }
   readonly requests: RequestRetention;
+  readonly helperEdges: HelperEdges;
   #executionFailures = new Map<string, Promise<Message>>();
   constructor(
     readonly options: {
@@ -645,6 +647,7 @@ export class Transcript {
     },
   ) {
     this.requests = options.requests ?? new V2RequestRetention();
+    this.helperEdges = new HelperEdges(options.diagnostic);
     if (options.agents) {
       this.colors = new AgentColors(
         options.agents,
@@ -1345,7 +1348,7 @@ export class Transcript {
     );
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
-    mapped = this.#decorateHelpers(mapped);
+    mapped = this.#decorateHelpers(mapped, !settled);
     if (raw.type === "shell") {
       let known = this.#projected.get(id);
       if (!known) this.#projected.set(id, known = { shells: new Map() });
@@ -2611,6 +2614,7 @@ export class Transcript {
     this.#revertCommits.delete(id);
     this.#anchors.delete(id);
     this.#watermarks.delete(id);
+    this.helperEdges.retire(id);
     await this.requests.remove(id);
     this.release(id);
   }
@@ -2748,6 +2752,26 @@ export class Transcript {
       sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
+    // Capture execution identity before the viewer/coverage fences. A helper
+    // can start or settle while no transcript body is acquired.
+    const assistant = text(d.assistantMessageID), call = text(d.id);
+    if (assistant) {
+      if (event.type === "session.tool.progress" && call) {
+        this.helperEdges.observe(id, assistant, call, d.metadata);
+      } else if (
+        (event.type === "session.tool.success" ||
+          event.type === "session.tool.failed") && call
+      ) this.helperEdges.retire(id, assistant, call);
+      else if (
+        event.type === "session.step.ended" ||
+        event.type === "session.step.failed"
+      ) this.helperEdges.retire(id, assistant);
+    }
+    if (
+      event.type === "session.execution.succeeded" ||
+      event.type === "session.execution.failed" ||
+      event.type === "session.execution.interrupted"
+    ) this.helperEdges.retire(id);
     const coveredSeq = this.#history.get(id)?.coveredSeq;
     const covered = coveredSeq !== undefined &&
       event.durable?.aggregateID === sid && event.durable.seq <= coveredSeq &&
@@ -3766,14 +3790,14 @@ export class Transcript {
       }
     }
   }
-  #decorateHelpers(message: Message): Message {
+  #decorateHelpers(message: Message, restoreRunning: boolean): Message {
     for (const [key, link] of this.#helperLinks) {
       if (link.parent === message.sessionID && link.message === message.id) {
         this.#helperLinks.delete(key);
       }
     }
     const parts = message.parts.map((part) =>
-      this.#helperPart(message.sessionID, message.id, part)
+      this.#helperPart(message.sessionID, message.id, part, restoreRunning)
     );
     this.#pruneHelpers();
     return { ...message, parts };
@@ -3782,15 +3806,17 @@ export class Transcript {
     parent: string,
     message: string,
     part: import("@otk/protocol").Part,
+    restoreRunning = true,
   ): import("@otk/protocol").Part {
     const key = JSON.stringify([parent, message, part.id]);
     this.#helperLinks.delete(key);
-    if (
-      part.kind !== "tool" || part.call.tool !== "task" ||
-      !part.call.childSessionID
-    ) return part;
-    const child = part.call.childSessionID,
-      progress = this.#helperSummary(child);
+    if (part.kind !== "tool" || part.call.tool !== "task") return part;
+    const child = part.call.childSessionID ??
+      (restoreRunning && part.call.status === "running"
+        ? this.helperEdges.child(parent, message, part.call.callID)
+        : undefined);
+    if (!child) return part;
+    const progress = this.#helperSummary(child);
     if (this.#subscriptions.has(parent)) {
       this.#helperLinks.set(key, {
         parent,
@@ -3805,7 +3831,7 @@ export class Transcript {
       this.#helperHints.add(child);
       this.options.requestHelper(child);
     }
-    return { ...part, call: { ...part.call, progress } };
+    return { ...part, call: { ...part.call, childSessionID: child, progress } };
   }
   #helperSummary(child: string): import("@otk/protocol").HelperSummary {
     return this.#helperProgress.get(child) ?? this.options.helper?.(child) ?? {

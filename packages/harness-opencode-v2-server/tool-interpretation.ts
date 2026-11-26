@@ -14,6 +14,10 @@ const record = (v: unknown): Record<string, unknown> =>
     : {};
 const text = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+export function toolChild(metadata: unknown): string | undefined {
+  const value = record(metadata);
+  return text(value.sessionID) ?? text(value.sessionId);
+}
 const failureText = (...values: unknown[]): string | undefined =>
   values.map(text).find((value) =>
     value !== undefined && value.trim().length > 0
@@ -94,7 +98,7 @@ export function interpretTool(
       sessionID: text(input.sessionID) ?? text(input.task_id),
     },
     metadata,
-    child: text(metadata.sessionID) ?? text(metadata.sessionId),
+    child: toolChild(metadata),
     title: text(metadata.title) ?? text(metadata.description) ??
       (sharedToolName(name) === "bash"
         ? text(input.command)?.slice(0, 200)

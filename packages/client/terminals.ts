@@ -71,8 +71,11 @@ export class TerminalSocket {
   #lastFrame = 0;
   #stopped = false;
   #clock: TerminalClock;
+  #releaseRecovery?: () => void;
   constructor(
-    private conn: Pick<SidecarConnection, "base" | "options">,
+    private conn:
+      & Pick<SidecarConnection, "base" | "options">
+      & Partial<Pick<SidecarConnection, "onRecovered">>,
     clock?: TerminalClock,
   ) {
     this.#clock = clock ?? {
@@ -82,6 +85,18 @@ export class TerminalSocket {
         return () => globalThis.clearTimeout(timer);
       },
     };
+    this.#releaseRecovery = conn.onRecovered?.(() => {
+      // Control and mux sockets can recover in either order. Join any mux
+      // already open/opening; retiring it here could drop live terminal input.
+      if (
+        this.#stopped || this.#socket ||
+        ![...this.#channels].some((c) => !c.blocked)
+      ) return;
+      this.#retry?.();
+      this.#retry = undefined;
+      // Reuse the currently retained attachments (same PTY IDs and sizes).
+      this.#connect();
+    });
   }
   subscribe(listener: (event: TerminalSocketEvent) => void): () => void {
     this.#listeners.add(listener);
@@ -408,6 +423,7 @@ export class TerminalSocket {
   }
   stop(): void {
     this.#stopped = true;
+    this.#releaseRecovery?.();
     this.#retry?.();
     this.#idle?.();
     this.#retire();
