@@ -5,7 +5,7 @@ import { ComposerNoticeRow } from "./ComposerNotice.tsx";
 import { ActivityIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
-import FailureContent from "./FailureContent.tsx";
+import FailureContent, { type FailureFeedbackRow } from "./FailureContent.tsx";
 
 /** Content only: its consumer owns the one joined notice frame and target. */
 export default function OperationFeedback(
@@ -14,40 +14,52 @@ export default function OperationFeedback(
     icon?: () => Element;
     control?(control: { focus(): void }): void;
     onReveal?(messageID: string): void;
+    onDismiss?(): void;
   },
 ): Element {
   const feedback = () => errorFeedback(props.feedback)!;
-  return (
+  const row = (content: FailureFeedbackRow) => (
     <ComposerNoticeRow
       focusable
       control={props.control}
-      icon={props.icon ??
-        (feedback().failure ? undefined : ActivityIcon)}
+      icon={content.icon}
       {...feedbackState({
-        feedback: props.feedback,
+        feedback: feedback(),
         class: "otk-operation-feedback",
       })}
-      trailing={
-        <Show when={!feedback().failure && props.feedback.action}>
-          <button type="button" onClick={() => props.feedback.action?.run()}>
-            {props.feedback.action?.label}
-          </button>
-        </Show>
-      }
+      actions={content.actions}
     >
-      {feedback().failure
-        ? (
-          <FailureContent
-            failure={feedback().failure!}
-            action={feedback().action}
-            onReveal={props.onReveal}
-          />
-        )
-        : (
+      {content.label}
+    </ComposerNoticeRow>
+  );
+  return (
+    <Show
+      when={feedback().failure}
+      fallback={row({
+        icon: () => props.icon?.() ?? <ActivityIcon />,
+        label: (
           <span class="otk-control-label" title={props.feedback.text}>
             {props.feedback.text}
           </span>
-        )}
-    </ComposerNoticeRow>
+        ),
+        get actions() {
+          return props.feedback.action
+            ? [{ key: "recover", ...props.feedback.action }]
+            : [];
+        },
+      })}
+    >
+      {(failure) => (
+        <FailureContent
+          failure={failure()}
+          action={feedback().action}
+          onReveal={props.onReveal}
+          onDismiss={props.onDismiss}
+          icon={props.icon}
+          placement="feedback"
+          row={row}
+        />
+      )}
+    </Show>
   );
 }

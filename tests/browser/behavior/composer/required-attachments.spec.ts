@@ -53,14 +53,16 @@ for (const mode of ["prompt", "command"] as const) {
         else await chmod(path, 0);
         try {
           await send(page).click();
-          await expect(page.locator(".otk-composer-notice [role=alert]"))
-            .toHaveCount(1);
-          await expect(page.locator(".otk-composer-notice [role=alert]"))
-            .toHaveText(
-              mode === "prompt"
-                ? "Not sent - see the error above"
-                : "See the error above",
-            );
+          const notice = page.locator(".otk-composer-notice [role=alert]");
+          await expect(notice).toHaveCount(1);
+          await expect(notice.getByRole("button", { name: "Show error" }))
+            .toBeVisible();
+          const label = notice.locator(".otk-record-row-label");
+          if (mode === "prompt") await expect(label).toContainText("Not sent.");
+          else await expect(label).not.toContainText("Not sent.");
+          await expect(label.locator(".otk-failure-heading")).toContainText(
+            "failed",
+          );
           const failure = page.getByRole("region", {
             name: "Transcript",
             exact: true,

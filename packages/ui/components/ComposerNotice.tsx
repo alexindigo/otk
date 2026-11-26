@@ -3,6 +3,9 @@ import "./ComposerNotice.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
+import RecordRow from "./RecordRow.tsx";
+import type { FittedAction } from "./FittedActions.tsx";
+import { ActivityIcon } from "./ChromeIcons.tsx";
 /** Shared joined notice frame; content and actions belong to its consumer. */
 export default function ComposerNotice(props: { children: Element }): Element {
   return <div class="otk-composer-notice">{props.children}</div>;
@@ -20,7 +23,7 @@ export function ComposerActionNotice(props: { text: string }): Element {
 export function ComposerNoticeRow(props: {
   icon?: () => Element;
   children: Element;
-  trailing?: Element;
+  actions?: readonly FittedAction[];
   class?: string;
   role?: "alert" | "status";
   "aria-atomic"?: "true";
@@ -45,7 +48,7 @@ export function ComposerNoticeRow(props: {
         });
       }}
       tabindex={props.focusable ? -1 : undefined}
-      class={`otk-composer-notice-row ${props.class ?? ""}`}
+      class={["otk-composer-notice-row", props.class]}
       type={props.onClick ? "button" : undefined}
       role={props.role}
       aria-atomic={props["aria-atomic"]}
@@ -57,11 +60,23 @@ export function ComposerNoticeRow(props: {
         : "false"}
       {...native.attributes}
     >
-      <Show when={props.icon}>
-        {(icon) => <span class="otk-composer-notice-icon">{icon()()}</span>}
+      <Show
+        when={props.icon}
+        fallback={
+          <div class="otk-composer-notice-content">{props.children}</div>
+        }
+      >
+        <RecordRow
+          icon={() => (
+            <span class="otk-composer-notice-icon">
+              {props.icon?.() ?? <ActivityIcon />}
+            </span>
+          )}
+          actions={props.actions}
+        >
+          <div class="otk-composer-notice-content">{props.children}</div>
+        </RecordRow>
       </Show>
-      <div class="otk-composer-notice-content">{props.children}</div>
-      {props.trailing}
     </Control>
   );
 }

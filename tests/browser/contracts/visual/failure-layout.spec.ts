@@ -131,7 +131,26 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
             node.getBoundingClientRect().left
           )
         );
-        await expect(failure.locator("[aria-expanded]")).toHaveCount(1);
+        const disclosure = failure.getByRole("button", {
+          name: "Details",
+          exact: true,
+        });
+        if (
+          await failure.evaluate((el) => el.classList.contains("is-feedback"))
+        ) {
+          const more = failure.getByRole("button", { name: "More actions" });
+          if (await more.isVisible()) {
+            await more.click();
+            await expect(
+              page.getByRole("menuitem", { name: "Details", exact: true }),
+            )
+              .toHaveAttribute("aria-expanded", "false");
+            await page.keyboard.press("Escape");
+          } else {await expect(disclosure).toHaveAttribute(
+              "aria-expanded",
+              "false",
+            );}
+        } else await expect(failure.locator("[aria-expanded]")).toHaveCount(1);
         await expect(failure.locator(".otk-tree-node, .otk-tree-connector"))
           .toHaveCount(0);
         if (edges.length > 1) {
@@ -201,6 +220,9 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveText("The attachment could not be read");
         await expect(
           page.locator(".otk-operation-feedback .otk-composer-notice-icon"),
+        ).toHaveCount(1);
+        await expect(
+          page.locator(".otk-operation-feedback .otk-failure-signal"),
         ).toHaveCount(0);
         await expect(page.locator(".otk-toast .otk-failure-signal"))
           .toHaveCount(0);
@@ -246,7 +268,10 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           .toHaveText("1 permission · 2 failed");
         await expect(page.locator(".otk-native-record .otk-failure-heading"))
           .toHaveCount(0);
-        await expect(page.locator(".otk-tool-brief")).toHaveCount(0);
+        // WP3 moves the native record's brief into its own heading slot.
+        // FailureContent must still not introduce a second heading/brief.
+        await expect(page.locator(".otk-failure-content .otk-tool-brief"))
+          .toHaveCount(0);
         await expect(page.locator(".otk-failure-reason:visible")).toHaveCount(
           2,
         );
@@ -318,7 +343,9 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveCount(1);
         await expect(page.locator(".otk-failure-time")).toHaveCount(0);
         await expect(
-          page.locator("[data-role=assistant] .otk-message-footer time[title]"),
+          page.locator(
+            "[data-role=assistant] .otk-message-footer time[title]:visible",
+          ),
         ).toHaveText([
           "1:16 AM",
           "1:23 AM",

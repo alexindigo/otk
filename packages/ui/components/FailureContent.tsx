@@ -5,32 +5,47 @@ import DisclosureToggle from "./DisclosureToggle.tsx";
 import Clock from "./Clock.tsx";
 import FailureSignal, { type FailureAnnouncement } from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
+import { ActivityIcon, AlertIcon, CloseIcon } from "./ChromeIcons.tsx";
+import type { FittedAction } from "./FittedActions.tsx";
 import "./FailureContent.css" with { type: "text" };
 
+export interface FailureFeedbackRow {
+  icon(): Element;
+  label: Element;
+  actions: readonly FittedAction[];
+}
+
 /** One presentation of failure facts. Containers choose density, never wording. */
-export default function FailureContent(props: {
-  failure: FailurePresentation;
-  action?: Feedback["action"];
-  onReveal?(messageID: string): void;
-  compact?: boolean;
-  /** An expanded disclosure keeps the full reason visible at every width. */
-  expanded?: boolean;
-  time?: number;
-  /** The surrounding row already supplies the action and target heading. */
-  placement?: "record";
-  /** A containing surface may own the failure signal on its outer edge. */
-  signal?: boolean;
-  /** Compatibility with single-line feedback tracks. */
-  inline?: boolean;
-  /** Borrow a containing owner's signal/content tracks without offset math. */
-  subgrid?: boolean;
-  /** Size to the facts instead of filling an already bounded feedback track. */
-  intrinsic?: boolean;
-  /** An optional trailing action shares the Details row. */
-  controls?: Element;
-  announcement?: FailureAnnouncement;
-  class?: string;
-}) {
+export default function FailureContent(
+  props:
+    & {
+      failure: FailurePresentation;
+      action?: Feedback["action"];
+      onReveal?(messageID: string): void;
+      compact?: boolean;
+      /** An expanded disclosure keeps the full reason visible at every width. */
+      expanded?: boolean;
+      time?: number;
+      /** A containing surface may own the failure signal on its outer edge. */
+      signal?: boolean;
+      /** Compatibility with single-line feedback tracks. */
+      inline?: boolean;
+      /** Borrow a containing owner's signal/content tracks without offset math. */
+      subgrid?: boolean;
+      /** Size to the facts instead of filling an already bounded feedback track. */
+      intrinsic?: boolean;
+      /** An optional trailing action shares the Details row. */
+      controls?: Element;
+      announcement?: FailureAnnouncement;
+      class?: string;
+    }
+    & ({ placement?: "record" } | {
+      placement: "feedback";
+      row(input: FailureFeedbackRow): Element;
+      icon?(): Element;
+      onDismiss?(): void;
+    }),
+) {
   const compact = () => props.compact || props.inline;
   const [open, setOpen] = createSignal(false);
   const toggle = () => (
@@ -67,6 +82,97 @@ export default function FailureContent(props: {
       </Show>
     </div>
   );
+  const detailBody = () => (
+    <ScrollRegion axis="y" class="otk-failure-detail-body">
+      <div class="otk-failure-disclosed-reason">{reason()}</div>
+      <Show when={props.placement === "record" && props.time !== undefined}>
+        <Clock at={props.time!} class="otk-failure-time" />
+      </Show>
+      {diagnostic()}
+      <Show when={props.failure.details}>
+        {(details) => <p class="otk-failure-diagnostic">{details()}</p>}
+      </Show>
+    </ScrollRegion>
+  );
+  if (props.placement === "feedback") {
+    const reference = () => props.failure.reference;
+    // The producer's retained reference distinguishes a refused prompt from a
+    // prompt that was sent successfully but failed during its run.
+    const notSent = () =>
+      reference()?.label === "Not sent - see the error above";
+    const prefix = () => notSent() ? "Not sent. " : "";
+    const description = () => {
+      const { heading, target, reason } = props.failure;
+      return reference()
+        ? `${prefix()}${heading}`
+        : `${heading}${target.label ? ` for ${target.label}` : ""}: ${reason}`;
+    };
+    const actions = (): readonly FittedAction[] => {
+      const record = reference();
+      if (record) {
+        return props.onReveal
+          ? [{
+            key: "reveal",
+            label: "Show error",
+            class: "otk-failure-reference",
+            run: () => props.onReveal?.(record.messageID),
+          }]
+          : [];
+      }
+      return [
+        ...(props.action ? [{ key: "recover", ...props.action }] : []),
+        {
+          key: "details",
+          label: "Details",
+          expanded: open(),
+          run: () => setOpen((value) => !value),
+        },
+        ...(props.onDismiss
+          ? [{
+            key: "dismiss",
+            label: "Dismiss notice",
+            icon: CloseIcon,
+            run: props.onDismiss,
+          }]
+          : []),
+      ];
+    };
+    return (
+      <div
+        class={["otk-failure-content is-feedback", {
+          "is-error": props.failure.tone === "error",
+        }]}
+      >
+        {props.row({
+          icon: () =>
+            props.icon?.() ??
+              (props.failure.tone === "error"
+                ? <AlertIcon />
+                : <ActivityIcon />),
+          get actions() {
+            return actions();
+          },
+          label: (
+            <span class="otk-control-label" title={description()}>
+              {prefix()}
+              <span class="otk-failure-heading">{props.failure.heading}</span>
+              <Show when={!reference()}>
+                {props.failure.target.label
+                  ? ` for ${props.failure.target.label}`
+                  : ""}:{" "}
+                <span class="otk-failure-summary-reason">
+                  {props.failure.reason}
+                </span>
+              </Show>
+            </span>
+          ),
+        })}
+        <Show when={open() && !reference()}>
+          <div class="otk-failure-detail-track">{detailBody()}</div>
+        </Show>
+      </div>
+    );
+  }
   return (
     <FailureSignal
       as="div"
@@ -155,23 +261,7 @@ export default function FailureContent(props: {
                   {props.controls}
                 </div>
               </Show>
-              <Show when={open()}>
-                <ScrollRegion axis="y" class="otk-failure-detail-body">
-                  <div class="otk-failure-disclosed-reason">{reason()}</div>
-                  <Show
-                    when={props.placement === "record" &&
-                      props.time !== undefined}
-                  >
-                    <Clock at={props.time!} class="otk-failure-time" />
-                  </Show>
-                  {diagnostic()}
-                  <Show when={props.failure.details}>
-                    {(details) => (
-                      <p class="otk-failure-diagnostic">{details()}</p>
-                    )}
-                  </Show>
-                </ScrollRegion>
-              </Show>
+              <Show when={open()}>{detailBody()}</Show>
             </div>
           </>
         }
