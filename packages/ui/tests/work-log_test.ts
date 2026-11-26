@@ -35,7 +35,7 @@ for (const hidden of [false, true]) {
       partGroups(input, present).filter((group) => group.work).map((group) =>
         group.workingMs
       ),
-      [700, 900, undefined],
+      [1600],
     );
     assertEquals(input.map((part) => part.id), [
       "first",
@@ -71,18 +71,15 @@ Deno.test("work groups preserve ordering, external ownership, missing clocks and
   );
   assertEquals(
     groups.map((group) => [group.work, group.parts.map((part) => part.id)]),
-    [[false, ["a"]], [true, ["b", "c"]], [false, ["d"]], [true, ["e"]]],
+    [[false, ["a"]], [false, ["d"]], [true, ["b", "c", "e"]]],
   );
-  // The shared owner projects this segment's evidence, never a loaded-page turn
-  // span. Incomplete clocks cannot borrow a duration from another segment.
+  // Incomplete clocks cannot manufacture a duration from the turn's wall time.
   assertEquals(groups.map((group) => group.workingMs), [
     undefined,
-    20,
     undefined,
     undefined,
   ]);
   assertEquals(groups.map((group) => Object.hasOwn(group, "time")), [
-    false,
     false,
     false,
     false,

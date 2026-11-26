@@ -124,33 +124,29 @@ function PartsView(
 }
 export interface MessageControl {
   reveal(): void;
+  revealWork(): Promise<void>;
 }
 function ReplyStart(props: {
   source: ReplyStartData;
   sessionID: string;
-  onOpen(id: string): void;
 }) {
   const session = useOptionalSessionPorts();
   return (
-    <header
-      class={["otk-reply-start", {
-        "is-continuation": props.source.continuation,
-      }]}
+    <span
+      class="otk-reply-start"
       data-reply-source={props.source.messageID}
     >
-      <div class="otk-reply-agent">
-        <EntityPill
-          label={props.source.agent}
-          facts={scopedEntityFacts(session, {
-            sessionID: props.sessionID,
-            turnID: props.source.turnID ?? props.source.messageID,
-            timing: props.source.timing,
-            outcomeTime: props.source.outcomeTime,
-            model: props.source.model,
-          })}
-        />
-      </div>
-    </header>
+      <EntityPill
+        label={props.source.agent}
+        facts={scopedEntityFacts(session, {
+          sessionID: props.sessionID,
+          turnID: props.source.turnID ?? props.source.messageID,
+          timing: props.source.timing,
+          outcomeTime: props.source.outcomeTime,
+          model: props.source.model,
+        })}
+      />
+    </span>
   );
 }
 export default function Message(
@@ -174,7 +170,7 @@ export default function Message(
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
     /** Injected disclosure for producer-owned successful completion facts. */
-    completionDetails?(): import("solid-js").Element;
+    completion?: { key: string; body(): import("solid-js").Element };
     usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
@@ -261,6 +257,12 @@ export default function Message(
   });
   let footerControl: VirtualListControl | undefined;
   let usageControl: { open(): void } | undefined;
+  const replySources = () =>
+    frames().flatMap((frame) =>
+      frame.groups.flatMap((group) => group.replyStart ?? [])
+    );
+  const workGroup = () => frames().at(-1)?.groups.at(-1)?.work;
+  const segmentWindows = new Map<string, VirtualListControl>();
   contentOwner(identity, {
     get usage() {
       return props.openUsage
@@ -284,6 +286,15 @@ export default function Message(
     props.control?.({
       reveal() {
         (prompt() && bubble ? bubble : article).focus({ preventScroll: true });
+      },
+      async revealWork() {
+        const frame = frames().at(-1), group = frame?.groups.at(-1);
+        if (frame && group?.work) {
+          await segmentWindows.get(frame.id)?.reveal(group.id, {
+            align: "nearest",
+            intent: "user",
+          });
+        }
       },
     })
   );
@@ -383,24 +394,16 @@ export default function Message(
                 key={(group) => group.id}
                 label="Reply segments"
                 role="segment"
+                control={(control) => {
+                  const id = frame().id;
+                  segmentWindows.set(id, control);
+                  return () => segmentWindows.delete(id);
+                }}
                 render={(group) => (
                   <Show
                     when={group().work}
                     fallback={
                       <>
-                        <Show when={group().replyStart}>
-                          {(source) => (
-                            <ReplyStart
-                              source={{
-                                ...source(),
-                                timing: presentation().time?.timing,
-                                outcomeTime: presentation().time?.outcome,
-                              }}
-                              sessionID={props.message.sessionID}
-                              onOpen={props.onOpenChild}
-                            />
-                          )}
-                        </Show>
                         <PartsView
                           parts={group().parts}
                           prefs={props.prefs}
@@ -426,25 +429,31 @@ export default function Message(
                       render={(visible, meta) => (
                         <WorkLog
                           owner={props.ownerID ?? props.message.id}
-                          records={group().parts.map((part) => part.id)}
+                          records={[
+                            ...group().parts.map((part) => part.id),
+                            ...(props.completion ? [props.completion.key] : []),
+                          ]}
                           prefs={props.prefs}
                           required={group().required}
                           meta={meta}
                           body={() => (
-                            <PartsView
-                              tree
-                              parts={visible()}
-                              prefs={props.prefs}
-                              directory={props.directory}
-                              permissions={props.permissions}
-                              onOpenChild={props.onOpenChild}
-                              user={props.message.role === "user"}
-                              streaming={streaming()}
-                              pending={props.pending}
-                              sourceID={sourceID}
-                              recordTime={recordTime}
-                              failureTime={failureTime}
-                            />
+                            <>
+                              <PartsView
+                                tree
+                                parts={visible()}
+                                prefs={props.prefs}
+                                directory={props.directory}
+                                permissions={props.permissions}
+                                onOpenChild={props.onOpenChild}
+                                user={props.message.role === "user"}
+                                streaming={streaming()}
+                                pending={props.pending}
+                                sourceID={sourceID}
+                                recordTime={recordTime}
+                                failureTime={failureTime}
+                              />
+                              {props.completion?.body()}
+                            </>
                           )}
                         />
                       )}
@@ -511,7 +520,23 @@ export default function Message(
         </Show>
         <Show when={assistant()}>
           {(message) => (
-            <>
+            <div
+              class={["otk-reply-end", {
+                "has-work": workGroup() || !!props.completion,
+              }]}
+            >
+              <Show when={!workGroup() && props.completion}>
+                {(completion) => (
+                  <div class="otk-reply-end-work">
+                    <WorkLog
+                      owner={props.ownerID ?? props.message.id}
+                      records={[completion().key]}
+                      prefs={props.prefs}
+                      body={() => completion().body()}
+                    />
+                  </div>
+                )}
+              </Show>
               <ContentWindow
                 items={["footer"]}
                 key={(key) => key}
@@ -522,6 +547,24 @@ export default function Message(
                 }}
                 render={() => (
                   <MessageFooter
+                    whole
+                    leading={
+                      <For
+                        each={replySources()}
+                        keyed={(source) => source.messageID}
+                      >
+                        {(source) => (
+                          <ReplyStart
+                            source={{
+                              ...source(),
+                              timing: presentation().time?.timing,
+                              outcomeTime: presentation().time?.outcome,
+                            }}
+                            sessionID={props.message.sessionID}
+                          />
+                        )}
+                      </For>
+                    }
                     ref={sourceRegion(() => props.lastID ?? props.message.id)}
                     at={outcomeClock()?.at}
                     actions={!props.readOnly
@@ -562,11 +605,10 @@ export default function Message(
                     <Show when={message().interrupted}>
                       <span>interrupted</span>
                     </Show>
-                    {props.completionDetails?.()}
                   </MessageFooter>
                 )}
               />
-            </>
+            </div>
           )}
         </Show>
         <Show when={error()}>

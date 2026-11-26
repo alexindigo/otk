@@ -54,6 +54,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
+.otk-meta-row.fits-whole-items > * {
+  flex: none;
+  inline-size: max-content;
+}
+.otk-meta-row.fits-whole-items > [hidden] {
+  display: none;
+}
 .otk-meta-fit {
   grid-area: 1 / 1;
   display: flex;

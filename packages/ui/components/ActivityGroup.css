@@ -23,11 +23,6 @@
 .otk-record-group.is-interval .otk-record-group-toggle {
   font: inherit;
 }
-.otk-record-completion {
-  --tree-height: var(--line-meta);
-  display: inline-grid;
-  align-items: center;
-}
 .otk-record-group-heading.wraps-actions {
   flex-wrap: wrap;
 }

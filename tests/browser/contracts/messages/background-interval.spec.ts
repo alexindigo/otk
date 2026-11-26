@@ -136,17 +136,19 @@ test("messages.success-only-interval-borrows-footer-and-direct-reveal", {
 }, async ({ isolatedState: state, page }) => {
   const { session } = await state.observe<{ session: string }>();
   await state.product("prefs.set", { key: "expandRecords", value: true });
+  await state.product("prefs.set", { key: "expandWork", value: false });
   await openSession(state, page, session);
   await action(state, "succeed");
   await expect(page.locator("[data-background-interval]")).toHaveCount(0);
-  const footer = page.locator(
-    ".otk-message-footer .otk-record-completion .otk-tree-toggle",
+  const log = page.locator(
+    "[data-role=assistant] .otk-work-fold",
   );
-  await expect(footer).toBeVisible();
-  await footer.click();
+  await expect(log).toBeVisible();
+  await expect(page.locator('[data-message="background-1"]')).toHaveCount(0);
+  await log.click();
   await expect(page.locator('[data-message="background-1"]')).toBeVisible();
-  await footer.click();
-  await expect(page.locator("[data-background-interval]")).toHaveCount(0);
+  await log.click();
+  await expect(page.locator('[data-message="background-1"]')).toHaveCount(0);
   await action(state, "fail");
   await page.locator(".otk-composer-notice").getByRole("button", {
     name: "See response",
