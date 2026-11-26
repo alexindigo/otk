@@ -136,12 +136,17 @@ export interface TranscriptProjection {
   started(messageID: string): boolean;
   entry(messageID: string): TranscriptReply | undefined;
   committed(messageID: string): boolean;
+  materialized(messageID: string): boolean;
   releaseCommittedSends(): void;
   messages(): Message[];
   clear(): void;
-  replace(messages: readonly Message[]): void;
+  replace(
+    messages: readonly Message[],
+    source?: { sameSource: boolean; keepParked: boolean },
+  ): void;
   merge(messages: readonly Message[]): void;
   retain(ids: Set<string>): void;
+  park(ids: readonly string[]): void;
   boundaries(values: readonly ReplyBoundary[]): void;
   boundary(turnID: string): ReplyBoundary | undefined;
   busy(value: boolean): boolean;
@@ -165,6 +170,9 @@ export function createTranscriptProjection(): TranscriptProjection {
   const parts = new Map<string, Map<string, number>>();
   const sends = new Map<string, PendingSend>();
   const localParts = new Set<string>();
+  // A parked warm body stays in the canonical map but owns no ordered row or
+  // reply segment until a native cursor acquires its interval again.
+  const parked = new Set<string>();
   const entryKey = (message: Message) =>
     sends.get(message.id)?.intent.key ?? replyKey(message);
   let replacing = false;
@@ -485,6 +493,14 @@ export function createTranscriptProjection(): TranscriptProjection {
       recordsDirty = false;
     }
   };
+  const indexParts = (message: Message) => {
+    clearHelper(message.id);
+    for (const part of message.parts) helperPart(message.id, part.id, part);
+    parts.set(
+      message.id,
+      new Map(message.parts.map((part, i) => [part.id, i])),
+    );
+  };
   // Only source admission can commit input. Decorations and derived clocks
   // rebuild the same message too, but are not evidence that native accepted it.
   const put = (message: Message, preservePartIndex = false, native = false) => {
@@ -510,6 +526,13 @@ export function createTranscriptProjection(): TranscriptProjection {
       oldKey = previous && entryKey(previous),
       key = entryKey(message);
     if (previous === message) return;
+    if (parked.has(message.id)) {
+      state.messagesByID[message.id] = message;
+      if (!preservePartIndex && previous?.parts !== message.parts) {
+        indexParts(message);
+      }
+      return;
+    }
     const last = read(state.messageIDs.at(-1) ?? "");
     if (!replacing && !previous && last && compare(last, message) < 0) {
       state.appendRevision++;
@@ -520,12 +543,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     header(previous, message);
     state.messagesByID[message.id] = message;
     if (!preservePartIndex && previous?.parts !== message.parts) {
-      clearHelper(message.id);
-      for (const part of message.parts) helperPart(message.id, part.id, part);
-      parts.set(
-        message.id,
-        new Map(message.parts.map((part, i) => [part.id, i])),
-      );
+      indexParts(message);
     }
     const segment = segmentByID.get(message.id);
     const agent = message.role === "assistant" ? message.agent : undefined;
@@ -589,6 +607,12 @@ export function createTranscriptProjection(): TranscriptProjection {
   const remove = (id: string) => {
     const previous = read(id);
     if (!previous) return;
+    if (parked.delete(id)) {
+      delete state.messagesByID[id];
+      parts.delete(id);
+      clearHelper(id);
+      return;
+    }
     if (previous.role === "context") recordsDirty = true;
     header(previous, undefined);
     const key = entryKey(previous);
@@ -620,6 +644,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       return !!read(messageID) &&
         (!sends.has(messageID) || sends.get(messageID)?.phase === "committed");
     },
+    materialized: (id: string) => !!read(id) && !parked.has(id),
     started(messageID: string) {
       if (answers.has(messageID)) return true;
       const position = userOrder.indexOf(messageID);
@@ -682,6 +707,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       recordOrder = undefined;
       recordsDirty = true;
       parts.clear();
+      parked.clear();
       helperLinks.clear();
       helperChildren.clear();
       boundaries.clear();
@@ -700,14 +726,31 @@ export function createTranscriptProjection(): TranscriptProjection {
       unfinishedOrder = [];
       detached = undefined;
     },
-    replace(messages: readonly Message[]) {
+    replace(
+      messages: readonly Message[],
+      source?: { sameSource: boolean; keepParked: boolean },
+    ) {
       const previous = state.messagesByID;
+      const inactive = source?.keepParked ? [...parked] : [];
       const last = read(state.messageIDs.at(-1) ?? "");
       owner.clear(false);
       replacing = true;
       try {
         for (const message of messages) {
-          put(retainStreamMessage(previous[message.id], message), false, true);
+          put(
+            source?.sameSource === false
+              ? message
+              : retainStreamMessage(previous[message.id], message),
+            false,
+            true,
+          );
+        }
+        for (const id of inactive) {
+          if (!read(id)) {
+            parked.add(id);
+            state.messagesByID[id] = previous[id];
+            indexParts(previous[id]);
+          }
         }
         for (const send of sends.values()) {
           if (send.phase !== "committed" && !read(send.message.id)) {
@@ -728,6 +771,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     },
     merge(messages: readonly Message[]) {
       for (const message of messages) {
+        if (parked.has(message.id)) remove(message.id);
         if (!read(message.id) || sends.has(message.id)) {
           put(message, false, true);
         }
@@ -735,7 +779,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       queues();
     },
     retain(ids: Set<string>) {
-      for (const id of state.messageIDs) {
+      for (const id of [...state.messageIDs, ...parked]) {
         if (
           !ids.has(id) &&
           (!sends.has(id) || sends.get(id)?.phase === "committed")
@@ -744,6 +788,17 @@ export function createTranscriptProjection(): TranscriptProjection {
           sends.delete(id);
           localParts.delete(id);
         }
+      }
+      queues();
+    },
+    park(ids: readonly string[]) {
+      for (const id of ids) {
+        const message = read(id);
+        if (!message || parked.has(id)) continue;
+        remove(id);
+        parked.add(id);
+        state.messagesByID[id] = message;
+        indexParts(message);
       }
       queues();
     },
