@@ -7,6 +7,9 @@ export const projectsMigrations: FeatureMigrations = {
   migrations: [{
     version: 1,
     sql: new URL("./migrations/projects/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./migrations/projects/002.sql", import.meta.url),
   }],
 };
 export interface ProjectRecord {
