@@ -215,9 +215,9 @@ export function applicationNotifications(input: {
       }
       // Resolve action ownership before channel delivery. This schedules the input
       // tone once and constructs one OS note, without an enrichment replay.
-      void input.connection(ref.sidecar).rpc.call(
-        "permission.list",
-        { sessionID: ref.session },
+      void input.connection(ref.sidecar).readPermissions(
+        ref.session,
+        (id) => input.entry(ref.sidecar, id),
       ).then((requests) => {
         if (candidates.get(incoming.id) !== incoming) return;
         const request = oldestPermission(

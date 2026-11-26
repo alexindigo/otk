@@ -7,6 +7,7 @@ import {
   type QuestionRequest,
   type SessionLookup,
 } from "@otk/protocol";
+import { type EntryChanges, permissionRouting } from "./entry-observations.ts";
 
 export type RequestKind = "permission" | "question" | "form";
 export interface RequestLifetime {
@@ -26,6 +27,19 @@ export interface RequestLifetime {
 }
 const key = (kind: RequestKind, id: string) =>
   `${kind === "permission" ? "permission" : "input"}:${id}`;
+type PermissionOp = Extract<ContentOp, {
+  op: "permission.upsert" | "permission.remove";
+}>;
+type PermissionRead = {
+  controller: AbortController;
+  events: Map<string, PermissionOp>;
+  entry: SessionLookup;
+  budget?: { replayops: number; replaybytes: number };
+  count: number;
+  bytes: number;
+  result: Promise<PermissionRequest[]>;
+  users: number;
+};
 /** One identity owns authority, local presentation and retained input. Views only project it. */
 export class RequestLifetimes {
   #records = new Map<string, RequestLifetime>();
@@ -35,6 +49,11 @@ export class RequestLifetimes {
   #batch = 0;
   #dirty = false;
   #deleted: (id: string) => boolean = () => false;
+  #permissionReads = new Map<string, PermissionRead>();
+  #permissionScopes = new Map<
+    string,
+    { ids: Set<string>; entry: SessionLookup }
+  >();
   constructor(readonly now: () => number = () => performance.now()) {}
   snapshot(): unknown {
     return [...this.#records].filter(([, row]) =>
@@ -83,7 +102,151 @@ export class RequestLifetimes {
   get(kind: RequestKind, id: string): RequestLifetime | undefined {
     return this.#records.get(key(kind, id));
   }
+  /** Transcript and background delivery lease the same scoped inventory. */
+  readPermissions(
+    scope: string,
+    entry: SessionLookup,
+    load: (signal: AbortSignal) => Promise<PermissionRequest[]>,
+    budget: PermissionRead["budget"],
+    signal?: AbortSignal,
+  ): Promise<PermissionRequest[]> {
+    signal?.throwIfAborted();
+    if (this.#permissionScopes.has(scope)) {
+      return Promise.resolve(this.permissions(scope, entry));
+    }
+    let current = this.#permissionReads.get(scope);
+    if (!current) {
+      const controller = new AbortController();
+      const events = new Map<string, PermissionOp>();
+      const loading = Promise.withResolvers<PermissionRequest[]>();
+      const result = loading.promise.then((rows) => {
+        controller.signal.throwIfAborted();
+        const live = [...events.values()].filter((op) =>
+          op.op === "permission.remove" ||
+          belongsToSession(op.request.sessionID, scope, entry)
+        );
+        this.replace("permission", rows, scope, entry, live);
+        const inventory = this.permissions(scope, entry);
+        if (inventory.length) {
+          this.#permissionScopes.set(scope, {
+            ids: new Set(inventory.map((r) => r.id)),
+            entry,
+          });
+        }
+        return inventory;
+      }).finally(() => {
+        if (this.#permissionReads.get(scope) === current) {
+          this.#permissionReads.delete(scope);
+        }
+      });
+      current = {
+        controller,
+        events,
+        entry,
+        budget,
+        count: 0,
+        bytes: 0,
+        result,
+        users: 0,
+      };
+      this.#permissionReads.set(scope, current);
+      try {
+        loading.resolve(load(controller.signal));
+      } catch (error) {
+        loading.reject(error);
+      }
+    }
+    const read = current;
+    read.users++;
+    let cancelled: (() => void) | undefined;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (cancelled) signal?.removeEventListener("abort", cancelled);
+      if (--read.users === 0 && this.#permissionReads.get(scope) === read) {
+        this.#permissionReads.delete(scope);
+        read.controller.abort();
+      }
+    };
+    return new Promise<PermissionRequest[]>((resolve, reject) => {
+      if (signal) {
+        cancelled = () => {
+          release();
+          reject(signal.reason);
+        };
+        signal.addEventListener("abort", cancelled, { once: true });
+      }
+      void read.result.then(resolve, reject);
+    }).finally(release);
+  }
+  /** New routing facts invalidate coverage before notification consumers run. */
+  observePermissionScopes(change: EntryChanges, entry: SessionLookup): void {
+    for (const { id, before, after } of change.changes) {
+      const previous = permissionRouting(before);
+      const current = permissionRouting(after);
+      if (
+        previous?.fresh === current?.fresh &&
+        before?.parentID === after?.parentID &&
+        before?.deleted === after?.deleted &&
+        previous?.keys.length === current?.keys.length &&
+        previous?.keys.every((key, i) => key === current?.keys[i]) !== false
+      ) continue;
+      for (const [scope, { ids }] of this.#permissionScopes) {
+        if (
+          current?.fresh && current.keys.some((key) => !ids.has(key)) &&
+            belongsToSession(id, scope, entry) ||
+          [...ids].some((key) => {
+            const row = this.get("permission", key);
+            return row?.sessionID === id &&
+              (!current?.fresh || !current.keys.includes(key) ||
+                !!after?.deleted || !belongsToSession(id, scope, entry));
+          })
+        ) this.#permissionScopes.delete(scope);
+      }
+    }
+  }
+  resetPermissionScopes(): void {
+    this.#permissionScopes.clear();
+    for (const read of this.#permissionReads.values()) read.controller.abort();
+    this.#permissionReads.clear();
+  }
   receive(op: ContentOp): void {
+    if (op.op === "permission.upsert" || op.op === "permission.remove") {
+      const id = op.op === "permission.upsert" ? op.request.id : op.requestID;
+      for (const [scope, read] of this.#permissionReads) {
+        if (
+          op.op === "permission.upsert" &&
+          !belongsToSession(op.request.sessionID, scope, read.entry)
+        ) continue;
+        read.bytes += JSON.stringify(op).length * 2;
+        if (
+          !read.budget || ++read.count > read.budget.replayops ||
+          read.bytes > read.budget.replaybytes
+        ) {
+          this.#permissionReads.delete(scope);
+          read.controller.abort();
+        } else read.events.set(id, op);
+      }
+      if (op.op === "permission.upsert") {
+        for (const [scope, { ids, entry }] of this.#permissionScopes) {
+          if (
+            !ids.has(id) && belongsToSession(op.request.sessionID, scope, entry)
+          ) {
+            this.#permissionScopes.delete(scope);
+          }
+        }
+      }
+      if (op.op === "permission.remove") this.#retirePermissionScopes(id);
+    }
+    this.#receive(op);
+  }
+  #retirePermissionScopes(id: string): void {
+    for (const [scope, { ids }] of this.#permissionScopes) {
+      if (ids.has(id)) this.#permissionScopes.delete(scope);
+    }
+  }
+  #receive(op: ContentOp): void {
     const kind: RequestKind | undefined = op.op.startsWith("permission.")
       ? "permission"
       : op.op.startsWith("question.")
@@ -206,6 +369,7 @@ export class RequestLifetimes {
         dismissed: false,
       };
     if (row.state !== "pending") return;
+    if (kind === "permission") this.#retirePermissionScopes(id);
     row.state = state;
     row.reason = reason;
     this.#records.set(key(kind, id), row);
@@ -339,7 +503,7 @@ export class RequestLifetimes {
         }
       }
       for (const request of rows) {
-        this.receive({ op: `${kind}.upsert`, request } as ContentOp);
+        this.#receive({ op: `${kind}.upsert`, request } as ContentOp);
         const row = this.get(kind, request.id);
         if (scope && row) (row.scopes ??= new Set()).add(scope);
       }
