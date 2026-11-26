@@ -12,6 +12,7 @@ import {
   textPreview,
   transcript,
 } from "../../pages/file-paths.ts";
+import { expectViewportEnd } from "../../pages/viewport-commit.ts";
 
 const themes = [["otk-dark", "dark"], ["otk-light", "linen"], [
   "otk-light-stone",
@@ -86,7 +87,13 @@ for (const [theme, label] of themes) {
       await awaitDisplay(page, theme, scale);
       await expect(status(page, id)).toHaveAttribute("data-status", "idle");
       await expect.poll(() => keys.size).toBeGreaterThan(0);
+      // Idle can publish before the completed reply footer. Sample only once
+      // that footer and its resulting transcript end have both committed.
+      await expect(page.locator(".otk-turn-time")).toHaveText(
+        /^Worked for \d+(?:\.\d+)?s$/,
+      );
       await page.evaluate(() => document.fonts.ready.then(() => {}));
+      await expectViewportEnd(page);
       const paragraphs = page.locator(
         '[data-role="assistant"] .otk-prose-paragraph',
       );
