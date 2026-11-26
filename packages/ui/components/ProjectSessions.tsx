@@ -332,12 +332,7 @@ export default function ProjectSessions(props: {
               lamp={
                 <TreeIcon>
                   <Show when={entry()}>
-                    {(session) => (
-                      <StatusLight
-                        state={lamp(entities(), stateKey)}
-                        event={session().timeUpdated}
-                      />
-                    )}
+                    <StatusLight state={lamp(entities(), stateKey)} />
                   </Show>
                 </TreeIcon>
               }

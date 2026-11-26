@@ -230,17 +230,31 @@ function canonicalTrailType(
   return imported?.module === "@otk/client" &&
     ["TrailCrumb", "TrailModel"].includes(imported.name);
 }
-function lampInput(source: Source, value: t.Node | undefined): boolean {
+function selectorInput(
+  source: Source,
+  value: t.Node | undefined,
+  selector: "lamp" | "sessionComposerLink",
+  visited = new Set<t.Node>(),
+): boolean {
   const resolved = source.value(value);
+  if (!resolved || visited.has(resolved)) return false;
+  visited.add(resolved);
   if (
-    resolved?.type === "MemberExpression" && !resolved.computed &&
+    selector === "lamp" && resolved.type === "MemberExpression" &&
+    !resolved.computed &&
     property(resolved.property) === "status"
   ) {
     return canonicalTrailType(source, trailInputType(source, resolved.object));
   }
-  if (!resolved || resolved.type !== "CallExpression") return false;
+  if (resolved.type !== "CallExpression") return false;
   const origin = source.imported(resolved.callee);
-  return origin?.name === "lamp" &&
+  if (!origin && !resolved.arguments.length) {
+    const accessor = source.value(resolved.callee);
+    return accessor?.type === "ArrowFunctionExpression" &&
+      accessor.params.length === 0 && accessor.body.type !== "BlockStatement" &&
+      selectorInput(source, accessor.body, selector, visited);
+  }
+  return origin?.name === selector &&
     ["@otk/client", "./entity-state.ts", "../entity-state.ts"].includes(
       origin.module,
     );
@@ -303,12 +317,18 @@ function violations(path: string, text: string): string[] {
     found.add("state-producer");
   }
   for (const node of source.all) {
-    if (
-      node.type === "JSXOpeningElement" &&
-      (source.name(node.name)?.split(".").at(-1) === "StatusLight" ||
-        source.imported(node.name)?.name === "StatusLight") &&
-      !lampInput(source, source.attr(node, "state"))
-    ) found.add("lamp-input");
+    if (node.type !== "JSXOpeningElement") continue;
+    const uses = (name: string) =>
+      source.imported(node.name)?.name === name ||
+      source.name(node.name)?.split(".").at(-1) === name;
+    if (uses("StatusLight")) {
+      if (!selectorInput(source, source.attr(node, "state"), "lamp")) {
+        found.add("lamp-input");
+      }
+      // The renderer animates changes to the accepted verdict. A raw native
+      // event or metadata timestamp cannot independently flash a lamp.
+      if (source.attr(node, "event")) found.add("lamp-event");
+    }
   }
   if (path !== client && timeAttention(source)) found.add("attention-clock");
   if (/(?:\.otk-age-|--otk-age-|otk-age-\$\{)/.test(text)) {
@@ -325,8 +345,6 @@ const PENDING: string[] = [
   "packages/client/project-projection.ts: raw-attention",
   "packages/client/reduce.ts: raw-attention",
   "packages/client/transcript.ts: raw-attention",
-  "packages/ui/components/ProjectInbox.tsx: lamp-input",
-  "packages/ui/components/ProjectInbox.tsx: raw-attention",
   "packages/ui/components/SessionView.tsx: raw-attention",
   "packages/ui/features/timeline.tsx: raw-attention",
   "packages/ui/shell/Shell.tsx: raw-attention",
@@ -445,6 +463,11 @@ Deno.test("entity state lamps require the selector, directly or through its bind
       'const lamp = () => "working"; <StatusLight state={lamp()} />;',
       'import {StatusLight as Light} from "@otk/ui"; <Light state="blocked" />;',
       'import {lamp} from "@otk/client"; let state = lamp(store,key,options); state = other; <StatusLight state={state} />;',
+      '<StatusLight state={shell.status === "running" ? "working" : "none"} />;',
+      '<StatusLight state={terminal.count ? "dependencies" : "none"} />;',
+      '<StatusLight state={permission ? "blocked" : "none"} />;',
+      'import {lamp} from "@otk/client"; const read = () => shell.state; <StatusLight state={read()} />;',
+      "const read = () => read(); <StatusLight state={read()} />;",
     ]
   ) assert(violations("packages/ui/example.tsx", text).includes("lamp-input"));
   for (
@@ -452,8 +475,19 @@ Deno.test("entity state lamps require the selector, directly or through its bind
       'import {lamp} from "@otk/client"; <StatusLight state={lamp(store,key,options)} />;',
       'import {lamp as select} from "@otk/client"; const state = select(store,key,options); <StatusLight state={state} />;',
       'import * as model from "@otk/client"; <StatusLight state={model.lamp(store,key,options)} />;',
+      'import {lamp} from "@otk/client"; const read = () => lamp(store,key); <StatusLight state={read()} />;',
     ]
   ) assertEquals(violations("packages/ui/example.tsx", text), []);
+});
+
+Deno.test("entity state lamps cannot pulse on separately supplied raw events", () => {
+  assertEquals(
+    violations(
+      "packages/ui/example.tsx",
+      'import Light from "./StatusLight.tsx"; import {lamp} from "@otk/client"; <Light state={lamp(store,key)} event={entry.timeUpdated} />;',
+    ),
+    ["lamp-event"],
+  );
 });
 
 Deno.test("entity state lamps accept canonical trail input provenance, never lookalikes or casts", () => {

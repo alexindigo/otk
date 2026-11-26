@@ -402,21 +402,18 @@ export default function ProjectInbox(props: {
         }`;
     const archive = () => props.entities?.(section.repo.sidecarId);
     const key = () => entityKey("archive", archiveEntityID(section.repo));
-    const attention = () => {
+    const status = () => lamp(archive(), key());
+    const unseenCount = () => {
       const store = archive();
-      return {
-        count: projects().length,
-        status: store ? lamp(store, key()) : "none" as const,
-        unseenCount: store && !store.isStale
-          ? store.get(key())?.counts.unseen ?? 0
-          : null,
-      };
+      return store && !store.isStale
+        ? store.get(key())?.counts.unseen ?? 0
+        : null;
     };
     const description = () =>
-      `${label()}, ${attention().count}, ${
-        attention().unseenCount === null
+      `${label()}, ${projects().length}, ${
+        unseenCount() === null
           ? "unseen count unavailable"
-          : `${attention().unseenCount} unseen`
+          : `${unseenCount()} unseen`
       }`;
     const change = (value: boolean) => {
       setExpanded(collapsed() || value);
@@ -443,17 +440,17 @@ export default function ProjectInbox(props: {
             metaClass="otk-archived-count"
             label={unknown() ? "Unknown repository" : "Archived"}
             description={description()}
-            count={attention().count}
+            count={projects().length}
             compact={collapsed()}
             open={expanded() && !collapsed()}
             onOpen={change}
             attributes={{
-              "data-rollup": attention().status,
-              "data-unseen-count": attention().unseenCount,
+              "data-rollup": status(),
+              "data-unseen-count": unseenCount(),
             }}
             leading={() => (
               <TreeIcon>
-                <StatusLight state={attention().status} />
+                <StatusLight state={status()} />
               </TreeIcon>
             )}
             body={() => (
@@ -520,7 +517,8 @@ export default function ProjectInbox(props: {
     const duplicate = () => props.duplicateName(name());
     const key = () => entityKey("project", project().directory);
     const entities = () => props.entities?.(project().sidecarId);
-    const lampLabel = () => stateLabel(project().status);
+    const status = () => lamp(entities(), key());
+    const lampLabel = () => stateLabel(status());
     return (
       <SidebarRow
         frame={{
@@ -540,7 +538,7 @@ export default function ProjectInbox(props: {
             "data-inactive": project().inactive ? "true" : "false",
             "data-source": project().source,
             "data-group": projectGroup(project()),
-            "data-rollup": project().status,
+            "data-rollup": status(),
             "data-summary-authority": project().summary?.authority,
             "data-project-parent": project().topology?.parentDirectory,
             "data-project-repo": project().topology?.repoID,
@@ -558,19 +556,19 @@ export default function ProjectInbox(props: {
             <button
               type="button"
               class="otk-project-attention"
-              aria-label={project().status === "none"
+              aria-label={status() === "none"
                 ? `Open project ${name()}`
                 : `${lampLabel()}: open session in ${name()}`}
-              title={project().status === "none"
+              title={status() === "none"
                 ? `Open project ${project().directory}`
                 : `${lampLabel()}: open session in ${project().directory}`}
               onClick={() =>
-                void (project().status === "none"
+                void (status() === "none"
                   ? open(project())
                   : openAttention(project()))}
             >
               <StatusLight
-                state={entities() ? lamp(entities()!, key()) : "none"}
+                state={status()}
                 dependencies={project().dependencies}
               />
             </button>
@@ -584,11 +582,7 @@ export default function ProjectInbox(props: {
             project().annotation ? `, ${project().annotation}` : ""
           }`,
           title: `${metaList([project().directory, project().label])}${
-            projectGroup(project()) === "discovered"
-              ? ""
-              : ` - ${
-                project().status === "none" ? "No known activity" : lampLabel()
-              }`
+            projectGroup(project()) === "discovered" ? "" : ` - ${lampLabel()}`
           }${project().annotation ? `, ${project().annotation}` : ""}`,
           onClick: () => void open(project()),
         }}

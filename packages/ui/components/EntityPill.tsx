@@ -4,7 +4,6 @@ import Clock from "./Clock.tsx";
 import { createMemo, Show } from "solid-js";
 import {
   type ActionControl,
-  createEntityStateStore,
   type EntityFacts,
   entityTimeValue,
   label,
@@ -17,8 +16,6 @@ import StatusLight from "./StatusLight.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import ActionButton from "./ActionButton.tsx";
 import { sessionOpenControl } from "./session-open.ts";
-
-const absent = createEntityStateStore({ read: () => undefined });
 
 /** Data-only shared preview. No session lookup or cross-scope fallback. */
 export default function EntityPill(props: {
@@ -42,8 +39,10 @@ export default function EntityPill(props: {
   const work = () => props.facts.reply ?? props.facts.tool;
   const state = () =>
     lamp(
-      props.facts.session.entities ?? absent,
-      entityKey("session", props.facts.session.id ?? ""),
+      props.facts.session.entities,
+      props.facts.session.id
+        ? entityKey("session", props.facts.session.id)
+        : undefined,
     );
   return (
     <Popover
@@ -106,13 +105,7 @@ export default function EntityPill(props: {
             <>
               <dt>Session now</dt>
               <dd class="otk-entity-status">
-                <StatusLight
-                  state={lamp(
-                    props.facts.session.entities ?? absent,
-                    entityKey("session", props.facts.session.id ?? ""),
-                  )}
-                  small
-                />
+                <StatusLight state={state()} small />
                 {label(state())}
               </dd>
             </>
