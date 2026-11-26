@@ -124,9 +124,23 @@ test("compiled debug logging reports each ignored real native event type once", 
       ids.push((await fixture.oc.createSession(`Debug event ${i}`)).id);
     }
     if (fixture.oc.kind === "opencode-v1") {
+      // Exercise two real ignored event types, twice each. Session creation
+      // alone can emit only events the current adapter already understands.
+      for (let i = 0; i < 2; i++) {
+        await fixture.oc.request("/tui/append-prompt", {
+          method: "POST",
+          body: { text: `Debug event ${i}` },
+        });
+        await fixture.oc.request("/tui/show-toast", {
+          method: "POST",
+          body: { message: `Debug event ${i}`, variant: "info" },
+        });
+      }
       await waitFor(
         () => server.log,
-        (log) => log.includes("harness event ignored:"),
+        (log) =>
+          log.includes("harness event ignored: tui.prompt.append") &&
+          log.includes("harness event ignored: tui.toast.show"),
       );
     } else {
       // V2 session.created is recognized; prove consumption rather than require
@@ -145,11 +159,13 @@ test("compiled debug logging reports each ignored real native event type once", 
     );
     if (fixture.oc.kind === "opencode-v1") {
       assert(ignored.length > 0, server.log);
-    } else {assertEquals(
+    } else {
+      assertEquals(
         ignored.length,
         0,
         "V2 recognized session events must not be logged as ignored",
-      );}
+      );
+    }
     assertEquals(ignored.length, new Set(ignored).size, server.log);
     assertEquals(server.child.exitCode, 0, server.log);
   } finally {
