@@ -239,16 +239,18 @@ test("terminal.run-code-unavailable-is-quiet-and-disabled", {
   try {
     await reply(state, page, bash([command("unavailable")]));
     await run(page).click();
+    const terminal = page.getByRole("region", {
+      name: "Terminal",
+      exact: true,
+    });
     await expect(
-      page.getByRole("region", { name: "Terminal", exact: true }).getByText(
-        "Terminal host is unavailable",
-        { exact: true },
-      ),
+      terminal.getByText("Terminal host is unavailable", { exact: true }),
     ).toHaveCount(1);
     // An open terminal can occupy the bounded transcript's viewport. Hiding
     // the dock must retain the reason on the same session's code control.
-    await page.getByRole("button", { name: "Hide terminal", exact: true })
+    await terminal.getByRole("button", { name: "Hide terminal", exact: true })
       .click();
+    await expect(terminal).toHaveCount(0);
     await expect(run(page)).toBeDisabled();
     await expect(run(page)).toHaveAccessibleDescription(
       "Terminals are unavailable on this OTK server",
