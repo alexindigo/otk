@@ -23,7 +23,7 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
-import ActivityGroup, { CompletionToggle } from "./ActivityGroup.tsx";
+import ActivityGroup from "./ActivityGroup.tsx";
 import RecordList from "./RecordList.tsx";
 import RecordKinds from "./RecordKinds.tsx";
 import { recordKindDisclosure, remaining } from "@otk/client";
@@ -202,6 +202,16 @@ export default function SessionView(props: {
     revertRecords(projection(), rollbackState())
   );
   const recordGroups = () => displayedRecords();
+  const logCompletion = (key: string) => {
+    const group = recordGroups().groups[recordGroups().completions[key]];
+    return group?.silent ? group : undefined;
+  };
+  const transcriptKeys = createMemo(() =>
+    recordGroups().keys.filter((key) => {
+      const group = recordGroups().groups[key];
+      return !(group?.silent && group.completionOf);
+    })
+  );
   const isRevert = (key: string) => {
     const boundary = revertFlowBoundary(rollbackState());
     return boundary && key === revertRecordKey(boundary);
@@ -519,6 +529,11 @@ export default function SessionView(props: {
       const ancestors = recordGroups().parents[key] ?? [];
       const part = message.parts[0];
       const recordOwner = recordGroups().owners[key];
+      const interval = recordGroups().groups[recordOwner];
+      const completionOf = interval?.silent ? interval.completionOf : undefined;
+      if (completionOf) {
+        interaction.workDisclosure(completionOf, [interval.key]).set(true);
+      }
       if (recordOwner && part?.kind === "external" && part.activity?.fold) {
         recordKindDisclosure(interaction, recordOwner, part.activity.category)
           .set(true);
@@ -535,11 +550,15 @@ export default function SessionView(props: {
         }
         control.reveal();
       };
-      await window?.reveal(recordGroups().owners[key] ?? key, {
+      await window?.reveal(completionOf ?? recordOwner ?? key, {
         align: "center",
         intent: "user",
         focus: ancestors.length ? undefined : focus,
       });
+      if (completionOf) {
+        const replyID = projection().repliesByID[completionOf]?.message.id;
+        if (replyID) await controls.get(replyID)?.revealWork();
+      }
       for (let n = 0; n < ancestors.length; n++) {
         const control = recordWindows.get(ancestors[n]);
         if (!control) {
@@ -856,12 +875,12 @@ export default function SessionView(props: {
                                 .anchor();
                               return (
                                 <VirtualList
-                                  keys={recordGroups().keys}
+                                  keys={transcriptKeys()}
                                   revision={recordGroups().revision}
                                   measurementKey={(key) =>
                                     `${key}:${
                                       recordGroups().revisions[key] ?? 0
-                                    }`}
+                                    }:${logCompletion(key)?.revision ?? 0}`}
                                   label="Transcript messages"
                                   viewport={() => list}
                                   samples={[{
@@ -911,7 +930,11 @@ export default function SessionView(props: {
                                     props.transcript?.pin(
                                       keys.flatMap((key) =>
                                         (recordGroups().groups[key]?.members ??
-                                          [key])
+                                          [
+                                            key,
+                                            ...(logCompletion(key)?.members ??
+                                              []),
+                                          ])
                                           .flatMap((member) =>
                                             projection().repliesByID[member]
                                               ?.messageIDs ?? []
@@ -921,199 +944,187 @@ export default function SessionView(props: {
                                   render={(key) =>
                                     renderGroup(
                                       key,
-                                      (key) => (
-                                        <Show
-                                          when={projection().repliesByID[key]}
-                                        >
-                                          {(reply) => {
-                                            const message = () =>
-                                              reply().message;
-                                            const turnID = () =>
-                                              message().role === "assistant"
-                                                ? (message() as import("@otk/protocol").AssistantMessage)
-                                                  .replyTo ?? message().id
-                                                : message().id;
-                                            const target = () => ({
-                                              sidecarId: props.sidecarId!,
-                                              sessionID: message().sessionID,
-                                              turnID: turnID(),
-                                            });
-                                            return (
-                                              <>
-                                                <Message
-                                                  sidecarId={props.sidecarId}
-                                                  sessionTitle={props.entry
-                                                    ?.title ??
-                                                    props.info?.title}
-                                                  ownerID={reply().key}
-                                                  segments={reply().segments}
-                                                  message={message()}
-                                                  send={reply().send}
-                                                  sourceTime={(id) =>
-                                                    projection()
-                                                      .messagesByID[id]
-                                                      ?.time.created}
-                                                  sourceOutcomeTime={(id) => {
-                                                    const source = projection()
-                                                      .messagesByID[id];
-                                                    return source?.role !==
-                                                        "user"
-                                                      ? source?.outcomeTime
-                                                      : undefined;
-                                                  }}
-                                                  lastID={reply().lastID}
-                                                  pending={reply().pending}
-                                                  completionDetails={() => (
-                                                    <Show
-                                                      when={recordGroups()
-                                                        .groups[
-                                                          recordGroups()
-                                                            .completions[
-                                                              reply().key
-                                                            ]
-                                                        ]}
-                                                    >
-                                                      {(group) => (
-                                                        <Show
-                                                          when={group().silent}
-                                                        >
-                                                          <CompletionToggle
-                                                            group={group()}
-                                                            prefs={props.prefs}
-                                                            onReveal={(
-                                                              user,
-                                                            ) => {
-                                                              void window
-                                                                ?.reveal(
-                                                                  group().key,
-                                                                  {
-                                                                    align:
-                                                                      "nearest",
-                                                                    intent: user
-                                                                      ? "user"
-                                                                      : undefined,
-                                                                  },
-                                                                );
-                                                            }}
-                                                          />
-                                                        </Show>
-                                                      )}
-                                                    </Show>
-                                                  )}
-                                                  recovery={props.transcript
-                                                    ?.state
-                                                    .content
-                                                    .recovering
-                                                    ?.find((
-                                                      p,
-                                                    ) =>
-                                                      reply().messageIDs
-                                                        .includes(
-                                                          p.messageID,
-                                                        )
-                                                    )
-                                                    ?.state ??
-                                                    (props.transcript?.state
-                                                        .recovering
-                                                        .some((
-                                                          p,
-                                                        ) =>
-                                                          reply().messageIDs
-                                                            .includes(
-                                                              p.messageID,
-                                                            )
-                                                        )
-                                                      ? "recovering"
-                                                      : undefined)}
-                                                  onRetryRecovery={() =>
-                                                    void retry()}
-                                                  usage={props.usageOwner
-                                                    ?.priced(
-                                                      target(),
-                                                      props.catalog,
-                                                    )}
-                                                  summary={sessionResult(
-                                                    props.entry,
-                                                    message(),
-                                                  )}
-                                                  openUsage={props.openUsage
-                                                    ? () =>
-                                                      props.openUsage!(turnID())
-                                                    : undefined}
-                                                  usageError={() =>
-                                                    props.usageError?.(
-                                                      turnID(),
-                                                    )}
-                                                  copySource={props.transcript
-                                                    ? (id, text) =>
-                                                      props.transcript!.source(
-                                                        id,
-                                                        text,
+                                      function renderReply(key): Element {
+                                        return (
+                                          <Show
+                                            when={projection().repliesByID[key]}
+                                          >
+                                            {(reply) => {
+                                              const message = () =>
+                                                reply().message;
+                                              const turnID = () =>
+                                                message().role === "assistant"
+                                                  ? (message() as import("@otk/protocol").AssistantMessage)
+                                                    .replyTo ?? message().id
+                                                  : message().id;
+                                              const target = () => ({
+                                                sidecarId: props.sidecarId!,
+                                                sessionID: message().sessionID,
+                                                turnID: turnID(),
+                                              });
+                                              return (
+                                                <>
+                                                  <Message
+                                                    sidecarId={props.sidecarId}
+                                                    sessionTitle={props.entry
+                                                      ?.title ??
+                                                      props.info?.title}
+                                                    ownerID={reply().key}
+                                                    segments={reply().segments}
+                                                    message={message()}
+                                                    send={reply().send}
+                                                    sourceTime={(id) =>
+                                                      projection()
+                                                        .messagesByID[id]
+                                                        ?.time.created}
+                                                    sourceOutcomeTime={(id) => {
+                                                      const source =
+                                                        projection()
+                                                          .messagesByID[id];
+                                                      return source?.role !==
+                                                          "user"
+                                                        ? source?.outcomeTime
+                                                        : undefined;
+                                                    }}
+                                                    lastID={reply().lastID}
+                                                    pending={reply().pending}
+                                                    completion={logCompletion(
+                                                        key,
                                                       )
-                                                    : undefined}
-                                                  activeRecord={progressRecord() ===
-                                                    message().id}
-                                                  copyIncomplete={message()
-                                                        .role ===
-                                                      "assistant" &&
-                                                    !!props.transcript &&
-                                                    (!props.exhausted &&
-                                                      (!props.transcript
-                                                        .projection
-                                                        .boundary(
+                                                      ? {
+                                                        key: logCompletion(key)!
+                                                          .key,
+                                                        body: () =>
+                                                          renderRecords(
+                                                            () =>
+                                                              logCompletion(
+                                                                key,
+                                                              )!,
+                                                            renderReply,
+                                                          ),
+                                                      }
+                                                      : undefined}
+                                                    recovery={props.transcript
+                                                      ?.state
+                                                      .content
+                                                      .recovering
+                                                      ?.find((
+                                                        p,
+                                                      ) =>
+                                                        reply().messageIDs
+                                                          .includes(
+                                                            p.messageID,
+                                                          )
+                                                      )
+                                                      ?.state ??
+                                                      (props.transcript?.state
+                                                          .recovering
+                                                          .some((
+                                                            p,
+                                                          ) =>
+                                                            reply().messageIDs
+                                                              .includes(
+                                                                p.messageID,
+                                                              )
+                                                          )
+                                                        ? "recovering"
+                                                        : undefined)}
+                                                    onRetryRecovery={() =>
+                                                      void retry()}
+                                                    usage={props.usageOwner
+                                                      ?.priced(
+                                                        target(),
+                                                        props.catalog,
+                                                      )}
+                                                    summary={sessionResult(
+                                                      props.entry,
+                                                      message(),
+                                                    )}
+                                                    openUsage={props.openUsage
+                                                      ? () =>
+                                                        props.openUsage!(
                                                           turnID(),
                                                         )
-                                                        ?.firstID ||
-                                                        !projection()
-                                                          .messagesByID[
-                                                            reply().firstID
-                                                          ]))}
-                                                  prefs={props.prefs}
-                                                  directory={props.info
-                                                    ?.directory}
-                                                  permissions={props
-                                                    .permissions}
-                                                  onOpenChild={props
-                                                    .onOpenChild}
-                                                  queued={projection().queuedIDs
-                                                    .has(
-                                                      message().id,
-                                                    )}
-                                                  control={(control) => {
-                                                    const id = message().id;
-                                                    controls.set(id, control);
-                                                    return () => {
-                                                      if (
-                                                        controls.get(id) ===
-                                                          control
-                                                      ) {
-                                                        controls
-                                                          .delete(id);
-                                                      }
-                                                    };
-                                                  }}
-                                                />
-                                                <Show
-                                                  when={props.rollback &&
-                                                    rollbackState().confirmation
-                                                        ?.messageID ===
-                                                      message().id &&
-                                                    (rollbackState().phase ===
-                                                        "confirming" ||
-                                                      rollbackState().phase ===
-                                                            "failed" &&
-                                                        !rollbackState()
-                                                          .record)}
-                                                >
-                                                  <RevertConfirmation
-                                                    owner={props.rollback!}
+                                                      : undefined}
+                                                    usageError={() =>
+                                                      props.usageError?.(
+                                                        turnID(),
+                                                      )}
+                                                    copySource={props.transcript
+                                                      ? (id, text) =>
+                                                        props.transcript!
+                                                          .source(
+                                                            id,
+                                                            text,
+                                                          )
+                                                      : undefined}
+                                                    activeRecord={progressRecord() ===
+                                                      message().id}
+                                                    copyIncomplete={message()
+                                                          .role ===
+                                                        "assistant" &&
+                                                      !!props.transcript &&
+                                                      (!props.exhausted &&
+                                                        (!props.transcript
+                                                          .projection
+                                                          .boundary(
+                                                            turnID(),
+                                                          )
+                                                          ?.firstID ||
+                                                          !projection()
+                                                            .messagesByID[
+                                                              reply().firstID
+                                                            ]))}
+                                                    prefs={props.prefs}
+                                                    directory={props.info
+                                                      ?.directory}
+                                                    permissions={props
+                                                      .permissions}
+                                                    onOpenChild={props
+                                                      .onOpenChild}
+                                                    queued={projection()
+                                                      .queuedIDs
+                                                      .has(
+                                                        message().id,
+                                                      )}
+                                                    control={(control) => {
+                                                      const id = message().id;
+                                                      controls.set(id, control);
+                                                      return () => {
+                                                        if (
+                                                          controls.get(id) ===
+                                                            control
+                                                        ) {
+                                                          controls
+                                                            .delete(id);
+                                                        }
+                                                      };
+                                                    }}
                                                   />
-                                                </Show>
-                                              </>
-                                            );
-                                          }}
-                                        </Show>
-                                      ),
+                                                  <Show
+                                                    when={props.rollback &&
+                                                      rollbackState()
+                                                          .confirmation
+                                                          ?.messageID ===
+                                                        message().id &&
+                                                      (rollbackState().phase ===
+                                                          "confirming" ||
+                                                        rollbackState()
+                                                                .phase ===
+                                                              "failed" &&
+                                                          !rollbackState()
+                                                            .record)}
+                                                  >
+                                                    <RevertConfirmation
+                                                      owner={props.rollback!}
+                                                    />
+                                                  </Show>
+                                                </>
+                                              );
+                                            }}
+                                          </Show>
+                                        );
+                                      },
                                     )}
                                 />
                               );

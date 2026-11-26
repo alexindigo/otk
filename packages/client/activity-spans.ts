@@ -18,6 +18,7 @@ export interface ActivityGroup {
   /** One frame between conversation messages, independent of admission state. */
   interval?: boolean;
   silent?: boolean;
+  completionOf?: string;
   breakouts?: string[];
   /** Client-owned failure wording, separate from producer summary nouns. */
   failureTitle?: string;
@@ -31,7 +32,7 @@ export interface RecordProjection {
   leaves: Record<string, string>;
   owners: Record<string, string>;
   revisions: Record<string, number>;
-  /** Successful completion facts borrow their preceding reply's footer. */
+  /** Successful completion facts belong to the preceding reply's work log. */
   completions: Record<string, string>;
 }
 function activity(reply: TranscriptReply | undefined): Activity | undefined {
@@ -200,6 +201,7 @@ export function createRecordProjection(): {
           if (
             conversation && replies[conversation].message.role === "assistant"
           ) {
+            interval.completionOf = conversation;
             next.completions[conversation] = key;
           }
         }

@@ -37,22 +37,17 @@
   margin-block: var(--space-2);
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
 }
-.otk-reply-start {
+.otk-reply-end.has-work {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
+  grid-template-columns: var(--tree-indent)
+    var(--tree-content-gutter, var(--tree-indent)) var(--space-2)
+    minmax(0, 1fr);
 }
-.otk-reply-agent {
-  justify-self: start;
-  max-width: 100%;
-  min-width: 0;
+.otk-reply-end.has-work > .otk-reply-end-work {
+  grid-column: 1 / -1;
 }
-.otk-reply-start.is-continuation {
-  margin-top: var(--space-6);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--otk-border);
+.otk-reply-end.has-work > :not(.otk-reply-end-work) {
+  grid-column: 4;
 }
 .otk-send-meta {
   display: inline-flex;

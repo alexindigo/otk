@@ -47,6 +47,7 @@ export function MetaRow(
     children?: Element;
     class?: string;
     controls?: readonly MetaControl[];
+    whole?: boolean;
   },
 ): Element {
   let root!: HTMLSpanElement, primary!: HTMLSpanElement;
@@ -73,6 +74,47 @@ export function MetaRow(
   };
   const controls = createMemo(() => props.controls ?? []);
   onSettled(() => {
+    if (props.whole) {
+      const items = new Set<HTMLElement>();
+      const fitItems = () => {
+        let remaining = root.clientWidth;
+        const gap = parseFloat(getComputedStyle(root).columnGap) || 0;
+        for (const item of items) item.hidden = false;
+        const widths = new Map(
+          [...items].map((item) => [item, item.getBoundingClientRect().width]),
+        );
+        for (const item of root.children) {
+          if (!(item instanceof HTMLElement)) continue;
+          const width = widths.get(item) ?? Infinity;
+          const fits = width <= remaining + 0.5;
+          item.hidden = !fits;
+          remaining = fits ? remaining - width - gap : -1;
+        }
+      };
+      const resize = new ResizeObserver(fitItems);
+      const update = () => {
+        for (const item of items) {
+          if (item.parentElement !== root) {
+            resize.unobserve(item);
+            items.delete(item);
+          }
+        }
+        for (const item of root.children) {
+          if (!(item instanceof HTMLElement) || items.has(item)) continue;
+          items.add(item);
+          resize.observe(item);
+        }
+        fitItems();
+      };
+      const mutation = new MutationObserver(update);
+      resize.observe(root);
+      mutation.observe(root, { childList: true });
+      update();
+      return () => {
+        resize.disconnect();
+        mutation.disconnect();
+      };
+    }
     if (!props.controls) return;
     observer = new ResizeObserver(fit);
     observer.observe(root);
@@ -93,6 +135,7 @@ export function MetaRow(
       ref={(element) => root = element}
       class={["otk-meta-row", props.class, {
         "has-controls": props.controls !== undefined,
+        "fits-whole-items": props.whole,
       }]}
     >
       <Show when={props.controls} fallback={props.children}>
