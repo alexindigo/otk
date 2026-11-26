@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../pages/primary-action.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { prompt } from "../pages/composer.ts";
@@ -42,7 +43,7 @@ for (const scenario of ["carriage-return", "backward-selection"] as const) {
       await state.queue([source]);
     }
     await prompt(page).fill("Reply with the source");
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     if (scenario === "carriage-return") {
       await page.getByRole("button", { name: "Allow once", exact: true })
         .click();
@@ -156,7 +157,7 @@ test("browser.insecure-origin-renders-opens-sends-and-copies", {
     .toHaveAttribute("aria-busy", "false");
   await state.queue(["Plain HTTP reply"]);
   await prompt(page).fill("Plain HTTP prompt");
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator("[data-role=assistant]")).toContainText(
     "Plain HTTP reply",
   );

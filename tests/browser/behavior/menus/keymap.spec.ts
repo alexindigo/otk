@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -92,11 +92,9 @@ test("menus.escape-layer-priority-then-double-escape-native-interrupt", {
   await expect(page.locator("[data-interrupt-confirmation]")).toHaveText(
     "Esc again to interrupt",
   );
-  // Triage decision 5: an empty draft keeps Send visible, disabled with reason.
-  await expectPrimaryBlocked(
-    page.locator(".otk-prompt button[type=submit]"),
-    "Write a message",
-  );
+  // The empty running composer presents Stop; Escape uses the same owner.
+  await expect(send(page)).toHaveAccessibleName("Stop");
+  await expect(send(page)).toBeEnabled();
   await page.keyboard.press("Escape");
   await expect(page.locator(`[data-session="${seed.id}"]`)).toHaveAttribute(
     "data-status",

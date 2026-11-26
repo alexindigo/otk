@@ -4,6 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, scrollTranscript } from "../../pages/transcript.ts";
 import { chips, messages, pendingChips, upload } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 import { contextMenu, dismiss, pick, rightClick } from "../../pages/menus.ts";
 import type { Locator, Page } from "@playwright/test";
 
@@ -243,7 +244,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   );
   await state.queue(["The earlier prompt ran again."]);
   await input.focus();
-  await expect(page.locator(".otk-send-button")).toBeEnabled();
+  await expect(send(page)).toBeEnabled();
   await input.press("Enter");
   await expect(page.locator(".otk-messages")).toContainText(
     "The earlier prompt ran again.",

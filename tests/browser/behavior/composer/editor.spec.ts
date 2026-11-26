@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import {
@@ -39,7 +40,7 @@ test(
     await page.keyboard.press("Escape");
     await expect(page.locator("dialog[open]")).toHaveCount(0);
     await state.queue(["Expanded paste received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect(chips(page)).toHaveCount(0);
     // insertChip owns a trailing separator; expanding the inline token preserves it.
     const expanded = source + "\nedited line ";
@@ -121,7 +122,7 @@ test(
       "editor before [File 1] editor after",
     );
     await state.queue(["Editor attachment received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(async () =>
       (await messages(state, session.id)).find((row) =>
         row.info.role === "user"

@@ -10,6 +10,7 @@ import { accessoryGeometry } from "../../support/control-geometry.ts";
 import {
   expectPrimaryBlocked,
   expectRuleThree,
+  send,
 } from "../pages/primary-action.ts";
 import { revealAcquired as reveal } from "../pages/transcript.ts";
 
@@ -332,7 +333,7 @@ export async function collections456(input: Inputs) {
         );
         expect(empty.height).toBe(48);
         await expectPrimaryBlocked(
-          page.locator(".otk-send-button"),
+          send(page),
           "Write a message",
         );
         await footer(page, 8);

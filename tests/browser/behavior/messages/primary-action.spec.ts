@@ -3,6 +3,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { completeUpload, holdUploads, upload } from "../../pages/composer.ts";
+import { send as composerPrimary } from "../../pages/primary-action.ts";
 
 for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
   test(`composer.primary-action-visible-${theme}`, {
@@ -24,7 +25,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       if (proof && state.startsWith("refusal-")) {
         const frame = page.locator(".otk-composer-refusal");
         await expect(frame).toBeVisible();
-        const primary = page.locator(".otk-send-button");
+        const primary = composerPrimary(page);
         await primary.focus();
         await expect(primary).toBeFocused();
         const box = (await primary.boundingBox())!;

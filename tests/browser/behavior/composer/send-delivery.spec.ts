@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt, readyChips, reply, upload } from "../../pages/composer.ts";
@@ -26,7 +27,7 @@ test("composer.plain-send-does-not-await-unreferenced-catalogs", {
   await state.queue(["Plain reply without catalog readiness."]);
   try {
     await prompt(page).fill("An ordinary prompt with no catalog reference.");
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect(page.locator('[data-role="user"]')).toContainText(
       "An ordinary prompt with no catalog reference.",
     );
@@ -92,7 +93,7 @@ test(
       await prompt(page).fill(
         "Busy image prompt must remain in the live stream.",
       );
-      await page.locator(".otk-prompt button[type=submit]").click();
+      await send(page).click();
       await expect(prompt(page)).toHaveValue("");
       // Draft custody transfers at dispatch, before native queue admission.
       // Establish the requested native order before sending from the other
@@ -192,7 +193,7 @@ test(
       "Show this prompt **right away**, then commit the same message.",
     );
     const start = performance.now();
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     const entry = page.locator('[data-send-state="pending"]');
     await expect(entry).toContainText("Show this prompt right away");
     const sendLatency = performance.now() - start;
@@ -330,7 +331,7 @@ test("composer.own-send-follows-latest-from-a-reader-anchor", {
   ).toBeGreaterThan(100);
   await state.queue(["Newest visible response."]);
   await prompt(page).fill("Newest visible prompt.");
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await reply(state, page, session.id, "Newest visible response.");
   await expect.poll(() =>
     pane.evaluate((element) =>
@@ -422,7 +423,7 @@ test(
     });
     await state.queue(["Gap recovery preserves the complete final prose."]);
     await prompt(page).fill("Recover exactly this native prompt.");
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect(prompt(page)).toHaveValue("");
     await reply(
       state,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
+import { expectPrimaryBlocked, send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
@@ -17,14 +17,18 @@ test.describe("core capabilities", () => {
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Keep my draft");
     await expectPrimaryBlocked(
-      page.locator(".otk-prompt button[type=submit]"),
+      send(page),
       "Sending is not supported here",
     );
     await input.press("Enter");
+    await expect(page.locator(".otk-composer-refusal")).toHaveText(
+      "Sending is not supported here",
+    );
     await input.press("Escape");
     await input.press("Escape");
-    // With no send capability Enter keeps its native textarea newline behavior.
-    await expect(input).toHaveValue("Keep my draft\n");
+    // D65: Enter consults the same unavailable activation as the button;
+    // the refusal preserves the draft and admits no native send.
+    await expect(input).toHaveValue("Keep my draft");
     await input.fill("");
     await input.press("!");
     await expect(input).toHaveValue("!");
@@ -68,7 +72,7 @@ test.describe("core capabilities", () => {
     await page.goto(`${state.url}/#/remote/tstv1-core`);
     await expect.poll(() => frames.held.length).toBeGreaterThanOrEqual(2);
     await expect.poll(() => frames.connections().opened).toBe(2);
-    await expect(page.locator(".otk-prompt button[type=submit]")).toHaveCount(
+    await expect(send(page)).toHaveCount(
       0,
     );
     await page.locator(".otk-settings-entry").click();
@@ -148,7 +152,7 @@ test.describe("initial capabilities", () => {
       await expect(page.locator(".otk-app")).toBeVisible();
       await expect.poll(() => frames.held.length).toBeGreaterThan(0);
       await expect(
-        page.locator(".otk-prompt button[type=submit],.otk-permission-dock"),
+        send(page).or(page.locator(".otk-permission-dock")),
       ).toHaveCount(0);
       frames.release();
       frames.hold((frame, request) =>
@@ -164,7 +168,7 @@ test.describe("initial capabilities", () => {
       await expect(page.locator(".otk-question-dock")).toBeVisible();
       await expect(page.locator(".otk-prompt")).toBeHidden();
       // The takeover's own primary replaces the hidden composer's Send.
-      await expect(page.locator(".otk-prompt button[type=submit]"))
+      await expect(send(page))
         .toBeHidden();
       await expect(
         page.locator(".otk-question-dock [data-primary-action]"),
@@ -177,7 +181,7 @@ test.describe("initial capabilities", () => {
         .click();
       await expect(page.locator(".otk-question-dock")).toHaveCount(0);
       await expect(page.locator(".otk-prompt")).toBeVisible();
-      await expect(page.locator(".otk-prompt button[type=submit]"))
+      await expect(send(page))
         .toBeEnabled();
       expect((await state.observe<{ calls: number }>()).calls).toBe(
         phase === "direct" ? 1 : 2,
