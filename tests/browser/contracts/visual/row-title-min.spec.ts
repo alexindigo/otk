@@ -4,7 +4,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
-import { restorePermissionDock } from "../../pages/crumbs.ts";
+import { restorePermissionDock, subagents } from "../../pages/crumbs.ts";
 import { prompt } from "../../pages/transcript.ts";
 
 const sidebarMeta = ".otk-sidebar-meta .otk-meta-item:not([hidden])";
@@ -37,6 +37,12 @@ const registry = [
     title: titleSlot,
     meta: sidebarMeta,
     frame: true,
+  },
+  {
+    id: "R5",
+    row: ".otk-subagent-row",
+    title: ".otk-subagent-name .otk-control-label",
+    meta: ".otk-subagent-meta .otk-meta-item:not([hidden])",
   },
   {
     id: "R9",
@@ -306,6 +312,21 @@ test("visual.row-title-min", { tag: ["@visual", "@isolated"] }, async (
       await timeline.hover();
       await inspect(page, "R4", `selected and hovered ${width} ${label}`);
       await capture(`timeline-${width}-${label}`);
+    }
+  }
+  for (const width of [1280, 900]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [theme, label] of themes) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await subagents(page).click();
+      await expect(page.locator(".otk-subagent-row").first()).toBeVisible();
+      await inspect(page, "R5", `${width} ${label}`);
+      await capture(`subagents-${width}-${label}`);
+      await page.keyboard.press("Escape");
     }
   }
   await restorePermissionDock(page);
