@@ -17,6 +17,24 @@ import type { RawPromptPart } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { attachmentMime } from "./attachment-mime.ts";
 import { submissionID } from "./submission-id.ts";
+
+// Withdrawal may stop waiting for a launch it does not own. The launch keeps
+// its own cancellation and can still establish the native admission outcome.
+async function observeLaunch(
+  launch: Promise<Response>,
+  signal: AbortSignal,
+): Promise<void> {
+  signal.throwIfAborted();
+  const interrupted = Promise.withResolvers<never>();
+  const abort = () => interrupted.reject(signal.reason);
+  signal.addEventListener("abort", abort, { once: true });
+  try {
+    await Promise.race([launch, interrupted.promise]);
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
+}
+
 export function prompt(
   client: Client,
   directory: Directory,
@@ -31,11 +49,17 @@ export function prompt(
   dispatched: (sessionID: string, messageID: string) => boolean = () => false,
 ): PromptCapability {
   const pending = new Map<string, Promise<Response>>();
-  const abort: PromptCapability["abort"] = async (id, operation) => {
+  const abortNative = async (
+    id: string,
+    dir: string | undefined,
+    operation?: OperationContext,
+    signal?: AbortSignal,
+  ) => {
     await client.json(`/session/${encodeURIComponent(ids.decode(id))}/abort`, {
       method: "POST",
       ...(operation ? { classification: "effect" as const, operation } : {}),
-      query: { directory: directory.cached(id) },
+      query: { directory: dir },
+      signal,
     });
     cancel(id);
   };
@@ -74,26 +98,31 @@ export function prompt(
       }
       return { messageID, state: "accepted" };
     },
-    abort,
+    async abort(id, operation) {
+      await abortNative(id, directory.cached(id), operation);
+    },
     async withdraw(id, messageID, operation) {
       const request = pending.get(`${id}/${messageID}`);
-      try {
-        await request;
-      } catch (error) {
-        if (error instanceof OperationFailure && error.outcome === "rejected") {
-          return { state: "absent" };
-        }
-      }
-      const native = ids.decode(id),
-        dir = await directory.resolve(id, operation?.signal);
       const signal = AbortSignal.any([
         AbortSignal.timeout(10_000),
         ...(operation ? [operation.signal] : []),
       ]);
       let rounds = 0;
       try {
+        if (request) {
+          try {
+            await observeLaunch(request, signal);
+          } catch (error) {
+            signal.throwIfAborted();
+            if (
+              error instanceof OperationFailure && error.outcome === "rejected"
+            ) return { state: "absent" };
+          }
+        }
+        const native = ids.decode(id),
+          dir = await directory.resolve(id, signal);
         while (rounds < 3) {
-          await abort(id, operation);
+          await abortNative(id, dir, operation, signal);
           const status = await client.json<Record<string, { type: string }>>(
             "/session/status",
             {
@@ -137,6 +166,7 @@ export function prompt(
               {
                 method: "DELETE",
                 query: { directory: dir },
+                signal,
                 ...(operation
                   ? { classification: "effect" as const, operation }
                   : {}),

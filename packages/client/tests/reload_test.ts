@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { createDrafts } from "../drafts.ts";
+import { createDrafts, type Draft } from "../drafts.ts";
 import { createReload } from "../reload.ts";
 import { RequestTracker } from "../requests.ts";
 import { RequestLifetimes } from "../request-lifetime.ts";
@@ -203,4 +203,58 @@ Deno.test("storage refusal prevents Reload and retains input", () => {
   assertThrows(() => reload.run());
   assertEquals(navigations, 0);
   assertEquals(drafts.current("session").input, "keep me");
+});
+
+Deno.test("reload keeps the full captured and parked drafts and retires only the actual send", () => {
+  const data = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => void data.set(key, value),
+  };
+  const drafts = createDrafts();
+  const write = drafts.writer("server/session");
+  const original: Draft = {
+    input: "  keep exact\nraw text ",
+    mode: "shell",
+    agent: "build",
+    variant: undefined,
+    editor: { text: "unsaved editor bytes" },
+    chips: [{
+      id: "attachment",
+      label: "file",
+      part: { kind: "text", text: "attached bytes" },
+    }],
+  };
+  const captured = drafts.captureSend("server/session", write(original)).take(
+    "first",
+    () => {},
+  )!;
+  captured({ kind: "unconfirmed", stop: true, reason: "Not confirmed" });
+  const newer = write({ input: "park these bytes", chips: [], mode: "normal" });
+  drafts.recoveries("server/session")[0].run();
+  const inFlight = drafts.captureSend(
+    "server/session",
+    drafts.current("server/session"),
+  )
+    .take("second", () => {})!;
+  inFlight({ kind: "unconfirmed", reason: "Unknown" });
+  createReload({ storage, navigate() {}, owners: { drafts } }).checkpoint();
+  const next = createDrafts();
+  createReload({ storage, navigate() {}, owners: { drafts: next } });
+  assertEquals(next.current("server/session").input, "");
+  assertEquals(
+    next.recoveries("server/session").map(({ id, kind, draft }) => ({
+      id,
+      kind,
+      draft,
+    })),
+    [
+      { id: "first", kind: "recoverable", draft: newer },
+      { id: "second", kind: "uncertain", draft: original },
+    ],
+  );
+  assertEquals(
+    Object.hasOwn(next.recoveries("server/session")[1].draft, "variant"),
+    true,
+  );
 });
