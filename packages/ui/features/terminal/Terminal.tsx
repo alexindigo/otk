@@ -10,10 +10,13 @@ import {
 } from "solid-js";
 import { Portal } from "@solidjs/web";
 import {
+  type ActionControl,
+  countLabel,
   FeedbackFailure,
   type SidecarConnection,
   type TerminalBox,
   terminalBoxFor,
+  type TerminalRun,
 } from "@otk/client";
 import { useShellPorts } from "../../shell/context.tsx";
 import { useSessionPorts } from "../../registries/session.tsx";
@@ -30,6 +33,7 @@ import {
 } from "../../components/ChromeIcons.tsx";
 import { TabPanels, TabStrip } from "../../components/Tabs.tsx";
 import ActionButton from "../../components/ActionButton.tsx";
+import { RunIcon } from "../../components/tools/ToolIcons.tsx";
 import PaneState from "../../components/PaneState.tsx";
 import Surface from "../../components/surface/Surface.tsx";
 import { contextTarget } from "../../components/context-target.ts";
@@ -109,6 +113,61 @@ function Pane(props: { model: TerminalPanelModel; id: string }) {
     </div>
   );
 }
+function PendingRow(props: {
+  run: TerminalRun;
+  ready(): boolean;
+  confirm: ActionControl;
+  cancel: ActionControl;
+}) {
+  let runButton: HTMLElement | undefined;
+  createEffect(() => props.ready() && props.run.id, (id) => {
+    if (!id) return;
+    const frame = requestAnimationFrame(() => {
+      runButton?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  });
+  const lines = () => props.run.text.split("\n");
+  return (
+    <div
+      class="otk-terminal-pending"
+      role="group"
+      aria-label="Pasted command"
+      data-otk-keyboard="local"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        void props.cancel.run();
+      }}
+    >
+      <span class="otk-terminal-pending-label otk-control-label">Pasted</span>
+      <code class="otk-terminal-pending-text" title={props.run.text}>
+        {lines()[0]}
+      </code>
+      <Show when={lines().length > 1}>
+        <span class="otk-terminal-pending-label otk-control-label">
+          {`+${countLabel(lines().length - 1, "line")}`}
+        </span>
+      </Show>
+      <span class="otk-terminal-pending-space" />
+      <ActionButton
+        action={props.confirm}
+        class="otk-terminal-run"
+        ref={(element) => {
+          runButton = element;
+        }}
+      >
+        <RunIcon class="otk-terminal-run-icon" />
+        <span class="otk-control-label">Run</span>
+      </ActionButton>
+      <ActionButton action={props.cancel} class="otk-terminal-cancel">
+        <span class="otk-control-label">Cancel</span>
+      </ActionButton>
+    </div>
+  );
+}
+
 function TerminalContent(
   props: { model: TerminalPanelModel; box: TerminalBox },
 ) {
@@ -126,6 +185,7 @@ function TerminalContent(
     id: string,
     title: string,
     run: () => unknown | Promise<unknown>,
+    enabled?: () => boolean,
   ) => {
     const command = `${id}@${owner}`;
     ownedCommand(commands, {
@@ -133,6 +193,7 @@ function TerminalContent(
       title,
       category: "Terminal",
       scope: "control",
+      enabled,
       run,
     });
     return commands.commands.control(command, undefined, {
@@ -149,6 +210,18 @@ function TerminalContent(
     recovery: "Select the text and try again",
   });
   const create = control("terminal.create", "New terminal", model.create);
+  const runPending = control(
+    "terminal.run-pending",
+    "Run",
+    model.confirmRun,
+    model.runReady,
+  );
+  const cancelPending = control(
+    "terminal.cancel-pending",
+    "Cancel",
+    model.cancelRun,
+    model.runReady,
+  );
   const resize = control(
     "terminal.resize",
     "Resize terminal",
@@ -206,6 +279,16 @@ function TerminalContent(
         density="panel"
         layout="fill"
         scrollable={false}
+        actions={model.pendingRun()
+          ? (
+            <PendingRow
+              run={model.pendingRun()!}
+              ready={model.runReady}
+              confirm={runPending}
+              cancel={cancelPending}
+            />
+          )
+          : undefined}
         title={
           <>
             <Show when={props.box.mode !== "expanded"}>

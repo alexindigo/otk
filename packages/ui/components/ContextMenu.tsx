@@ -44,7 +44,7 @@ export default function ContextMenu(
       ? []
       : browserContextTargets(
         path,
-        (node) => contextTargets([node]),
+        (node, invocation) => contextTargets([node], invocation),
         reason === "pointer" ? { x, y } : undefined,
       );
     returnFocus = () => {

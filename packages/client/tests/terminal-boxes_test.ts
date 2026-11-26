@@ -15,15 +15,23 @@ import {
 
 Deno.test("runs open a closed box, retain expanded mode, and drain FIFO", async () => {
   const box = new TerminalBox();
+  const calls: string[] = [];
+  box.runs.attach({
+    terminalID: "terminal",
+    bracketedPaste: () => true,
+    paste: (text) => calls.push(text),
+    submit: () => calls.push("Enter"),
+    erase: () => {},
+  });
   const first = box.run("one");
   assertEquals(box.mode, "docked");
   box.expand();
   const second = box.run("two");
   assertEquals(box.mode, "expanded");
-  const runs = box.takeRuns();
-  assertEquals(runs.map(({ text }) => text), ["one", "two"]);
-  assertEquals(box.takeRuns(), []);
-  for (const run of runs) run.resolve();
+  assertEquals(box.runs.waiting, true);
+  box.runs.deliver("terminal");
+  assertEquals(calls, ["one", "Enter", "two", "Enter"]);
+  assertEquals(box.runs.waiting, false);
   await Promise.all([first, second]);
 });
 

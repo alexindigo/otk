@@ -73,7 +73,7 @@ Deno.test("pinned X10 coordinates survive the user-input adapter as raw bytes", 
     });
     let sent: Uint8Array = new Uint8Array();
     const input = terminalInput((bytes) => sent = bytes);
-    Reflect.apply(input!, undefined, [report]);
+    input(report, "user");
     assertEquals([...sent], [27, 91, 77, 32, 128, 33]);
   } finally {
     core.dispose();
@@ -155,7 +155,7 @@ Deno.test("terminal renderer suppresses actual WASM ESC[6n replies through live 
         "checkpoint replay generated a fresh reply",
       );
       assertEquals(input, []);
-      userInput("echo user\r");
+      userInput("echo user\r", "user");
       assertEquals(input.map((bytes) => new TextDecoder().decode(bytes)), [
         "echo user\r",
       ]);

@@ -39,6 +39,7 @@ export interface ContentIdentity {
 }
 export interface ContentTarget extends ContentIdentity {
   code?: CodeBlockSource;
+  runText?: string;
   lastID?: string;
   completed?: boolean;
   queued?: boolean;

@@ -3,25 +3,19 @@ import { randomID } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { SidecarConnection } from "./connection.ts";
 import { RequestFailure } from "./failures.ts";
+import { TERMINAL_RUN_LABEL, TerminalRuns } from "./terminal-runs.ts";
 
-export const TERMINAL_RUN_LABEL = "Run in terminal";
 export const TERMINALS_UNAVAILABLE =
   "Terminals are unavailable on this OTK server";
 const closedReason = "The terminal was closed before the command ran.";
 
-function unavailableFailure(reason: string): RequestFailure {
+function unavailableFailure(reason = closedReason): RequestFailure {
   return new RequestFailure({
     code: "terminal.unavailable",
     retry: "new-intent",
     diagnosticID: randomID(),
     facts: { actionLabel: TERMINAL_RUN_LABEL, reason },
   });
-}
-
-export interface PendingRun {
-  text: string;
-  resolve(): void;
-  reject(cause: unknown): void;
 }
 
 const panelFailures = new WeakSet<object>();
@@ -35,11 +29,19 @@ export type TerminalBoxMode = "closed" | "docked" | "expanded";
 export class TerminalBox {
   #mode: TerminalBoxMode = "closed";
   #unavailable: string | undefined;
-  #runs: PendingRun[] = [];
-  #released = false;
+  readonly runs: TerminalRuns;
   #store;
   constructor(factory: StateFactory = createState) {
     this.#store = factory({ revision: 0 });
+    this.runs = new TerminalRuns(factory, {
+      unavailable: () => this.#unavailable,
+      unavailableFailure,
+      ownFailure: (cause) => panelFailures.add(cause),
+      queued: () => {
+        if (this.#mode === "closed") this.#set("docked");
+        else this.#changed();
+      },
+    });
   }
   get mode(): TerminalBoxMode {
     void this.#store.state.revision;
@@ -69,26 +71,10 @@ export class TerminalBox {
   }
   /** Open this session's dock and wait for delivery to its selected shell. */
   run(text: string): Promise<void> {
-    if (this.#released || this.#unavailable) {
-      return Promise.reject(
-        unavailableFailure(this.#unavailable ?? closedReason),
-      );
-    }
-    return new Promise((resolve, reject) => {
-      this.#runs.push({ text, resolve, reject });
-      if (this.#mode === "closed") this.#set("docked");
-      else this.#changed();
-    });
+    return this.runs.request(text, "submit");
   }
-  get hasRuns(): boolean {
-    return this.#runs.length > 0;
-  }
-  takeRuns(): readonly PendingRun[] {
-    return this.#runs.splice(0);
-  }
-  failRuns(cause: object): void {
-    panelFailures.add(cause);
-    for (const run of this.takeRuns()) run.reject(cause);
+  paste(text: string): Promise<void> {
+    return this.runs.request(text, "confirm");
   }
   toggle(): void {
     if (this.#mode === "closed") this.#set("docked");
@@ -101,16 +87,12 @@ export class TerminalBox {
     if (this.#mode === "expanded") this.#set("docked");
   }
   close(): void {
-    const runs = this.takeRuns();
+    this.runs.hidden();
     this.#set("closed");
-    if (runs.length) {
-      const cause = unavailableFailure(closedReason);
-      for (const run of runs) run.reject(cause);
-    }
   }
   release(): void {
-    this.#released = true;
-    this.close();
+    this.runs.release();
+    this.#set("closed");
   }
 }
 

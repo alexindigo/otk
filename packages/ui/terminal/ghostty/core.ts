@@ -736,6 +736,17 @@ export class GhosttyTerminalCore {
     });
   }
 
+  bracketedPaste(): boolean {
+    this.ensureActive();
+    this.runtime.bytes(this.scratch, 1)[0] = 0;
+    return this.runtime.call(
+          "ghostty_terminal_mode_get",
+          this.terminal,
+          2004,
+          this.scratch,
+        ) === GHOSTTY_SUCCESS && this.runtime.bytes(this.scratch, 1)[0] !== 0;
+  }
+
   encodePaste(data: string): string {
     this.ensureActive();
     const input = encoder.encode(data);
@@ -743,14 +754,7 @@ export class GhosttyTerminalCore {
     return this.temporary((alloc, usize) => {
       const inputPointer = alloc(input.length);
       this.runtime.bytes(inputPointer, input.length).set(input);
-      this.runtime.bytes(this.scratch, 1)[0] = 0;
-      const bracketed = this.runtime.call(
-            "ghostty_terminal_mode_get",
-            this.terminal,
-            2004,
-            this.scratch,
-          ) ===
-          GHOSTTY_SUCCESS && this.runtime.bytes(this.scratch, 1)[0] !== 0;
+      const bracketed = this.bracketedPaste();
       const written = usize();
       return this.encodeOutput(
         written,

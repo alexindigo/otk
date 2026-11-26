@@ -28,13 +28,13 @@ export function terminalSink(
   };
 }
 
-/** Only surface user gestures reach the attachment, never the core's writer. */
+/** Surface input reaches the attachment, never the core's writer. */
 export function terminalInput(
-  input: (bytes: Uint8Array) => void,
+  input: (bytes: Uint8Array, origin: "user" | "program") => void,
 ): GhosttyTerminalSurfaceOptions["onData"] {
   const encoder = new TextEncoder();
-  return (data) =>
-    input(typeof data === "string" ? encoder.encode(data) : data);
+  return (data, origin) =>
+    input(typeof data === "string" ? encoder.encode(data) : data, origin);
 }
 
 function rgb(hex: string): GhosttyColor {
@@ -57,7 +57,10 @@ export interface TerminalRenderer {
   visible(value: boolean): void;
   theme(colors: ThemeColors): void;
   focus(): void;
-  run(text: string): void;
+  paste(text: string): void;
+  submit(): void;
+  erase(count: number): void;
+  bracketedPaste(): boolean;
   selection(): string;
   dispose(): void;
 }
@@ -65,7 +68,7 @@ export async function createTerminalRenderer(
   mount: HTMLElement,
   ports: {
     colors: ThemeColors;
-    input(bytes: Uint8Array): void;
+    input(bytes: Uint8Array, origin: "user" | "program"): void;
     resize(cols: number, rows: number): void;
     selection(text: string): void;
     meta(change: TerminalMeta): void;
@@ -94,7 +97,10 @@ export async function createTerminalRenderer(
     visible: (value) => active.setVisible(value),
     theme: (colors) => active.setTheme(terminalTheme(colors)),
     focus: () => active.focus(),
-    run: (text) => active.pasteAndSubmit(text),
+    paste: (text) => active.paste(text),
+    submit: () => active.submit(),
+    erase: (count) => active.erase(count),
+    bracketedPaste: () => active.bracketedPaste(),
     selection: () => active.getSelection(),
     dispose: () => active.dispose(),
   };

@@ -597,7 +597,10 @@ export interface GhosttyTerminalSurfaceOptions {
   readonly font?: GhosttyTerminalFont;
   /** Read after font and WASM loading. */
   readonly visible?: boolean;
-  readonly onData: (data: string | Uint8Array) => void;
+  readonly onData: (
+    data: string | Uint8Array,
+    origin: "user" | "program",
+  ) => void;
   readonly onResize: (cols: number, rows: number) => void;
   readonly onSelectionChange: () => void;
   readonly beforeKey: (event: KeyboardEvent) => boolean;
@@ -1127,13 +1130,28 @@ export class GhosttyTerminalSurface {
     this.sendInput(() => this.core.encodePaste(text), admission);
   }
 
-  /** The same paste encoding as a native paste, with one explicit submission. */
-  pasteAndSubmit(text: string): void {
-    const admission = this.inputAdmission;
-    if (text && admission !== null) {
-      this.flushResize();
-      this.sendInput(() => this.core.encodePaste(text) + "\r", admission);
-    }
+  /** The same encoding as native paste, without an implicit Enter. */
+  paste(text: string): void {
+    this.sendInput(
+      () => {
+        this.flushResize();
+        return this.disposed ? "" : this.core.encodePaste(text);
+      },
+      undefined,
+      true,
+    );
+  }
+
+  submit(): void {
+    this.sendInput(() => "\r", undefined, true);
+  }
+
+  erase(count: number): void {
+    if (count > 0) this.sendInput(() => "\x7f".repeat(count), undefined, true);
+  }
+
+  bracketedPaste(): boolean {
+    return !this.disposed && this.core.bracketedPaste();
   }
 
   // The terminal selection is the only browser-readable PRIMARY-like buffer.
@@ -1298,11 +1316,18 @@ export class GhosttyTerminalSurface {
   private sendInput(
     encode: () => string | Uint8Array,
     admission = this.inputAdmission,
+    programmatic = false,
   ): void {
-    if (admission === null || admission !== this.inputAdmission) return;
+    // The run owner may erase in a retained, nonvisible terminal. Native
+    // gestures still require the current visible input admission.
+    const current = () =>
+      !this.disposed &&
+      (programmatic ||
+        (admission !== null && admission === this.inputAdmission));
+    if (!current()) return;
     const data = encode();
-    if (admission !== this.inputAdmission || data.length === 0) return;
-    this.options.onData(data);
+    if (!current() || data.length === 0) return;
+    this.options.onData(data, programmatic ? "program" : "user");
   }
 
   private readonly onKeyDown = (event: KeyboardEvent) => {

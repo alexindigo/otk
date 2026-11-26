@@ -8,6 +8,7 @@ import {
   failedSendPresentation,
   messageTimeValue,
   replyErrorFeedback,
+  runnableText,
 } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { createMemo, For, onSettled, Show } from "solid-js";
@@ -348,14 +349,28 @@ export default function Message(
           (element) => {
             article = element;
           },
-          contextTarget(() => ({
-            kind: props.readOnly
+          contextTarget((invocation) => {
+            const kind = props.readOnly
               ? "saved-message"
               : prompt()
               ? "prompt"
-              : "reply",
-            data: target(),
-          })),
+              : "reply";
+            const data = target();
+            if (kind !== "reply") return { kind, data };
+            const span = invocation.inner.find(({ kind }) =>
+              kind === "code-span"
+            )?.data as { text: string } | undefined;
+            return {
+              kind,
+              data: {
+                ...data,
+                runText: runnableText({
+                  selection: invocation.selection,
+                  span: span?.text,
+                }),
+              },
+            };
+          }),
         ]}
         class={["otk-message", {
           "otk-user-message": userBubble(),

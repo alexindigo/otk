@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub, ContextTarget } from "@otk/client";
 import { copyText } from "../clipboard.ts";
+import type { ContextInvocation } from "../components/context-target.ts";
 
 interface TextTarget {
   text: string;
@@ -24,7 +25,10 @@ export function nativeTextContext(path: readonly EventTarget[]): boolean {
  * by the menu view. Non-field selections are captured before focus moves. */
 export function browserContextTargets(
   path: readonly EventTarget[],
-  declared: (element: HTMLElement) => ContextTarget[] = () => [],
+  declared: (
+    element: HTMLElement,
+    invocation: ContextInvocation,
+  ) => ContextTarget[] = () => [],
   point?: { x: number; y: number },
 ): ContextTarget[] {
   if (nativeTextContext(path)) return [];
@@ -33,7 +37,8 @@ export function browserContextTargets(
   );
   const selection = document.getSelection();
   const targets: ContextTarget[] = [];
-  const selectedHere = !!selection?.toString() &&
+  const text = selection?.toString() ?? "";
+  const selectedHere = !!text && selection &&
     Array.from(
       { length: selection.rangeCount },
       (_, index) => selection.getRangeAt(index),
@@ -45,8 +50,9 @@ export function browserContextTargets(
         )
         : !!nodes[0] && selection.containsNode(nodes[0], true)
     );
-  if (selectedHere) {
-    targets.push({ kind: "selection", data: { text: selection!.toString() } });
+  const selectedText = selectedHere ? text : "";
+  if (selectedText) {
+    targets.push({ kind: "selection", data: { text: selectedText } });
   }
   for (const node of nodes) {
     if (node instanceof HTMLAnchorElement && node.href) {
@@ -58,7 +64,9 @@ export function browserContextTargets(
         data: { text: node.currentSrc || node.src, name: node.alt || "Image" },
       });
     }
-    targets.push(...declared(node));
+    targets.push(
+      ...declared(node, { selection: selectedText, inner: targets.slice() }),
+    );
   }
   return targets;
 }
