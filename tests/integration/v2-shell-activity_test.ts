@@ -30,9 +30,7 @@ Deno.test({
         ancestors: () => [],
         descendants: (id) => new Set([id]),
       }, () => {});
-      const inventory = () =>
-        (states.get(entityKey("session", target.id))?.evidence?.liveWork ?? [])
-          .filter((value) => value.kind === "shell");
+      const roster = () => states.get(entityKey("session", target.id))?.shells;
       let boots = 0;
       const adapter = new OpencodeV2ServerAdapter({
         serviceFile: native.serviceFile,
@@ -76,21 +74,23 @@ Deno.test({
           undefined,
         );
         await waitFor(() =>
-          inventory().length, (count) =>
+          roster()?.count, (count) =>
           count === 1);
+        assertEquals(roster()?.state, "working");
         const owned = (await native.api.shell.list({
           location: { directory: native.directory },
         })).data.find((shell) => shell.metadata.sessionID === target.nativeID)!;
         assertEquals(
-          inventory().map((item) => [item.id, item.title, item.startedAt]),
+          roster()?.items.map((item) => [item.id, item.title, item.startedAt]),
           [[owned.id, owned.command, owned.time.started]],
         );
         const before = boots;
         native.proxy.disconnect();
         await waitFor(() => boots, (count) => count > before);
         assertEquals(entries.get(target.id)?.status, "busy");
-        await waitFor(() => inventory().length, (count) => count === 1);
-        assertEquals(inventory()[0].startedAt, owned.time.started);
+        await waitFor(() => roster()?.count, (count) => count === 1);
+        assertEquals(roster()?.state, "working");
+        assertEquals(roster()?.items[0].startedAt, owned.time.started);
         await adapter.capabilities.prompt!.abort(target.id);
         // Deliberately dropping the proxy also loses the submitting HTTP reply.
         // Its uncertainty must not hide or prevent interruption of native work.
@@ -109,7 +109,7 @@ Deno.test({
           [other.nativeID],
         );
         assertEquals(entries.get(other.id)?.status, "busy");
-        assertEquals(inventory(), []);
+        assertEquals(roster(), { count: 0, items: [], state: "none" });
         assert(
           !(await native.api.message.list({ sessionID: target.nativeID })).data
             .some((message) => message.type === "assistant"),

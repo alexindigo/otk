@@ -10,6 +10,7 @@ import {
   lamp,
   liveWork,
   sessionEvidence,
+  sessionShells,
   sessionWorkStatus,
 } from "../entity-state.ts";
 import { createInbox } from "../inbox.ts";
@@ -53,18 +54,21 @@ Deno.test("session execution excludes shell-only activity and stale evidence", a
   assertEquals(running(store, S), true);
   value = {
     ...value,
-    evidence: {
-      ...value.evidence!,
-      liveWork: [{
+    shells: {
+      items: [{
         id: "shell",
-        kind: "shell",
         label: "Shell",
         title: "Shell",
-        state: "working",
       }],
+      count: 1,
+      state: "working",
     },
   };
+  assertEquals(sessionShells(store, S), value.shells);
   assertEquals(running(store, S), false);
+  store.stale(true);
+  assertEquals(sessionShells(store, S), undefined);
+  store.stale(false);
   value = session("working");
   store.stale(true);
   assertEquals(running(store, S), false);
@@ -198,10 +202,10 @@ Deno.test("emphasis, attention counts, labels and live work borrow the same stat
   assertEquals(label("working"), "Working");
   assertEquals(label("blocked", "permission"), "Needs you");
   const item = {
-    id: "shell-1",
-    kind: "shell" as const,
-    label: "Shell",
-    title: "sleep",
+    id: "exec-1",
+    kind: "execution" as const,
+    label: "Execution",
+    title: "Run",
     state: "working" as const,
   };
   f.put(session("working", {

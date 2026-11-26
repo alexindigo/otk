@@ -28,9 +28,7 @@ export default function ComposerTakeovers(
   const { takeovers, composerDocks } = useUiRegistries(),
     session = useSessionPorts();
   const { commands } = useCommandPorts();
-  const shells = createMemo(() =>
-    (session.workItems?.() ?? []).filter((item) => item.kind === "shell")
-  );
+  const shells = () => session.shells?.();
   const title = (id: string) =>
     session.entry(id)?.title ?? "Session unavailable";
   const trail = () => session.trail?.();
@@ -39,7 +37,9 @@ export default function ComposerTakeovers(
     const store = entities(), key = trail()?.task;
     return store && taskHelpers(store, key);
   });
-  const link = createMemo(() => composerLinkState(helpers(), shells().length));
+  const link = createMemo(() =>
+    composerLinkState(helpers(), shells()?.count ?? 0)
+  );
   const available = () => takeovers.available(session.supports);
   const active = () =>
     available().some((item) => item.active?.(session) ?? true);
@@ -99,7 +99,14 @@ export default function ComposerTakeovers(
                         sessionID: id,
                       }, title(id))}
                   />
-                  <LiveWork shells={shells()} />
+                  <Show when={shells()?.count ? shells() : undefined}>
+                    {(scope) => (
+                      <LiveWork
+                        shells={scope()}
+                        sessionID={session.sessionID()}
+                      />
+                    )}
+                  </Show>
                 </span>
               </div>
             </div>

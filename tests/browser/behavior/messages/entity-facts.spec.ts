@@ -109,6 +109,8 @@ test(
           exact: true,
         });
         await expect(capsule).toBeVisible();
+        await expect(capsule.locator(".otk-status-light:visible"))
+          .toHaveAttribute("data-state", "working");
         await capsule.click();
         const item = page.locator("[data-running-work^='shell/']");
         await expect(item).toContainText("sleep 120");

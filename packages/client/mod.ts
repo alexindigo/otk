@@ -26,7 +26,6 @@ export {
   helperCountsLabel,
   type LiveWorkOwner,
   type RunningWork,
-  runningWorkLabel,
 } from "./live-work.ts";
 export {
   type PendingRun,

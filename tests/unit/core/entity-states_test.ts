@@ -377,6 +377,72 @@ test("an unchanged session publishes nothing", () => {
   assertEquals(o.published, []);
 });
 
+test("2.99: only fresh shells in the session contribute to its shell roster and lamp", () => {
+  const o = owner();
+  const shell = {
+    id: "shell",
+    kind: "shell" as const,
+    label: "Shell",
+    title: "sleep 120",
+    startedAt: 10,
+  };
+  const entry = {
+    ...base,
+    activity: {
+      inputs: keys("pending-question"),
+      work: {
+        ...keys(shell.id, "run"),
+        items: [shell, { ...shell, id: "ended" }, {
+          ...shell,
+          id: "run",
+          kind: "execution" as const,
+        }],
+      },
+    },
+  };
+  o.put(entry);
+  o.put({
+    ...base,
+    id: "child",
+    parentID: base.id,
+    activity: {
+      work: {
+        ...keys("child-shell"),
+        items: [{ ...shell, id: "child-shell" }],
+      },
+    },
+  });
+  const task = () => o.states.get(entityKey("task", "session/s"));
+  assertEquals(task()?.state, "blocked");
+  assertEquals(o.get(base.id)?.state, "blocked");
+  const { kind: _kind, ...row } = shell;
+  assertEquals(o.get(base.id)?.shells, {
+    items: [row],
+    count: 1,
+    state: "working",
+  });
+  const empty = { items: [], count: 0, state: "none" } as const;
+  o.put({
+    ...entry,
+    activity: {
+      ...entry.activity,
+      work: { ...entry.activity.work, fresh: false },
+    },
+  });
+  assertEquals(o.get(base.id)?.shells, empty);
+  o.put({
+    ...entry,
+    activity: {
+      ...entry.activity,
+      work: { ...entry.activity.work, ...keys("run") },
+    },
+  });
+  assertEquals(o.get(base.id)?.shells, empty);
+  assertEquals(o.get(base.id)?.evidence?.work, true);
+  assertEquals(task()?.state, "blocked");
+  assertEquals(o.get("child")?.shells?.count, 1);
+});
+
 test("live work belongs to the entity owner, including blocked helpers, title changes and retirement", () => {
   const o = owner();
   o.put({ ...base, id: "root" });
@@ -971,6 +1037,14 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
   const task = () => o.states.get(entityKey("task", "session/s"));
   assertEquals(task()?.helpers, {
     counts: { running: 2, needsYou: 1, notReturned: 3 },
+    lamps: {
+      all: { state: "blocked" },
+      groups: {
+        running: { state: "working" },
+        needsYou: { state: "blocked" },
+        notReturned: { state: "blocked" },
+      },
+    },
     ids: [
       "helper-0",
       "helper-1",

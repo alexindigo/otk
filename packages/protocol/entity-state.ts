@@ -30,9 +30,28 @@ export interface EntityRequestEvidence {
   arrivedAt?: number;
 }
 export type HelperDisposition = "running" | "needsYou" | "notReturned";
+export interface EntityLamp {
+  state: ProjectStatus;
+}
 export interface TaskHelpers {
   counts: Record<HelperDisposition, number>;
   ids: string[];
+  /** The counted helpers only, not the entire ancestry task. */
+  lamps?: {
+    all: EntityLamp;
+    groups: Record<HelperDisposition, EntityLamp>;
+  };
+}
+/** The session's own currently running shells. No session verdict on a row. */
+export interface RunningShells extends EntityLamp {
+  state: "working" | "none";
+  count: number;
+  items: readonly {
+    id: string;
+    label: string;
+    title: string;
+    startedAt?: number;
+  }[];
 }
 export interface SessionEvidence {
   /** D66: a proven helper terminal not covered by its parent's result receipt. */
@@ -53,7 +72,7 @@ export interface SessionEvidence {
   };
   liveWork?: readonly {
     id: string;
-    kind: "shell" | "execution" | "helper";
+    kind: "execution" | "helper";
     label: string;
     title: string;
     startedAt?: number;
@@ -79,6 +98,8 @@ export interface EntityState {
   evidence?: SessionEvidence;
   /** D66/D58: ordered helpers belonging to this task. */
   helpers?: TaskHelpers;
+  /** Fresh shell inventory belonging only to this session. */
+  shells?: RunningShells;
   /** Aggregates blocked only by permissions: those requests' identities, so
    * the client derives the same per-request grace as for each member. */
   requests?: readonly EntityRequestEvidence[];
