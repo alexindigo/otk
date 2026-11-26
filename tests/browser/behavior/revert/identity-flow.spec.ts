@@ -220,20 +220,29 @@ test("revert.identity-confirmation-preservation-and-in-flow-geometry", {
   await capture("failed-send");
   await choice.getByRole("button", { name: "Save copy", exact: true }).click();
   await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
-    "The earlier conversation couldn't be saved: storage is full. The replacement was not sent.",
+    "The replacement was not sent.",
   );
   await expect(choice).not.toContainText(/localStorage|\bbytes\b|5 MB/);
-  await choice.getByRole("button", { name: "Details", exact: true }).click();
-  await expect(choice.locator(".otk-failure-detail-body")).toContainText(
+  const failedGroup = page.locator(".otk-revert-group");
+  await failedGroup.locator(".otk-record-group-toggle").click();
+  await expect(failedGroup.locator(".otk-failure-reason:visible")).toHaveText(
+    "The earlier conversation couldn't be saved: storage is full.",
+  );
+  const details = failedGroup.getByRole("button", {
+    name: "Details",
+    exact: true,
+  });
+  await details.click();
+  await expect(failedGroup.locator(".otk-failure-detail-body")).toContainText(
     "localStorage is full",
   );
-  await expect(choice.locator(".otk-failure-detail-body")).toContainText(
+  await expect(failedGroup.locator(".otk-failure-detail-body")).toContainText(
     /require [\d,]+ bytes/,
   );
-  await expect(choice.locator(".otk-failure-detail-body")).toContainText(
+  await expect(failedGroup.locator(".otk-failure-detail-body")).toContainText(
     "about 5 MB per origin",
   );
-  await choice.getByRole("button", { name: "Details", exact: true }).click();
+  await details.click();
   await expect(choice.getByRole("button", { name: "Save copy", exact: true }))
     .toBeEnabled();
   await expect(input).toHaveValue("Replacement after a saved copy");

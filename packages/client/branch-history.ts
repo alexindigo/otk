@@ -50,7 +50,12 @@ export interface BranchHistoryState {
   pending: boolean;
   error?: FailureValue;
   choice?: { branchID: string; label: string; draft: Draft };
-  permanence?: { boundaryID: string; saving: boolean; error: FailureValue };
+  permanence?: {
+    boundaryID: string;
+    saving: boolean;
+    error: FailureValue;
+    causeID?: string;
+  };
   recovery?: { boundaryID: string; restored: boolean };
 }
 export interface BranchSendPermit {
@@ -1031,6 +1036,9 @@ export function createBranchHistory(options: {
           boundaryID: record.boundaryID,
           saving: false,
           error: sendFailure(target, cause),
+          causeID: cause instanceof RequestFailure
+            ? cause.failure.diagnosticID
+            : undefined,
         };
         sends.set(draftKey(t), { target, record, draft, choice, wait });
         publishSend(t);
@@ -1058,6 +1066,9 @@ export function createBranchHistory(options: {
           pending.choice = {
             ...pending.choice,
             error: sendFailure(pending.target, cause),
+            causeID: cause instanceof RequestFailure
+              ? cause.failure.diagnosticID
+              : undefined,
           };
         }
       } finally {

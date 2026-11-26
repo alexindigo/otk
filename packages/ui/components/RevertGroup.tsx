@@ -4,7 +4,7 @@ import { createMemo, type Element, For, Show } from "solid-js";
 import {
   type ActivityGroup as Group,
   type BranchHistory,
-  errorFeedback,
+  type FailurePresentation,
   savedBranchProjection,
   type SessionRevert,
   type SessionRevertState,
@@ -17,7 +17,7 @@ import Clock from "./Clock.tsx";
 import { CloseIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import FailureContent from "./FailureContent.tsx";
-import { BranchCopyRecovery } from "./SavedBranches.tsx";
+import { branchCopyRecoveryActions } from "./SavedBranches.tsx";
 import FittedActions from "./FittedActions.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
@@ -54,7 +54,9 @@ export default function RevertGroup(props: {
     title?: string;
   };
   warning?: string;
-  failureVisible?: boolean;
+  failure?: FailurePresentation;
+  failureStatus?: string;
+  recoverCopy?: boolean;
   onOpenCopy?(): void;
   onOpenChild(id: string): void;
 }): Element {
@@ -65,10 +67,6 @@ export default function RevertGroup(props: {
     props.state.record?.prompt?.input.split("\n")[0] || preview(first()) ||
     boundary();
   const at = () => props.state.record?.prompt?.time ?? first()?.time.created;
-  const failure = () =>
-    props.failureVisible === false
-      ? undefined
-      : errorFeedback(props.state.error);
   const pending = () =>
     !!props.state.pending || props.state.phase === "staging" ||
     props.state.phase === "restoring";
@@ -84,7 +82,7 @@ export default function RevertGroup(props: {
       data-boundary={boundary()}
       data-phase={props.state.phase}
       data-dismissed={props.state.dismissed ? "true" : "false"}
-      role={failure() && !props.state.dismissed ? "alert" : undefined}
+      role={props.failure && !props.state.dismissed ? "alert" : undefined}
       tabindex={props.state.dismissed ? 0 : undefined}
       ref={contextTarget(() => ({ kind: "session", data: props.target }))}
     >
@@ -92,10 +90,10 @@ export default function RevertGroup(props: {
         group={props.group}
         prefs={{ ...props.prefs, expandRecords: false }}
         collapsible={!props.state.dismissed}
-        failed={!!failure() && !props.state.dismissed}
+        failed={props.failure?.tone === "error" && !props.state.dismissed}
         wrapActions
         icon={RevertIcon}
-        label={(open) => (
+        label={() => (
           <span class="otk-revert-heading-content">
             <ChromeMeta class="otk-revert-label otk-control-label">
               <span>Reverted from</span>
@@ -109,18 +107,6 @@ export default function RevertGroup(props: {
                 {label()}
               </span>
             </ChromeMeta>
-            <Show
-              when={!open() && !props.state.dismissed && failure()?.failure}
-            >
-              {(value) => (
-                <ChromeMeta
-                  class="otk-control-label otk-revert-reason"
-                  title={value().reason}
-                >
-                  {value().reason}
-                </ChromeMeta>
-              )}
-            </Show>
             <Show when={!props.state.dismissed && props.warning}>
               <ChromeMeta
                 class="otk-control-label otk-revert-warning"
@@ -131,7 +117,7 @@ export default function RevertGroup(props: {
             </Show>
           </span>
         )}
-        trailing={(open) => (
+        trailing={() => (
           <Show when={!props.state.dismissed}>
             <Show when={pending()}>
               <ActivityIndicator
@@ -155,6 +141,9 @@ export default function RevertGroup(props: {
             <Show when={props.state.phase === "saved"}>
               <ChromeMeta>Copy saved</ChromeMeta>
             </Show>
+            <Show when={props.failureStatus}>
+              {(status) => <ChromeMeta>{status()}</ChromeMeta>}
+            </Show>
             <FittedActions
               inline
               items={[
@@ -174,8 +163,10 @@ export default function RevertGroup(props: {
                     },
                   }]
                   : []),
-                ...(!open() && props.state.phase === "failed" &&
-                    props.state.record
+                ...(props.recoverCopy && props.history
+                  ? branchCopyRecoveryActions(props.history)
+                  : props.state.phase === "failed" && props.state.record &&
+                      props.owner
                   ? [{
                     key: "retry",
                     label: "Retry",
@@ -208,7 +199,7 @@ export default function RevertGroup(props: {
         body={() => (
           <TranscriptSnapshot>
             <div class="otk-revert-records">
-              <Show when={failure()?.failure}>
+              <Show when={props.failure}>
                 {(value) => (
                   <FailureContent
                     failure={value()}
@@ -217,9 +208,6 @@ export default function RevertGroup(props: {
                     signal={false}
                   />
                 )}
-              </Show>
-              <Show when={failure()?.failure && props.history?.state.recovery}>
-                <BranchCopyRecovery owner={props.history!} />
               </Show>
               <For each={props.state.record?.files}>
                 {(file) => (

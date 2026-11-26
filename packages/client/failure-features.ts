@@ -426,6 +426,19 @@ export function placeFailure(
   return shipped.place(failure, placement, occupant);
 }
 
+/** A failed local send with a published request record keeps its identity,
+ * not a second rendering of the record. Unlinked, local-only failures still
+ * own their reason and recovery (for example, an unconfirmed send). */
+export function failedSendPresentation(feedback?: Feedback): {
+  diagnosticID?: string;
+  feedback?: Feedback;
+} {
+  return {
+    diagnosticID: feedback?.diagnosticID,
+    feedback: feedback?.failure?.value.facts?.record ? undefined : feedback,
+  };
+}
+
 /** Target-bound presentation outlives any mounted view and borrows request state. */
 export function createRequestFeedback(
   tracker: RequestTracker,

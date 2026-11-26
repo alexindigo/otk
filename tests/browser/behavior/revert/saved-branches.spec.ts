@@ -356,7 +356,10 @@ test(
     await expect(alert).toContainText("Reverted from");
     await expect(alert).not.toContainText("Quota-protected branch");
     await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(alert).toContainText(plainReason);
+    await expect(alert).toContainText("Copy not saved");
+    await expect(alert).not.toContainText(plainReason);
+    await expect(alert.getByRole("button", { name: "Retry", exact: true }))
+      .toBeVisible();
     await expect(alert).not.toContainText(/localStorage|\bbytes\b|5 MB/);
     await alert.locator(".otk-record-group-toggle").click();
     await expect(alert.locator(".otk-revert-reason")).toHaveCount(0);
@@ -382,21 +385,25 @@ test(
     await expect(choice.getByRole("status")).toContainText(
       "Sending makes the revert permanent",
     );
-    await expect(alert).toHaveCount(0);
+    await expect(alert).toHaveCount(1);
+    await expect(alert).toContainText("Copy not saved");
     await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
     await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
-      plainReason + " The replacement was not sent.",
+      "The replacement was not sent.",
+    );
+    await expect(alert.locator(".otk-failure-reason:visible")).toHaveText(
+      plainReason,
     );
     await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
-    await failureDetails(choice);
+    await expect(choice).not.toContainText(plainReason);
     await choice.getByRole("button", { name: "Save copy", exact: true })
       .click();
     await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
-    await failureDetails(choice);
+    await expect(choice).not.toContainText(plainReason);
     await expect(page.getByRole("button", { name: "Save copy", exact: true }))
       .toBeVisible();
     await expect(page.getByRole("button", { name: "Send anyway", exact: true }))
@@ -455,7 +462,7 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
   const group = page.locator(".otk-revert-group");
-  await expect(group).toContainText(plainReason);
+  await expect(group).toContainText("Copy not saved");
   await expect(group).not.toContainText("replacement was not sent");
   const input = page.locator("textarea[name=prompt]");
   await input.fill("Keep this edited replacement");
@@ -551,18 +558,21 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await page.locator('[data-message-command="prompt.revert"]').click();
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
-  await expect(group).toContainText(plainReason);
+  await expect(group).toContainText("Copy not saved");
   await input.fill("Keep this edited replacement");
   await page.getByRole("button", { name: "Restore conversation", exact: true })
     .click();
+  await expect(group).toHaveCount(0);
+  const restoredNotice = page.locator(".otk-composer-notice");
   await expect(
-    page.getByRole("button", {
+    restoredNotice.getByRole("button", {
       name: "Keep without a saved copy",
       exact: true,
     }),
   ).toBeVisible();
   await page.evaluate(() => Reflect.get(globalThis, "restoreCopyStorage")());
-  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await restoredNotice.getByRole("button", { name: "Retry", exact: true })
+    .click();
   await expect(
     page.getByRole("button", {
       name: "Keep without a saved copy",

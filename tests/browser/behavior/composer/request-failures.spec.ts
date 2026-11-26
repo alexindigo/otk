@@ -51,6 +51,10 @@ test.describe("pre-message rejection", () => {
     await expect(local).toHaveCount(1);
     await scrollTranscript(page, false);
     await expect(local).toContainText("Keep this unsent draft intact");
+    await expect(local.locator(".otk-failure-content")).toHaveCount(0);
+    await expect(local).toContainText("Not sent");
+    await expect(page.locator(".otk-messages .otk-failure-content"))
+      .toHaveCount(1);
     await expect(local.getByRole("button", { name: "Retry", exact: true }))
       .toHaveCount(0);
     expect((await state.native<{ info: { role: string } }[]>(
