@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
 import { tempDir, test } from "../../../tests/support/resources.ts";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { loadServiceConfig } from "../../../core/config/loader.ts";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
@@ -19,7 +19,7 @@ async function wait(read: () => boolean) {
 }
 
 for (const method of ["shell", "command"] as const) {
-  test(`${method} admission resolves while the actual harness response is still pending`, async () => {
+  test(`${method} admission waits for the harness response without an operation context`, async () => {
     const cfg = loadServiceConfig({
       defaultsPath: fromFileUrl(
         new URL("../../../defaults/otk.toml", import.meta.url),
@@ -111,16 +111,16 @@ for (const method of ["shell", "command"] as const) {
       const admitted = capability(input).then(() => {
         settled = true;
       });
+      void admitted.catch(() => {});
       while (!started) {
         assert(Date.now() < deadline, "Actual command request did not start");
         await new Promise((resolve) => setTimeout(resolve, 5));
       }
       await new Promise((resolve) => setTimeout(resolve, 20));
-      assert(
-        settled,
-        `${method} admission still depends on the held command response`,
-      );
+      assertEquals(settled, false, "A pending response cannot prove admission");
+      release(Response.json({}));
       await admitted;
+      assertEquals(settled, true);
     } finally {
       release?.(Response.json({}));
       await adapter.core.stop();
@@ -227,7 +227,10 @@ for (const method of ["shell", "command"] as const) {
           command: "owned command",
           arguments: "owned arguments",
         };
-        await capability(input);
+        const submission = capability(input);
+        const rejected = assertRejects(() => submission);
+        void rejected.catch(() => {});
+        await wait(() => release !== undefined);
         if (outcome === "stop") {
           assertEquals(ops, [{
             op: "session.error",
@@ -240,6 +243,7 @@ for (const method of ["shell", "command"] as const) {
           }], "Admission did not establish a clean identified request state");
           const admittedOps = structuredClone(ops);
           await adapter.core.stop();
+          await rejected;
           stopped = true;
           assert(aborted, "Adapter stop left the actual HTTP watcher alive");
           assertEquals(
@@ -254,6 +258,7 @@ for (const method of ["shell", "command"] as const) {
               data: { message: "Deferred shell failure" },
             }, { status: 503 }),
           );
+          await rejected;
           await wait(() =>
             ops.some((op) =>
               op.op === "session.error" &&

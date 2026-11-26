@@ -240,7 +240,12 @@ export async function observationFixture() {
         command: "owned operation",
         arguments: "",
       };
-      await invoke(input);
+      const before = requests.length;
+      const outcome = invoke(input);
+      // This fixture controls the native response after seeing the request.
+      // Do not await that response before the test is allowed to release it.
+      void outcome.catch(() => {});
+      await Promise.race([outcome, wait(() => requests.length > before)]);
     },
     fail(index: number, message: string, ref = "http-reference") {
       requests[index].release(

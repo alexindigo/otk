@@ -4,7 +4,7 @@ import { type CommandsCapability, HarnessError } from "@otk/harness";
 import type { AttachmentPolicy, CommandOption } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
-import type { Launch } from "./shell.ts";
+import { awaitLaunch, type Launch } from "./shell.ts";
 import { mapPromptParts } from "./prompt.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type { DirectoryCatalogs } from "./catalogs.ts";
@@ -87,7 +87,7 @@ export function commands(
           },
         },
       );
-      if (operation && launched) await launched.settled;
+      await awaitLaunch(launched, !!operation);
       return { messageID, state: "accepted" };
     },
   };
