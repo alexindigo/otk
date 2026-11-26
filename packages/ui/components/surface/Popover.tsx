@@ -51,6 +51,7 @@ export default function Popover(props: {
     "name" | "aria-describedby" | "aria-invalid"
   >;
   title?: string;
+  titleAction?: Element;
   size?: "wide" | "content" | "fit";
   place?: "bounds-end";
   density?: "menu";
@@ -344,6 +345,7 @@ export default function Popover(props: {
               layout="popover"
               density={props.density}
               title={props.title ? <h2>{props.title}</h2> : undefined}
+              titleAction={props.titleAction}
             >
               {props.children}
             </Surface>

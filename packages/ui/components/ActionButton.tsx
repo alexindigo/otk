@@ -116,7 +116,10 @@ export default function ActionButton(props: {
         data-inline-action={props.inline ? "true" : undefined}
         aria-haspopup={props.inline?.popup}
         aria-description={props.inline?.description}
-        ref={[(element: HTMLElement) => props.ref?.(element), native.ref]}
+        ref={(element: HTMLElement) => {
+          native.ref(element);
+          props.ref?.(element);
+        }}
         {...native.attributes}
         aria-label={props.label}
         aria-expanded={props.expanded === undefined

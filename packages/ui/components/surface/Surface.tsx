@@ -12,6 +12,7 @@ export default function Surface(props: {
   staticChildren?: boolean;
   scrollable?: boolean;
   title?: Element;
+  titleAction?: Element;
   actions?: Element;
   children: Element;
 }): Element {
@@ -28,8 +29,13 @@ export default function Surface(props: {
       }]}
       data-signal={props.signal}
     >
-      <Show when={props.title}>
-        <header class="otk-surface-title">{props.title}</header>
+      <Show when={props.title || props.titleAction}>
+        <header class="otk-surface-title">
+          {props.title}
+          <Show when={props.titleAction}>
+            {(action) => <div class="otk-surface-title-action">{action()}</div>}
+          </Show>
+        </header>
       </Show>
       <ScrollRegion
         borrowed={props.scrollable === false}
