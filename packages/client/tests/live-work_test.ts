@@ -8,11 +8,23 @@ import {
   presentedEntity,
   taskHelpers,
 } from "../entity-state.ts";
-import type { EntityState, HelperDisposition } from "@otk/protocol";
+import type {
+  EntityState,
+  HelperDisposition,
+  TaskHelpers,
+} from "@otk/protocol";
 
-const helpers = {
+const helpers: TaskHelpers = {
   ids: ["helper"],
   counts: { running: 0, needsYou: 0, notReturned: 1 },
+  lamps: {
+    all: { state: "finished" },
+    groups: {
+      running: { state: "none" },
+      needsYou: { state: "none" },
+      notReturned: { state: "finished" },
+    },
+  },
 };
 const counts = { blocked: 0, finished: 1, unseen: 1, working: 0 };
 
@@ -80,10 +92,7 @@ Deno.test("composer link is idle with an undelivered helper and no shells", () =
     }),
   });
   const roster = taskHelpers(store, "task:root");
-  assertEquals(
-    lamp(store, roster!.ids.map((id) => `session:${id}`)),
-    "finished",
-  );
+  assertEquals(lamp(roster?.lamps?.all), "finished");
   assertEquals(work.composerLinkState(roster, 0), "idle");
 });
 

@@ -11,7 +11,6 @@ import type {
   InboxRpc,
   LiveWorkOwner,
   ModelCatalogOwner,
-  RunningWork,
   SessionDelivery,
   SessionSubmission,
   ToolCompletionSource,
@@ -26,6 +25,7 @@ import type {
   Preferences,
   PromptPart,
   QuestionRequest,
+  RunningShells,
 } from "@otk/protocol";
 
 /** Session-scoped data and typed operations, independent of any feature list. */
@@ -51,12 +51,10 @@ export interface SessionPorts {
   entry(id: string): IndexEntry | undefined;
   entityFacts?(identity: EntityIdentity): EntityFacts;
   entities?(): EntityStateStore;
-  workEntityKey?(): string;
   status?(id: string): import("@otk/client").InboxStatus | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
-  /** Borrowed family and active shell projection; no UI-owned activity store. */
-  workItems?(): readonly RunningWork[];
+  shells?(): RunningShells | undefined;
   trail?(): TrailModel | undefined;
   liveWork?: LiveWorkOwner;
   delivery?: SessionDelivery;

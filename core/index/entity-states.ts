@@ -11,6 +11,7 @@ import {
   type ProjectStatus,
   type ProjectSummary,
   rollupStatus,
+  type RunningShells,
   type SessionEvidence,
   type Supervision,
   taskEntityID,
@@ -24,6 +25,7 @@ import {
 } from "./supervision.ts";
 
 const PERMISSION_GRACE_MS = 500;
+const noShells: RunningShells = { items: [], count: 0, state: "none" };
 
 interface EntityClock {
   now(): number;
@@ -838,11 +840,32 @@ export class EntityStates {
         (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
       a.id.localeCompare(b.id);
     const { running, needsYou, notReturned } = groups;
+    const lampOf = (group: EntityState[]) => ({
+      state: group.reduce<ProjectStatus>(
+        (state, item) => rollupStatus(state, item.state),
+        "none",
+      ),
+    });
+    const lamps = {
+      running: lampOf(running),
+      needsYou: lampOf(needsYou),
+      notReturned: lampOf(notReturned),
+    };
     return {
       counts: {
         running: running.length,
         needsYou: needsYou.length,
         notReturned: notReturned.length,
+      },
+      lamps: {
+        all: {
+          state: rollupStatus(
+            lamps.running.state,
+            lamps.needsYou.state,
+            lamps.notReturned.state,
+          ),
+        },
+        groups: lamps,
       },
       ids: [
         ...running.sort(active),
@@ -949,6 +972,11 @@ export class EntityStates {
         activity?.work?.keys.includes(item.id)
       )
       : [];
+    const shells: RunningShells["items"] = items.flatMap((item) => {
+      if (item.kind !== "shell") return [];
+      const { kind: _kind, ...shell } = item;
+      return [shell];
+    });
     const before = this.#states.get(entityKey("session", entry.id));
     const starts = items.flatMap((item) =>
       item.kind === "execution" && item.startedAt !== undefined
@@ -998,19 +1026,14 @@ export class EntityStates {
           ? (activity?.inputs?.keys ?? []).map((id) => ({ id }))
           : [],
       },
-      ...(items.length || helpers.length
+      ...(items.length > shells.length || helpers.length
         ? {
           liveWork: [
-            ...items.map((item) => ({
-              id: item.id,
-              kind: item.kind,
-              label: item.label,
-              title: item.title,
-              ...(item.startedAt === undefined
-                ? {}
-                : { startedAt: item.startedAt }),
-              state,
-            })),
+            ...items.flatMap((item) =>
+              item.kind === "execution"
+                ? [{ ...item, kind: item.kind, state }]
+                : []
+            ),
             ...helpers,
           ],
         }
@@ -1042,6 +1065,9 @@ export class EntityStates {
         ? { terminalOrigin: verdict.terminalOrigin }
         : {}),
       evidence,
+      shells: shells.length
+        ? { items: shells, count: shells.length, state: "working" }
+        : noShells,
     };
   }
   #set(value: EntityState): boolean {

@@ -55,19 +55,20 @@ markers and never borrow session/helper clocks. Session-now presentation borrows
 the serving entity replica handle, including when a metadata entry is not
 leased. The same retained historical fact uses current state and permission
 grace instead of copying a status from its record. Every EntityPill producer
-uses that binding. `liveWork(session)` reads the owner's helper and shell
-inventory; helper labels may borrow acquired digest metadata, never its
-attention. Transcript paging is not an input. `createLiveWork` owns capability
-checks and joined stop admission across presentation lifetimes; elapsed labels
-describe running time, not working time.
+uses that binding. `sessionShells` reads the owner's fresh session shell roster,
+count and lamp. `liveWork` supplies current helper stop candidates; transcript
+paging is not an input. `createLiveWork` owns capability checks and joined stop
+admission across presentation lifetimes; elapsed labels describe running time,
+not working time.
 
 The helper inventory follows native ancestry and fresh positive work keys,
 independently of task/checkout boundaries and attention priority. Blocked
 helpers remain in the count with their own attention lamps. Cross-project
 routing keeps work facts for these demanded descendants while unrelated pending
 identities remain request-only. Helper title/work changes refresh only family
-ancestors even when the lamp counts do not change. The task entity supplies the
-work-chip lamp; each popover item uses its own session entity.
+ancestors even when the lamp counts do not change. The task's helper roster
+supplies the helper pill and subgroup lamps, separate from the task verdict.
+Each helper popover item uses its own session entity.
 
 `EntityStateStore.observeChanges` observes accepted evidence and staleness
 independently of `subscribe`'s notification transitions. Canonical transcripts

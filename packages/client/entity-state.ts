@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
   BlockedCause,
+  EntityLamp,
   EntityState,
   HelperDisposition,
   ProjectStatus,
+  RunningShells,
   SessionEvidence,
   TaskHelpers,
 } from "@otk/protocol";
-import { entityKey, rollupStatus } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
 export interface EntityTransition {
@@ -155,21 +157,17 @@ export function presentedEntity(
   };
 }
 
-/** Read a published lamp, or roll up the published states of an explicit roster. */
+/** Read a published lamp from the replica or from one of its scoped rosters. */
+export function lamp(publication: EntityLamp | undefined): ProjectStatus;
 export function lamp(
   store: EntityStateStore | undefined,
-  key: string | readonly string[] | undefined,
+  key: string | undefined,
+): ProjectStatus;
+export function lamp(
+  source: EntityStateStore | EntityLamp | undefined,
+  key?: string,
 ): ProjectStatus {
-  if (key === undefined || typeof key === "string") {
-    return entityState(store, key);
-  }
-  if (!store || store.isStale) return "none";
-  let state: ProjectStatus = "none";
-  for (const member of key) {
-    state = rollupStatus(state, store.get(member)?.state);
-    if (state === "blocked") break;
-  }
-  return state;
+  return source && "state" in source ? source.state : entityState(source, key);
 }
 
 export function permissionVisible(
@@ -209,6 +207,13 @@ export function helperDisposition(
   return sessionEvidence(store, key)?.helper;
 }
 
+export function sessionShells(
+  store: EntityStateStore,
+  key: string,
+): RunningShells | undefined {
+  return store.isStale ? undefined : store.get(key)?.shells;
+}
+
 /** Own-session evidence only. Descendant counts retain their explicit scope. */
 export function sessionEvidence(
   store: EntityStateStore,
@@ -232,8 +237,7 @@ export function sessionWorkStatus(
 export function sessionRunning(store: EntityStateStore, key: string): boolean {
   const evidence = sessionEvidence(store, key);
   return !!evidence?.work &&
-    (!evidence.liveWork?.length ||
-      evidence.liveWork.some((item) => item.kind !== "shell"));
+    (!sessionShells(store, key)?.count || !!evidence.liveWork?.length);
 }
 
 export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {

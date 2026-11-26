@@ -140,13 +140,12 @@ export default function Subagents(
           onClose={stop}
           trigger={
             <LiveCount
-              entities={entities()}
-              lampKey={publication().ids.map((id) => entityKey("session", id))}
+              lamp={publication().lamps?.all}
               label={helperCountsLabel(publication().counts)}
               compact={grouped().map((group) => ({
                 id: group.kind,
                 count: group.count,
-                lampKey: group.ids.map((id) => entityKey("session", id)),
+                lamp: publication().lamps?.groups[group.kind],
               }))}
             />
           }
