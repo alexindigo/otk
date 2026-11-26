@@ -171,13 +171,6 @@ export default function SessionView(props: {
     sessionID: props.info?.id,
     label: props.info?.title,
   });
-  const feedback = createMemo(() =>
-    sessionComposerFeedback(
-      props.errorState,
-      failureTarget(),
-      rollbackPresentation().feedback,
-    )
-  );
   let noticeControl: { focus(): void } | undefined;
   const [activationNotice, setActivationNotice] = createSignal<string>();
   const revealLifetime = new AbortController();
@@ -196,6 +189,16 @@ export default function SessionView(props: {
   const interaction = props.transcript?.interaction ??
     createTranscriptInteraction();
   const projection = () => props.transcript?.state ?? fallback();
+  const messageIDs = createMemo(() => new Set(projection().messageIDs));
+  const hasRecord = (id: string) => messageIDs().has(id);
+  const feedback = createMemo(() =>
+    sessionComposerFeedback(
+      props.errorState,
+      failureTarget(),
+      rollbackPresentation().feedback,
+      hasRecord,
+    )
+  );
   const rollbackState = () => rollbackPresentation().state;
   const revertRecords = createRevertRecordProjection();
   const displayedRecords = createMemo(() =>
@@ -802,6 +805,7 @@ export default function SessionView(props: {
                             operationKey={feedback()?.identity}
                             diagnosticID={feedback()?.diagnosticID}
                             composer={feedback()}
+                            hasRecord={hasRecord}
                             onReveal={(messageID) =>
                               void reveal({ messageID }).catch((cause) =>
                                 setRevealError(failureValue(cause))
@@ -816,7 +820,11 @@ export default function SessionView(props: {
                                   contextualFailure(failure, {
                                     target: failureTarget(),
                                   }),
-                                  { surface: "session", view: failureTarget() },
+                                  {
+                                    surface: "session",
+                                    view: failureTarget(),
+                                    hasRecord,
+                                  },
                                 )}
                               />
                             )}

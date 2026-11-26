@@ -52,8 +52,10 @@ export interface FeedbackOwner {
 export type FailurePlacement = "record" | {
   surface: "feedback" | "session" | "notification" | "record";
   view?: FailureTarget;
+  /** The live transcript projection, not a mounted DOM or a retained observation. */
+  hasRecord?(messageID: string): boolean;
 };
-function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
+export function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
   return !!a?.sessionID && a.sessionID === b?.sessionID &&
     (a.sidecarId ?? "local") === (b.sidecarId ?? "local");
 }
@@ -118,11 +120,9 @@ export class FailurePresenter {
     const enrichment = this.#contributions.get(failure.code)?.(failure);
     const facts = failure.facts ?? {};
     const retained = placement === "record" || placement.surface === "record";
-    const reference = !retained &&
-      placement.surface !== "notification" && placement.view?.sessionID &&
-      placement.view.sessionID === facts.target?.sessionID &&
-      (placement.view.sidecarId ?? "local") ===
-        (facts.target?.sidecarId ?? "local");
+    const reference = !retained && placement.surface !== "notification" &&
+      sameView(facts.target, placement.view) && facts.record &&
+      placement.hasRecord?.(facts.record.messageID);
     const action = (facts.action && this.context.action?.(facts.action)) ||
       facts.actionLabel || "The requested action";
     const target =
@@ -227,12 +227,14 @@ export class FailurePresenter {
     occupant?: Feedback,
   ): Feedback | undefined {
     const value = this.#present(failure, placement);
+    if (
+      placement !== "record" && placement.surface === "feedback" &&
+      failure.facts?.record && sameView(failure.facts.target, placement.view) &&
+      failure.facts.origin !== "composer"
+    ) return;
     if (value.failure?.reference && placement !== "record") {
       const origin = failure.facts?.origin ?? "session";
-      if (
-        placement.surface === "session" && origin === "composer" ||
-        placement.surface === "feedback" && origin !== "composer"
-      ) return;
+      if (placement.surface === "session" && origin === "composer") return;
       const held = occupant?.failure;
       if (
         placement.surface === "session" && held?.reference &&
