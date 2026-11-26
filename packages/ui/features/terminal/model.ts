@@ -107,7 +107,10 @@ export function createTerminalPanel(
         continue;
       }
       try {
-        pane.renderer.run(run.text);
+        if (run.text) {
+          pane.renderer.paste(run.text);
+          pane.renderer.submit();
+        }
         pane.renderer.focus();
         run.resolve();
       } catch (cause) {

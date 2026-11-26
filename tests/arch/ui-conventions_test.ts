@@ -14,6 +14,7 @@ import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { composerHeaderErrors } from "./composer-header.ts";
 import { containerChromeErrors } from "./container-chrome.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
+import { terminalRunErrors } from "./terminal-run.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
 import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
 import { registerTranscriptPreferences } from "../../packages/protocol/preferences/transcript.ts";
@@ -23,6 +24,33 @@ import {
 } from "./style-boundaries.ts";
 
 const popoverCSS = "packages/ui/components/surface/Popover.css";
+
+Deno.test("UI convention: one terminal run path", async () => {
+  const surface = "packages/ui/terminal/ghostty/surface.ts";
+  assertEquals(
+    terminalRunErrors(
+      new Map([
+        [
+          surface,
+          'this.core.encodePaste(text) + "\\r"; function pasteAndSubmit() {}',
+        ],
+      ]),
+    ).length,
+    2,
+  );
+  assertEquals(
+    terminalRunErrors(
+      new Map([
+        [
+          surface,
+          'this.sendInput(() => this.core.encodePaste(text)); this.sendInput(() => "\\r");',
+        ],
+      ]),
+    ),
+    [],
+  );
+  assertEquals(terminalRunErrors(await productionSources()), []);
+});
 
 Deno.test("UI convention: container chrome stays off item collections", async () => {
   const tabs = "packages/ui/components/Tabs.tsx";

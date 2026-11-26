@@ -1,7 +1,9 @@
 # Ghostty browser renderer
 
-OTK's Run in terminal is a user paste gesture followed by Enter through
-`pasteAndSubmit`.
+OTK's Run in terminal writes through one owner (`TerminalRuns` in @otk/client):
+a paste gesture through `paste`, then `submit` (Enter) right away, or after the
+user confirms. `erase` removes a pending paste. Programmatic writes are marked
+so user input can end a pending paste.
 
 Vendored from T3 Code (`pingdotgg/t3code`), commit
 `7462f234e89027943cf0d1a73d3ae1f36571d4e3`, `apps/web/src/terminal/ghostty/` and
