@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { FailurePresentation, Feedback } from "@otk/client";
-import { createSignal, Show } from "solid-js";
+import { createSignal, type Element, Show } from "solid-js";
 import DisclosureToggle from "./DisclosureToggle.tsx";
 import Clock from "./Clock.tsx";
-import FailureSignal from "./FailureSignal.tsx";
+import FailureSignal, { type FailureAnnouncement } from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import "./FailureContent.css" with { type: "text" };
 
@@ -26,9 +26,23 @@ export default function FailureContent(props: {
   subgrid?: boolean;
   /** Size to the facts instead of filling an already bounded feedback track. */
   intrinsic?: boolean;
+  /** An optional trailing action shares the Details row. */
+  controls?: Element;
+  announcement?: FailureAnnouncement;
+  class?: string;
 }) {
   const compact = () => props.compact || props.inline;
   const [open, setOpen] = createSignal(false);
+  const toggle = () => (
+    <DisclosureToggle
+      class="otk-failure-details"
+      label="Details"
+      open={open()}
+      onOpen={setOpen}
+    >
+      <span class="otk-failure-detail-toggle">Details</span>
+    </DisclosureToggle>
+  );
   const reason = () => (
     <div class="otk-failure-body">
       <p class="otk-failure-reason">{props.failure.reason}</p>
@@ -56,12 +70,14 @@ export default function FailureContent(props: {
   return (
     <FailureSignal
       as="div"
+      announcement={props.announcement}
       placement="gutter"
       enabled={props.signal !== false && !props.failure.reference &&
         props.failure.tone !== "neutral"}
       informational={props.failure.tone === "info"}
       class={[
         "otk-failure-content",
+        props.class,
         "otk-disclosure-layout",
         compact() ? "is-compact" : "",
         props.expanded ? "is-expanded" : "",
@@ -133,14 +149,12 @@ export default function FailureContent(props: {
                   </button>
                 )}
               </Show>
-              <DisclosureToggle
-                class="otk-failure-details"
-                label="Details"
-                open={open()}
-                onOpen={setOpen}
-              >
-                <span class="otk-failure-detail-toggle">Details</span>
-              </DisclosureToggle>
+              <Show when={props.controls} fallback={toggle()}>
+                <div class="otk-failure-control-row">
+                  {toggle()}
+                  {props.controls}
+                </div>
+              </Show>
               <Show when={open()}>
                 <ScrollRegion axis="y" class="otk-failure-detail-body">
                   <div class="otk-failure-disclosed-reason">{reason()}</div>

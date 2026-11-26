@@ -1041,6 +1041,7 @@ export default function Shell(
             />
             <Toasts
               model={notifications.toast}
+              entities={resources.entities}
               detail={permissionNotificationDetail}
               onMore={() =>
                 void saveLayout({

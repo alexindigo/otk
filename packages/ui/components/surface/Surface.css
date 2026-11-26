@@ -87,13 +87,12 @@
   max-height: none;
 }
 .otk-surface[data-signal] {
-  border-left: 3px solid var(--otk-success);
+  --surface-signal: var(--danger);
+  box-shadow: inset calc(2 * var(--otk-unit)) 0 var(--surface-signal),
+    var(--overlay-shadow);
 }
-.otk-surface[data-signal=error] {
-  border-left-color: var(--danger);
-}
-.otk-surface[data-signal=attention] {
-  border-left-color: var(--otk-attention);
+.otk-surface[data-signal=info] {
+  --surface-signal: var(--otk-fg-3);
 }
 .otk-surface.has-static-children .otk-surface-body > * {
   flex-shrink: 0;

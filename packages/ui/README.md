@@ -1726,15 +1726,16 @@ toast model: information/done chips expire after six seconds, keyed input chips
 are active and errors sticky. Each message borrows the shared feedback binding's
 alert/status semantics and names itself with the owner's complete notification
 text. Toast's Surface body scrolls when the viewport constrains it. The stack
-shows at most three cards, newest first, and delegates its overflow row to an
-injected Sessions-opening callback. Opening that view detaches the stack so it
-cannot cover the session lamps. Each card has a square top-right close slot and
-a trailing Dismiss action. Both dismiss presentation; action buttons use
-delivery-scoped public command IDs. Permission details use the shared summary's
-compact, single-line target with the full text in its title. Session activity
-labels and stale-resume descriptions come from the client formatter. Attention
-is cleared by actual viewing/resolution, not by dismissal or command promise
-completion.
+shows at most three cards, newest first, and the overflow control pages through
+the remaining cards. Opening Sessions detaches the stack so it cannot cover the
+session lamps. Each card has one square top-right dismiss control. Session notes
+show the same live lamp as the sidebar and offer the session name through the
+guarded Open action; failures use their own tone and disclosure. Dismissal
+affects presentation only; action buttons use delivery-scoped public command
+IDs. Permission details use the shared summary's compact, single-line target
+with the full text in its title. Session activity labels and stale-resume
+descriptions come from the client formatter. Attention is cleared by actual
+viewing/resolution, not by dismissal or command promise completion.
 
 The OS channel uses secure-context browser `Notification`, tag replacement,
 silent OS presentation and a focus/default-command click handler. `request`

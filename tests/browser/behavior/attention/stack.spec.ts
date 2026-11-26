@@ -52,7 +52,7 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
         path: info.outputPath(`notif-${count}-${theme}.png`),
       });
       if (count === "eight") {
-        for (const selector of [".otk-toast-close", ".otk-toast-dismiss"]) {
+        for (const selector of [".otk-toast-close", ".otk-toast-target"]) {
           const card = page.locator(".otk-toast").first();
           const control = card.locator(selector);
           await control.hover();
@@ -76,7 +76,7 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   const first = await ask(1);
   const note = page.locator(toast(first.id));
   await expect(
-    note.getByRole("button", { name: "Close notification", exact: true }),
+    note.getByRole("button", { name: "Dismiss notification", exact: true }),
   ).toBeVisible();
   await expect(note.locator(".otk-toast-age")).toHaveText(
     /^Session idle 12d(?: \d+(?:\.\d+)?[hms])*$/,
@@ -115,12 +115,12 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
       const close = stack.querySelector(".otk-toast-close")!;
       const icon = close.firstElementChild!.getBoundingClientRect();
       const c = close.getBoundingClientRect();
-      const dismiss = stack.querySelector(".otk-toast-dismiss")!
+      const allow = stack.querySelector(".otk-toast-action")!
         .getBoundingClientRect();
       const label = document.createRange();
-      label.selectNodeContents(stack.querySelector(".otk-toast-dismiss")!);
+      label.selectNodeContents(stack.querySelector(".otk-toast-action")!);
       const text = label.getBoundingClientRect();
-      const actions = stack.querySelector(".otk-toast-actions")!
+      const foot = stack.querySelector(".otk-toast-foot")!
         .getBoundingClientRect();
       return {
         contained: box.left >= 0 && box.top >= 0 && box.right <= innerWidth &&
@@ -137,13 +137,13 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
           icon.top - c.top,
           c.bottom - icon.bottom,
         ],
-        dismissRight: actions.right - dismiss.right,
-        dismissCenters: [
+        actionRight: foot.right - allow.right,
+        actionCenters: [
           Math.abs(
-            text.left + text.width / 2 - dismiss.left - dismiss.width / 2,
+            text.left + text.width / 2 - allow.left - allow.width / 2,
           ),
           Math.abs(
-            text.top + text.height / 2 - dismiss.top - dismiss.height / 2,
+            text.top + text.height / 2 - allow.top - allow.height / 2,
           ),
         ],
       };
@@ -153,8 +153,8 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
     expect(geometry.cards).toBe(3);
     expect(Math.max(...geometry.gaps) - Math.min(...geometry.gaps))
       .toBeLessThanOrEqual(1);
-    expect(geometry.dismissRight).toBeLessThanOrEqual(1);
-    for (const delta of geometry.dismissCenters) {
+    expect(geometry.actionRight).toBeLessThanOrEqual(1);
+    for (const delta of geometry.actionCenters) {
       expect(delta).toBeLessThanOrEqual(1);
     }
     measurements.push({ width, ...geometry });
@@ -167,11 +167,14 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
       frame.method === "question.reply" || frame.method === "question.reject"
     ).length;
   const before = replies();
-  await newest.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await newest.getByRole("button", {
+    name: "Dismiss notification",
+    exact: true,
+  }).click();
   await expect(newest).toHaveCount(0);
   await expect(page.locator(toast(sessions[6].id))).toBeVisible();
   await page.locator(toast(sessions[6].id)).getByRole("button", {
-    name: "Close notification",
+    name: "Dismiss notification",
     exact: true,
   }).click();
   await expect(page.locator(toast(sessions[6].id))).toHaveCount(0);
@@ -197,7 +200,7 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   // Overflow pages retained evidence; only explicit dismissal retires a note.
   for (let remaining = 6; remaining > 0; remaining--) {
     await page.locator(".otk-toast").first().getByRole("button", {
-      name: "Dismiss",
+      name: "Dismiss notification",
       exact: true,
     }).click();
     await expect(page.locator(".otk-toast")).toHaveCount(
@@ -264,7 +267,7 @@ test(
       };
       const first = await ask();
       await page.locator(toast(session.id)).getByRole("button", {
-        name: "Dismiss",
+        name: "Dismiss notification",
         exact: true,
       }).click();
       await state.product("prefs.set", { key: "notify.toast", value: false });
@@ -303,7 +306,7 @@ test(
       const second = await ask();
       expect(second.id).not.toBe(first.id);
       await page.locator(toast(session.id)).getByRole("button", {
-        name: "Close notification",
+        name: "Dismiss notification",
         exact: true,
       }).click();
       expect(

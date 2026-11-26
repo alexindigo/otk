@@ -8,50 +8,83 @@
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
-  width: min(25rem, calc(100vw - 2 * var(--overlay-gutter)));
+  width: min(calc(400 * var(--otk-unit)), calc(100vw - 2 *
+    var(--overlay-gutter)));
+  max-height: calc(100dvh - 2 * var(--overlay-gutter));
   pointer-events: none;
 }
-.otk-toast-header {
+.otk-toast-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--control-size);
   align-items: start;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
 }
-.otk-toast-message {
-  row-gap: var(--space-1);
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  padding: 0;
-  line-height: 1.5;
+.otk-toast.has-lead .otk-toast-row {
+  grid-template-columns: var(--control-size) minmax(0, 1fr) var(--control-size);
+}
+.otk-toast-lead {
+  display: grid;
+  place-items: center;
+  block-size: var(--control-size);
+}
+.otk-toast-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(var(--control-size), auto);
+  align-items: center;
+  column-gap: var(--space-1);
+  min-inline-size: 0;
+}
+.otk-toast-line > :not(.otk-toast-title, .otk-toast-target) {
+  grid-column: 1 / -1;
 }
 .otk-toast-title {
   font-weight: 500;
 }
-.otk-toast-body {
+.otk-toast-target {
+  --focus-ring-offset: 0px;
+  justify-self: start;
+  padding: var(--space-1);
+  font-weight: 400;
   color: var(--otk-fg-faint);
 }
-.otk-toast-actions {
+.otk-toast-target:is(button, a):hover {
+  background: none;
+  color: var(--otk-fg);
+  text-decoration: underline;
+}
+.otk-toast-more {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+.otk-toast.has-lead .otk-toast-more {
+  grid-column-start: 2;
+}
+.otk-toast-foot,
+.otk-toast-foot-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.otk-toast-actions button {
+.otk-toast-foot-actions {
+  min-inline-size: 0;
+  margin-inline-start: auto;
+}
+.otk-toast-action {
   font-size: var(--text-meta);
 }
-.otk-toast-dismiss {
-  margin-inline-start: auto;
+.otk-toast-row > .otk-toast-failure {
+  grid-column: 1 / 3;
+  --failure-heading-size: var(--control-size);
+  --failure-heading-align: center;
+}
+.otk-toast-failure-action {
+  text-align: end;
+  min-inline-size: 0;
 }
 .otk-toasts-more {
   pointer-events: auto;
   align-self: flex-end;
   background: var(--overlay-bg);
-}
-.otk-toasts {
-  max-height: calc(100dvh - 2 * var(--overlay-gutter));
-}
-.otk-toasts-more {
   flex: none;
 }
