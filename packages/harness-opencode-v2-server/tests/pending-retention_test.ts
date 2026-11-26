@@ -8,6 +8,7 @@ import { V2RequestRetention } from "../request-retention.ts";
 import { Transcript } from "../transcript.ts";
 
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,

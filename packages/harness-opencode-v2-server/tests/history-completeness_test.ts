@@ -25,6 +25,7 @@ import { requestFailureFacts } from "../request-failure.ts";
 
 const sessionID = "opcv2-ses_history";
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 1048576,
   coolms: 1000,

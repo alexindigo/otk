@@ -50,6 +50,7 @@ function fixture(revert?: NativeSession["revert"]) {
   } as unknown as V2Client;
   const policy: MessagePolicy = {
     prefetchms: 1000,
+    bridgepages: 4,
     prefetchbytes: 1000,
     coolms: 1000,
     preloadms: 1000,
