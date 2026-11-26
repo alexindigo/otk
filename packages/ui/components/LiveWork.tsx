@@ -40,9 +40,7 @@ export default function LiveWork(
       onClose={stop}
       trigger={
         <LiveCount
-          lamp={props.shells}
-          label={label()}
-          compact={[{
+          parts={[{
             id: "shells",
             count: props.shells.count,
             lamp: props.shells,

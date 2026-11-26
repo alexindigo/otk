@@ -17,21 +17,11 @@
   min-inline-size: 0;
   white-space: nowrap;
 }
-.otk-live-count.is-full {
-  display: var(--live-count-full, flex);
-}
 .otk-live-count-compact {
-  display: var(--live-count-compact, none);
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-  min-inline-size: 0;
-}
-.otk-live-count-compact.is-only {
   display: inline-flex;
-  flex-wrap: nowrap;
+  align-items: center;
   gap: var(--space-2);
+  min-inline-size: 0;
 }
 /* The header aligns its labels, while the interaction surface has its own
    padding. Its paint box does not consume space from the caption or link. */
