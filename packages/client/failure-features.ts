@@ -13,6 +13,7 @@ import {
   type Feedback,
   type FeedbackOwner,
   GENERIC_FAILURE_REASON,
+  sameView,
 } from "./failures.ts";
 import type {
   FailureFacts,
@@ -367,13 +368,30 @@ export function replyErrorFeedback(
 export function composerPointer(
   failures: readonly PublicFailure[],
   view: FailureTarget | undefined,
-  local?: Feedback,
+  local: Feedback | undefined,
+  hasRecord: (messageID: string) => boolean,
 ): Feedback | undefined {
-  if (local) return local;
+  const placement = { surface: "feedback", view, hasRecord } as const;
+  if (local) {
+    const value = local.failure;
+    if (!value?.value.facts?.record) return local;
+    const shown = shipped.describe(value.value, placement);
+    return {
+      ...local,
+      text: shown.text,
+      failure: {
+        ...shown.failure!,
+        count: value.count,
+        occurrences: value.occurrences,
+      },
+    };
+  }
   for (const failure of failures) {
-    if (failure.facts?.origin !== "composer") continue;
-    const shown = shipped.describe(failure, { surface: "feedback", view });
-    if (shown.failure?.reference) return shown;
+    if (
+      failure.facts?.origin !== "composer" || !failure.facts.record ||
+      !sameView(failure.facts.target, view)
+    ) continue;
+    return shipped.describe(failure, placement);
   }
   return local;
 }
@@ -381,7 +399,8 @@ export function composerPointer(
 export function sessionComposerFeedback(
   state: import("@otk/protocol").SessionErrorState | undefined,
   view: FailureTarget | undefined,
-  local?: Feedback,
+  local: Feedback | undefined,
+  hasRecord: (messageID: string) => boolean,
 ): Feedback | undefined {
   return composerPointer(
     (state?.observations ?? []).flatMap((observation) => {
@@ -396,6 +415,7 @@ export function sessionComposerFeedback(
     }),
     view,
     local,
+    hasRecord,
   );
 }
 export function placeFailure(
@@ -404,6 +424,19 @@ export function placeFailure(
   occupant?: Feedback,
 ): Feedback | undefined {
   return shipped.place(failure, placement, occupant);
+}
+
+/** A failed local send with a published request record keeps its identity,
+ * not a second rendering of the record. Unlinked, local-only failures still
+ * own their reason and recovery (for example, an unconfirmed send). */
+export function failedSendPresentation(feedback?: Feedback): {
+  diagnosticID?: string;
+  feedback?: Feedback;
+} {
+  return {
+    diagnosticID: feedback?.diagnosticID,
+    feedback: feedback?.failure?.value.facts?.record ? undefined : feedback,
+  };
 }
 
 /** Target-bound presentation outlives any mounted view and borrows request state. */

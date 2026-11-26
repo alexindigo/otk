@@ -1,9 +1,66 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { openSession } from "../../fixtures/wire.ts";
+import { openSession, wire } from "../../fixtures/wire.ts";
 
 test.use({ profile: "composer-request-failure" });
+
+test.describe("accepted send", () => {
+  test.use({ profile: "isolated" });
+  test("composer.revert-removes-pointer-but-keeps-the-failure", {
+    tag: ["@composer", "@revert", "@isolated"],
+  }, async ({ isolatedState: state, page }, info) => {
+    const source = await state.native<{ id: string }>("/session", "POST", {
+      title: "Revert past a failed send",
+    });
+    await wire(
+      page,
+      (frame) =>
+        frame.t === "request" && frame.method === "session.prompt"
+          ? {
+            ...frame,
+            params: {
+              ...frame.params,
+              model: { provider: "fake", model: "scripte" },
+            },
+          }
+          : frame,
+    );
+    await openSession(state, page, source.id);
+    const input = page.locator("textarea[name=prompt]");
+    await input.fill("Revert from this failed prompt");
+    await input.press("Enter");
+    const notice = page.locator(".otk-composer-notice");
+    const record = page.locator('[data-native-record$="/request-failure"]');
+    await expect(record).toHaveCount(1);
+    await expect(notice.locator(".otk-failure-reference")).toHaveCount(1);
+
+    const prompt = page.getByText("Revert from this failed prompt", {
+      exact: true,
+    });
+    await prompt.scrollIntoViewIfNeeded();
+    const bubble = prompt.locator("xpath=ancestor::article");
+    await bubble.locator(".otk-user-bubble").focus();
+    await bubble.locator('[data-message-command="prompt.revert"]').click();
+    await page.getByRole("button", { name: "Confirm revert", exact: true })
+      .click();
+    await expect(page.locator(".otk-revert-group")).toContainText(
+      "Reverted from",
+    );
+    await expect(record).toHaveCount(0);
+    await expect(notice.locator(".otk-failure-reference")).toHaveCount(0);
+    await expect(notice.locator(".otk-failure-heading")).toHaveText(
+      "Running session failed",
+    );
+    await expect(page.getByText("Running session failed", { exact: true }))
+      .toHaveCount(1);
+    await info.attach("reverted-failure-without-pointer", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
+  });
+});
+
 test("messages.definitive-independent-rejection-has-one-session-pointer", {
   tag: ["@messages", "@composer", "@isolated"],
 }, async ({ isolatedState: state, page }, info) => {

@@ -163,7 +163,7 @@ export default function SessionView(props: {
     revertPresentation(
       props.rollback?.state ?? {},
       requestFeedback(),
-      props.branchHistory?.state.error,
+      props.branchHistory?.state,
     )
   );
   const failureTarget = () => ({
@@ -171,13 +171,6 @@ export default function SessionView(props: {
     sessionID: props.info?.id,
     label: props.info?.title,
   });
-  const feedback = createMemo(() =>
-    sessionComposerFeedback(
-      props.errorState,
-      failureTarget(),
-      rollbackPresentation().feedback,
-    )
-  );
   let noticeControl: { focus(): void } | undefined;
   const [activationNotice, setActivationNotice] = createSignal<string>();
   const revealLifetime = new AbortController();
@@ -196,6 +189,16 @@ export default function SessionView(props: {
   const interaction = props.transcript?.interaction ??
     createTranscriptInteraction();
   const projection = () => props.transcript?.state ?? fallback();
+  const messageIDs = createMemo(() => new Set(projection().messageIDs));
+  const hasRecord = (id: string) => messageIDs().has(id);
+  const feedback = createMemo(() =>
+    sessionComposerFeedback(
+      props.errorState,
+      failureTarget(),
+      rollbackPresentation().feedback,
+      hasRecord,
+    )
+  );
   const rollbackState = () => rollbackPresentation().state;
   const revertRecords = createRevertRecordProjection();
   const displayedRecords = createMemo(() =>
@@ -308,7 +311,9 @@ export default function SessionView(props: {
           }
           : undefined}
         warning={props.branchHistory?.preservationWarning()}
-        failureVisible={!props.branchHistory?.state.permanence}
+        failure={rollbackPresentation().recordFailure?.failure}
+        failureStatus={rollbackPresentation().recordStatus}
+        recoverCopy={rollbackPresentation().recordRecovery}
         onOpenCopy={props.branchHistory && rollbackState().record
           ? () => {
             const branch = props.branchHistory!.state.branches.find((branch) =>
@@ -328,33 +333,27 @@ export default function SessionView(props: {
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
-  const copyRecovery = () =>
-    !!props.branchHistory?.state.recovery &&
-    (!rollbackState().record || !!rollbackState().dismissed);
   const noticed = () =>
     !!props.forkNote || !!feedback() || !!activationNotice() ||
     !!props.draftRecoveries?.length ||
     !!props.branchHistory?.state.permanence ||
-    copyRecovery() ||
+    rollbackPresentation().noticeRecovery ||
     !!props.branchHistory?.state.choice ||
-    !!props.branchHistory?.state.error && !rollbackState().record;
-  const branchFailureVisible = () => {
-    const value = props.branchHistory?.state.error;
-    return !value || value.diagnosticID !== feedback()?.diagnosticID;
-  };
+    !!rollbackPresentation().branchFeedback;
   // The slot's identity is its mounted lifetime, not each feedback publication.
   const notice = () => (
     <ComposerNotice>
       <Show when={props.branchHistory}>
         {(owner) => (
           <>
-            <RevertSendChoice owner={owner()} />
+            <RevertSendChoice
+              owner={owner()}
+              feedback={rollbackPresentation().permanenceFeedback}
+            />
             <SavedBranchNotice
               owner={owner()}
-              failureVisible={branchFailureVisible() &&
-                !owner().state.permanence &&
-                (!rollbackState().record || !!rollbackState().dismissed)}
-              recoveryVisible={copyRecovery()}
+              feedback={rollbackPresentation().branchFeedback}
+              recoveryVisible={rollbackPresentation().noticeRecovery}
               statusVisible={false}
             />
           </>
@@ -802,6 +801,7 @@ export default function SessionView(props: {
                             operationKey={feedback()?.identity}
                             diagnosticID={feedback()?.diagnosticID}
                             composer={feedback()}
+                            hasRecord={hasRecord}
                             onReveal={(messageID) =>
                               void reveal({ messageID }).catch((cause) =>
                                 setRevealError(failureValue(cause))
@@ -816,7 +816,11 @@ export default function SessionView(props: {
                                   contextualFailure(failure, {
                                     target: failureTarget(),
                                   }),
-                                  { surface: "session", view: failureTarget() },
+                                  {
+                                    surface: "session",
+                                    view: failureTarget(),
+                                    hasRecord,
+                                  },
                                 )}
                               />
                             )}

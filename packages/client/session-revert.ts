@@ -10,6 +10,7 @@ import {
   errorFeedback,
   type FailureValue,
   failureValue,
+  placeFailure,
 } from "./failure-features.ts";
 import { type Feedback, RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
@@ -19,7 +20,11 @@ import type { TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { Drafts } from "./drafts.ts";
 import { historyDraft } from "./prompt-history.ts";
-import { type BranchHistory, savedBranchMatches } from "./branch-history.ts";
+import {
+  type BranchHistory,
+  type BranchHistoryState,
+  savedBranchMatches,
+} from "./branch-history.ts";
 
 export interface RevertStrip {
   boundaryID: string;
@@ -55,17 +60,73 @@ type RevertFlow = SessionRevertState & { preview?: Message[] };
 export function revertPresentation(
   state: SessionRevertState,
   feedback?: Feedback,
-  branchFailure?: FailureValue,
-): { state: SessionRevertState; feedback?: Feedback } {
+  history?: BranchHistoryState,
+): {
+  state: SessionRevertState;
+  recordFailure?: Feedback;
+  recordStatus?: string;
+  branchFeedback?: Feedback;
+  permanenceFeedback?: Feedback;
+  recordRecovery: boolean;
+  noticeRecovery: boolean;
+  feedback?: Feedback;
+} {
+  const branch = errorFeedback(history?.error);
+  const ownsRecord = !!state.record && !state.dismissed;
+  const copyRecovery = history?.recovery;
+  const recordRecovery = ownsRecord &&
+    copyRecovery?.boundaryID === state.record?.boundaryID;
+  const failure = (recordRecovery ? branch : undefined) ??
+    errorFeedback(state.error);
+  const recordFailure = ownsRecord && failure?.failure
+    ? placeFailure(failure.failure.value, {
+      surface: "record",
+      view: failure.failure.value.facts?.target,
+    })
+    : undefined;
+  const permanence = history?.permanence;
+  const permanenceFeedback = errorFeedback(permanence?.error);
+  const recordOwnsBranch = !!recordFailure &&
+    recordFailure.diagnosticID === branch?.diagnosticID;
+  const recordOwnsCause = !!recordFailure &&
+    recordFailure.diagnosticID === permanence?.causeID;
+  const branchFeedback = !recordOwnsBranch &&
+      (!permanence || !branch?.diagnosticID ||
+        branch.diagnosticID !== permanence.causeID)
+    ? branch
+    : undefined;
   const sameRequest = feedback?.identity && state.key === feedback.identity;
   const sameFailure = feedback?.diagnosticID &&
     state.failure?.diagnosticID === feedback.diagnosticID;
-  const sameBranchFailure = branchFailure && branchFailure.diagnosticID &&
-    feedback?.diagnosticID === branchFailure.diagnosticID;
+  const sameBranchFailure = branch?.diagnosticID &&
+    feedback?.diagnosticID === branch.diagnosticID;
   const ownsPending = sameRequest && state.pending &&
     feedback?.kind === "pending" && !feedback.failure;
   return {
     state,
+    recordFailure,
+    recordStatus: recordFailure &&
+        (recordRecovery ||
+          recordFailure.failure?.value.code.startsWith("branch-history.")) &&
+        state.phase === "failed"
+      ? "Copy not saved"
+      : recordFailure?.failure?.heading,
+    branchFeedback,
+    permanenceFeedback: recordOwnsCause && permanenceFeedback?.failure
+      ? placeFailure({
+        ...permanenceFeedback.failure.value,
+        facts: {
+          ...permanenceFeedback.failure.value.facts,
+          reason: "The replacement was not sent.",
+          details: undefined,
+        },
+      }, {
+        surface: "feedback",
+        view: permanenceFeedback.failure.value.facts?.target,
+      })
+      : permanenceFeedback,
+    recordRecovery: !!recordRecovery,
+    noticeRecovery: !!copyRecovery && !recordRecovery && !permanence,
     feedback: ownsPending || sameRequest || sameFailure || sameBranchFailure
       ? undefined
       : feedback,
@@ -657,7 +718,7 @@ export function createSessionRevert(options: {
     },
     retry() {
       return options.branchHistory?.retryCopy?.().catch(() => {
-        // The branch-history owner publishes the failure for both surfaces.
+        // The branch-history owner publishes the failure for placement.
       }) ?? Promise.resolve();
     },
     dismiss() {

@@ -6,7 +6,7 @@ import {
   age,
   branchDraftLabels,
   type BranchHistory,
-  errorFeedback,
+  type Feedback,
   isReplaced,
   savedBranchProjection,
   savedPromptDraft,
@@ -20,11 +20,11 @@ import ScrollRegion from "./ScrollRegion.tsx";
 import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
-import FittedActions from "./FittedActions.tsx";
+import FittedActions, { type FittedAction } from "./FittedActions.tsx";
 import TimeText from "./TimeText.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
 export function RevertSendChoice(
-  props: { owner: BranchHistory },
+  props: { owner: BranchHistory; feedback?: Feedback },
 ): import("solid-js").Element {
   const choice = () => props.owner.state.permanence;
   const perform = (action: () => Promise<void>) => {
@@ -34,7 +34,9 @@ export function RevertSendChoice(
     <Show when={choice()}>
       {(pending) => (
         <div class="otk-permanence-choice">
-          <OperationFeedback feedback={errorFeedback(pending().error)!} />
+          <Show when={props.feedback}>
+            {(value) => <OperationFeedback feedback={value()} />}
+          </Show>
           <ComposerNoticeRow>
             <FittedActions
               items={[
@@ -69,7 +71,7 @@ export function RevertSendChoice(
 export function SavedBranchNotice(
   props: {
     owner: BranchHistory;
-    failureVisible?: boolean;
+    feedback?: Feedback;
     recoveryVisible?: boolean;
     statusVisible?: boolean;
   },
@@ -84,8 +86,8 @@ export function SavedBranchNotice(
   };
   return (
     <>
-      <Show when={props.failureVisible !== false && state().error}>
-        <OperationFeedback feedback={errorFeedback(state().error)!} />
+      <Show when={props.feedback}>
+        {(value) => <OperationFeedback feedback={value()} />}
       </Show>
       <Show
         when={props.recoveryVisible !== false && state().recovery &&
@@ -130,30 +132,30 @@ export function SavedBranchNotice(
   );
 }
 export function BranchCopyRecovery(props: { owner: BranchHistory }) {
-  return (
-    <FittedActions
-      items={[
-        {
-          key: "retry",
-          label: props.owner.state.pending ? "Saving copy..." : "Retry",
-          disabled: props.owner.state.pending,
-          run: () => {
-            void props.owner.retryCopy().catch((cause) =>
-              props.owner.fail(cause)
-            );
-          },
-        },
-        {
-          key: "keep",
-          label: "Keep without a saved copy",
-          disabled: props.owner.state.pending,
-          title:
-            "Keep the live conversation and current draft without saving the earlier conversation",
-          run: () => props.owner.keepWithoutCopy(),
-        },
-      ]}
-    />
-  );
+  return <FittedActions items={branchCopyRecoveryActions(props.owner)} />;
+}
+
+export function branchCopyRecoveryActions(
+  owner: BranchHistory,
+): FittedAction[] {
+  return [
+    {
+      key: "retry",
+      label: owner.state.pending ? "Saving copy..." : "Retry",
+      disabled: owner.state.pending,
+      run: () => {
+        void owner.retryCopy().catch((cause) => owner.fail(cause));
+      },
+    },
+    {
+      key: "keep",
+      label: "Keep without a saved copy",
+      disabled: owner.state.pending,
+      title:
+        "Keep the live conversation and current draft without saving the earlier conversation",
+      run: () => owner.keepWithoutCopy(),
+    },
+  ];
 }
 export default function SavedBranches(
   props: {
