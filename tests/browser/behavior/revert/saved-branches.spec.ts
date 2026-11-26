@@ -45,12 +45,13 @@ async function noClippedRecovery(page: Page) {
     async () => (await visible()).every((control) => control.fits),
     { message: "All visible recovery controls fit whole after layout settles" },
   ).toBe(true);
-  const keep = row.getByRole("button", {
+  const recovery = copyRecoveryActions(page);
+  const keep = recovery.getByRole("button", {
     name: "Keep without a saved copy",
     exact: true,
   });
   if (!await keep.isVisible()) {
-    await row.getByRole("button", { name: "More actions", exact: true })
+    await recovery.getByRole("button", { name: "More actions", exact: true })
       .click();
     await expect(
       page.getByRole("menu").getByRole("menuitem", {
@@ -60,6 +61,14 @@ async function noClippedRecovery(page: Page) {
     ).toBeVisible();
     await page.keyboard.press("Escape");
   }
+}
+
+function copyRecoveryActions(page: Page) {
+  // The failure's Details may have its own More. Find the recovery actions
+  // by their specific offer, which is also mounted when folded into More.
+  return page.locator(".otk-composer-notice .otk-fitted-actions").filter({
+    has: page.locator('button[aria-label="Keep without a saved copy"]'),
+  });
 }
 
 test.use({
@@ -729,7 +738,10 @@ test(
     await expect(input).toHaveValue("Keep this narrow draft");
     await noClippedRecovery(page);
     const notice = page.locator(".otk-composer-notice");
-    await notice.getByRole("button", { name: "More actions", exact: true })
+    await copyRecoveryActions(page).getByRole("button", {
+      name: "More actions",
+      exact: true,
+    })
       .click();
     await page.getByRole("menuitem", {
       name: "Keep without a saved copy",

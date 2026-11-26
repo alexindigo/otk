@@ -30,14 +30,16 @@ export default function RecordRow(props: {
         class="otk-record-row-grid"
       >
         {props.icon()}
-        <div class="otk-record-row-label">{props.children}</div>
-        <Show when={props.status}>
-          <div class="otk-record-row-status">
-            <MetaRow whole intrinsic class="otk-record-row-facts">
-              <ContentSlot content={props.status} />
-            </MetaRow>
-          </div>
-        </Show>
+        <div class="otk-record-row-main">
+          <div class="otk-record-row-label">{props.children}</div>
+          <Show when={props.status}>
+            <div class="otk-record-row-status">
+              <MetaRow whole intrinsic class="otk-record-row-facts">
+                <ContentSlot content={props.status} />
+              </MetaRow>
+            </div>
+          </Show>
+        </div>
         <Show when={props.actions?.length}>
           <div class="otk-record-row-actions">
             <FittedActions inline items={props.actions ?? []} />
