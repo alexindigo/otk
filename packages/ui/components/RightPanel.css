@@ -1,24 +1,26 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-right-panel {
-  position: relative;
-  flex: none;
-  min-height: 0;
+.otk-panel-header {
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--otk-border);
-  background: var(--otk-bg-side);
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--chrome-inset) var(--corner);
 }
-.otk-right-panel[hidden] {
-  display: none;
+.otk-panel-header.is-collapsed {
+  padding-inline-start: 0;
+  justify-content: end;
 }
 .otk-panel-icons {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: var(--chrome-gap);
-  padding: 0 var(--corner-zone) 0 var(--chrome-inset);
-  min-height: var(--chrome-header-height);
-  flex: none;
+  flex: 1;
   flex-wrap: wrap;
+}
+.otk-panel-rail-body {
+  flex: 1;
+  min-height: 0;
 }
 .otk-panel-icons button {
   --selection-padding: 0;

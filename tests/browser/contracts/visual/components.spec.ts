@@ -623,19 +623,18 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "chrome");
-    const padding = () =>
-      page.locator(".otk-task-strip").evaluate((el) =>
-        getComputedStyle(el).paddingRight
-      );
+    const width = async () =>
+      (await page.locator(".otk-task-list").boundingBox())!.width;
     await page.evaluate("styleTest.reserve(false);styleTest.collapse(false)");
-    const normal = await padding();
+    const normal = await width();
     await page.evaluate(
       "document.body.className='otk-app';document.body.dataset.rightCollapsed='true'",
     );
-    expect(await padding()).toBe(normal);
+    expect(await width()).toBe(normal);
     await page.evaluate("document.body.className='';styleTest.reserve(true)");
-    await expect.poll(padding).not.toBe("12px");
-    expect(await padding()).not.toBe(normal);
+    await expect(page.getByRole("button", { name: "Trailing action" }))
+      .toBeVisible();
+    await expect.poll(width).toBeLessThan(normal);
     await page.evaluate("styleTest.collapse(true)");
     await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
       "data-collapsed",

@@ -85,6 +85,7 @@ export default function ProjectInbox(props: {
   prefs: Preferences;
   ready: boolean;
   history?: import("solid-js").Element;
+  collapseToggle?: import("solid-js").Element;
   holdOrder?(): () => void;
   onOpen(project: ProjectSelection): void;
   onAttention?(project: ProjectSelection): void;
@@ -725,6 +726,7 @@ export default function ProjectInbox(props: {
       bodyClass="otk-inbox-scroll"
       header={
         <div class="otk-inbox-brand">
+          {props.collapseToggle}
           <div class="otk-inbox-identity">
             <Show when={!collapsed()}>{props.history}</Show>
             <strong>OTK</strong>

@@ -83,8 +83,8 @@ export default function ProjectTabs(props: {
   rename?: SessionRename;
   displayMenu?: Element;
   projectChip?: Element;
-  /** Reserve space for consumer chrome without inspecting its class or state. */
-  reserveTrailing?: boolean;
+  /** Optional chrome content in its own in-flow trailing slot. */
+  trailing?: Element;
   ready: boolean;
   /** Guarded navigation; its accepted route reconciles the session's owning tab. */
   onOpen(id: string): boolean;
@@ -395,7 +395,6 @@ export default function ProjectTabs(props: {
       ref={orderInput}
       class="otk-project-tabs"
       aria-label="Project tabs"
-      data-reserve-trailing={props.reserveTrailing ? "true" : undefined}
     >
       <Show when={error()}>
         <FeedbackStatus feedback={errorFeedback(error())} />
@@ -565,6 +564,7 @@ export default function ProjectTabs(props: {
           </button>
         </Show>
         <div class="otk-topbar-end">{props.displayMenu}</div>
+        {props.trailing}
       </div>
       <div class="otk-breadcrumb-row">
         <nav class="otk-task-crumbs" aria-label="Task sessions">

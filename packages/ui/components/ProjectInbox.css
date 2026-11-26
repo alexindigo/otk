@@ -2,10 +2,10 @@
 .otk-inbox-brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-2);
   height: var(--chrome-header-height);
   flex: none;
-  padding: 0 var(--chrome-inset) 0 var(--corner-zone);
+  padding-inline: var(--corner);
 }
 .otk-inbox-brand strong {
   font-family: var(--font-mono);
@@ -143,15 +143,16 @@
   background: var(--otk-hover);
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-brand {
-  padding: 0;
+  padding-inline-end: 0;
 }
-.otk-project-inbox[data-collapsed=true] .otk-inbox-brand > * {
+.otk-project-inbox[data-collapsed=true] :is(.otk-inbox-identity, .otk-add-project) {
   display: none;
 }
 .otk-inbox-identity {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex: 1;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-leading {
   --history-axis: column;
