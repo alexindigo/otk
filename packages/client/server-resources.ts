@@ -3,7 +3,9 @@ import type {
   CapabilityName,
   IndexEntry,
   Preferences,
+  ProjectEditTarget,
   ProjectLocation,
+  ProjectPatch,
   ServerFrame,
   SessionStructure,
   SessionTreeTarget,
@@ -138,6 +140,10 @@ export interface ServerResources {
   duplicateProjectName(name: string): boolean;
   checkoutLabel(sidecarId: string, directory: string): string;
   projectLabel(sidecarId: string, directory: string): string;
+  updateProject(
+    target: ProjectSelection & ProjectEditTarget,
+    patch: ProjectPatch,
+  ): Promise<void>;
   projects(
     now: number,
   ): (ProjectProjectionRow & { sidecarId: string; label: string })[];
@@ -1089,6 +1095,13 @@ export function createServerResources(o: {
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     checkoutLabel: (id, directory) => projectOwner(id).label(directory),
     projectLabel: (id, directory) => projectOwner(id).projectLabel(directory),
+    async updateProject({ sidecarId, directory, projectID }, patch) {
+      await sidecars.connection(sidecarId).rpc.call("project.update", {
+        directory,
+        projectID,
+        patch,
+      });
+    },
     duplicateProjectName: (name) => {
       for (const s of sidecars.state.list) projectOwner(s.id);
       void nameClock.state.keys[name];

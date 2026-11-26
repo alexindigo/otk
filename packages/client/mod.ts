@@ -147,6 +147,7 @@ export * from "./session-actions.ts";
 export * from "./session-revert.ts";
 export * from "./session-rename.ts";
 export * from "./inline-rename.ts";
+export * from "./project-rename.ts";
 export * from "./session-title.ts";
 export * from "./input-guard.ts";
 export * from "./shell-navigation.ts";

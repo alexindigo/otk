@@ -18,6 +18,7 @@ import {
 } from "solid-js";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import {
+  canRenameProject,
   CommandHub,
   FeedbackFailure,
   historyTarget,
@@ -91,6 +92,7 @@ export default function Shell(
     branchHistory,
     actions,
     rename,
+    projectRename,
     revert,
     forkNotes,
     guard,
@@ -584,6 +586,7 @@ export default function Shell(
             toggles,
             usage: session.usage,
             rename,
+            projectRename,
             transcript: {
               messages: () => session.state.content.messages,
               exhausted: () => session.state.exhausted,
@@ -706,6 +709,12 @@ export default function Shell(
               projects={projects()}
               duplicateName={resources.duplicateProjectName}
               projectLabel={resources.projectLabel}
+              projectRename={projectRename}
+              canRename={(row) =>
+                canRenameProject(
+                  row,
+                  resources.server(row.sidecarId)?.capabilities ?? [],
+                )}
               entities={resources.entities}
               servers={sidecars.state.list}
               selected={project()}

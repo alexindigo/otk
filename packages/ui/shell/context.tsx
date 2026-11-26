@@ -28,6 +28,7 @@ export interface ShellPorts {
   toggles: Toggles;
   usage: SessionUsageOwner;
   rename?: SessionRename;
+  projectRename?: import("@otk/client").ProjectRename;
   transcript: {
     messages(): Message[];
     exhausted(): boolean;
