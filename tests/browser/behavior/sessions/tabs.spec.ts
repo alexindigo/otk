@@ -238,19 +238,28 @@ test.describe("task tabs", () => {
     const chip = page.getByRole("button", {
       name: /^Subagents:/,
     });
+    const trail = page.locator(".otk-trail");
+    const current = trail.locator('[data-crumb][aria-current="page"]');
     await expect(chip).toBeVisible();
-    await expect(page.locator("[data-crumb]:visible")).toHaveCount(10);
-    await expect(page.locator("[data-fit-mode]").first()).toHaveAttribute(
+    // WP9 keeps every D67 ancestor navigable when compact titles cannot fit.
+    await expect(trail.locator("a[data-crumb]")).toHaveCount(ids.length);
+    await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
       "data-fit-mode",
-      "compact",
+      "scroll",
     );
+    await expect(current).toHaveAttribute("data-crumb", "tstv1-chain-8");
+    await expect(current).toBeInViewport({ ratio: 0.99 });
+    await current.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(trail.locator("[data-crumb=tstv1-chain-7]")).toBeFocused();
     await chip.click();
-    const choice = page.locator(".otk-subagents [data-subagent]")
-      .nth(1);
-    const id = await choice.getAttribute("data-subagent");
-    expect(ids).toContain(id);
+    const id = "tstv1-chain-6";
+    const choice = page.getByRole("menu", { name: "Subagents" }).locator(
+      `[data-subagent="${id}"]`,
+    );
     await choice.locator(".otk-subagent-name").click();
     await expect(page).toHaveURL(new RegExp(`${id}$`));
+    await expect(current).toHaveAttribute("data-crumb", id);
     await expect(page.locator(`[data-tab="${task.id}"]`)).toHaveAttribute(
       "aria-selected",
       "true",
@@ -261,7 +270,7 @@ test.describe("task tabs", () => {
       "",
     );
     await chip.click();
-    await expect(page.locator(`[data-subagent="${id}"] .otk-lamp-shape`))
+    await expect(choice.locator(".otk-lamp-shape"))
       .toHaveCSS("display", "block");
   });
 });
