@@ -1,8 +1,53 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { NotificationHub } from "@otk/client";
+import { serverNotifications } from "../shell/notifications.ts";
 import { ManualClock } from "../../../tests/support/manual-clock.ts";
 import { registerToastChannel } from "../features/notify/toast.ts";
+
+Deno.test("persistent server delivery dedupes retries and honors dismissal until the state changes", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
+  const hub = new NotificationHub(
+    () => ({ channels: ["toast"] }),
+    async () => {},
+    (error) => {
+      throw error;
+    },
+  );
+  const servers = serverNotifications(hub);
+  const { model, stop } = registerToastChannel(hub);
+  try {
+    const sidecar = { id: "local", label: "This server" };
+    const outage = { kind: "unreachable", since: 10 } as const;
+    const offline = { ...sidecar, continuity: outage };
+    servers.update([offline]);
+    const first = model.state.items[0];
+    servers.update([{ ...offline, continuity: { ...outage } }]);
+    assertEquals(model.state.items[0].delivery === first.delivery, true);
+    assertEquals(clock.pending, 0);
+    clock.advanceTo(7000);
+    assertEquals(model.state.items.length, 1);
+    first.delivery.dismiss();
+    servers.update([{
+      ...offline,
+      continuity: { ...outage, refused: "Probe failed" },
+    }]);
+    assertEquals(model.state.items.length, 0);
+    servers.update([{
+      ...sidecar,
+      continuity: { kind: "updated", build: "b" },
+    }]);
+    assertEquals(model.state.items.map(({ note }) => note.title), [
+      "OTK was updated",
+    ]);
+    servers.update([]);
+    assertEquals(model.state.items.length, 0);
+  } finally {
+    stop();
+    hub.stop();
+  }
+});
 
 Deno.test("toast hold preserves a transient and restarts a full six seconds", () => {
   const clock = new ManualClock();

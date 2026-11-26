@@ -15,7 +15,7 @@ export interface ToastsModel {
   hold(id: string, held: boolean): void;
 }
 const AUTO_DISMISS_MS = 6000;
-/** Keyed active/error chips; transient information owns its exact timer. */
+/** Keyed input, error and server chips persist; transient information owns its timer. */
 export function registerToastChannel(
   hub: NotificationHub,
 ): { model: ToastsModel; stop(): void } {

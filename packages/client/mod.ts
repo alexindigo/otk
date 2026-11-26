@@ -85,6 +85,7 @@ export * from "./message-policy.ts";
 export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";
 export * from "./server-continuity.ts";
+export * from "./server-notes.ts";
 export * from "./browser-storage.ts";
 export * from "./server-resources.ts";
 export type { ProjectProjectionRow } from "./project-projection.ts";

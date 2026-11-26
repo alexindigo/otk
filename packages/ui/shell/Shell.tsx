@@ -202,6 +202,15 @@ export default function Shell(
     entities: resources.entities,
     observeEntries: resources.observeEntries,
   });
+  createEffect(
+    () =>
+      sidecars.state.list.map(({ id, label, continuity }) => ({
+        id,
+        label,
+        continuity,
+      })),
+    (list) => notifications.servers(list),
+  );
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {
       if (accepted) notifications.receive(id, frame);
