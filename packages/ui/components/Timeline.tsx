@@ -13,7 +13,6 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 import { contextTarget } from "./context-target.ts";
 import MessageFooter from "./MessageFooter.tsx";
 import SidebarRow from "./SidebarRow.tsx";
-import { TreeNode } from "./Tree.tsx";
 import { EmptyState } from "./View.tsx";
 import VirtualList from "./VirtualList.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
@@ -27,41 +26,35 @@ function PromptRow(props: {
   const ref = contextTarget(() => ({ kind: "prompt", data: props.target }));
   return (
     <li>
-      <TreeNode
-        class="otk-sidebar-tree"
-        leadingRow
-        selected={props.selected}
-        header={() => (
-          <SidebarRow
-            frame={{
-              selected: props.selected,
-              class: "otk-timeline-row",
-              ref,
-              attributes: { "data-timeline-prompt": props.prompt.id },
-            }}
-            action={{
-              class: "otk-timeline-reveal",
-              title: props.target.text,
-              onClick: props.onReveal,
-            }}
-            label={
-              <span class="otk-timeline-preview">
-                {props.target.text || "Prompt"}
-                <Show when={props.prompt.queued}>
-                  {" "}
-                  <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
-                </Show>
-              </span>
-            }
-            meta={
-              <MessageFooter
-                class="otk-timeline-trailing"
-                at={props.prompt.time}
-                actions={{ kind: "prompt", target: props.target }}
-              />
-            }
+      <SidebarRow
+        flat
+        frame={{
+          selected: props.selected,
+          class: "otk-timeline-row",
+          ref,
+          attributes: { "data-timeline-prompt": props.prompt.id },
+        }}
+        action={{
+          class: "otk-timeline-reveal",
+          title: props.target.text,
+          onClick: props.onReveal,
+        }}
+        label={
+          <span class="otk-timeline-preview">
+            {props.target.text || "Prompt"}
+            <Show when={props.prompt.queued}>
+              {" "}
+              <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
+            </Show>
+          </span>
+        }
+        meta={
+          <MessageFooter
+            class="otk-timeline-trailing"
+            at={props.prompt.time}
+            actions={{ kind: "prompt", target: props.target }}
           />
-        )}
+        }
       />
     </li>
   );

@@ -6,8 +6,8 @@ import { ProjectAvatar } from "./ProjectChip.tsx";
 import { selection } from "./selection.ts";
 import "./SidebarRow.css" with { type: "text" };
 
-/** Tree owns disclosure/depth. Every row borrows these remaining fixed tracks,
- * even when its lamp or artwork is absent. Only the label can shrink. */
+/** Tree owns disclosure/depth. A row can reserve lamp and artwork tracks or
+ * render as a flat label and metadata pair. */
 export default function SidebarRow(props: {
   lamp?: Element;
   avatar?: { name: string; color?: string };
@@ -15,6 +15,7 @@ export default function SidebarRow(props: {
   meta?: Element;
   feedback?: Element;
   compact?: boolean;
+  flat?: boolean;
   editing?: boolean;
   detailedMeta?: boolean;
   mainRef?(element: HTMLButtonElement): void;
@@ -50,6 +51,7 @@ export default function SidebarRow(props: {
     <span
       class={["otk-sidebar-row", {
         "is-compact": props.compact,
+        "is-flat": props.flat,
         "has-detailed-meta": props.detailedMeta,
       }]}
     >
