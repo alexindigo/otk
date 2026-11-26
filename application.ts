@@ -279,6 +279,7 @@ export async function startApplication(
       staticRoot,
       index,
       sources,
+      projectOrder: inbox.projectOrder,
       diagnostics: options.diagnostics,
       diagnostic: options.diagnostic,
       signal: options.signal,

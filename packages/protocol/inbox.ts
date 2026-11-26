@@ -7,6 +7,7 @@ export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "projects.list": { kind: "read", pending: "Loading projects" },
   "projects.add": { kind: "mutation", pending: "Creating project session" },
   "projects.inactive": { kind: "mutation", pending: "Saving project" },
+  "projects.move": { kind: "mutation", pending: "Saving project order" },
   "projects.visit": {
     kind: "mutation",
     pending: "Saving project visit",
@@ -190,6 +191,10 @@ export interface InboxRpcMethods {
     params: { directory: string; inactive: boolean };
     result: ProjectRecord;
   };
+  "projects.move": {
+    params: import("./project-order.ts").ProjectMove;
+    result: { revision: number };
+  };
   "projects.visit": {
     params: { directory: string; active?: boolean };
     result: ProjectRecord | null;
@@ -241,6 +246,7 @@ export interface InboxRequestReceipts {
   "task-closed": { taskID: string; closed: true };
   project: ProjectRecord;
   "project-visit": ProjectRecord | null;
+  "project-order-move": true;
   "project-templates": string[];
   "session-seen": number;
   "session-acknowledge": AcknowledgedSessions;

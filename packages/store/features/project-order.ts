@@ -45,6 +45,19 @@ export class ProjectOrderStore extends MetadataChanges<{ user: string }> {
     ).get(key(user), key(directory));
     return row && String(row.id);
   }
+  /** Evidence can fill a missing repository without touching the rank. */
+  rememberRepository(
+    user: string,
+    root: string,
+    repo: string,
+    tx: StoreWrite,
+  ): void {
+    this.db.write(() => {
+      this.db.connection.prepare(
+        "UPDATE project_order SET repo=? WHERE user=? AND root=? AND repo IS NULL",
+      ).run(repo, key(user), key(root));
+    }, tx);
+  }
   create(user: string, root: string, repo?: string, tx?: StoreWrite): string {
     return this.db.write((scope) => {
       const id = crypto.randomUUID();

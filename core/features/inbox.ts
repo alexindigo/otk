@@ -11,6 +11,7 @@ import {
   type IndexEntry,
   type IndexMetadata,
   isSessionID,
+  type ProjectMove,
   type ProjectRecord,
   type ProjectSummary,
   type ServerFrame,
@@ -28,11 +29,13 @@ import type {
   StoreWrite,
   Tasks,
 } from "@otk/store";
+import { ProjectOrderStore } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
 import { ProjectSummaries } from "../index/project-summaries.ts";
 import { SessionSupervision } from "../index/supervision.ts";
 import { EntityStates } from "../index/entity-states.ts";
 import { ProjectIdentity } from "../index/project-identity.ts";
+import { ProjectOrder } from "./project-order.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
@@ -41,6 +44,7 @@ import {
   localExecution,
   localResultExecution,
   localWrite,
+  metadataReceipt,
   nativeEffect,
   nativeExecution,
   preparedLocalExecution,
@@ -72,6 +76,10 @@ export interface InboxStores {
   templates: ProjectTemplates;
   checkouts?: Checkouts;
 }
+const orderMoveReceipt = metadataReceipt("project-order-move", (value) => {
+  if (value !== true) throw new TypeError("Invalid project move receipt");
+  return true;
+});
 /** A received operation's target: its session, or its project directory. */
 interface OperationTarget {
   kind: "session" | "directory";
@@ -736,6 +744,7 @@ export class InboxFeature implements FrameSource {
   #user = "";
   readonly states: EntityStates;
   readonly summaries: ProjectSummaries;
+  readonly projectOrder: ProjectOrder;
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
@@ -763,6 +772,11 @@ export class InboxFeature implements FrameSource {
         this.#observe(entry);
         this.summaries.mark(id);
       },
+    );
+    const identityOwner = new ProjectIdentity(stores.checkouts);
+    this.projectOrder = new ProjectOrder(
+      new ProjectOrderStore(stores.projects.db),
+      identityOwner,
     );
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
@@ -792,9 +806,12 @@ export class InboxFeature implements FrameSource {
         this.#schedule();
       },
       this.supervision,
-      new ProjectIdentity(stores.checkouts),
+      identityOwner,
       this.index.hierarchy,
       this.states,
+      undefined,
+      (directories, revised) =>
+        this.projectOrder.admit(this.user, directories, revised),
     );
     this.index.hierarchy.configure(
       this.summaries.identity,
@@ -809,7 +826,14 @@ export class InboxFeature implements FrameSource {
       const { digest: _digest, ...metadata } = entry;
       this.summaries.entry(metadata);
     }
+    this.projectOrder.admit(
+      this.user,
+      [...index.snapshotEntries()].map((entry) => entry.directory),
+    );
     this.#stops.push(
+      index.observeDirectories((directories) =>
+        this.projectOrder.admit(this.user, directories)
+      ),
       index.observe((entry, previous, delta) => {
         if (
           delta &&
@@ -845,6 +869,10 @@ export class InboxFeature implements FrameSource {
       }),
       stores.projects.listen((change) => {
         this.#identity();
+        this.projectOrder.admit(
+          change.user,
+          change.upsert.map((project) => project.directory),
+        );
         for (const project of change.upsert) {
           this.summaries.ensure(project.directory);
           const known = this.#policies.find((policy) =>
@@ -1017,6 +1045,11 @@ export class InboxFeature implements FrameSource {
         project,
       ) => [project.directory, project]),
     );
+    this.projectOrder.admit(user, [
+      ...this.#projects.keys(),
+      ...this.#discovered,
+      ...this.summaries?.values.keys() ?? [],
+    ]);
     this.#generation = crypto.randomUUID();
     this.#revision = 0;
     this.#pending.clear();
@@ -1218,6 +1251,7 @@ export class InboxFeature implements FrameSource {
     this.#closed = true;
     this.#dependencyAbort.abort();
     this.states.close();
+    this.projectOrder.close();
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
     this.#publications.clear();
@@ -1341,6 +1375,7 @@ export class InboxFeature implements FrameSource {
     try {
       const paths = await this.scan(this.#templates);
       if (this.#closed || version !== this.#scanVersion) return;
+      this.projectOrder.admit(this.user, paths);
       this.#discovered = paths;
       this.#summaryDirectories();
     } catch (error) {
@@ -1425,6 +1460,35 @@ export class InboxFeature implements FrameSource {
       execution: readExecution(() => ({ resource: "projects" })),
       params: () => undefined,
       handler: () => s.projects.list(user()),
+    });
+    const savedOrder = () => ({ revision: this.projectOrder.revision });
+    rpc.register("projects.move", {
+      execution: localResultExecution(
+        (p: ProjectMove) => ({ resource: `project-order:${p.id}` }),
+        orderMoveReceipt,
+        savedOrder,
+      ),
+      params(p): ProjectMove {
+        const id = text(p, "id")!;
+        const before = text(p, "before", true), after = text(p, "after", true);
+        if (
+          (before === undefined) === (after === undefined) || before === "" ||
+          after === ""
+        ) {
+          throw new HarnessError(
+            "params",
+            "Expected exactly one project move target",
+          );
+        }
+        return before !== undefined ? { id, before } : { id, after: after! };
+      },
+      handler: (ctx, p) => {
+        localWrite(ctx, (tx) => {
+          this.projectOrder.move(user(), p, tx);
+          return true as const;
+        }, orderMoveReceipt);
+        return savedOrder();
+      },
     });
     rpc.register("projects.add", {
       execution: {

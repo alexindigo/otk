@@ -20,6 +20,7 @@ import type {
   IndexEntry,
   MessagePolicy,
   Preferences,
+  ProjectOrderFrame,
   RequestControl,
   RequestEvent,
   RequestRef,
@@ -39,6 +40,8 @@ import { ExecutionFailure, publicFailure } from "../requests/failures.ts";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
+  principal: string;
+  orderRevision?: number;
   sessions: Set<string>;
   view: ViewLease;
   index: IndexView;
@@ -73,6 +76,11 @@ export interface ConnectionRequests {
   helloms: number;
   requested?: () => void;
   attachments?: import("@otk/protocol").AttachmentPolicy;
+  projectOrder?: {
+    readonly revision: number;
+    frame(user: string): ProjectOrderFrame;
+    listen(listener: (user: string) => void): () => void;
+  };
 }
 /** Socket recipients own delivery and leases, never action execution. */
 export class Connections {
@@ -104,6 +112,23 @@ export class Connections {
       this.#stops.push(
         prefs.listen((prefs) => this.broadcast({ t: "prefs", prefs })),
       );
+      const order = this.requests.projectOrder;
+      if (order) {
+        // Merge a burst of admissions, but #send always flushes synchronously
+        // when a recipient is about to receive a frame that depends on order.
+        const pending = new Set<string>();
+        this.#stops.push(order.listen((user) => {
+          if (pending.has(user)) return;
+          pending.add(user);
+          queueMicrotask(() => {
+            pending.delete(user);
+            if (this.#closed) return;
+            for (const c of this.#connections) {
+              if (c.principal === user) this.#flushOrder(c);
+            }
+          });
+        }));
+      }
       for (const source of sources) {
         source.connection?.(this.harnessState);
         if (source.open) continue;
@@ -126,14 +151,35 @@ export class Connections {
       throw error;
     }
   }
+  #flushOrder(connection: Connection): void {
+    const order = this.requests.projectOrder;
+    if (
+      order && connection.welcomed &&
+      connection.orderRevision !== order.revision
+    ) {
+      this.#send(connection, order.frame(connection.principal));
+    }
+  }
+  #beforeFrame(connection: Connection, frame: ServerFrame): void {
+    if (
+      frame.t !== "welcome" && frame.t !== "ping" && frame.t !== "error" &&
+      frame.t !== "projects.order"
+    ) {
+      this.#flushOrder(connection);
+    }
+  }
   #send(connection: Connection, frame: ServerFrame): void {
     if (
       this.#connections.has(connection) &&
       connection.ws.readyState === WebSocket.OPEN
     ) {
+      this.#beforeFrame(connection, frame);
       const start = performance.now(), serialized = JSON.stringify(frame);
       this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
       connection.ws.send(serialized);
+      if (frame.t === "projects.order") {
+        connection.orderRevision = frame.revision;
+      }
     }
   }
   broadcast(frame: ServerFrame): void {
@@ -149,6 +195,7 @@ export class Connections {
       if (!accepts(connection) || connection.ws.readyState !== WebSocket.OPEN) {
         continue;
       }
+      this.#beforeFrame(connection, frame);
       if (serialized === undefined) {
         const start = performance.now();
         serialized = JSON.stringify(frame);
@@ -203,6 +250,7 @@ export class Connections {
     const c: Connection = {
       ws,
       welcomed: false,
+      principal: "",
       sessions: new Set(),
       view: { epoch: 0, crumbs: [], rows: [] },
       index: undefined as unknown as IndexView,
@@ -397,7 +445,7 @@ export class Connections {
           }
           if (welcoming) return;
           welcoming = true;
-          principal = this.requests.identity();
+          principal = c.principal = this.requests.identity();
           const identity = await requestFingerprint(`principal:${principal}`);
           if (!this.#connections.has(c)) return;
           if (raw.view) c.view = view(object(raw.view));
