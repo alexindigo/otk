@@ -5,6 +5,7 @@
   inline-size: 100%;
 }
 .otk-fitted-actions.is-inline {
+  --row-compact: var(--control-size);
   flex: 0 1 auto;
   inline-size: max-content;
   max-inline-size: 100%;
