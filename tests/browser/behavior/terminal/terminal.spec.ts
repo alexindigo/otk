@@ -13,6 +13,10 @@ import {
 } from "../../pages/terminal.ts";
 import type { Page } from "@playwright/test";
 
+// Full-screen programs need rows in the dock even after it yields half the
+// session pane to the transcript. Keep reload/checkpoint tests in the dock.
+const fullScreenProgramViewport = { width: 1440, height: 1440 };
+
 // Read the renderer, including offscreen scrollback, through its native wheel
 // and accessibility ports. No private renderer state or clipboard is consulted.
 async function screenAndScrollback(page: Page): Promise<string> {
@@ -214,6 +218,7 @@ test(
 test("terminal.less-forward-back-search-and-main-screen-return", {
   tag: "@terminal",
 }, async ({ state, page }) => {
+  await page.setViewportSize(fullScreenProgramViewport);
   const id = await open(state, page, "Terminal less");
   try {
     await command(page, "printf 'before-%s\\n' less");
@@ -470,6 +475,7 @@ test(
   "terminal.btop-full-screen-panels-and-quit",
   { tag: "@terminal" },
   async ({ state, page }) => {
+    await page.setViewportSize(fullScreenProgramViewport);
     const id = await open(state, page, "Terminal btop");
     try {
       await command(page, "printf 'before-%s\\n' btop");
@@ -541,7 +547,11 @@ test("terminal.composer-toggle-detaches-without-closing-the-shell", {
 });
 
 for (
-  const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]
+  const size of [
+    { width: 1280, height: 720 },
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+  ]
 ) {
   test(`terminal.dock-and-editor-geometry-${size.width}x${size.height}`, {
     tag: "@terminal",
@@ -568,7 +578,7 @@ for (
         `PS1='geometry$ '; printf '\\033]0;%s\\007' '${title}'`,
       );
       await expect(tabs(page).first()).toHaveAttribute("title", title);
-      await expect.poll(() =>
+      const geometry = () =>
         page.evaluate(() => {
           const box = document.querySelector(".otk-terminal")!
             .getBoundingClientRect();
@@ -576,17 +586,33 @@ for (
             .getBoundingClientRect();
           const transcript = document.querySelector(".otk-transcript-viewport")!
             .getBoundingClientRect();
+          const pane = document.querySelector(".otk-session-content")!
+            .getBoundingClientRect();
           return {
+            dockHeight: box.height,
+            paneHeight: pane.height,
+            transcriptHeight: transcript.height,
             aligned: Math.abs(box.left - composer.left) <= .5 &&
               Math.abs(box.right - composer.right) <= .5,
-            height:
-              Math.abs(box.height - Math.round(innerHeight * 2 / 3)) <= .5 ||
-              transcript.height <= .5,
-            flow: box.bottom <= composer.top + .5 && composer.top >= 0 &&
+            // 2.105 WP7 / 2.110 review: fill half the content pane without
+            // borrowing from the transcript or counting the composer.
+            dockFits: Math.abs(box.height - pane.height / 2) <= 2,
+            transcriptFits: transcript.height + .02 >= pane.height / 2,
+            flow: transcript.bottom <= box.top + .5 &&
+              box.bottom <= composer.top + .5 && composer.top >= 0 &&
               composer.bottom <= innerHeight + .5,
           };
-        })
-      ).toEqual({ aligned: true, height: true, flow: true });
+        });
+      await expect.poll(geometry).toMatchObject({
+        aligned: true,
+        dockFits: true,
+        transcriptFits: true,
+        flow: true,
+      });
+      const { dockHeight, paneHeight, transcriptHeight } = await geometry();
+      console.log(
+        `DOCK-GEOMETRY ${size.width}x${size.height} dock=${dockHeight} pane=${paneHeight} transcript=${transcriptHeight}`,
+      );
       await page.getByRole("button", { name: "Edit prompt", exact: true })
         .click();
       const editor = page.getByRole("dialog", {
@@ -716,6 +742,10 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
       "aria-label",
       /expansion-filler-80/,
     );
+    // Portal movement updates the canvas bounds before the PTY acknowledges
+    // its new grid. Start each scrollback walk on the canonical grid.
+    await expect.poll(() => wire.grids.length).toBeGreaterThan(0);
+    const dockGrid = wire.grids.at(-1)!;
     expect(await screenAndScrollback(page)).toContain("before-expansion");
     const engines = await page.evaluate(() =>
       Reflect.get(globalThis, "__terminalEngines")
@@ -727,6 +757,9 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
       .click();
     const dialog = page.getByRole("dialog", { name: "Terminal", exact: true });
     await expect(dialog).toBeVisible();
+    await expect.poll(() => wire.grids.at(-1)!.rows).toBeGreaterThan(
+      dockGrid.rows,
+    );
     expect(await screenAndScrollback(page)).toContain("before-expansion");
     await expect(
       dialog.getByRole("textbox", { name: "Terminal input", exact: true }),
@@ -745,6 +778,7 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
     await dialog.getByRole("button", { name: "Close Terminal", exact: true })
       .click();
     await expect(dialog).toHaveCount(0);
+    await expect.poll(() => wire.grids.at(-1)).toEqual(dockGrid);
     expect(await screenAndScrollback(page)).toContain("before-expansion");
     await expect(
       page.getByRole("textbox", { name: "Terminal input", exact: true }),
@@ -769,6 +803,7 @@ test(
   "terminal.btop-reload-restores-same-live-screen",
   { tag: "@terminal" },
   async ({ state, page }) => {
+    await page.setViewportSize(fullScreenProgramViewport);
     const wire = observe(page),
       id = await open(state, page, "Terminal btop reload");
     try {
@@ -819,6 +854,7 @@ test(
 test("terminal.truncated-replay-falls-back-to-live-btop-checkpoint", {
   tag: "@terminal",
 }, async ({ state, page }) => {
+  await page.setViewportSize(fullScreenProgramViewport);
   const wire = observe(page),
     id = await open(state, page, "Terminal truncated replay");
   try {

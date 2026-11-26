@@ -18,6 +18,59 @@ import type { TerminalInfo } from "@otk/protocol";
 import type { SidecarConnection } from "@otk/client";
 import type { ThemeEngine } from "../theme/engine.ts";
 
+for (const mode of ["docked", "expanded"] as const) {
+  Deno.test(`closing every shell leaves the terminal box ${mode}`, async () => {
+    const terminal = (id: string): TerminalInfo => ({
+      id,
+      title: id,
+      foreground: null,
+      cols: 80,
+      rows: 24,
+      status: "running",
+      exitCode: null,
+      startedAt: 0,
+    });
+    let list = [terminal("1"), terminal("2")];
+    const connection = {
+      base: new URL("http://fixture/api/"),
+      options: {},
+      rpc: {
+        call(method: string, args: { terminalID: string }) {
+          if (method === "terminal.list") return Promise.resolve(list);
+          if (method === "terminal.close") {
+            list = list.filter(({ id }) => id !== args.terminalID);
+            return Promise.resolve(undefined);
+          }
+          throw new Error(`Unexpected terminal request: ${method}`);
+        },
+      },
+    } as unknown as SidecarConnection;
+    const theme = { subscribe: () => () => {} } as unknown as ThemeEngine;
+    const box = new TerminalBox();
+    box.toggle();
+    if (mode === "expanded") box.expand();
+    const panel = createTerminalPanel(
+      connection,
+      "tstv1-a",
+      theme,
+      () => {},
+      undefined,
+      box,
+    );
+    try {
+      await panel.start();
+      await panel.closeIndex(0);
+      assertEquals(panel.terminals.state.list.map(({ id }) => id), ["2"]);
+      await panel.closeIndex(0);
+      assertEquals(box.mode, mode);
+      assertEquals(panel.terminals.state.list, []);
+      assertEquals(panel.state.creating, false);
+    } finally {
+      panel.dispose();
+    }
+  });
+}
+
 for (const code of ["terminal-unavailable", "method"]) {
   Deno.test(`terminal panel owns queued Run rejection for ${code}`, async () => {
     const box = new TerminalBox();

@@ -108,3 +108,28 @@
   box-shadow: var(--overlay-shadow);
   border-radius: var(--radius-row);
 }
+.otk-surface-panel {
+  --surface-content-inset: var(--space-2);
+  --surface-slot-inset: 0px;
+  padding: var(--surface-content-inset);
+  gap: var(--space-2);
+  background: var(--otk-bg-side);
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  color: var(--otk-fg);
+}
+.otk-surface-panel > .otk-surface-title {
+  padding: 0;
+  gap: var(--space-2);
+  min-block-size: var(--control-size);
+}
+.otk-surface-panel > .otk-surface-title h2 {
+  flex: none;
+  font: 600 var(--text-ui)/var(--line-ui) var(--font-ui);
+}
+.otk-surface-panel > .otk-surface-body,
+.otk-surface-panel > .otk-surface-scroll > .otk-surface-body {
+  padding: 0;
+  gap: 0;
+}
