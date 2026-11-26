@@ -45,6 +45,12 @@ const registry = [
     meta: ".otk-subagent-meta .otk-meta-item:not([hidden])",
   },
   {
+    id: "R6",
+    row: ".otk-record-row",
+    title: ".otk-record-row-label",
+    meta: ".otk-record-row-status .otk-meta-item:not([hidden])",
+  },
+  {
     id: "R7",
     row: ".otk-composer-activity-line",
     title: ".otk-composer-task, .otk-composer-destination",
@@ -349,6 +355,27 @@ test("visual.row-title-min", { tag: ["@visual", "@isolated"] }, async (
   await expect.poll(async () =>
     JSON.stringify(await state.native(`/session/${child.id}/message`))
   ).toContain("The configuration is ready.");
+  await page.locator(".otk-user-bubble").first().focus();
+  await page.locator('.otk-messages [data-message-command="prompt.revert"]')
+    .click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-phase",
+    "saved",
+  );
+  for (const width of [1280, 900]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const [theme, label] of themes) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await inspect(page, "R6", `${width} ${label}`);
+      await capture(`record-${width}-${label}`);
+    }
+  }
 });
 
 test(
