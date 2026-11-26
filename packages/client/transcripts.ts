@@ -13,6 +13,8 @@ import { createTranscript, type TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { presentFailure } from "./failure-features.ts";
 
+export type { TranscriptGapState, TranscriptState } from "./transcript.ts";
+
 export interface BodyTarget {
   sidecarId: string;
   sessionID: string;
