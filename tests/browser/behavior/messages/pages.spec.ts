@@ -239,22 +239,30 @@ test(
       .toBe(markers.join("\n\n"));
     await expect(page.locator("[data-role=assistant] .otk-message-footer"))
       .toHaveCount(1);
-    await expect(
-      // Decisions 1/20 keep idle separate; whole-reply Copy still acquires all 205 segments.
-      page.locator("[data-message][data-role=assistant]").getByRole("list", {
-        name: "Reply segments",
-        exact: true,
-      }),
-      // Step bookkeeping adds a leading and a trailing work group around the
-      // existing 102 text segments and 101 between-text tool groups.
-    ).toHaveAttribute("data-acquired-count", "205");
+    // 2.105 WP6: 102 text segments plus one Work log that owns every work
+    // record. Decisions 1/20 still keep V2 idle as a separate native row.
+    const assistant = page.locator("[data-message][data-role=assistant]");
+    await expect(assistant.getByRole("list", {
+      name: "Reply segments",
+      exact: true,
+    })).toHaveAttribute("data-acquired-count", String(markers.length + 1));
+    await expect(assistant.locator(".otk-work-log")).toHaveCount(1);
     if (state.controller.info!.version.startsWith("2.")) {
-      // A singleton remains bare; retained spans disclose by record identity.
+      // 2.105 WP6 puts completion in the reply's Work log, not a bare row.
+      const work = assistant.locator(".otk-work-log");
+      const disclosure = work.getByRole("button", {
+        name: "Work log",
+        exact: true,
+      });
+      await disclosure.click();
       await revealAcquired(page, '[data-native-record="opencode-v2/idle"]');
-      await expect(page.locator('[data-native-record="opencode-v2/idle"]'))
+      await expect(work.locator('[data-native-record="opencode-v2/idle"]'))
         .toBeVisible();
+      // The header is well above the virtualized completion row. Use its
+      // keyboard action, then prove the disclosure settled before proceeding.
+      await disclosure.press("Enter");
+      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     }
-    expect(await page.locator(".otk-work-log").count()).toBeLessThan(101);
     expect(
       capture.sent.filter(({ frame }) => frame.method === "session.messages")
         .length,
