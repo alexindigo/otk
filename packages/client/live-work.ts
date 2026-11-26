@@ -69,12 +69,13 @@ const helperLabels = [
 ] as const;
 
 /** Display order and vocabulary shared by every form of the same counts. */
-export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
+export function helperCountParts(counts?: TaskHelpers["counts"]): readonly {
   kind: HelperDisposition;
   title: string;
   count: number;
   phrase: string;
 }[] {
+  if (!counts) return [];
   return helperLabels.flatMap(({ kind, title, singular, plural }) => {
     const count = counts[kind];
     return count > 0
@@ -85,7 +86,7 @@ export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
 
 /** One vocabulary for the pill and its accessible name, from published counts. */
 export function helperCountsLabel(
-  counts: TaskHelpers["counts"],
+  counts?: TaskHelpers["counts"],
 ): string {
   return helperCountParts(counts).map(({ count, phrase }) =>
     `${count} ${phrase}`

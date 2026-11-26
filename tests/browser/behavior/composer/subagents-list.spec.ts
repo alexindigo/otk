@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { activity } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-hierarchy" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
@@ -70,6 +71,112 @@ const openTask = async (
   });
   return task;
 };
+
+test.describe("last subagent leaves the roster", () => {
+  test.use({ profile: "contract-sessions-default" });
+  const child = "tstv1-urgent-child";
+  const startHelper = async (
+    state: Parameters<typeof openSession>[0],
+    page: Parameters<typeof openSession>[1],
+  ) => {
+    await state.product("prefs.set", { key: "notify.toast", value: false });
+    await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Review helper",
+      sessions: [main],
+    });
+    await openSession(state, page, main);
+    await activity(state, child, "hold");
+  };
+
+  test(
+    "composer.subagents.open-list-empties-closes-to-header",
+    tags,
+    async ({ isolatedState: state, page }, info) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await startHelper(state, page);
+      const pill = page.locator(".otk-subagents-trigger");
+      const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+      const header = page.locator(".otk-composer-activity");
+      const capture = async (phase: string) => {
+        for (const [theme, label] of themes) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          await page.screenshot({
+            path: info.outputPath(`activity-${phase}-${label}.png`),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+      };
+      await expect(pill).toHaveAccessibleName("Subagents: 1 running");
+      await capture("pill");
+      await activity(state, child, "release");
+      await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+      await pill.focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("button", { name: "Clear finished" }))
+        .toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(menu.getByRole("menuitem").first()).toBeFocused();
+      await header.evaluate((region, panel) => {
+        region.addEventListener("focus", () => {
+          region.dataset.activityHandoff = JSON.stringify({
+            open: !!document.querySelector(panel),
+            mounted: !!region.querySelector(".otk-subagents-trigger"),
+          });
+        }, { once: true });
+      }, dropdown);
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "release",
+        sessionID: child,
+        target: "trail-delivery",
+      });
+      await expect(menu).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(header).toBeFocused();
+      await expect(header).toHaveAttribute(
+        "data-activity-handoff",
+        '{"open":false,"mounted":true}',
+      );
+      await expect(header).toHaveCSS("outline-style", "none");
+      await capture("header-focus");
+      await expect(header).toBeFocused();
+
+      await activity(state, child, "hold");
+      await expect(pill).toHaveAccessibleName("Subagents: 1 running");
+      await expect(pill).toHaveAttribute("aria-expanded", "false");
+      await expect(menu).toHaveCount(0);
+    },
+  );
+
+  test(
+    "composer.subagents.clear-finished-closes-to-header",
+    tags,
+    async ({ isolatedState: state, page }) => {
+      await startHelper(state, page);
+      await expect(page.locator(".otk-subagents-trigger"))
+        .toHaveAccessibleName("Subagents: 1 running");
+      await activity(state, child, "release");
+      const pill = page.locator(".otk-subagents-trigger");
+      const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+      const clear = page.getByRole("button", { name: "Clear finished" });
+      await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+      await pill.focus();
+      await page.keyboard.press("Enter");
+      await expect(menu).toBeVisible();
+      await expect(clear).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(menu).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(page.locator(".otk-composer-activity")).toBeFocused();
+    },
+  );
+});
 
 test(
   "composer.subagents-pill-shows-per-state-counts",

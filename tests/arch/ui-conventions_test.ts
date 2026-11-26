@@ -50,6 +50,45 @@ Deno.test("UI convention: container chrome stays off item collections", async ()
   assertEquals(containerChromeErrors(await productionSources()), []);
 });
 
+Deno.test("UI convention: container chrome is not gated on item counts", async () => {
+  const view = "packages/ui/Fixture.tsx";
+  const shell = "packages/ui/components/LiveWork.tsx";
+  const rejected = new Map([
+    [
+      shell,
+      `export default function LiveWork() {
+      return <Show when={presence.mounted}><Popover /></Show>;
+    }`,
+    ],
+    [
+      view,
+      `<Show when={helpers()?.ids.length ? helpers() : undefined}>
+      {(p) => <Menu label="S">x</Menu>}
+    </Show>;
+    <Show when={shells()?.count}><LiveWork shells={s()} /></Show>;
+    (ready && list.size > 0) && <div><Popover /></div>;
+    list?.length ? <Dialog /> : <Takeover />;`,
+    ],
+  ]);
+  assertEquals(
+    containerChromeErrors(rejected).map((error) => error.split(": ").at(-1)),
+    ["Menu", "LiveWork", "Popover", "Dialog", "Takeover"].map((name) =>
+      `${name} must not be count-gated`
+    ),
+  );
+  const accepted = new Map([[
+    view,
+    `<Surface title={<h2>T</h2>} titleAction={<A/>}>
+    <Show when={list().length} fallback={<Empty/>}>{rows}</Show>
+    <For each={rows()}>{(r) => <ActionButton action={stop(r())}><StopIcon/></ActionButton>}</For>
+    {list.length && <Rows />}
+  </Surface>;
+  <Show when={presence.mounted}><Menu label="S">x</Menu></Show>;`,
+  ]]);
+  assertEquals(containerChromeErrors(accepted), []);
+  assertEquals(containerChromeErrors(await productionSources()), []);
+});
+
 // Offsets may use the containing edge and spacing tokens, not other boxes'
 // dimensions. Follow custom property aliases so naming a calculation doesn't
 // make a positional relationship structural.

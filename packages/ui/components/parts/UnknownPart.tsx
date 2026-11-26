@@ -182,63 +182,62 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                         <Show when={state()}>
                           {(value) => <p>{value()}</p>}
                         </Show>
-                        <Show
-                          when={props.recordTime !== undefined ||
-                            activity()?.parameters?.length}
+                        <dl
+                          class="otk-native-parameters"
+                          hidden={props.recordTime === undefined &&
+                            !activity()?.parameters?.length}
                         >
-                          <dl class="otk-native-parameters">
-                            <Show
-                              when={props.recordTime !== undefined}
-                            >
-                              <dt>Recorded at</dt>
-                              <dd>
-                                <Clock
-                                  at={props.recordTime!}
-                                  precise
-                                  class="otk-native-value"
-                                  data-record-time=""
-                                />
-                              </dd>
-                            </Show>
-                            <For
-                              each={activity()?.parameters}
-                              keyed={(parameter) => parameter.key}
-                            >
-                              {(parameter) => (
-                                <>
-                                  <dt>{parameter().label}</dt>
-                                  <dd>
-                                    <Show
-                                      when={parameter().entity}
-                                      fallback={
-                                        <Show
-                                          when={parameter().child}
-                                          fallback={
-                                            <span class="otk-native-value">
-                                              {parameter().value}
-                                            </span>
-                                          }
-                                        >
-                                          {(ref) => child(ref())}
-                                        </Show>
-                                      }
-                                    >
-                                      {(entity) => (
-                                        <EntityPill
-                                          label={entity().label}
-                                          facts={scopedEntityFacts(
-                                            session,
-                                            entity(),
-                                          )}
-                                        />
-                                      )}
-                                    </Show>
-                                  </dd>
-                                </>
-                              )}
-                            </For>
-                          </dl>
-                        </Show>
+                          <Show
+                            when={props.recordTime !== undefined}
+                          >
+                            <dt>Recorded at</dt>
+                            <dd>
+                              <Clock
+                                at={props.recordTime!}
+                                precise
+                                class="otk-native-value"
+                                data-record-time=""
+                              />
+                            </dd>
+                          </Show>
+                          <For
+                            each={activity()?.parameters}
+                            keyed={(parameter) => parameter.key}
+                          >
+                            {(parameter) => (
+                              <>
+                                <dt>{parameter().label}</dt>
+                                <dd>
+                                  <Show
+                                    when={parameter().entity}
+                                    fallback={
+                                      <Show
+                                        when={parameter().child}
+                                        fallback={
+                                          <span class="otk-native-value">
+                                            {parameter().value}
+                                          </span>
+                                        }
+                                      >
+                                        {(ref) => child(ref())}
+                                      </Show>
+                                    }
+                                  >
+                                    {(entity) => (
+                                      <EntityPill
+                                        label={entity().label}
+                                        facts={scopedEntityFacts(
+                                          session,
+                                          entity(),
+                                        )}
+                                      />
+                                    )}
+                                  </Show>
+                                </dd>
+                              </>
+                            )}
+                          </For>
+                        </dl>
                         <Show when={activity()?.body}>
                           {(body) => (
                             <Blocks

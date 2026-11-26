@@ -75,17 +75,14 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
         title: "Choose variant",
         category: "Prompt",
         enabled: () =>
-          enabled() && selection().applies.variant &&
-          selection().model.variants.length > 0 && !!variantPicker,
+          enabled() && selection().variantSelectable && !!variantPicker,
         run: () => variantPicker!.open(),
       });
       ownedCommand(ctx, {
         id: "variant.cycle",
         title: "Next variant",
         category: "Prompt",
-        enabled: () =>
-          enabled() && selection().applies.variant &&
-          selection().model.variants.length > 0,
+        enabled: () => enabled() && selection().variantSelectable,
         run: owner.cycleVariant,
       });
       onSettled(() => {
@@ -289,8 +286,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
             </Show>
             <Show when={selection().applies.variant}>
               <Show
-                when={owner.catalogKnown() &&
-                  selection().model.variants.length > 0}
+                when={owner.catalogKnown() && selection().variantSelectable}
               >
                 <ListPicker<string | undefined>
                   label="Choose variant"

@@ -7,6 +7,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
+import { activity } from "../../pages/sessions.ts";
 import {
   openRecord,
   readRecordBody,
@@ -21,6 +22,44 @@ import {
 } from "../../pages/composer-error.ts";
 
 test.use({ profile: "transport-shell" });
+test.describe("running shell roster", () => {
+  test.use({ profile: "contract-sessions-default" });
+  test(
+    "composer.shells.open-list-empties-closes-to-header",
+    { tag: ["@composer", "@isolated"] },
+    async ({ isolatedState: state, page }) => {
+      const root = "tstv1-otk";
+      await openSession(state, page, root);
+      await activity(state, root, "freeze");
+      const roster = (action: "hold" | "release") =>
+        state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action,
+          target: "header-shells",
+        });
+      await roster("hold");
+      const pill = page.locator(".otk-live-work-trigger");
+      await expect(pill).toHaveAccessibleName("Running work: 2 shells");
+      await pill.click();
+      const list = page.getByRole("list", { name: "Running shells" });
+      await expect(list.getByRole("listitem")).toHaveCount(2);
+      const rowControl = list.getByRole("button").first();
+      await rowControl.focus();
+      await expect(rowControl).toBeFocused();
+
+      await roster("release");
+      await expect(list).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(page.locator(".otk-composer-activity")).toBeFocused();
+
+      await roster("hold");
+      await expect(pill).toHaveAccessibleName("Running work: 2 shells");
+      await expect(pill).toHaveAttribute("aria-expanded", "false");
+      await expect(list).toHaveCount(0);
+    },
+  );
+});
+
 test("composer.literal-pasted-bang-and-ordinary-native-typing", {
   tag: ["@composer", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
