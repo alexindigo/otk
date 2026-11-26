@@ -725,7 +725,6 @@ export default function Shell(
                   }}
                 />
               }
-              holdOrder={resources.holdProjectOrder}
               projects={projects()}
               duplicateName={resources.duplicateProjectName}
               projectLabel={resources.projectLabel}

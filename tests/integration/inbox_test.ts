@@ -75,7 +75,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
   try {
     const rpc = a.connection.rpc;
     assertEquals(
-      a.inbox().projects.map((p) => [p.directory, p.added, p.order]),
+      a.inbox().projects.map((p) => [p.directory, p.added]),
       [],
     );
     await a.model.openSession("tstv1-core", root);
@@ -197,10 +197,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     assertEquals(a.inbox().finishes["tstv1-core"], finish);
     assert(a.inbox().seen["tstv1-core"] >= finish);
     assertEquals(a.inbox().tasks.map((t) => t.id), [second.id]);
-    assertEquals(a.inbox().projects.map((p) => [p.directory, p.order]), [[
-      root,
-      0,
-    ], [empty, 1]]);
+    assertEquals(a.inbox().projects.map((p) => p.directory), [root, empty]);
     assertEquals(a.inbox().pathTemplates, [join(root, "{project}")]);
     await waitFor(
       async () =>

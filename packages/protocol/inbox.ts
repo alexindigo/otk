@@ -41,7 +41,6 @@ export interface AcknowledgedSessions {
 /** Inbox metadata is server-local; callers pair it with their connection ID. */
 export interface ProjectRecord {
   directory: string;
-  order: number;
   added: boolean;
   inactive: boolean;
   lastVisit: number;

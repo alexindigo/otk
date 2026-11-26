@@ -130,7 +130,6 @@ Deno.test("orphan-only project summaries lift Inactive without fabricating popul
   const inbox = snapshot();
   inbox.projects = [{
     directory: "/orphan",
-    order: 0,
     added: true,
     inactive: true,
     lastVisit: 1,

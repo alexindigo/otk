@@ -253,7 +253,7 @@ export function inboxProjects(
       project.directory,
       entries.filter((entry) => entry.directory === project.directory),
     )
-  ).sort((a, b) => a.order - b.order).map(
+  ).map(
     (project) => {
       const sessions = entries.filter((entry) =>
         entry.directory === project.directory
@@ -300,7 +300,6 @@ export function inboxProjects(
       directory,
       source: "index",
       group: "active",
-      order: 0,
       added: false,
       inactive: false,
       lastVisit: 0,
@@ -315,7 +314,6 @@ export function inboxProjects(
       directory,
       source: "template",
       group: "discovered",
-      order: 0,
       added: false,
       inactive: false,
       lastVisit: 0,
@@ -545,9 +543,7 @@ export function createInbox(
         );
         if (at < 0) draft.projects.push(op.project);
         else draft.projects[at] = op.project;
-        draft.projects.sort((a, b) =>
-          a.order - b.order || a.directory.localeCompare(b.directory)
-        );
+        draft.projects.sort((a, b) => a.directory.localeCompare(b.directory));
         break;
       }
       case "project.remove":

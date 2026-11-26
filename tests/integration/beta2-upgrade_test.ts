@@ -11,6 +11,7 @@ import {
 } from "../support/beta1-state.ts";
 import { RemainingMeasurements } from "../support/remaining-measurements.ts";
 import { tempDir, test } from "../support/resources.ts";
+import { withoutLegacyPositions } from "./project-order-upgrade.ts";
 
 test("genuine beta.1 schema upgrades preserve every user record and restart idempotently", async () => {
   const root = await tempDir("beta2-upgrade-");
@@ -21,9 +22,16 @@ test("genuine beta.1 schema upgrades preserve every user record and restart idem
     createSessionReferenceUpgrade(opencodeV1SessionID.legacy, {
       now: () => 42,
     })(db);
-    assertEquals(snapshot(db), upgradedManifest(before));
+    assertEquals(
+      snapshot(db),
+      withoutLegacyPositions(upgradedManifest(before)),
+    );
     for (const table of unchanged) {
-      assertEquals(snapshot(db)[table], before[table], table);
+      assertEquals(
+        snapshot(db)[table],
+        withoutLegacyPositions(before)[table],
+        table,
+      );
     }
     assertEquals(
       db.connection.prepare("SELECT count(*) AS n FROM permission_activity")
@@ -85,11 +93,17 @@ for (
         Error,
         "owned upgrade fault",
       );
-      assertEquals(snapshot(db), schemaUpgradedManifest(before));
+      assertEquals(
+        snapshot(db),
+        withoutLegacyPositions(schemaUpgradedManifest(before)),
+      );
       db.close();
       db = new OtkDb(root, beta2Migrations, { busyms: 5000 });
       createSessionReferenceUpgrade(opencodeV1SessionID.legacy)(db);
-      assertEquals(snapshot(db), upgradedManifest(before));
+      assertEquals(
+        snapshot(db),
+        withoutLegacyPositions(upgradedManifest(before)),
+      );
     } finally {
       db.close();
     }
@@ -126,12 +140,17 @@ for (const feature of ["tasks", "session-reference-upgrade", "requests"]) {
       try {
         assertEquals(
           snapshot(db),
-          feature === "tasks" ? before : schemaUpgradedManifest(before),
+          withoutLegacyPositions(
+            feature === "tasks" ? before : schemaUpgradedManifest(before),
+          ),
         );
         db.close();
         db = new OtkDb(root, beta2Migrations, { busyms: 5000 });
         createSessionReferenceUpgrade(opencodeV1SessionID.legacy)(db);
-        assertEquals(snapshot(db), upgradedManifest(before));
+        assertEquals(
+          snapshot(db),
+          withoutLegacyPositions(upgradedManifest(before)),
+        );
       } finally {
         db.close();
       }

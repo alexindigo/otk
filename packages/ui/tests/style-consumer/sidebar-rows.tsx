@@ -23,7 +23,6 @@ const project = (
   ageing: 0,
   inactive: false,
   added: true,
-  order: 0,
   lastVisit: 0,
   artwork: "avatar",
   ...extra,

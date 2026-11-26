@@ -5,6 +5,7 @@ import type {
   Preferences,
   ProjectEditTarget,
   ProjectLocation,
+  ProjectMove,
   ProjectPatch,
   ServerFrame,
   SessionStructure,
@@ -56,7 +57,7 @@ import {
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
-import { createStableOrder } from "./stable-order.ts";
+import { createProjectOrder, orderProjectRows } from "./project-order.ts";
 import { createFileFacts, type FileFacts } from "./file-facts.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 
@@ -64,6 +65,11 @@ export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
   removed?(id: string): void;
 }
+type ServerProjectRow = ProjectProjectionRow & {
+  sidecarId: string;
+  label: string;
+  otkProjectID?: string;
+};
 export interface ServerResources {
   forms(id: string): readonly import("@otk/protocol").FormRequest[];
   progress(server: string, directory?: string): ProgressDisplay;
@@ -99,7 +105,7 @@ export interface ServerResources {
   approvals(id: string): ApprovalModel;
   tabs(project: ProjectSelection): ClientTabs;
   holdTaskOrder(project: ProjectSelection): () => void;
-  holdProjectOrder(): () => void;
+  moveProject(sidecarId: string, move: ProjectMove): Promise<void>;
   taskActions(project: ProjectSelection): TaskActions;
   entry(sidecarId: string, sessionID: string): IndexEntry | undefined;
   server(id: string): SidecarState | undefined;
@@ -146,7 +152,7 @@ export interface ServerResources {
   ): Promise<void>;
   projects(
     now: number,
-  ): (ProjectProjectionRow & { sidecarId: string; label: string })[];
+  ): ServerProjectRow[];
   /** The connection's entity states, for lamps and emphasis (decision 62). */
   entities(server: string): import("./entity-state.ts").EntityStateStore;
   tabSnapshot(project: ProjectSelection): TabInput;
@@ -177,6 +183,7 @@ export function createServerResources(o: {
   index: ClientIndex;
   factory?: StateFactory;
   error?: (error: unknown) => void;
+  diagnostic?: (error: unknown) => void;
   /** One release input for catalog warm-up. Until decision 30, acquisition is page-ready. */
   pageReady?: (
     project: ProjectSelection,
@@ -184,11 +191,13 @@ export function createServerResources(o: {
   ) => void | (() => void);
 }): ServerResources {
   const factory = o.factory ?? createState;
-  const projectOrderClock = factory({ revision: 0 });
-  const projectOrder = createStableOrder<{
-    id: string;
-    row: ProjectProjectionRow & { sidecarId: string; label: string };
-  }>(() => projectOrderClock.update((s) => s.revision++));
+  const orders = new Map<string, ReturnType<typeof createProjectOrder>>();
+  const missingOrder = new Map<string, Set<string>>();
+  function projectOrder(id: string) {
+    let order = orders.get(id);
+    if (!order) orders.set(id, order = createProjectOrder(factory));
+    return order;
+  }
   const lifetimeClock = factory({ revision: 0 });
   const requestSubscriptions = new Map<string, () => void>();
   const requests = (id: string) => {
@@ -338,7 +347,7 @@ export function createServerResources(o: {
   };
   const labelledRows = new WeakMap<
     ProjectProjectionRow,
-    { sidecarId: string; label: string } & ProjectProjectionRow
+    ServerProjectRow
   >();
   const tabModels = new Map<string, ClientTabs>();
   const observers = new Set<FrameObserver>();
@@ -810,6 +819,9 @@ export function createServerResources(o: {
   };
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
+    if (frame.t === "projects.order" || frame.t === "welcome") {
+      projectOrder(id).receive(frame);
+    }
     if (
       id === LOCAL_SIDECAR && frame.t === "prefs" &&
       tasksFollowParent !== frame.prefs.tasksFollowParent
@@ -1008,7 +1020,13 @@ export function createServerResources(o: {
       model.update(tabInput(p));
       return model.holdOrder();
     },
-    holdProjectOrder: () => projectOrder.hold(),
+    async moveProject(id, move) {
+      const result = await sidecars.connection(id).rpc.call(
+        "projects.move",
+        move,
+      );
+      await projectOrder(id).settled(result.revision);
+    },
     entry,
     server,
     connected,
@@ -1113,35 +1131,44 @@ export function createServerResources(o: {
       return (names.get(name) ?? 0) > 1;
     },
     projects: (now) => {
-      void projectOrderClock.state.revision;
       // The configured server list is durable before any server answers.
-      const serverOrder = new Map(
-        sidecars.state.list.map((s, i) => [s.id, i]),
-      );
-      const rows = sidecars.state.list.flatMap((s) => {
+      const rows = sidecars.state.list.flatMap((s, serverOrder) => {
+        const order = projectOrder(s.id);
+        if (!order.ready) return [];
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
           const row = owner.row(directory, now)!;
+          const slot = order.slot(directory);
+          if (!slot) {
+            let reported = missingOrder.get(s.id);
+            if (!reported) missingOrder.set(s.id, reported = new Set());
+            if (!reported.has(directory)) {
+              reported.add(directory);
+              reportDiagnostic(
+                o.diagnostic ?? console.warn,
+                new Error(
+                  `project order missing directory: ${s.id} ${directory}`,
+                ),
+              );
+            }
+          }
           let labelled = labelledRows.get(row);
-          if (!labelled || labelled.label !== s.label) {
-            labelled = { ...row, sidecarId: s.id, label: s.label };
+          if (
+            !labelled || labelled.label !== s.label ||
+            labelled.otkProjectID !== slot?.id
+          ) {
+            labelled = {
+              ...row,
+              sidecarId: s.id,
+              label: s.label,
+              otkProjectID: slot?.id,
+            };
             labelledRows.set(row, labelled);
           }
-          return labelled;
+          return { row: labelled, serverOrder, slot };
         });
       });
-      return projectHierarchy(
-        projectOrder.order(
-          rows.map((row) => ({
-            id: JSON.stringify([row.sidecarId, row.directory]),
-            row,
-          })),
-          (row) => ({
-            source: serverOrder.get(row.row.sidecarId),
-            position: row.row.source === "tracked" ? row.row.order : undefined,
-          }),
-        ).map((item) => item.row),
-      );
+      return projectHierarchy(orderProjectRows(rows));
     },
     tabSnapshot(p) {
       const input = tabInput(p);
@@ -1174,6 +1201,9 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      orders.get(id)?.stop();
+      orders.delete(id);
+      missingOrder.delete(id);
       requestSubscriptions.get(id)?.();
       requestSubscriptions.delete(id);
       listOwners.get(id)?.stop();
@@ -1247,7 +1277,8 @@ export function createServerResources(o: {
       });
     },
     stop() {
-      projectOrder.stop();
+      for (const order of orders.values()) order.stop();
+      orders.clear();
       for (const release of requestSubscriptions.values()) release();
       requestSubscriptions.clear();
       if (stopped) return;

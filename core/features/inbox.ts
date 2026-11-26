@@ -1074,7 +1074,7 @@ export class InboxFeature implements FrameSource {
     );
     return {
       projects: [...this.#projects.values()].sort((a, b) =>
-        a.order - b.order || a.directory.localeCompare(b.directory)
+        a.directory.localeCompare(b.directory)
       ).map((p) => ({ ...p })),
       tasks: [
         ...(view
@@ -1189,7 +1189,7 @@ export class InboxFeature implements FrameSource {
         }
         const inbox: InboxSnapshot = {
           projects: [...maps.projects.values()].sort((a, b) =>
-            a.order - b.order || a.directory.localeCompare(b.directory)
+            a.directory.localeCompare(b.directory)
           ),
           tasks: [...maps.tasks.values()].sort((a, b) =>
             a.order - b.order || a.id.localeCompare(b.id)

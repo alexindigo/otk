@@ -354,10 +354,26 @@ Deno.test("live Sessions context overlays preserve creation order when a page ro
   }
 });
 
+function publishOrder(
+  f: ReturnType<typeof fixture>,
+  id: string,
+  directories: (string | string[])[],
+  revision = 1,
+) {
+  f.receive(id, {
+    t: "projects.order",
+    revision,
+    projects: directories.map((directory) => {
+      const aliases = typeof directory === "string" ? [directory] : directory;
+      return { id: aliases[0], directories: aliases };
+    }),
+  });
+}
+
 Deno.test("sidebar identities stay ordered through state/recency ticks, explicit moves reorder and arrivals append", () => {
   const f = fixture();
   const inbox = metadata();
-  inbox.projects.push({ ...inbox.projects[0], directory: "/q", order: 1 });
+  inbox.projects.push({ ...inbox.projects[0], directory: "/q" });
   inbox.discovered = ["/new-discovered"];
   const summary = (
     directory: string,
@@ -389,6 +405,8 @@ Deno.test("sidebar identities stay ordered through state/recency ticks, explicit
       "/q": summary("/q", "blocked", 1),
     };
     publish();
+    assertEquals(ids(), []);
+    publishOrder(f, "local", ["/p", "/q", "/new-discovered"]);
     const initial = ids();
     assertEquals(initial, ["/p", "/q", "/new-discovered"]);
     for (const status of ["working", "blocked", "finished"] as const) {
@@ -399,11 +417,10 @@ Deno.test("sidebar identities stay ordered through state/recency ticks, explicit
         assertEquals(ids(), initial);
       }
     }
-    inbox.projects[0].order = 1;
-    inbox.projects[1].order = 0;
-    publish();
+    publishOrder(f, "local", ["/q", "/p", "/new-discovered"], 2);
     assertEquals(ids(), ["/q", "/p", "/new-discovered"]);
     inbox.summaries["/arrival"] = summary("/arrival", "blocked", 9999999);
+    publishOrder(f, "local", ["/q", "/p", "/new-discovered", "/arrival"], 3);
     publish();
     assertEquals(ids(), ["/q", "/p", "/new-discovered", "/arrival"]);
     delete inbox.summaries["/q"];
@@ -433,15 +450,15 @@ Deno.test("project order is the durable server and saved order, whichever server
       inbox: {
         ...metadata(),
         tasks: [],
-        projects: directories.map((directory, order) => ({
+        projects: [...directories].reverse().map((directory) => ({
           directory,
-          order,
           lastVisit: 1,
           inactive: false,
           added: true,
         })),
       },
     });
+    publishOrder(f, id, directories);
   };
   const order = (f: ReturnType<typeof fixture>) =>
     f.resources.projects(100).map((p) => `${p.sidecarId}:${p.directory}`);
@@ -471,7 +488,6 @@ function metadata(): InboxSnapshot {
   return {
     projects: [{
       directory: "/p",
-      order: 0,
       lastVisit: 1,
       inactive: false,
       added: true,
@@ -781,6 +797,7 @@ Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects n
     ) => [r.id, r.group]),
     [["tstv1-idle", "nested-task"]],
   );
+  publishOrder(f, "local", [["/tree", "/tree/src"]]);
   assertEquals(f.resources.projects(0).map((r) => r.directory), ["/tree"]);
   assertEquals(inbox.tasks[0].directory, "/tree/src");
   assertEquals(f.resources.tabs(project).tasks()[0].directory, "/tree/src");
@@ -906,6 +923,7 @@ Deno.test("@load @sessions digest-only patches do zero project-row recomputation
     return createState(initial);
   };
   const f = fixture(factory);
+  publishOrder(f, "local", ["/p", "/other"]);
   f.receive("local", {
     t: "index.snapshot",
     rev: 0,
@@ -978,6 +996,7 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     attention: { ...entry().attention, permissions: 0 },
   };
   const b = { ...a, id: "b", directory: "/two/shared" };
+  publishOrder(f, "local", [a.directory, b.directory, "/empty"]);
   f.receive("local", { t: "index.snapshot", rev: 0, entries: [a, b] });
   f.receive("local", {
     t: "inbox.snapshot",
@@ -1027,6 +1046,7 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     f.resources.projects(100).find((r) => r.directory === b.directory),
     other,
   );
+  publishOrder(f, "local", [[a.directory, "/moved"], b.directory, "/empty"], 2);
   f.receive("local", {
     t: "index.patch",
     rev: 1,
@@ -1344,6 +1364,8 @@ Deno.test("server resources project per-server attention and labelled projects f
     f.resources.projectEntries({ sidecarId: "local", directory: "/other" }),
     [],
   );
+  publishOrder(f, "local", ["/p"]);
+  publishOrder(f, "remote", ["/p"]);
   assertEquals(
     f.resources.projects(100).map((p) => [p.sidecarId, p.label, p.status]),
     [["local", "This server", "working"], [
