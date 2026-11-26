@@ -175,6 +175,8 @@ test("menus.captured-session-task-and-project-effects", {
   const project = '[data-project$="/projects/otk"] .otk-project-open';
   await rightClick(page, project);
   expect(await menuLabels(page)).toEqual([
+    "Move up",
+    "Move down",
     "Mark inactive",
     "Add project",
     "Collapse projects",
@@ -185,6 +187,8 @@ test("menus.captured-session-task-and-project-effects", {
     .toHaveAttribute("data-inactive", "true");
   await rightClick(page, project);
   expect(await menuLabels(page)).toEqual([
+    "Move up",
+    "Move down",
     "Mark active",
     "Add project",
     "Hide inactive projects",
