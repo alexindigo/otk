@@ -56,7 +56,7 @@ test(
       const geometry = await entry.evaluate((el) => {
         // Issue 2.96: the shared sidebar row owns both the content tracks
         // and its full-width feedback track below them.
-        const row = el.closest(".otk-sidebar-row-grid")!;
+        const row = el.closest(".otk-sidebar-row")!;
         const content = row.getBoundingClientRect();
         const action = row.querySelector(".otk-sidebar-row-main")!
           .getBoundingClientRect();
@@ -74,24 +74,27 @@ test(
       await expect(entry).toContainText(/not found|no longer available/);
       // A missing session has no owner-supplied recovery; do not invent advice.
       await expect(entry.locator(".otk-failure-recovery")).toHaveCount(0);
-      for (
-        const surface of [
-          page.locator(".otk-operation-feedback"),
-          entry,
-        ]
-      ) {
-        // The open session is already the inline target. Background notification
-        // navigation remains covered by failure-toast-native.spec.ts.
+      // WP5: the composer notice row is now inside FailureContent, while the
+      // inline editor exposes that same presentation inside its alert frame.
+      const notice = page.locator(".otk-operation-feedback");
+      await expect(notice).toHaveCount(1);
+      for (const surface of [notice, entry]) {
         await expect(surface.getByRole("link")).toHaveCount(0);
         await expect(surface).not.toContainText("Failure owner fixture");
         await expect(surface).not.toContainText(`Session ${session.id}`);
-        expect(
-          await surface.locator(".otk-failure-content").evaluate((el) =>
-            el.closest(".otk-control-label") === null
-          ),
-          "Failure prose has its own content slot, never a single-line control label",
-        ).toBe(true);
       }
+      const failureContent = (element: Element) =>
+        element.closest(".otk-control-label") === null;
+      expect(
+        await entry.locator(".otk-failure-content").evaluate(failureContent),
+      )
+        .toBe(true);
+      expect(
+        await notice.evaluate((element) => {
+          const content = element.closest(".otk-failure-content");
+          return !!content && content.closest(".otk-control-label") === null;
+        }),
+      ).toBe(true);
       // This selected target already owns inline feedback. Background-toast title
       // and link coverage belongs to failure-toast-native.spec.ts, not a duplicate.
       await expect(page.locator(".otk-toast")).toHaveCount(0);
