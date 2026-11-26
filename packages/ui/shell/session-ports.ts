@@ -124,10 +124,15 @@ export function sessionPorts(o: {
       );
     },
     permissionVisible: (request) =>
-      permissionVisible(entities(), request.sessionID, request.id) ||
-      // Lost authority stops replies, but must not unmount retained input.
-      (!resources.linked(target.sidecarId) &&
-        !!connection.attention.draft("permission", request.id)),
+      permissionVisible(
+        entities(),
+        request.sessionID,
+        request.id,
+        !resources.linked(target.sidecarId) &&
+          connection.attention.draft("permission", request.id)
+          ? "cached-draft"
+          : "fresh",
+      ),
     questions: () => {
       void session.state.content;
       return connection.attention.questions(

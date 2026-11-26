@@ -51,6 +51,34 @@ class Socket {
     });
   }
 }
+Deno.test("view changes preserve the ordered inbox patch stream but fence old snapshots", async () => {
+  const socket = new Socket();
+  const frames: string[] = [];
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame(frame) {
+      frames.push(frame.t);
+    },
+  }, {
+    fetcher: bootstrapFetch(),
+    socket: () => socket as unknown as WebSocket,
+  });
+  try {
+    await connection.connect();
+    socket.open();
+    socket.welcome();
+    const previous = connection.viewEpoch;
+    connection.view({ directory: "/project", crumbs: [], rows: [] });
+    for (const t of ["index.snapshot", "inbox.snapshot", "inbox.patch"]) {
+      socket.onmessage!({
+        data: JSON.stringify({ t, epoch: previous }),
+      });
+    }
+    assertEquals(frames, ["welcome", "inbox.patch"]);
+  } finally {
+    connection.stop();
+  }
+});
 Deno.test("incompatible hello and welcome publish OTK was updated with an owner-supplied Reload", async () => {
   for (
     const frame of [

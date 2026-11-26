@@ -28,8 +28,9 @@ export default function PrimaryAction(props: {
       aria-description={props.state.reason ?? props.description}
       title={props.state.reason ?? props.title ?? props.state.label}
       onClick={(event) => {
-        if (props.type !== "submit") props.onInvoke();
-        else if (!props.state.available) event.preventDefault();
+        // aria-disabled preserves focus, but does not suppress activation.
+        if (!props.state.available) event.preventDefault();
+        else if (props.type !== "submit") props.onInvoke();
       }}
     >
       {props.children ?? props.state.label}
