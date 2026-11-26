@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { sessionComposerLink, taskHelpers } from "@otk/client";
+import { META_SEPARATOR, sessionComposerLink, taskHelpers } from "@otk/client";
 import "./ComposerTakeovers.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import { createMemo, type Element, For, Show } from "solid-js";
@@ -13,7 +13,6 @@ import LiveLink from "./LiveLink.tsx";
 import Subagents from "./Subagents.tsx";
 import { sessionSelectionControl } from "./session-open.ts";
 import ChromeMeta from "./ChromeMeta.tsx";
-import { ChevronIcon } from "./ChromeIcons.tsx";
 import { RequestReopen } from "./RequestDismiss.tsx";
 import { POPOVER_BOUNDS } from "./surface/Popover.tsx";
 export default function ComposerTakeovers(
@@ -73,7 +72,9 @@ export default function ComposerTakeovers(
                         <ChromeMeta class="otk-composer-task otk-control-label">
                           {task()}
                         </ChromeMeta>
-                        <ChevronIcon class="otk-composer-chevron" />
+                        <ChromeMeta class="otk-composer-separator">
+                          {META_SEPARATOR}
+                        </ChromeMeta>
                       </>
                     )}
                   </Show>

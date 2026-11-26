@@ -4,6 +4,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { activity } from "../../pages/sessions.ts";
+import { cleanup, viewport } from "../../pages/terminal.ts";
 
 test.use({ profile: "contract-sessions-default" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
@@ -42,6 +43,125 @@ const activeAnimation = [{
 }];
 
 test(
+  "composer.docked-terminal-leaves-the-header-with-its-input-and-room-for-history",
+  tags,
+  async ({ isolatedState: state, page }, info) => {
+    test.setTimeout(120_000);
+    await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Facade rollout",
+      sessions: [root],
+    });
+    await activity(state, child, "hold");
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "hold",
+      target: "header-shells",
+    });
+    await openSession(state, page, root);
+    await expect(helpers(page)).toHaveAccessibleName("Subagents: 1 running");
+    await expect(shells(page)).toHaveAccessibleName("Running work: 2 shells");
+    await page.getByRole("button", { name: "Open terminal", exact: true })
+      .click();
+    try {
+      await expect(viewport(page)).toBeVisible();
+      await expect(viewport(page)).not.toHaveAttribute(
+        "aria-label",
+        "Terminal output",
+      );
+      const target = page.locator(".otk-composer-target");
+      const names = await target.locator(".otk-control-label")
+        .allTextContents();
+      expect(names).toHaveLength(2);
+      await expect.soft(target).toHaveText(names.join(" · "));
+      await expect.soft(target.locator("svg")).toHaveCount(0);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.mouse.move(0, 0);
+      const facts = [];
+      for (const [width, scale] of [[1440, 100], [1440, 125], [900, 125]]) {
+        await page.setViewportSize({ width, height: 800 });
+        await state.product("prefs.set", {
+          key: "textSize",
+          value: String(scale),
+        });
+        await expect(page.locator("html")).toHaveCSS(
+          "--otk-scale",
+          String(scale / 100),
+        );
+        for (const [theme, label] of themes) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          const geometry = await page.locator(".otk-session-view").evaluate(
+            (pane) => {
+              const box = (selector: string) =>
+                pane.querySelector(selector)!
+                  .getBoundingClientRect();
+              const header = box(".otk-composer-activity-slot"),
+                composer = box(".otk-composer"),
+                terminal = box(".otk-composer-surface"),
+                transcript = box(".otk-transcript-viewport");
+              return {
+                pane: box(".otk-session-content").height,
+                transcript: transcript.height,
+                terminal: terminal.height,
+                terminalToHeader: header.top - terminal.bottom,
+                headerToInput: composer.top - header.bottom,
+                clippedSession: (() => {
+                  const title = pane.querySelector(
+                    ".otk-composer-destination",
+                  )!;
+                  return title.scrollWidth - title.clientWidth;
+                })(),
+                space: parseFloat(
+                  getComputedStyle(
+                    pane.querySelector(".otk-composer-activity")!,
+                  ).paddingBlockEnd,
+                ),
+              };
+            },
+          );
+          const context = `${width}/${scale}/${label}`;
+          expect.soft(geometry.terminal, context).toBeGreaterThan(0);
+          expect.soft(geometry.terminalToHeader, context)
+            .toBeGreaterThanOrEqual(0);
+          expect.soft(geometry.headerToInput, context).toBeGreaterThanOrEqual(
+            0,
+          );
+          expect.soft(geometry.headerToInput, context).toBeLessThanOrEqual(
+            geometry.space + 1,
+          );
+          expect.soft(geometry.transcript + .02, context)
+            .toBeGreaterThanOrEqual(
+              geometry.pane / 2,
+            );
+          expect.soft(geometry.clippedSession, context).toBeLessThanOrEqual(1);
+          await expect.soft(helpers(page)).toHaveText("1");
+          await expect.soft(helpers(page)).not.toHaveText(
+            /running|needs you|returned/,
+          );
+          await expect.soft(shells(page)).toHaveText("2");
+          facts.push({ width, scale, theme, ...geometry });
+          await page.screenshot({
+            path: info.outputPath(`wp7-${width}-${scale}-${label}.png`),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+      }
+      await info.attach("wp7-geometry", {
+        body: JSON.stringify(facts, null, 2),
+        contentType: "application/json",
+      });
+    } finally {
+      await cleanup(state, root);
+    }
+  },
+);
+
+test(
   "composer.running-shells-do-not-inherit-the-blocked-task-lamp",
   tags,
   async ({ isolatedState: state, page }) => {
@@ -63,10 +183,8 @@ test(
     await expect(tabLamp).toHaveAttribute("data-state", "blocked");
     const pill = shells(page);
     await expect(pill).toHaveAccessibleName("Running work: 2 shells");
-    for (const selector of [".is-full", ".otk-live-count-compact"]) {
-      await expect(pill.locator(`${selector} .otk-status-light`))
-        .toHaveAttribute("data-state", "working");
-    }
+    await expect(pill.locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "working");
     await pill.click();
     const list = page.getByRole("list", { name: "Running shells" });
     await expect(list.getByRole("listitem")).toHaveCount(2);
@@ -157,7 +275,7 @@ test(
       stage = "full",
     ) => {
       const measured = await page.locator(".otk-composer-dock").evaluate(
-        (dock, stage) => {
+        (dock) => {
           const at = (selector: string) =>
             dock.querySelector<HTMLElement>(selector)!;
           const box = (selector: string) =>
@@ -169,17 +287,24 @@ test(
           const title = box(".otk-composer-target"),
             connector = box(".otk-live-link");
           const pills = [".otk-subagents-trigger", ".otk-live-work-trigger"];
-          const visibleCount = stage === "full"
-            ? ".otk-live-count.is-full"
-            : ".otk-live-count-compact .otk-live-count";
-          const titleLabel = at(".otk-composer-task");
-          const count = (pill: string) =>
-            `${pill} ${pill === pills[0] ? ".otk-live-count" : visibleCount}`;
+          const count = (pill: string) => `${pill} .otk-live-count`;
           const lastPill = box(pills[1]);
+          const wrapped = lastPill.top >= title.bottom;
+          const probe = document.createElement("span");
+          probe.style.cssText =
+            "position:absolute;inline-size:var(--row-title-min)";
+          at(".otk-composer-task").append(probe);
+          const floor = probe.getBoundingClientRect().width;
+          probe.remove();
+          const titleMinimum = connector.width ? floor : Math.min(
+            floor,
+            title.width - box(".otk-composer-destination").width -
+              box(".otk-composer-separator").width,
+          );
           return {
             leading: title.left - box(".otk-prompt-input").left,
             trailing: lastPill.right -
-              (stage === "wrap"
+              (wrapped
                 ? row.getBoundingClientRect().right -
                   parseFloat(getComputedStyle(row).paddingInlineEnd) -
                   parseFloat(getComputedStyle(row).borderInlineEndWidth)
@@ -188,12 +313,11 @@ test(
             linkToPill: box(pills[0]).left - connector.right,
             betweenPills: box(pills[1]).left - box(pills[0]).right,
             pillText: pills.map((pill) => at(pill).innerText),
-            titleWidth: titleLabel.getBoundingClientRect().width,
-            titleMinimum: parseFloat(
-              getComputedStyle(titleLabel).minInlineSize.match(/[\d.]+px/)
-                ?.[0] ?? "0",
-            ),
-            wrap: lastPill.top >= title.bottom,
+            titleWidth: box(".otk-composer-task").width,
+            titleMinimum,
+            wrap: wrapped,
+            linkOnPillLine: !connector.width ||
+              Math.abs(center(connector) - center(lastPill)) <= .5,
             overflow: row.scrollWidth - row.clientWidth,
             lampGaps: pills.map((pill) =>
               box(`${count(pill)} .otk-chrome-meta`).left -
@@ -206,7 +330,14 @@ test(
                 `${count(pill)} .otk-status-light`,
                 `${count(pill)} .otk-chrome-meta`,
               ]),
-            ].map((selector) => center(box(selector)) - rowCenter),
+            ].map((selector) =>
+              center(box(selector)) -
+              (wrapped
+                ? selector === ".otk-composer-task"
+                  ? center(title)
+                  : center(lastPill)
+                : rowCenter)
+            ),
             linkWidth: connector.width,
             truncated: [
               ...pills.map((pill) => `${count(pill)} .otk-chrome-meta`),
@@ -217,7 +348,6 @@ test(
             }),
           };
         },
-        stage,
       );
       const u = scale / 100, context = `${width}/${scale}/${theme}`;
       for (
@@ -225,11 +355,18 @@ test(
           ["leading inset", measured.leading, 1],
           ["trailing inset", measured.trailing, 1],
           ...(measured.linkWidth
-            ? [["title to link", measured.titleToLink - 12 * u, .5], [
-              "link to pill",
-              measured.linkToPill - 12 * u,
-              .5,
-            ]] as const
+            ? [
+              ...(measured.wrap ? [] : [[
+                "title to link",
+                measured.titleToLink - 12 * u,
+                .5,
+              ]] as const),
+              [
+                "link to pill",
+                measured.linkToPill - 12 * u,
+                .5,
+              ],
+            ] as const
             : []),
           ["between pills", measured.betweenPills - 16 * u, .5],
           [
@@ -240,25 +377,22 @@ test(
           ...measured.lampGaps.map((gap, i) =>
             [`lamp ${i}`, gap - 8 * u, .5] as const
           ),
-          ...(stage === "wrap"
-            ? []
-            : measured.centerDrifts.map((drift, i) =>
-              [`center ${i}`, drift, .5] as const
-            )),
+          ...measured.centerDrifts.map((drift, i) =>
+            [`center ${i}`, drift, .5] as const
+          ),
         ] as const
       ) {
         expect.soft(Math.abs(delta), `${context}: ${axis}`)
           .toBeLessThanOrEqual(limit);
       }
-      if (stage === "full" || stage === "compact") {
+      if (stage === "full" || stage === "wrap-with-link") {
         expect.soft(measured.linkWidth, context).toBeGreaterThanOrEqual(
           24 * u - .5,
         );
       } else expect.soft(measured.linkWidth, context).toBe(0);
-      expect.soft(measured.pillText, context).toEqual(
-        ["1", stage === "full" ? "2 shells" : "2"],
-      );
-      expect.soft(measured.wrap, context).toBe(stage === "wrap");
+      expect.soft(measured.pillText, context).toEqual(["1", "2"]);
+      expect.soft(measured.wrap, context).toBe(stage !== "full");
+      expect.soft(measured.linkOnPillLine, context).toBe(true);
       expect.soft(measured.overflow, context).toBeLessThanOrEqual(1);
       expect.soft(measured.truncated, context).toEqual([
         false,
@@ -266,7 +400,7 @@ test(
         width < 1000 && stage !== "full",
       ]);
       if (stage !== "full") {
-        expect.soft(measured.titleMinimum, context).toBeGreaterThan(45);
+        expect.soft(measured.titleMinimum, context).toBeGreaterThan(0);
         expect.soft(measured.titleWidth, context).toBeGreaterThanOrEqual(
           measured.titleMinimum - .5,
         );
@@ -361,11 +495,11 @@ test(
         "data-otk-theme",
         theme,
       );
-      await check(800, 125, label, "compact");
+      await check(800, 125, label, "wrap-with-link");
       await shot(`header-row-narrow-${label}.png`);
     }
     await page.setViewportSize({ width: 775, height: 900 });
-    await check(775, 125, "stone", "no-link");
+    await check(775, 125, "stone", "wrap");
     await state.product("layout.patch", {
       leftCollapsed: true,
       rightWidth: 300,

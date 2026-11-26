@@ -816,9 +816,10 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
   assertEquals(label.get("min-inline-size"), "min(var(--row-title-min),100%)");
   assertEquals(label.get("flex"), "0 1 auto");
   assert(
-    css.some((rule) =>
-      rule.condition.includes("@container composer-activity") &&
-      rule.declarations.get("--live-count-compact") === "flex"
+    !css.some((rule) =>
+      [...rule.declarations.keys()].some((key) =>
+        key.startsWith("--live-count-")
+      )
     ),
   );
   assert(
