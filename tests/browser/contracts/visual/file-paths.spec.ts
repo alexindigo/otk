@@ -43,10 +43,10 @@ const narrow = async (state: TestState, page: Page) => {
     "data-collapsed",
     "true",
   );
-  await expect(page.locator(".otk-right-panel")).toHaveJSProperty(
-    "hidden",
-    true,
-  );
+  const right = page.locator('aside.otk-sidebar-rail[data-side="right"]');
+  await expect(right).toHaveCount(1);
+  await expect(right).toHaveAttribute("data-collapsed", "true");
+  await expect(right).toBeVisible();
   await page.setViewportSize({ width: 400, height: 850 });
 };
 
