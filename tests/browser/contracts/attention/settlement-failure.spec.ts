@@ -33,11 +33,29 @@ for (const kind of ["permission", "question", "form"] as const) {
       await expect(failure).toContainText(
         "A different response was already sent for this request",
       );
-      await expect(failure).toContainText("This one was not sent");
+      // Forms retain in-flow field feedback; only the joined composer row
+      // moves certainty into Details.
+      const owner = kind === "form"
+        ? failure
+        : page.locator(".otk-failure-content.is-feedback").filter({
+          has: failure,
+        });
+      if (kind === "form") {
+        await expect(owner).toContainText("This one was not sent");
+      } else {
+        await expect(owner).toHaveCount(1);
+        const details = owner.locator(".otk-failure-detail-body");
+        await expect(details).toHaveCount(0);
+        await failure.getByRole("button", { name: "Details", exact: true })
+          .click();
+        await expect(details.locator(".otk-failure-recovery")).toHaveText(
+          "This one was not sent",
+        );
+      }
       // UI conventions suppress the open session's inline self-target. The
       // fixture's captured target and single-frame admission stay authoritative.
-      await expect(failure.getByRole("link")).toHaveCount(0);
-      await expect(failure).not.toContainText("Reply target");
+      await expect(owner.getByRole("link")).toHaveCount(0);
+      await expect(owner).not.toContainText("Reply target");
       await expect(page.locator("[data-settlement-frames]")).toHaveAttribute(
         "data-settlement-frames",
         "1",

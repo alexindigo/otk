@@ -357,7 +357,8 @@ test(
     await span.locator("button").first().click();
     await scenario(state, "fail");
     await page.locator(".otk-composer-notice").getByRole("button", {
-      name: "See response",
+      name: "Show error",
+      exact: true,
     }).click();
     await expect(page.locator('.otk-message[data-message="record-10"]'))
       .toBeFocused();

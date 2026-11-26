@@ -24,12 +24,15 @@ test(
 test("composer.public-ui-sync-async-paste-drop-refusals-retain-input", {
   tag: ["@composer", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
-  await page.goto(`${state.url}/?interaction-failures`);
-  await page.locator("[data-dark]").click();
-  await page.locator(".otk-prompt textarea").fill("Retain this unsent input");
+  const prompt = page.locator(".otk-prompt");
+  const alert = prompt.getByRole("alert");
   for (const mode of ["sync", "async"]) {
     for (const kind of ["paste", "drop"]) {
+      await page.goto(`${state.url}/?interaction-failures`);
+      await page.locator("[data-dark]").click();
+      await prompt.locator("textarea").fill("Retain this unsent input");
       await page.locator(`[data-${mode}]`).click();
+      await expect(alert).toHaveCount(0);
       await page.evaluate((kind) => {
         document.querySelector(
           kind === "paste" ? ".otk-prompt textarea" : ".otk-prompt",
@@ -43,11 +46,9 @@ test("composer.public-ui-sync-async-paste-drop-refusals-retain-input", {
             }),
         );
       }, kind);
-      await expect(
-        page.locator(".otk-prompt [role=alert] .otk-failure-content"),
-      )
-        .toHaveText(/OTK has no further details/);
-      await expect(page.locator(".otk-prompt textarea")).toHaveValue(
+      await expect(alert).toHaveCount(1);
+      await expect(alert).toContainText("OTK has no further details");
+      await expect(prompt.locator("textarea")).toHaveValue(
         "Retain this unsent input",
       );
     }

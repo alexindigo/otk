@@ -119,7 +119,8 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
   }
   await action(state, "fail");
   await page.locator(".otk-composer-notice").getByRole("button", {
-    name: "See response",
+    name: "Show error",
+    exact: true,
   }).click();
   await expect(page.locator('[data-message="background-7"]')).toBeFocused();
   const record = page.locator('[data-message="background-7"]');
@@ -151,7 +152,8 @@ test("messages.success-only-interval-borrows-footer-and-direct-reveal", {
   await expect(page.locator('[data-message="background-1"]')).toHaveCount(0);
   await action(state, "fail");
   await page.locator(".otk-composer-notice").getByRole("button", {
-    name: "See response",
+    name: "Show error",
+    exact: true,
   }).click();
   await expect(page.locator('[data-message="background-1"]')).toBeFocused();
 });
@@ -166,7 +168,8 @@ test("messages.pending-breakout-reveal-and-settlement-retain-the-frame", {
   const key = await interval.getAttribute("data-background-interval");
   await action(state, "fail");
   await page.locator(".otk-composer-notice").getByRole("button", {
-    name: "See response",
+    name: "Show error",
+    exact: true,
   }).click();
   await expect(page.locator('[data-message="background-1"]')).toBeFocused();
   await action(state, "release");
