@@ -332,9 +332,16 @@ export function createSessionDelivery(input: {
         bind();
         const id = entry?.intent.key ?? randomID();
         activated = id;
-        const currentEntry = () =>
-          (entry && transcript?.projection.entry(entry.message.id)?.send) ??
-            entry!;
+        const ownedEntry = () => {
+          if (!entry) return;
+          const owned = transcript?.projection.entry(entry.message.id)?.send;
+          return owned?.intent.key === id &&
+              owned.intent.clientID === entry.intent.clientID
+            ? owned
+            : undefined;
+        };
+        const currentEntry = () => ownedEntry() ?? entry!;
+        let observeEntry: (() => void) | undefined;
         if (entry) {
           if (committedMessage(entry.message.id)) {
             return { kind: "committed", messageID: entry.message.id };
@@ -422,7 +429,7 @@ export function createSessionDelivery(input: {
             });
           };
           publish({ ...entry, dispatched: entry.dispatched ?? false });
-          timers.set(id, clock.set(failObservation, SEND_OBSERVATION_MS));
+          observeEntry = failObservation;
         }
         void (async () => {
           let result: SubmissionReceipt | null | undefined;
@@ -444,11 +451,6 @@ export function createSessionDelivery(input: {
               if (watch) watch.dispatched = true;
               if (entry) {
                 transcript?.send?.({ ...currentEntry(), dispatched: true });
-              } else if (!timers.has(id)) {
-                timers.set(
-                  id,
-                  clock.set(() => unavailable(id), SEND_OBSERVATION_MS),
-                );
               }
             });
           } catch (cause) {
@@ -463,6 +465,15 @@ export function createSessionDelivery(input: {
             clear(id);
             const receipt = store.state.receipts.find((r) => r.id === id);
             const correlated = receipt?.messageID ?? entry?.message.id;
+              timers.set(
+                id,
+                clock.set(
+                  ownedEntry() && observeEntry
+                    ? observeEntry
+                    : () => unavailable(id),
+                  SEND_OBSERVATION_MS,
+                ),
+              );
             if (correlated && committedMessage(correlated)) {
               update(id, (receipt) => receipt.settled = true);
               finish(id, { kind: "committed", messageID: correlated });
@@ -615,7 +626,10 @@ export function createSessionDelivery(input: {
             }
           });
           bind();
-          if (entry) {
+          if (
+            entry && ownedEntry() &&
+            (!result || result.messageID === entry.message.id)
+          ) {
             // The pending transcript entry now owns this send (2.39): it
             // commits in place or fails visibly with Retry. A commitment that
             // bind() already observed has settled the outcome first.
@@ -625,7 +639,8 @@ export function createSessionDelivery(input: {
             });
           }
           if (!store.state.receipts.some((r) => r.id === id)) return;
-          if (!transcript) {
+          if (!transcript || (entry && outcomes.has(id))) {
+            clear(id);
             unavailable(id);
             return;
           }
