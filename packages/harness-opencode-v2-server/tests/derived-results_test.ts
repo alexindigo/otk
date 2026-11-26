@@ -182,6 +182,33 @@ async function fixture(disk = false, apiOnly = false) {
   };
 }
 
+Deno.test("V2 page metadata does not wait for publication of derived usage", async () => {
+  const f = await fixture();
+  try {
+    f.seed("prompt", 1, "user");
+    f.seed("reply", 2, "assistant", { cost: 1, tokens: zero });
+    f.sink.storage.publish = () => {
+      throw new Error("Digest publication is unavailable");
+    };
+    const result = await f.sink.transcriptMetadata(
+      id,
+      ["prompt"],
+      new AbortController().signal,
+      undefined,
+      { messageID: "prompt", created: 1 },
+    );
+    assertEquals(result.prompt?.id, "prompt");
+    assertEquals(result.boundaries, [{
+      turnID: "prompt",
+      firstID: "reply",
+      lastID: "reply",
+      complete: true,
+    }]);
+  } finally {
+    await f.close();
+  }
+});
+
 Deno.test("V2 coherent publications omit absent errors and clear retained failures", async () => {
   const f = await fixture();
   try {

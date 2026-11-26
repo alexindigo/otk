@@ -129,8 +129,8 @@ these helpers.
 
 ## Public API
 
-Supervision optionally carries `dependencies: { running: number }` independently
-of its unchanged own-session state and native completion token. Aggregate
+An inbox session entity optionally carries a running terminal owner count in
+`dependencies`, independently of its native supervision. Aggregate
 `ProjectStatus` adds `dependencies` between working and none; scalar project
 facts carry optional checkout-based `dependencies` counts. TerminalInfo may
 include `checkout` and `ownerSessionID`; existing session-targeted terminal RPCs

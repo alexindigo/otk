@@ -584,11 +584,13 @@ test(
       await page.reload();
       // Navigation may still emit old-document requests before closing its
       // socket. The new hello, not the host's reload call, starts this phase.
-      const backgroundEnd = frames.findIndex((event, index) =>
-        index >= reloadStart && event.direction === "sent" &&
-        event.frame.t === "hello"
-      );
-      expect(backgroundEnd).toBeGreaterThanOrEqual(reloadStart);
+      const newHello = () =>
+        frames.findIndex((event, index) =>
+          index >= reloadStart && event.direction === "sent" &&
+          event.frame.t === "hello"
+        );
+      await expect.poll(newHello).toBeGreaterThanOrEqual(reloadStart);
+      const backgroundEnd = newHello();
       await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
         "data-collapsed",
         "true",
