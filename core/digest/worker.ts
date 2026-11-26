@@ -326,10 +326,15 @@ async function publishAll(
 async function publishStored(
   sessionID: string,
   cached = false,
-  reserved = publicationOrder.reserve(sessionID, "background", true),
+  reserved?: DigestPublicationReservation,
 ): Promise<void> {
   const signal = execution.getStore()?.signal ?? lifetime.signal;
-  await reserved.run(signal, async () => {
+  const reservation = reserved ?? publicationOrder.reserve(
+    sessionID,
+    "background",
+    true,
+  );
+  await reservation.run(signal, async () => {
     for (;;) {
       signal.throwIfAborted();
       const row = store!.summary([sessionID])[0];
@@ -374,7 +379,16 @@ async function publishStored(
       }
       if (changed) continue;
       if (revision < (publishedRevisions.get(sessionID) ?? -1)) return;
-      for (const value of parts) await send(value, signal);
+      if (reserved) {
+        for (const value of parts) await send(value, signal);
+      } else {
+        // Earlier committed packets may still be buffered after their ordering
+        // reservation retires. Drain that prefix before sending replay directly.
+        await batches!.settle(signal);
+        // The batch drain is essential. Keep replay out of it so every credit
+        // wait resumes under this reservation's optional/donated eligibility.
+        for (const value of parts) await sendRaw(value, signal);
+      }
       publishedRevisions.set(sessionID, revision);
       return;
     }

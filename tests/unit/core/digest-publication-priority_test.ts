@@ -359,10 +359,9 @@ for (const background of [false, true]) {
           value.publicationWaiting === 0,
       );
       const paused = [...seen];
-      // Socket release crosses an isolate boundary: one already-started credited
-      // chunk may settle after the callback closes the final viewer.
-      assertEquals(paused.every((id) => id === "opcv1-ses_a"), true);
-      assertEquals(paused.length >= 1 && paused.length <= 2, true);
+      // The bridge posts the scope release before returning this packet's
+      // credit. Replay cannot spend that returned credit until it is eligible.
+      assertEquals(paused, ["opcv1-ses_a"]);
       await restarted.deleteIntent("opcv1-ses_b", "barrier", "begin", 1);
       assertEquals(
         seen,
