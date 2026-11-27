@@ -371,12 +371,5 @@ export function config(sources: Omit<LoadSources, "authState">): ServiceConfig {
       `config: env overrides ${result.envOverridden.join(", ")}`,
     );
   }
-  const roots = result.config.images.roots;
-  diagnostic(
-    "info",
-    roots.length
-      ? `inline images: allowed roots ${JSON.stringify(roots)}`
-      : "inline images: no allowed roots",
-  );
   return result.config;
 }

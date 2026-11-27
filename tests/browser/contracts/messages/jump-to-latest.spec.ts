@@ -332,7 +332,12 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   });
   // The common opener explicitly waits for an editable root composer.
   await page.goto(`${state.url}/#/local/${child.id}`);
-  await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+  // D17: the child has a collapsed toolbar, not an editable composer.
+  await expect(page.getByRole("button", {
+    name: "Join the conversation",
+    exact: true,
+  })).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   const pane = page.getByRole("region", { name: "Transcript", exact: true });
   await expect(pane).toHaveAttribute("aria-busy", "false");
   await expect(pane).toContainText("Child source.");
@@ -351,8 +356,9 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   const rect = await pane.boundingBox();
   const session = await page.locator(".otk-session-view").boundingBox();
   const header = await activity.boundingBox();
+  const dock = await page.locator(".otk-composer-dock").boundingBox();
   expect(Math.abs(rect!.y + rect!.height - header!.y)).toBeLessThanOrEqual(.5);
-  expect(Math.abs(header!.y + header!.height - session!.y - session!.height))
+  expect(Math.abs(dock!.y + dock!.height - session!.y - session!.height))
     .toBeLessThanOrEqual(.5);
   await page.mouse.move(rect!.x + 8, rect!.y + rect!.height / 2);
   for (let i = 0; i < 4; i++) {

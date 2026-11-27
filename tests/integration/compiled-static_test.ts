@@ -19,7 +19,6 @@ test("compiled static paths preserve files, directory SPA fallback and API 404",
         "/assets/",
         "/assets",
         "/assets%2F",
-        "/assets/missing.js",
         "/nested/route",
         "/nested/route/",
         "/index.html",
@@ -39,6 +38,23 @@ test("compiled static paths preserve files, directory SPA fallback and API 404",
         path,
       );
       assertEquals(withoutBase(await response.text()), withoutBase(html), path);
+    }
+    // Issue 2.131: missing assets must never return the SPA shell.
+    for (const path of ["/assets/missing.js", "/manifest.json"]) {
+      const response = await fetch(server.url + path);
+      assertEquals(response.status, 404, path);
+      assertEquals(
+        response.headers.get("content-type"),
+        "text/plain; charset=utf-8",
+        path,
+      );
+      assertEquals(response.headers.get("cache-control"), "no-store", path);
+      assertEquals(
+        response.headers.get("x-content-type-options"),
+        "nosniff",
+        path,
+      );
+      assertEquals(await response.text(), "Not found", path);
     }
     const script = /src="([^"]+\.js)"/.exec(html);
     assert(script, html);
