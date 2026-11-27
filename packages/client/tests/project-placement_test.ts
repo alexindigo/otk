@@ -45,3 +45,17 @@ Deno.test("a checkout with an unknown repository is never placed as a live proje
     );
   }
 });
+
+Deno.test("D78: a yellow checkout with live work does not move into Archived", () => {
+  const placement = {
+    lifecycle: { archived: true },
+    status: "finished" as const,
+    inactive: true,
+    hasSessions: true,
+  };
+  assertEquals(projectPlacement(placement).section, "archived");
+  assertEquals(
+    projectPlacement({ ...placement, liveWork: true }).section,
+    "live",
+  );
+});

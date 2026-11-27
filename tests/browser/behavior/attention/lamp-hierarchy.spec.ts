@@ -37,10 +37,16 @@ test("attention.lamp-hierarchy-session-own-task-subtree-project-tasks", {
   await expect(crumb).toHaveAttribute("data-state", "none");
   await expect(tab).toHaveAttribute("data-state", "blocked");
   await expect(project).toHaveAttribute("data-state", "blocked");
-  // Isolate cross-checkout work; D57 puts unanswered questions and local work
-  // ahead of this particular proof if either is still present.
+  // D78: acknowledge the finished local work so the cross-checkout helper
+  // is the only remaining activity in the task and project.
   await scenario("release", "tstv1-disp-2");
   await scenario("release", "tstv1-disp-0");
+  for (const sessionID of [main, "tstv1-finished", "tstv1-blocked"]) {
+    await state.product("sessions.acknowledge", {
+      scope: "subtree",
+      sessionID,
+    });
+  }
   await expect(crumb).toHaveAttribute("data-state", "none");
   await expect(tab).toHaveAttribute("data-state", "working");
   await expect(project).toHaveAttribute("data-state", "working");

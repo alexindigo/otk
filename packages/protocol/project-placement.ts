@@ -15,10 +15,12 @@ export function projectPlacement(input: {
   lifecycle?: Pick<ProjectSummary, "archived" | "availability" | "topology">;
   status: ProjectStatus;
   dependencies?: number;
+  liveWork?: true;
   inactive: boolean;
   hasSessions: boolean;
 }): ProjectPlacement {
-  const live = input.status === "working" || input.status === "blocked" ||
+  const live = input.liveWork || input.status === "working" ||
+    input.status === "blocked" ||
     input.status === "dependencies" || (input.dependencies ?? 0) > 0;
   const archived = input.lifecycle?.archived === true;
   // Without a repository there is no live parent: it is never a project row.

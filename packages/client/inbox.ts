@@ -327,21 +327,23 @@ export function inboxProjects(
     [...tracked, ...discovered, ...templates].map((row) => {
       const summary = inbox.summaries?.[row.directory];
       const archived = summary?.archived === true;
+      const entity = stateFor(row.directory);
       const placement = projectPlacement({
         lifecycle: summary,
         status: row.status,
-        dependencies: stateFor(row.directory)?.dependencies,
+        dependencies: entity?.dependencies,
+        liveWork: entity?.liveWork,
         inactive: row.inactive,
         hasSessions: row.group !== "discovered",
       });
       return {
         ...row,
         ...placement,
-        dependencies: stateFor(row.directory)?.dependencies,
+        dependencies: entity?.dependencies,
         group: placement.section === "live"
           ? "active" as const
           : placement.section,
-        unseenCount: stateFor(row.directory)?.counts.unseen ?? null,
+        unseenCount: entity?.counts.unseen ?? null,
         archived,
         topology: summary?.topology,
         availability: summary?.availability,

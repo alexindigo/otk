@@ -37,11 +37,11 @@ test("composer.subagents-clear-removes-only-finished", {
   });
 
   const pill = page.getByRole("button", {
-    name: "Subagents: 1 needs you, 2 running, 5 finished",
+    name: "Subagents: 1 needs you, 5 finished, 2 running", // D78
   });
   const lamps = pill.locator(".otk-status-light:visible");
-  await expect(pill).toHaveText(/^\s*1\s*2\s*5\s*$/);
-  for (const [i, kind] of ["blocked", "working", "finished"].entries()) {
+  await expect(pill).toHaveText(/^\s*1\s*5\s*2\s*$/);
+  for (const [i, kind] of ["blocked", "finished", "working"].entries()) {
     await expect(lamps.nth(i)).toHaveAttribute("data-state", kind);
   }
   await pill.hover();
@@ -140,6 +140,11 @@ test("composer.subagents-clear-removes-only-finished", {
     action: "release",
     sessionID: "tstv1-disp-2",
   });
-  await expect(page.locator(`[data-tab="${task.id}"] .otk-status-light`))
-    .toHaveAttribute("data-state", "working");
+  const tabLamp = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
+  await expect(tabLamp).toHaveAttribute("data-state", "finished"); // D78
+  await state.product("sessions.acknowledge", {
+    scope: "subtree",
+    sessionID: "tstv1-disp-2",
+  });
+  await expect(tabLamp).toHaveAttribute("data-state", "working");
 });

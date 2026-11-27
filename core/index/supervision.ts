@@ -130,11 +130,10 @@ export class SessionSupervision {
       questions: evidence?.inputs?.fresh ? evidence.inputs.keys.length : 0,
     };
   }
-  status(value: Supervision): ProjectStatus {
-    return value.state === "needsYou"
-      ? "blocked"
-      : value.state === "finishedUnseen"
-      ? "finished"
-      : value.state;
+  /** D35/D69: this session's live work can supersede its own older finish. */
+  status(value: Supervision, operation?: "working" | "blocked"): ProjectStatus {
+    if (value.state === "needsYou" || operation === "blocked") return "blocked";
+    if (operation === "working") return "working";
+    return value.state === "finishedUnseen" ? "finished" : value.state;
   }
 }

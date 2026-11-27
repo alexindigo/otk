@@ -205,7 +205,7 @@ Deno.test("keyed task membership retains an explicitly grouped session before it
   assertEquals(tabs.sessionFor("task"), "pending");
 });
 
-Deno.test("a mixed task lamp shows working without changing saved strip order", () => {
+Deno.test("D78: a mixed task lamp shows an unseen finish without changing saved strip order", () => {
   const running = { ...entry("running"), status: "busy" as const },
     finished = entry("finished"),
     newer = { ...entry("newer", 100), status: "busy" as const };
@@ -221,7 +221,7 @@ Deno.test("a mixed task lamp shows working without changing saved strip order", 
     inbox: meta,
   });
   assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
-    ["mixed", "working"],
+    ["mixed", "finished"],
     ["newer", "working"],
   ]);
   tabs.stop();

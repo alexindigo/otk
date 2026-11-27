@@ -7,8 +7,9 @@ import { activity } from "../../pages/sessions.ts";
 test.use({ profile: "contract-sessions-hierarchy" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
 const main = "tstv1-otk";
-const pillText = /^\s*1\s*2\s*3\s*$/;
-const rowsInOrder = [2, 0, 1, 6, 4, 3].map((n) => `tstv1-disp-${n}`);
+// D78 ranks the groups; each group keeps its own deterministic row order.
+const pillText = /^\s*1\s*3\s*2\s*$/;
+const rowsInOrder = [2, 6, 4, 3, 0, 1].map((n) => `tstv1-disp-${n}`);
 const longTitle =
   "Disposition helper 7 checking every checkout of the task for guest inventory drift before the merge queue runs";
 const themes = [["otk-dark", "dark"], ["otk-light", "linen"], [
@@ -189,7 +190,7 @@ test(
     await page.setViewportSize({ width: 1440, height: 900 });
     const task = await openTask(state, page);
     const pill = page.getByRole("button", {
-      name: "Subagents: 1 needs you, 2 running, 3 finished",
+      name: "Subagents: 1 needs you, 3 finished, 2 running",
     });
     await expect(pill).toHaveText(pillText, { useInnerText: true });
     const tab = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
@@ -197,8 +198,8 @@ test(
     await expect(tab).toHaveAttribute("data-state", "blocked");
     await expect(lamp).toHaveCount(3);
     await expect(lamp.nth(0)).toHaveAttribute("data-state", "blocked");
-    await expect(lamp.nth(1)).toHaveAttribute("data-state", "working");
-    await expect(lamp.nth(2)).toHaveAttribute("data-state", "finished");
+    await expect(lamp.nth(1)).toHaveAttribute("data-state", "finished");
+    await expect(lamp.nth(2)).toHaveAttribute("data-state", "working");
     const paint = (node: Element) => getComputedStyle(node).backgroundImage;
     expect(await lamp.first().evaluate(paint)).toEqual(
       await tab.evaluate(paint),
@@ -301,8 +302,8 @@ test(
     const menu = page.getByRole("menu", { name: "Subagents", exact: true });
     await expect(menu.locator(".otk-subagent-heading")).toHaveText([
       "Needs you 1",
-      "Running 2",
       "Finished 3",
+      "Running 2",
     ]);
     const rows = menu.locator("[data-subagent]");
     await expect(rows).toHaveCount(rowsInOrder.length);
@@ -311,12 +312,12 @@ test(
         items.map((row) => row.getAttribute("data-subagent"))
       )
     ).toEqual(rowsInOrder);
-    for (const [index, id] of rowsInOrder.entries()) {
+    for (const id of rowsInOrder) {
       await expect(
         menu.locator(`[data-subagent="${id}"]`).getByRole("menuitem", {
           name: /^Terminate /,
         }),
-      ).toHaveCount(index === 1 || index === 2 ? 1 : 0);
+      ).toHaveCount(id === "tstv1-disp-0" || id === "tstv1-disp-1" ? 1 : 0);
     }
     const time = (n: number) =>
       menu.locator(`[data-subagent="tstv1-disp-${n}"] .otk-subagent-time`);
@@ -401,7 +402,10 @@ test(
             ? longTitle
             : `Disposition helper ${Number(rowsInOrder[index].at(-1)) + 1}`,
         );
-        if (index === 1 || index === 2) {
+        if (
+          rowsInOrder[index] === "tstv1-disp-0" ||
+          rowsInOrder[index] === "tstv1-disp-1"
+        ) {
           expect(pos.gaps, context).toBeDefined();
           expect.soft(Math.max(...pos.gaps!) - Math.min(...pos.gaps!), context)
             .toBeLessThanOrEqual(1);
