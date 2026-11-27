@@ -20,6 +20,7 @@ export type NativeSession =
     terminal?: number;
     terminalError?: unknown;
     runID?: string;
+    legacyAcknowledgement?: TerminalEvidence["legacyAcknowledgement"];
   };
 export type SessionFacts = Pick<
   NativeSession,
@@ -35,6 +36,7 @@ export type SessionFacts = Pick<
   | "terminal"
   | "terminalError"
   | "runID"
+  | "legacyAcknowledgement"
   | "subpath"
 >;
 export function millis(value: unknown): number {
@@ -78,6 +80,8 @@ export function terminalFacts(
   idle: unknown,
   outcome: unknown,
   shell?: number,
+  runID?: string,
+  proof?: TerminalEvidence["legacyAcknowledgement"],
 ): TerminalEvidence {
   const end = terminalEvidence(idle, outcome);
   return latestTerminal(
@@ -86,6 +90,8 @@ export function terminalFacts(
         terminal: end,
         outcome: outcome as TerminalOutcome,
         terminalOrigin: "historical",
+        ...(runID ? { runID } : {}),
+        ...(proof !== undefined ? { legacyAcknowledgement: proof } : {}),
       }
       : undefined,
     shell ? { terminal: shell, terminalOrigin: "historical" } : undefined,
@@ -100,10 +106,9 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     raw.time.idle,
     raw.outcome,
     raw.parentID ? undefined : raw.terminal,
+    raw.parentID ? raw.runID : undefined,
+    raw.parentID ? raw.legacyAcknowledgement : undefined,
   );
-  if (raw.parentID && raw.runID && terminal.terminal) {
-    terminal.runID = raw.runID;
-  }
   const failure =
     terminal.outcome === "failed" && terminal.terminal === millis(raw.time.idle)
       ? terminalFailure(
