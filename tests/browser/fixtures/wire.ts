@@ -92,6 +92,8 @@ export async function openSession(
   if (!page.url().startsWith(state.url)) {
     await page.goto(`${state.url}/#/local/${id}`);
   } else {
+    const sessions = page.getByRole("tab", { name: "Sessions", exact: true });
+    await expect(sessions).toHaveAttribute("aria-selected", "true");
     if (!await page.locator(`[data-session="${id}"]`).count()) {
       const session = await state.product("session.get", { sessionID: id });
       await page.locator(

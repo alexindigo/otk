@@ -237,7 +237,7 @@ test.describe("actual tool forms", () => {
         .locator(".otk-work-tool-summary"),
     ).toContainText("2 entries");
     for (const name of ["glob", "grep"]) {
-      const raw = await runNativeTool(
+      await runNativeTool(
         state,
         page,
         s.id,
@@ -250,9 +250,7 @@ test.describe("actual tool forms", () => {
             include: "*.txt",
           },
       );
-      const selector = `[data-work-source=${
-        JSON.stringify(raw.messageID)
-      }] [data-tool=search]`;
+      const selector = "[data-tool=search]";
       await expandTool(page, selector);
       const brief = workPanel(page).locator(
         `${selector}:has([data-search-mode=${name}]) .otk-work-tool-summary`,

@@ -424,6 +424,7 @@ export interface NativeToolPart {
   callID?: string;
   messageID: string;
   type: string;
+  tool?: string;
   state: {
     status: string;
     output?: string;
@@ -439,6 +440,7 @@ export async function runNativeTool(
   input: Record<string, Json>,
   model?: { providerID: string; modelID: string },
 ) {
+  const answer = `Finished ${name}.`;
   const before = await state.native<
     { info: { id: string }; parts: NativeToolPart[] }[]
   >(
@@ -448,20 +450,22 @@ export async function runNativeTool(
     before.flatMap((message) => message.parts).map((part) => part.id),
   );
   const oldMessages = new Set(before.map((message) => message.info.id));
-  await toolScript(state, name, input, `Finished ${name}.`);
+  await toolScript(state, name, input, answer);
   if (model) {
     await state.native(`/session/${sessionID}/prompt_async`, "POST", {
       model,
       parts: [{ type: "text", text: `Run ${name}` }],
     });
   } else await prompt(page, `Run ${name}`);
-  let result: NativeToolPart | undefined;
+  let result: NativeToolPart | undefined, terminalID: string | undefined;
   await expect.poll(async () => {
     const messages = await state.native<{
       info: {
         id: string;
         role: string;
         finish?: string;
+        parentID?: string;
+        metadata?: { parentID?: string };
         time: { completed?: number };
       };
       parts: (NativeToolPart & { text?: string })[];
@@ -470,27 +474,57 @@ export async function runNativeTool(
     );
     result = messages.flatMap((message) => message.parts).find((part) =>
       !old.has(part.id) && part.type === "tool" &&
-      part.state?.status === "completed"
+      part.state?.status === "completed" &&
+      part.tool === name && !oldMessages.has(part.messageID)
     );
+    if (!result) return false;
+    const source = messages.find(({ info }) => info.id === result!.messageID);
+    const parentOf = (info: typeof messages[number]["info"]) =>
+      info.parentID ?? info.metadata?.parentID;
+    const parent = source && parentOf(source.info);
     // Native status can briefly become idle between a tool and its continuation.
-    // Join this turn's new terminal text/checkpoint before admitting another
-    // trusted prompt, exactly as the real empty-read integration witness does.
-    return !!result &&
-      messages.some((message) =>
-        !oldMessages.has(message.info.id) &&
-        message.info.role === "assistant" && message.info.finish === "stop" &&
-        !!message.info.time.completed && message.parts.some((part) =>
-          part.type === "text" &&
-          part.text === `Finished ${name}.`
-        )
-      );
+    // Match the terminal message in the same native turn when the facade
+    // exposes both parents; otherwise the wire replyTo join below proves it.
+    terminalID = messages.find(({ info, parts }) =>
+      !oldMessages.has(info.id) &&
+      info.role === "assistant" && info.finish === "stop" &&
+      !!info.time.completed &&
+      (!parent || !parentOf(info) || parentOf(info) === parent) &&
+      parts.some((part) => part.type === "text" && part.text === answer)
+    )?.info.id;
+    return !!terminalID;
   }, { timeout: 60_000 }).toBe(true);
-  await expect(page.locator(".otk-messages")).toContainText(
-    `Finished ${name}.`,
-    { timeout: 60_000 },
+  // A reply can span several native messages. The product groups them by
+  // their published replyTo, not the tool source ID or repeated answer text.
+  const published = { sourceID: result!.messageID, terminalID: terminalID! };
+  let turnID: string | undefined;
+  await expect.poll(async () => {
+    turnID = await page.evaluate(
+      ({ sourceID, terminalID }) => {
+        const { transcriptPublication } = globalThis as typeof globalThis & {
+          transcriptPublication: Map<string, import("@otk/protocol").Message>;
+        };
+        const source = transcriptPublication.get(sourceID);
+        const terminal = transcriptPublication.get(terminalID);
+        if (source?.role !== "assistant" || terminal?.role !== "assistant") {
+          return;
+        }
+        const key = source.replyTo ?? source.id;
+        if (key === (terminal.replyTo ?? terminal.id)) return key;
+      },
+      published,
+    );
+    return turnID;
+  }, { timeout: 60_000, message: `Browser ownership of ${name} reply` })
+    .toBeTruthy();
+  const key = JSON.stringify(`reply:${turnID!}`);
+  const reply = page.locator(
+    `.otk-messages [data-virtual-key=${key}] [data-role="assistant"]`,
   );
-  // Native idle and the reply shell can precede publication of the tool part.
-  // Join the exact part that supplies the Work log before looking for its fold.
+  await expect(reply.getByText(answer, { exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
+  // The reply shell can precede publication of the exact completed call.
   await expect.poll(() => {
     return page.evaluate(({ messageID, callID }) => {
       const { transcriptPublication } = globalThis as typeof globalThis & {
@@ -506,12 +540,6 @@ export async function runNativeTool(
       callID: result!.callID ?? result!.id,
     });
   }, { message: `Browser publication of completed ${name} tool` }).toBe(true);
-  const message = `[data-message="${result!.messageID}"]`;
-  // Issue 2.115 / decision 74: bookkeeping no longer supplies rows in a
-  // reply's Work log. Acquire the action's disclosure, not the reply shell:
-  // its prose can be mounted while the windowed work segment is still out.
-  const reply = page.locator(message);
-  await revealAcquired(page, `${message} .otk-work-strip`);
   await openWork(reply);
   return result!;
 }
