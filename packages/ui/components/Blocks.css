@@ -47,11 +47,18 @@
 }
 .otk-table-scroll table {
   border-collapse: collapse;
+  min-inline-size: min-content;
 }
 .otk-table-scroll th,
 .otk-table-scroll td {
+  /* The auto table algorithm must size columns at natural line breaks,
+     not at the emergency breaks allowed by the surrounding reply. */
+  overflow-wrap: normal;
   border: 1px solid var(--muted);
   padding: var(--space-2) var(--space-3);
+}
+.otk-table-scroll .otk-prose-code {
+  box-decoration-break: clone;
 }
 .otk-prose-block.is-compact-start > :first-child {
   margin-top: 0;

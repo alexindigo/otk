@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Blocks.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
-import { createMemo, For, Match, Show, Switch, useContext } from "solid-js";
+import {
+  createContext,
+  createMemo,
+  For,
+  Match,
+  Show,
+  Switch,
+  useContext,
+} from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
 import { hrefPath, pathSegments, textRuns } from "@otk/client";
@@ -38,18 +46,34 @@ export function Inlines(props: { items: Inline[] }) {
   );
 }
 type InlineProps<K extends Inline["i"]> = { item: Inline & { i: K } };
+const TableWrap = createContext(false);
+function InlineText(props: { text: string }) {
+  if (!useContext(TableWrap)) return <>{props.text}</>;
+  // Keep path components intact without changing the displayed/copied text.
+  // This also allows URLs to wrap between path segments, not inside them.
+  return (
+    <For each={props.text.split(/(?<=[/\\])(?=[^\s/\\])/u)} keyed={false}>
+      {(chunk, index) => <>{index > 0 && <wbr />}{chunk()}</>}
+    </For>
+  );
+}
 function TextInline(props: InlineProps<"text">) {
   const context = useContext(PathContext);
-  if (!context || context.inLink) return <>{props.item.text}</>;
+  if (!context || context.inLink) return <InlineText text={props.item.text} />;
   return (
     <For
       each={pathSegments(props.item.text, "prose", context.style)}
       keyed={false}
     >
       {(segment) => (
-        <Show when={segment().mention} fallback={segment().text}>
+        <Show
+          when={segment().mention}
+          fallback={<InlineText text={segment().text} />}
+        >
           {(mention) => (
-            <PathLink mention={mention()}>{segment().text}</PathLink>
+            <PathLink mention={mention()}>
+              <InlineText text={segment().text} />
+            </PathLink>
           )}
         </Show>
       )}
@@ -63,7 +87,9 @@ function CodeInline(props: InlineProps<"code">) {
     data: { text: props.item.text },
   }));
   const code = () => (
-    <code class="otk-prose-code" ref={target}>{props.item.text}</code>
+    <code class="otk-prose-code" ref={target}>
+      <InlineText text={props.item.text} />
+    </code>
   );
   return (
     <Show
@@ -242,42 +268,44 @@ function Quote(props: { block: Block & { b: "quote" }; conceal?: boolean }) {
 }
 function Table(props: { block: Block & { b: "table" } }) {
   return (
-    <ScrollRegion axis="x" class="otk-table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <For each={props.block.header} keyed={false}>
-              {(cell, index) => (
-                <th
-                  style={{ "text-align": props.block.align[index] ?? "left" }}
-                >
-                  <Inlines items={cell()} />
-                </th>
+    <TableWrap value>
+      <ScrollRegion axis="x" horizontalTrack="in-flow" class="otk-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <For each={props.block.header} keyed={false}>
+                {(cell, index) => (
+                  <th
+                    style={{ "text-align": props.block.align[index] ?? "left" }}
+                  >
+                    <Inlines items={cell()} />
+                  </th>
+                )}
+              </For>
+            </tr>
+          </thead>
+          <tbody>
+            <For each={props.block.rows} keyed={false}>
+              {(row) => (
+                <tr>
+                  <For each={row()} keyed={false}>
+                    {(cell, index) => (
+                      <td
+                        style={{
+                          "text-align": props.block.align[index] ?? "left",
+                        }}
+                      >
+                        <Inlines items={cell()} />
+                      </td>
+                    )}
+                  </For>
+                </tr>
               )}
             </For>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.block.rows} keyed={false}>
-            {(row) => (
-              <tr>
-                <For each={row()} keyed={false}>
-                  {(cell, index) => (
-                    <td
-                      style={{
-                        "text-align": props.block.align[index] ?? "left",
-                      }}
-                    >
-                      <Inlines items={cell()} />
-                    </td>
-                  )}
-                </For>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
-    </ScrollRegion>
+          </tbody>
+        </table>
+      </ScrollRegion>
+    </TableWrap>
   );
 }
 function Rule() {

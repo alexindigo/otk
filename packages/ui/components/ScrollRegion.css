@@ -73,3 +73,14 @@
 .otk-scroll-frame.is-dragging > .otk-scroll-track {
   opacity: 1;
 }
+.otk-scroll-frame.has-in-flow-track {
+  grid-template: auto / minmax(0, 1fr);
+}
+.otk-scroll-frame.has-in-flow-track > .otk-scroll {
+  grid-area: 1 / 1;
+}
+.otk-scroll-frame.has-in-flow-track > .otk-scroll-track-x {
+  opacity: 1;
+  padding-block: var(--space-2);
+  margin-inline: var(--space-1);
+}
