@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type Element, For, Show } from "solid-js";
 import OverflowRow from "./OverflowRow.tsx";
+import { MoreIcon } from "./ChromeIcons.tsx";
 import Menu from "./surface/Menu.tsx";
 import "./FittedActions.css" with { type: "text" };
 
@@ -37,8 +38,8 @@ export default function FittedActions(
         more={(keys) => (
           <Menu
             label="More actions"
-            trigger="..."
-            triggerClass="otk-overflow-trigger"
+            trigger={<MoreIcon />}
+            triggerClass="otk-icon-button"
           >
             <For
               each={props.items.filter((item) => keys().includes(item.key))}
