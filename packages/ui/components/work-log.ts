@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
+  Activity,
   AssistantMessage,
   Message,
   Part,
@@ -7,7 +8,13 @@ import type {
 } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
 import { isAssistantTerminal } from "@otk/protocol";
-import { hasActiveRecord, type TranscriptProjectionState } from "@otk/client";
+import {
+  foldRecords,
+  hasActiveRecord,
+  type RecordKindFold,
+  type TranscriptProjectionState,
+  workLogBookkeeping,
+} from "@otk/client";
 export { hasActiveRecord } from "@otk/client";
 export { createMessageLayout } from "./message-layout.ts";
 
@@ -28,6 +35,7 @@ export interface PartGroup {
   parts: Part[];
   work: boolean;
   required?: boolean;
+  recordCounts?: RecordKindFold[];
   workingMs?: number;
   replyStart?: ReplyStart;
 }
@@ -117,10 +125,18 @@ export function partGroups(
 ): PartGroup[] {
   const groups: PartGroup[] = [];
   let work: PartGroup | undefined;
+  const markers: Activity[] = [];
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
     if (value.work) {
+      const bookkeeping = workLogBookkeeping(part);
+      if (bookkeeping) {
+        if (bookkeeping === "step" && value.activity) {
+          markers.push(value.activity);
+        }
+        continue;
+      }
       work ??= { id: part.id, parts: [], work: true };
       work.parts.push(part);
       if (value.required) work.required = true;
@@ -133,6 +149,10 @@ export function partGroups(
       });}
   }
   if (work) {
+    if (markers.length) {
+      work.recordCounts = foldRecords(markers, (activity) =>
+        activity, () => false).folds;
+    }
     const workingMs = segmentWorkingTime(work.parts, presentation, timingParts);
     if (workingMs !== undefined) work.workingMs = workingMs;
     groups.push(work);

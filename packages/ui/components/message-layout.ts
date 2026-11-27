@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Part } from "@otk/protocol";
-import type { TranscriptReply } from "@otk/client";
+import { type TranscriptReply, workLogBookkeeping } from "@otk/client";
 import type { PartPresentation } from "../registries/renderers.ts";
 import {
   partFrames,
@@ -105,7 +105,9 @@ export function createMessageLayout() {
             before.value.frame !== value.frame ||
             !!before.value.prose !== !!value.prose ||
             !!before.value.work !== !!value.work ||
-            !!before.value.required !== !!value.required
+            !!before.value.required !== !!value.required ||
+            role === "assistant" && value.work &&
+              workLogBookkeeping(before.part) !== workLogBookkeeping(part)
           ) structural = true;
           if (before) replacements.push({ before, after });
           parts.set(part.id, after);

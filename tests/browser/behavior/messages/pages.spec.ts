@@ -257,8 +257,7 @@ test(
       .toBe(markers.join("\n\n"));
     await expect(page.locator("[data-role=assistant] .otk-message-footer"))
       .toHaveCount(1);
-    // 2.105 WP6: 102 text segments plus one Work log that owns every work
-    // record. Decisions 1/20 still keep V2 idle as a separate native row.
+    // 102 text segments plus one Work log for the actions, not bookkeeping.
     const assistant = page.locator("[data-message][data-role=assistant]");
     await expect(assistant.getByRole("list", {
       name: "Reply segments",
@@ -266,18 +265,15 @@ test(
     })).toHaveAttribute("data-acquired-count", String(markers.length + 1));
     await expect(assistant.locator(".otk-work-log")).toHaveCount(1);
     if (state.controller.info!.version.startsWith("2.")) {
-      // 2.105 WP6 puts completion in the reply's Work log, not a bare row.
       const work = assistant.locator(".otk-work-log");
       const disclosure = work.getByRole("button", {
         name: "Work log",
         exact: true,
       });
       await disclosure.click();
-      await revealAcquired(page, '[data-native-record="opencode-v2/idle"]');
-      await expect(work.locator('[data-native-record="opencode-v2/idle"]'))
-        .toBeVisible();
-      // The header is well above the virtualized completion row. Use its
-      // keyboard action, then prove the disclosure settled before proceeding.
+      await expect(work.locator('[data-tool="bash"]')).not.toHaveCount(0);
+      await expect(work.getByText("Execution succeeded", { exact: true }))
+        .toHaveCount(0);
       await disclosure.press("Enter");
       await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     }

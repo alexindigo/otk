@@ -170,8 +170,6 @@ export default function Message(
     usage?: Usage;
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
-    /** Injected disclosure for producer-owned successful completion facts. */
-    completion?: { body(): import("solid-js").Element };
     usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
@@ -448,6 +446,7 @@ export default function Message(
                   >
                     <RecordKinds
                       items={group().parts}
+                      counts={group().recordCounts}
                       activity={(part) =>
                         parts.presentation(part, props.prefs).activity}
                       prefs={props.prefs}
@@ -459,23 +458,20 @@ export default function Message(
                           required={group().required}
                           meta={meta}
                           body={() => (
-                            <>
-                              <PartsView
-                                tree
-                                parts={visible()}
-                                prefs={props.prefs}
-                                directory={props.directory}
-                                permissions={props.permissions}
-                                onOpenChild={props.onOpenChild}
-                                user={props.message.role === "user"}
-                                streaming={streaming()}
-                                pending={props.pending}
-                                sourceID={sourceID}
-                                recordTime={recordTime}
-                                failureTime={failureTime}
-                              />
-                              {props.completion?.body()}
-                            </>
+                            <PartsView
+                              tree
+                              parts={visible()}
+                              prefs={props.prefs}
+                              directory={props.directory}
+                              permissions={props.permissions}
+                              onOpenChild={props.onOpenChild}
+                              user={props.message.role === "user"}
+                              streaming={streaming()}
+                              pending={props.pending}
+                              sourceID={sourceID}
+                              recordTime={recordTime}
+                              failureTime={failureTime}
+                            />
                           )}
                         />
                       )}
@@ -544,20 +540,9 @@ export default function Message(
           {(message) => (
             <div
               class={["otk-reply-end", {
-                "has-work": workGroup() || !!props.completion,
+                "has-work": workGroup(),
               }]}
             >
-              <Show when={!workGroup() && props.completion}>
-                {(completion) => (
-                  <div class="otk-reply-end-work">
-                    <WorkLog
-                      owner={props.ownerID ?? props.message.id}
-                      prefs={props.prefs}
-                      body={() => completion().body()}
-                    />
-                  </div>
-                )}
-              </Show>
               <ContentWindow
                 items={["footer"]}
                 key={(key) => key}

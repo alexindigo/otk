@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createMemo, type Element } from "solid-js";
-import { foldRecords } from "@otk/client";
+import { foldRecords, type RecordKindFold } from "@otk/client";
 import type { Activity, Preferences } from "@otk/protocol";
 import { retainedRecordKinds } from "../features/transcript-context.tsx";
 import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
@@ -11,6 +11,7 @@ export default function RecordKinds<T>(props: {
   items: readonly T[];
   activity(item: T): Activity | undefined;
   count?(item: T): number;
+  counts?: readonly RecordKindFold[];
   prefs: Preferences;
   identity: string;
   render(
@@ -29,29 +30,44 @@ export default function RecordKinds<T>(props: {
   );
   const meta = (primary: () => Element) => (
     <MetaRow
-      controls={folded().folds.map((fold) => ({
-        key: fold.category,
-        measure: () => (
-          <DisclosureToggle variant="meta" label={fold.label} onOpen={() => {}}>
-            <ChromeMeta>{fold.label}</ChromeMeta>
-          </DisclosureToggle>
-        ),
-        render: () => (
-          <DisclosureToggle
-            variant="meta"
-            label={fold.label}
-            data-record-kind={fold.category}
-            open={choices.expanded(fold.category, props.prefs)}
-            onOpen={(open) =>
-              choices.set(
-                fold.category,
-                open,
-              )}
-          >
-            <ChromeMeta>{fold.label}</ChromeMeta>
-          </DisclosureToggle>
-        ),
-      }))}
+      controls={[
+        ...(props.counts ?? []).map((count) => ({
+          key: count.category,
+          measure: () => <ChromeMeta>{count.label}</ChromeMeta>,
+          render: () => (
+            <ChromeMeta data-record-kind={count.category}>
+              {count.label}
+            </ChromeMeta>
+          ),
+        })),
+        ...folded().folds.map((fold) => ({
+          key: fold.category,
+          measure: () => (
+            <DisclosureToggle
+              variant="meta"
+              label={fold.label}
+              onOpen={() => {}}
+            >
+              <ChromeMeta>{fold.label}</ChromeMeta>
+            </DisclosureToggle>
+          ),
+          render: () => (
+            <DisclosureToggle
+              variant="meta"
+              label={fold.label}
+              data-record-kind={fold.category}
+              open={choices.expanded(fold.category, props.prefs)}
+              onOpen={(open) =>
+                choices.set(
+                  fold.category,
+                  open,
+                )}
+            >
+              <ChromeMeta>{fold.label}</ChromeMeta>
+            </DisclosureToggle>
+          ),
+        })),
+      ]}
     >
       {primary()}
     </MetaRow>

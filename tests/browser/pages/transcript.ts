@@ -422,8 +422,12 @@ export async function runNativeTool(
     { timeout: 60_000 },
   );
   const message = `[data-message="${result!.messageID}"]`;
-  await revealAcquired(page, message);
-  await openWorkLogs(page, page.locator(message));
+  // Issue 2.115 / decision 74: bookkeeping no longer supplies rows in a
+  // reply's Work log. Acquire the action's disclosure, not the reply shell:
+  // its prose can be mounted while the windowed work segment is still out.
+  const reply = page.locator(message);
+  await revealAcquired(page, `${message} .otk-work-fold`);
+  await openWorkLogs(page, reply);
   return result!;
 }
 

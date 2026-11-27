@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Activity } from "@otk/protocol";
 import type { TranscriptReply } from "./transcript-projection.ts";
+import { workLogBookkeeping } from "./record-folds.ts";
 
 export interface ActivityGroup {
   key: string;
@@ -32,7 +33,7 @@ export interface RecordProjection {
   leaves: Record<string, string>;
   owners: Record<string, string>;
   revisions: Record<string, number>;
-  /** Successful completion facts belong to the preceding reply's work log. */
+  /** Successful completion facts belong to the preceding reply's outcome. */
   completions: Record<string, string>;
 }
 function activity(reply: TranscriptReply | undefined): Activity | undefined {
@@ -75,7 +76,7 @@ function summary(
   for (const id of ids) {
     const reply = replies[id], value = activity(reply);
     const fact = foldable(reply) && !value?.fold &&
-      value?.completion?.placement !== "footer" &&
+      workLogBookkeeping(reply.message.parts[0]) !== "completion" &&
       value?.summary;
     if (!fact) continue;
     const count = counts.get(fact.kind) ?? { ...fact, count: 0 };
@@ -219,7 +220,9 @@ export function createRecordProjection(): {
         next.owners[id] = interval.key;
         const safe = foldable(reply), facts = activity(reply);
         if (!safe) interval.breakouts!.push(id);
-        if (!safe || facts?.completion?.placement !== "footer") {
+        if (
+          !safe || workLogBookkeeping(reply.message.parts[0]) !== "completion"
+        ) {
           interval.silent = false;
         }
         const previous = interval.children!.at(-1);
