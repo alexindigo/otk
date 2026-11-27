@@ -85,8 +85,10 @@ test.describe("sidebar", () => {
     await expect(heading.locator(".otk-tree-selection-mark")).toBeVisible();
     const gaps = await heading.evaluate((node) => {
       const mark = node.querySelector(".otk-tree-selection-mark")!;
-      const rail = node.querySelector(".otk-tree-own")!;
-      const box = rail.querySelector(".otk-tree-toggle")!;
+      const rail = node.querySelector(".otk-tree-junction")!;
+      const box = node.querySelector(
+        ".otk-tree-trigger-slot .otk-tree-toggle",
+      )!;
       const ruler = document.createElement("span");
       ruler.style.cssText = "position:absolute;inline-size:var(--space-1)";
       node.append(ruler);
@@ -122,11 +124,13 @@ test.describe("worktrees", () => {
     const heading = child.locator(
       "xpath=ancestor::div[contains(@class,'otk-tree-heading')][1]",
     );
-    const elbow = heading.locator(".otk-tree-incoming .otk-tree-connector");
+    const elbow = heading.locator(
+      ".otk-tree-junction:is(.is-tee, .is-elbow) .otk-tree-connector",
+    );
     await expect(elbow).toBeVisible();
     const [lamp, junction] = await Promise.all([
       parent.locator(".otk-status-light").boundingBox(),
-      heading.locator(".otk-tree-incoming .otk-tree-upper").boundingBox(),
+      heading.locator(".otk-tree-junction .otk-tree-upper").boundingBox(),
     ]);
     expect(lamp).not.toBeNull();
     expect(junction).not.toBeNull();

@@ -90,7 +90,7 @@ async function inspect(list: Locator) {
           check(near(box(next.frame).top - row.top, height), "row pitch");
         }
       }
-      const lamp = box(q(".otk-sidebar-lamp"));
+      const lamp = box(q(".otk-tree-node-lane"));
       const art = box(q(".otk-sidebar-icon"));
       const title = box(label);
       const columns = [lamp.left, art.left, title.left];
@@ -151,7 +151,7 @@ async function inspect(list: Locator) {
         check(item.scrollWidth <= item.clientWidth + .5, "meta clipped");
         check(row.right - box(item).right >= space - .5, "meta edge padding");
       }
-      const stem = q(".otk-tree-icon.has-stem .otk-tree-icon-stem");
+      const stem = q(".otk-tree-node-lane.is-stem .otk-tree-stem-paint");
       if (!next) continue;
       const nextOwn = (selector: string) =>
         next.node.querySelector<HTMLElement>(
@@ -159,8 +159,10 @@ async function inspect(list: Locator) {
         );
       if (stem && shown(stem)) {
         stems++;
-        const incoming = nextOwn(".otk-tree-incoming .otk-tree-upper");
-        const extension = q(".otk-tree-icon-extension");
+        const incoming = nextOwn(
+          ".otk-tree-junction:is(.is-tee, .is-elbow) .otk-tree-upper",
+        );
+        const extension = q(".otk-tree-node-lane > .otk-tree-lane-extension");
         const tail = extension && box(extension).height ? extension : stem;
         check(
           !!incoming && near(box(incoming).left, box(tail).left) &&
@@ -170,18 +172,18 @@ async function inspect(list: Locator) {
       }
       for (
         const lower of Array.from(node.querySelectorAll(
-          ":scope > .otk-tree-heading :is(.otk-tree-rails, .otk-tree-own) .is-through .otk-tree-lower, :scope > .otk-tree-heading .otk-tree-own.is-through .otk-tree-lower",
+          ":scope > .otk-tree-heading :is(.otk-tree-lane.is-through .otk-tree-through-paint, .otk-tree-junction.is-tee .otk-tree-lower)",
         ))
       ) {
         const painted = (el: Element) =>
           shown(el) && getComputedStyle(el).backgroundImage !== "none";
         const lanes = Array.from(
           next.node.querySelectorAll(
-            ":scope > .otk-tree-heading :is(.otk-tree-rails, .otk-tree-own) .otk-tree-upper",
+            ":scope > .otk-tree-heading :is(.otk-tree-through-paint, .otk-tree-upper)",
           ),
         ).filter(painted);
         if (!painted(lower)) continue;
-        const endpoint = own(".otk-tree-extension");
+        const endpoint = own(".otk-tree-junction > .otk-tree-lane-extension");
         if (!endpoint) continue;
         through++;
         check(
@@ -223,6 +225,22 @@ async function layout(state: TestState) {
   });
 }
 
+async function fitInlinePanel(page: Page, rightWidth: number) {
+  // D74: reserved width is an inline-panel contract, not a sheet contract.
+  // Keep the device scale and requested sidebar widths, but make room for
+  // the shell's current minimum conversation width at this text size.
+  const viewport = page.viewportSize()!;
+  const minimum = await page.locator(".otk-app").evaluate((app) =>
+    parseFloat(getComputedStyle(app).getPropertyValue("--main-min"))
+  );
+  const left = (await rail(page, "left").boundingBox())!.width;
+  const width = Math.ceil(left + minimum + rightWidth);
+  if (width > viewport.width) {
+    await page.setViewportSize({ ...viewport, width });
+  }
+  await expect(page.locator(".otk-stage")).not.toHaveClass(/\bis-sheet\b/);
+}
+
 async function matrix(state: TestState, page: Page, side: "left" | "right") {
   const list = rail(page, side);
   const widths = side === "left" ? [200, 248] : [280, 320];
@@ -236,6 +254,7 @@ async function matrix(state: TestState, page: Page, side: "left" | "right") {
         "--otk-scale",
         String(+text / 100),
       );
+      if (side === "right") await fitInlinePanel(page, Math.max(...widths));
       let narrow = 0;
       for (const width of widths) {
         await state.product(
@@ -350,6 +369,7 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
           rail(page, "right").locator(`.otk-session-row[data-session="${id}"]`);
         await expect(row(parent.id)).toHaveClass(/is-selected/);
         await expect(row(child.id)).toContainText("P 1");
+        await fitInlinePanel(page, 280);
         await page.locator(".otk-permission-dock").getByRole("button", {
           name: "Dismiss locally",
         }).click();

@@ -903,7 +903,7 @@ const owners: Record<Rule, string> = {
   "list-order":
     "Decision 60: list order uses saved positions or creation, never activity, recency or state",
   "sidebar-row":
-    "SidebarRow owns fixed lamp/artwork tracks and shrinkable labels; Tree owns depth; no local offsets or overlapping selection",
+    "SidebarRow owns artwork and shrinkable labels; Tree owns lamp lanes and depth; no local offsets or overlapping selection",
   "message-footer":
     "D21: MessageFooter owns persistent time/actions; message metadata is never hover-only",
 };

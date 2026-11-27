@@ -5,15 +5,66 @@ import { nativeAttributes } from "./native-attributes.ts";
 import { ProjectAvatar } from "./ProjectChip.tsx";
 import { selection } from "./selection.ts";
 import { MetaRow } from "./MetaRow.tsx";
-import { TreeIcon } from "./Tree.tsx";
 import { TitleLabel } from "./TitleEditor.tsx";
 import "./SidebarRow.css" with { type: "text" };
 
-/** Tree owns disclosure/depth. A row can reserve lamp and artwork tracks or
- * render as a flat label and metadata pair. */
+type Frame = {
+  selected: boolean;
+  class: string;
+  ref?: (el: HTMLElement) => void;
+  attributes?: Record<string, unknown>;
+};
+
+/** The selection surface borrows its layout from Tree, or flows in Timeline. */
+export function SidebarFrame(
+  props: { frame: Frame; children: Element },
+): Element {
+  const native = nativeAttributes(() => props.frame.attributes ?? {});
+  return (
+    <div
+      ref={(element) => {
+        native.ref(element);
+        props.frame.ref?.(element);
+      }}
+      {...selection({
+        class: `otk-sidebar-frame ${props.frame.class}`,
+        kind: "current",
+        selected: props.frame.selected,
+      })}
+      data-otk-selection="vertical"
+      data-otk-selection-mark="external"
+      {...native.attributes}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+export function SidebarFeedback(props: { children: Element }): Element {
+  return <div class="otk-sidebar-row-feedback">{props.children}</div>;
+}
+
+export function SidebarLampAction(props: {
+  label: string;
+  title: string;
+  onClick(): void;
+  children: Element;
+}): Element {
+  return (
+    <button
+      type="button"
+      class="otk-sidebar-lamp-action"
+      aria-label={props.label}
+      title={props.title}
+      onClick={() => props.onClick()}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+/** Tree owns disclosure, depth and the lamp. SidebarRow owns row content. */
 export default function SidebarRow(props: {
-  lamp?: Element;
-  lampAction?: Omit<ComponentProps<"button">, "children">;
   avatar?: { name: string; color?: string };
   title?: {
     text: string;
@@ -26,22 +77,13 @@ export default function SidebarRow(props: {
   label?: Element;
   meta?: Element;
   control?: Element;
-  feedback?: Element;
-  compact?: boolean;
   flat?: boolean;
   editing?: boolean;
   mainRef?(element: HTMLButtonElement): void;
   action?: Omit<ComponentProps<"button">, "children">;
-  frame?: {
-    selected: boolean;
-    class: string;
-    ref?: (el: HTMLElement) => void;
-    attributes?: Record<string, unknown>;
-  };
+  frame?: Frame;
 }): Element {
   const native = nativeAttributes(() => props.action ?? {});
-  const lampNative = nativeAttributes(() => props.lampAction ?? {}, ["class"]);
-  const frameNative = nativeAttributes(() => props.frame?.attributes ?? {});
   function Main() {
     return (
       <>
@@ -90,27 +132,8 @@ export default function SidebarRow(props: {
     );
   }
   const row = () => (
-    <span
-      class={["otk-sidebar-row", {
-        "is-compact": props.compact,
-        "is-flat": props.flat,
-      }]}
-    >
+    <span class={["otk-sidebar-row", { "is-flat": props.flat }]}>
       <span class="otk-sidebar-row-grid">
-        <span class="otk-sidebar-slot otk-sidebar-lamp">
-          <TreeIcon extend>
-            <Show when={props.lampAction} fallback={props.lamp}>
-              <button
-                ref={lampNative.ref}
-                {...lampNative.attributes}
-                type="button"
-                class="otk-sidebar-lamp-action"
-              >
-                {props.lamp}
-              </button>
-            </Show>
-          </TreeIcon>
-        </span>
         <Show
           when={props.action && !props.editing}
           fallback={
@@ -139,32 +162,12 @@ export default function SidebarRow(props: {
             <span class="otk-sidebar-control">{props.control}</span>
           </Show>
         </span>
-        <Show when={props.feedback}>
-          <span class="otk-sidebar-row-feedback">{props.feedback}</span>
-        </Show>
       </span>
     </span>
   );
   return (
     <Show when={props.frame} fallback={row()}>
-      {(frame) => (
-        <div
-          ref={(el) => {
-            frameNative.ref(el);
-            frame().ref?.(el);
-          }}
-          {...selection({
-            class: `otk-sidebar-frame ${frame().class}`,
-            kind: "current",
-            selected: frame().selected,
-          })}
-          data-otk-selection="vertical"
-          data-otk-selection-mark="external"
-          {...frameNative.attributes}
-        >
-          {row()}
-        </div>
-      )}
+      {(frame) => <SidebarFrame frame={frame()}>{row()}</SidebarFrame>}
     </Show>
   );
 }

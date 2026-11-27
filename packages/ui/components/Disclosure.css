@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 :root {
-  --tree-indent: calc(19 * var(--otk-unit));
-  --tree-box-size: calc(9 * var(--otk-unit));
   --disclosure-gutter: var(--control-size);
 }
 .otk-disclosure-layout {

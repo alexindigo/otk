@@ -11,7 +11,7 @@
   text-align: start;
   color: var(--otk-fg-2);
 }
-.otk-disclosure-toggle.otk-tree-toggle {
+.otk-disclosure-toggle[data-disclosure-variant=tree] {
   --disclosure-gutter: var(--tree-box-size);
   grid-template-columns: var(--disclosure-gutter);
   gap: 0;

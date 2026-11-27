@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { Source } from "./analysis.ts";
-import { rules } from "./styles.ts";
+import { rules, variables } from "./styles.ts";
 
 const components = "packages/ui/components";
 const sidebars = ["ProjectInbox", "ProjectSessions"];
@@ -101,7 +101,7 @@ Deno.test("the only live disclosure instance is owned by shell state", async () 
   assertEquals(owners, ["packages/ui/state/shell.ts"]);
 });
 
-Deno.test("flat TreeNode paths share the nested junction and disclosure control", async () => {
+Deno.test("flat TreeNode paths use TreeLanes and share the disclosure control", async () => {
   const text = await Deno.readTextFile("packages/ui/components/Tree.tsx");
   const node = text.slice(text.indexOf("export function TreeNode"));
   assert(node.includes("path?: readonly boolean[]"));
@@ -113,6 +113,88 @@ Deno.test("flat TreeNode paths share the nested junction and disclosure control"
     elements.filter((name) => name === "DisclosureToggle").length,
     1,
   );
-  assertEquals(elements.filter((name) => name === "TreeRails").length, 1);
+  assertEquals(elements.filter((name) => name === "TreeLanes").length, 1);
   assert(node.includes("<IconStemContext value={stem}>"));
+});
+
+const tree = `${components}/Tree`;
+const laneTokens = ["--tree-indent", "--tree-box-size"];
+
+async function* files(dir: string): AsyncGenerator<string> {
+  for await (const entry of Deno.readDir(dir)) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory) yield* files(path);
+    else if (entry.isFile) yield path;
+  }
+}
+
+Deno.test("Tree.css alone declares lane tokens and owns lane selectors and tracks", async () => {
+  const definitions: string[] = [];
+  const violations: string[] = [];
+  for await (const path of files("packages/ui")) {
+    if (!path.endsWith(".css")) continue;
+    for (
+      const { selector, declarations } of rules(await Deno.readTextFile(path))
+    ) {
+      for (const token of laneTokens) {
+        if (declarations.has(token)) definitions.push(`${path}: ${token}`);
+      }
+      if (path === `${tree}.css`) continue;
+      if (selector.includes(".otk-tree-")) {
+        violations.push(`${path}: ${selector}`);
+      }
+      const columns = declarations.get("grid-template-columns");
+      if (
+        columns &&
+        variables(columns).some(({ name }) => name === "--tree-indent")
+      ) {
+        // The existing transcript footer still follows the legacy transcript
+        // tracks. WP2 moves it onto TreeNode when it migrates that tree.
+        if (
+          path === `${components}/Message.css` &&
+          selector === ".otk-reply-end.has-work" &&
+          columns.replaceAll(/\s/g, "") ===
+            "var(--tree-indent)var(--tree-content-gutter,var(--tree-indent))var(--space-2)minmax(0,1fr)"
+        ) continue;
+        violations.push(`${path}: ${selector} grid-template-columns`);
+      }
+    }
+  }
+  assertEquals(
+    definitions.sort(),
+    laneTokens.map((token) => `${tree}.css: ${token}`).sort(),
+  );
+  assertEquals(violations, []);
+});
+
+Deno.test("TreeLanes is the only lane renderer and Tree the only lane-state consumer", async () => {
+  const imports: string[] = [];
+  const renderers: string[] = [];
+  for (const root of ["packages", "web/src"]) {
+    for await (const path of files(root)) {
+      if (!/\.tsx?$/.test(path) || path.split("/").includes("tests")) continue;
+      const text = await Deno.readTextFile(path);
+      if (!/laneStates|data-lane-segment|TreeLanes/.test(text)) continue;
+      const source = new Source(text, path);
+      for (const n of source.all) {
+        if (
+          n.type === "ImportSpecifier" &&
+          source.name(n.imported) === "laneStates"
+        ) imports.push(path);
+        if (
+          n.type === "JSXAttribute" &&
+          source.name(n.name) === "data-lane-segment"
+        ) {
+          let owner = source.parent.get(n);
+          while (owner && owner.type !== "FunctionDeclaration") {
+            owner = source.parent.get(owner);
+          }
+          renderers.push(`${path}:${owner?.id?.name}`);
+        }
+      }
+    }
+  }
+  assertEquals(imports, [`${tree}.tsx`]);
+  assertEquals([...new Set(renderers)], [`${tree}.tsx:TreeLanes`]);
 });
