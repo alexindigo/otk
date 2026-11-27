@@ -50,6 +50,7 @@ import { useUiRegistries } from "../registries/context.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
+  boundaryRepresentative,
   contextualFailure,
   createRevertRecordProjection,
   createTranscriptInteraction,
@@ -283,7 +284,18 @@ export default function SessionView(props: {
     <Show
       when={isRevert(key)}
       fallback={
-        <Show when={recordGroups().groups[key]} fallback={one(key)}>
+        <Show
+          when={recordGroups().groups[key]}
+          fallback={
+            <Show
+              keyed
+              when={boundaryRepresentative(recordGroups().boundaries[key])}
+              fallback={one(key)}
+            >
+              {one}
+            </Show>
+          }
+        >
           {(group) => (
             <RecordKinds
               items={group().children ?? []}
@@ -564,7 +576,11 @@ export default function SessionView(props: {
       }
       interaction.reveal(ancestors);
       const focus = () => {
-        const control = controls.get(reply?.message.id ?? target.messageID);
+        const member = recordOwner &&
+          boundaryRepresentative(recordGroups().boundaries[recordOwner]);
+        const control = controls.get(
+          member || (reply?.message.id ?? target.messageID),
+        );
         if (!control) {
           throw new RequestFailure({
             code: "message.missing",
@@ -969,8 +985,9 @@ export default function SessionView(props: {
                                     onPins={(keys) =>
                                       props.transcript?.pin(
                                         keys.flatMap((key) =>
-                                          (recordGroups().groups[key]
-                                            ?.members ??
+                                          (recordGroups().boundaries[key] ??
+                                            recordGroups().groups[key]
+                                              ?.members ??
                                             [
                                               key,
                                               ...(logCompletion(key)?.members ??

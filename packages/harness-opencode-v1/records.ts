@@ -230,6 +230,7 @@ export function recordPart(part: RawPart): ExternalPart {
       activity.title = "Session compaction";
       activity.layout = "boundary";
       activity.category = "compaction";
+      activity.boundary = { key: part.messageID };
       break;
     case "step-start":
       activity.title = "Step started";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertNotEquals, assertObjectMatch } from "@std/assert";
 import type { Activity, Message } from "@otk/protocol";
 import { activitySpans, createTranscriptProjection } from "../mod.ts";
 import { createRecordProjection } from "../activity-spans.ts";
@@ -302,6 +302,41 @@ Deno.test("mid-turn compaction follows the grouped reply", () => {
     "a2",
     "a4",
   ]);
+});
+
+Deno.test("V1 marker and summary share the first boundary entry and revise it as the summary changes", () => {
+  const compaction = {
+    layout: "boundary" as const,
+    category: "compaction" as const,
+    boundary: { key: "r1" },
+  };
+  const marker = record("r1", { ...compaction, title: "Marker" });
+  const prompt: Message = { ...record("p2"), role: "user", parts: [] };
+  const projection = createTranscriptProjection();
+  projection.reset([marker, prompt]);
+  const before = projection.state.records.revisions.r1;
+  projection.merge([record("r3", { ...compaction, title: "Running summary" })]);
+  const running = projection.state.records;
+  assertEquals(running.keys, ["r1", "p2"]);
+  assertObjectMatch(running, { boundaries: { r1: ["r1", "r3"] } });
+  assertEquals(running.owners.r3, "r1");
+  assertEquals(Object.keys(running.groups), []);
+  assertNotEquals(running.revisions.r1, before);
+  projection.apply({
+    op: "part.upsert",
+    messageID: "r3",
+    part: record("r3", { ...compaction, title: "Finished summary" }).parts[0],
+  });
+  assertNotEquals(projection.state.records.revisions.r1, running.revisions.r1);
+  assertEquals(projection.state.records.keys, running.keys);
+});
+
+Deno.test("V2 compactions with the same title and distinct part IDs are separate boundaries", () => {
+  const compaction = { layout: "boundary", category: "compaction" } as const;
+  const value = group([record("r1", compaction), record("r2", compaction)]);
+  assertEquals(value.keys, ["r1", "r2"]);
+  assertObjectMatch(value, { boundaries: { r1: ["r1"], r2: ["r2"] } });
+  assertEquals(Object.keys(value.groups), []);
 });
 
 Deno.test("singletons mint intervals and identical groups do not cross kinds or details", () => {

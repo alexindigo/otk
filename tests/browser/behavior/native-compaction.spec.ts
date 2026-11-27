@@ -4,6 +4,7 @@ import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { openSession } from "../fixtures/wire.ts";
 import {
   compactionBoundary,
+  expectCompactionBetween,
   expectCompactionSummary,
   prompt,
 } from "../pages/transcript.ts";
@@ -94,3 +95,38 @@ test(
     }
   },
 );
+
+test("sessions.native-compaction-is-a-top-level-boundary", {
+  tag: ["@sessions", "@messages"],
+}, async ({ isolatedState: state, page }) => {
+  test.setTimeout(120_000);
+  const session = await state.native<{ id: string }>("/session", "POST", {
+    title: "Compaction between replies",
+  });
+  await openSession(state, page, session.id);
+  const row = page.locator(`[data-session="${session.id}"]`);
+  const firstReply = "Reply before compaction.";
+  await state.queue([firstReply]);
+  await prompt(page, "First prompt before compaction");
+  await expect(page.locator('[data-message][data-role="assistant"]'))
+    .toContainText(firstReply);
+  await expect(row).toHaveAttribute("data-status", "idle");
+
+  await state.queue(["## Objective\n\nA summary between prompts."]);
+  await sessionContext(
+    page,
+    `[data-session="${session.id}"]`,
+    "session.compact",
+  );
+  const compaction = compactionBoundary(state);
+  await expect(page.locator(compaction.title)).toHaveText(compaction.completed);
+  await expect(row).toHaveAttribute("data-status", "idle");
+
+  const nextPrompt = "Second prompt after compaction";
+  await state.queue(["Reply after compaction."]);
+  await prompt(page, nextPrompt);
+  await expectCompactionBetween(state, page, firstReply, nextPrompt);
+  await expect(row).toHaveAttribute("data-status", "idle");
+  await page.reload();
+  await expectCompactionBetween(state, page, firstReply, nextPrompt);
+});
