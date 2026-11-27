@@ -1352,14 +1352,13 @@ template-only, and Inactive requires explicit user policy unless mandatory
 activity lifts it. `source` retains provenance separately. Scalar seeds own
 population counts, so hydrating an existing session cannot increment them. Every
 project row has a light. The protocol's `ROLLUP_PRIORITY` / `rollupStatus` own
-aggregate lamp display: needs you, working, finished but unseen, none.
-Navigation instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished
-but unseen, working, none. Never use display order to choose the most urgent
-session, or urgency to paint a rollup. Project and task lights consume
-supervision; presentation does not rank states. Finished children retain unseen
-attention until acknowledged. Task tabs use saved task order, and phantoms use
-immutable creation order. Discovery retains source inventory order when it has
-no saved position or native creation clock. Activity never orders these lists.
+aggregate lamp display (D78). Navigation borrows those ranks through
+`urgentStatus`; it still owns the session candidates and tie-breaking. Project
+and task lights consume supervision; presentation does not rank states. Finished
+children retain unseen attention until acknowledged. Task tabs use saved task
+order, and phantoms use immutable creation order. Discovery retains source
+inventory order when it has no saved position or native creation clock. Activity
+never orders these lists.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project
@@ -1376,11 +1375,10 @@ affected repo membership.
 
 Server-proven archived worktrees carry `archived` separately from manual
 `inactive`. `projectPlacement` owns section and removal annotation together for
-both snapshot and keyed projections. Only working or blocked attention keeps an
-archived leaf live. Finished-unseen leaves belong to Archived;
-`archiveAttention` borrows the shared rollup order and sums their unseen counts
-for the always-visible disclosure. Manual activity-policy changes cannot
-unarchive a checkout.
+both snapshot and keyed projections. Live work and blockers keep an archived
+leaf live, even when an unseen finish wins its lamp. The Archived disclosure
+reads the server's archive entity for the lamp and unseen count. Manual
+activity-policy changes cannot unarchive a checkout.
 
 `projectTree` supplies the branch representation shared by `projectHierarchy`
 and the sidebar. Server, repository and canonical-root identity prove each edge;

@@ -66,7 +66,7 @@ Deno.test("helper clock selects one timestamp for the published disposition", ()
 Deno.test("live-work helper counts omit zero and agree with their verbs", () => {
   assertEquals(
     work.helperCountsLabel({ running: 4, needsYou: 3, finished: 221 }),
-    "3 need you, 4 running, 221 finished",
+    "3 need you, 221 finished, 4 running", // D78
   );
   const blocked = { running: 0, needsYou: 1, finished: 2 };
   assertEquals(

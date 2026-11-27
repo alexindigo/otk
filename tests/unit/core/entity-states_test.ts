@@ -760,12 +760,13 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     );
     const key = entityKey("task", taskEntityID("task", task.id));
     const get = () => feature.get().entities?.[key];
-    assertEquals(get()?.state, "working");
+    // D78: both views publish the finished parent over the working helper.
+    assertEquals(get()?.state, "finished");
     for (const view of views) {
       const frame = await view.snapshot!();
       assertEquals(
         frame?.t === "inbox.snapshot" && frame.inbox.entities?.[key]?.state,
-        "working",
+        "finished",
       );
     }
     index.upsert({ ...child, activity: { permissions: keys("per_child") } });
@@ -785,7 +786,7 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     );
     index.upsert({ ...child, directory: "/p" });
     await settle();
-    assertEquals(get()?.state, "working");
+    assertEquals(get()?.state, "finished");
     assertEquals(get()?.counts.unseen, 1);
     stores.tasks.close(task.id);
     await settle();
@@ -793,7 +794,7 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     assertEquals(
       feature.get().entities
         ?.[entityKey("task", taskEntityID("session", "parent"))]?.state,
-      "working",
+      "finished",
     );
     assertEquals(
       feature.get().entities?.[entityKey("session", "parent")]?.state,
@@ -860,7 +861,7 @@ const row = (
   activity,
 });
 
-test("live 2.61 shape: a working project with two unseen finishes is green with unseen 2", () => {
+test("2.61: two sessions working on newer runs stay green while keeping their unseen counts (D35/D69/D78)", () => {
   const { owner, state } = summaries(() => ({ seen: 10, finish: 0 }));
   owner.entry(row("main", "/repo", { terminal: 20, work: keys("shell") }));
   owner.entry(
@@ -880,20 +881,26 @@ test("live 2.61 shape: a working project with two unseen finishes is green with 
   });
 });
 
-test("X10 shape: a working helper wins the repository while the main session stays finished", () => {
+test("D78: a finished main lights the repository yellow while its helper is working", () => {
   const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
-  owner.entry(row("main", "/repo", { terminal: 20 }));
+  owner.entry(row("main", "/repo", {}));
   owner.entry(
     row("helper", "/repo/tree", { terminal: 5, work: keys("run") }, "main"),
   );
+  assertEquals(state("project", "/repo")?.state, "working");
+  owner.entry(row("main", "/repo", { terminal: 20 }));
   assertEquals(
     owner.states.get(entityKey("session", "main"))?.state,
     "finished",
   );
+  assertEquals(
+    owner.states.get(entityKey("session", "helper"))?.state,
+    "working",
+  );
   assertEquals(state("checkout", "/repo/tree")?.state, "working");
-  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(state("project", "/repo")?.counts.finished, 1);
-  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.status, "finished");
   // Moving out of a checkout moves its contribution, nothing is rescanned.
   owner.remove("helper");
   assertEquals(state("checkout", "/repo/tree")?.state, "none");
@@ -950,6 +957,10 @@ test("a received operation is work on its target session and its wait blocks it 
   assertEquals(o.get("s")?.state, "working");
   assertEquals(o.get("s")?.evidence?.work, true);
   assertEquals(o.get("s")?.counts.working, 1);
+  // D35/D69: an older unseen finish cannot mask work on that same session.
+  o.put({ ...entry, activity: { ...entry.activity, terminal: 6 } }, 5);
+  assertEquals(o.get("s")?.counts.unseen, 1);
+  assertEquals(o.get("s")?.state, "working");
   // An operation waiting for input is immediate, never graced as a permission.
   o.states.operation("s", "blocked");
   o.put({
@@ -1012,13 +1023,13 @@ test("the inbox borrows received operations by target session", async () => {
   }
 });
 
-test("a received operation without a session colours its checkout and project", () => {
+test("D78: an unseen finish beats a working checkout operation but not its blocker", () => {
   const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
   owner.entry(row("main", "/repo", { terminal: 5 }));
   owner.states.checkoutOperation("/repo/tree", "working");
   owner.touch("/repo/tree");
   assertEquals(state("checkout", "/repo/tree")?.state, "working");
-  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(owner.values.get("/repo/tree")?.status, "working");
   owner.states.checkoutOperation("/repo/tree", "blocked");
   assertEquals(state("project", "/repo")?.state, "blocked");
@@ -1027,6 +1038,26 @@ test("a received operation without a session colours its checkout and project", 
   owner.touch("/repo/tree");
   assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(owner.values.get("/repo/tree")?.status, "none");
+});
+
+test("D78: a working checkout operation keeps a yellow leaf out of Archived", () => {
+  const { states, put } = owner();
+  const checkout = () => states.get(entityKey("checkout", "/p"));
+  const archive = () => states.get(entityKey("archive", "p"));
+  states.placement({
+    directory: "/p",
+    archived: true,
+    availability: "removed",
+    topology: { repoID: "p", canonicalRoot: "/repo", leafDirectory: "/p" },
+  });
+  states.member(base.id, "/p");
+  put({ ...base, activity: { terminal: 10 } });
+  assertEquals(archive()?.state, "finished");
+  states.checkoutOperation("/p", "working");
+  assertEquals(checkout()?.state, "finished");
+  assertEquals(archive()?.state, "none");
+  states.checkoutOperation("/p");
+  assertEquals(archive()?.state, "finished");
 });
 
 test("a deleted member stops counting toward its project's unseen finishes", () => {
@@ -1078,7 +1109,7 @@ test("D69/D70: one task spans checkouts and a project counts it once", () => {
     activity: { terminal: 51 },
   };
   o.put(terminal);
-  assertEquals(get("task", "task/review")?.state, "working");
+  assertEquals(get("task", "task/review")?.state, "finished", "D78");
   assertEquals(get("project", "/repo")?.counts.finished, 1);
   o.put({ ...terminal, activity: { inputs: keys("q") } });
   assertEquals(get("task", "task/review")?.state, "blocked");
@@ -1107,7 +1138,7 @@ test("D70: moving a parent moves its entire subtree, and unlinking retires the o
   assertEquals(o.get("d")?.state, "working");
   assertEquals(get("session/d")?.counts.working, 1);
 });
-test("D66/D58: one task publishes its ordered non-root dispositions", () => {
+test("D66/D58/D78: one task publishes its ordered non-root dispositions", () => {
   const o = owner();
   o.put(base);
   const put = (
@@ -1159,13 +1190,13 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
       },
     },
     ids: [
-      "helper-0",
-      "helper-1",
       "helper-2",
       "helper-6",
       "helper-5",
       "helper-4",
       "helper-3",
+      "helper-0",
+      "helper-1",
     ],
   });
   assertEquals(o.get("s")?.evidence?.helper, undefined);
@@ -1174,5 +1205,5 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
   assertEquals(o.get("helper-5")?.evidence?.helper, "finished");
   assertEquals(o.get("helper-6")?.evidence?.helper, "finished");
   put(1, running(5));
-  assertEquals(task()?.helpers?.ids.slice(0, 2), ["helper-1", "helper-0"]);
+  assertEquals(task()?.helpers?.ids.slice(-2), ["helper-1", "helper-0"]);
 });

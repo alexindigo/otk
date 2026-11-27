@@ -6,6 +6,8 @@ import {
   type EntityCounts,
   entityKey,
   type EntityState,
+  HELPER_LAMP_ORDER,
+  HELPER_LAMP_STATE,
   type HelperDisposition,
   type IndexMetadata,
   projectPlacement,
@@ -466,7 +468,7 @@ export class EntityStates {
       this.#retire(entry.id, removals);
       this.#ancestors(entry.id, upserts);
     } else {
-      const state = rollupStatus(this.supervision.status(verdict), operation);
+      const state = this.supervision.status(verdict, operation);
       const counts = own(state, verdict.unseen === true);
       this.#own.set(entry.id, counts);
       const value = this.#session(
@@ -741,6 +743,7 @@ export class EntityStates {
             lifecycle: facts,
             status: state?.state ?? "none",
             dependencies: state?.dependencies,
+            liveWork: state?.liveWork,
             inactive: false,
             hasSessions: false,
           }).section === "archived"
@@ -783,7 +786,7 @@ export class EntityStates {
       if (this.#set(value)) upserts.push(value);
     }
   }
-  /** Decision 57 over members: blocked > working > finished > none. */
+  /** D78: members and local evidence feed the same aggregate lamp order. */
   #aggregate(
     kind: EntityState["kind"],
     id: string,
@@ -820,6 +823,7 @@ export class EntityStates {
         : before.previous,
       counts: { ...counts },
       ...(dependencies ? { dependencies } : {}),
+      ...(counts.working || operation === "working" ? { liveWork: true } : {}),
       ...(cause === "permission"
         ? {
           requests: [...members.requests.keys()].sort().map((id) => ({ id })),
@@ -864,10 +868,14 @@ export class EntityStates {
     // Group lamps describe the counted disposition, not the member's own
     // session lamp (an unseen failure may still have a red session lamp).
     const lamps: NonNullable<TaskHelpers["lamps"]>["groups"] = {
-      running: { state: running.length ? "working" : "none" },
-      needsYou: { state: needsYou.length ? "blocked" : "none" },
-      finished: { state: finished.length ? "finished" : "none" },
-      ...(opened.length ? { opened: { state: "none" } } : {}),
+      running: { state: running.length ? HELPER_LAMP_STATE.running : "none" },
+      needsYou: {
+        state: needsYou.length ? HELPER_LAMP_STATE.needsYou : "none",
+      },
+      finished: {
+        state: finished.length ? HELPER_LAMP_STATE.finished : "none",
+      },
+      ...(opened.length ? { opened: { state: HELPER_LAMP_STATE.opened } } : {}),
     };
     return {
       counts: {
@@ -886,14 +894,16 @@ export class EntityStates {
         },
         groups: lamps,
       },
-      ids: [
-        ...running.sort(active),
-        ...needsYou.sort(active),
-        ...finished.sort((a, b) =>
-          (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
-        ),
-        ...opened.sort((a, b) => a.id.localeCompare(b.id)),
-      ].map((value) => value.id),
+      ids: HELPER_LAMP_ORDER.flatMap((kind) =>
+        groups[kind].sort(
+          kind === "finished"
+            ? (a, b) =>
+              (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
+            : kind === "opened"
+            ? (a, b) => a.id.localeCompare(b.id)
+            : active,
+        ).map(({ id }) => id)
+      ),
     };
   }
   /** Undefined means the task is unknown; an empty roster is a valid no-op. */

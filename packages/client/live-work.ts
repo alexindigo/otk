@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState } from "./state.ts";
-import type {
-  EntityState,
-  HelperDisposition,
-  TaskHelpers,
+import {
+  type EntityState,
+  HELPER_LAMP_ORDER,
+  type HelperDisposition,
+  type TaskHelpers,
 } from "@otk/protocol";
 import { age, elapsed, type TimeText } from "./format.ts";
 
@@ -60,22 +61,20 @@ export function createLiveWork(input: {
   };
 }
 
-const helperLabels = [
-  {
-    kind: "needsYou",
+const helperLabels = {
+  needsYou: {
     title: "Needs you",
     singular: "needs you",
     plural: "need you",
   },
-  { kind: "running", title: "Running", singular: "running", plural: "running" },
-  {
-    kind: "finished",
+  running: { title: "Running", singular: "running", plural: "running" },
+  finished: {
     title: "Finished",
     singular: "finished",
     plural: "finished",
   },
-  { kind: "opened", title: "Opened", singular: "opened", plural: "opened" },
-] as const;
+  opened: { title: "Opened", singular: "opened", plural: "opened" },
+} as const;
 
 /** Display order and vocabulary shared by every form of the same counts. */
 export function helperCountParts(counts?: TaskHelpers["counts"]): readonly {
@@ -85,7 +84,8 @@ export function helperCountParts(counts?: TaskHelpers["counts"]): readonly {
   phrase: string;
 }[] {
   if (!counts) return [];
-  return helperLabels.flatMap(({ kind, title, singular, plural }) => {
+  return HELPER_LAMP_ORDER.flatMap((kind) => {
+    const { title, singular, plural } = helperLabels[kind];
     const count = counts[kind] ?? 0;
     return count > 0
       ? [{ kind, title, count, phrase: count === 1 ? singular : plural }]
