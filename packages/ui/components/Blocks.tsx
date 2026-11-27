@@ -63,7 +63,11 @@ function TextInline(props: InlineProps<"text">) {
   if (!context || context.inLink) return <InlineText text={props.item.text} />;
   return (
     <For
-      each={pathSegments(props.item.text, "prose", context.style)}
+      each={pathSegments(
+        props.item.text,
+        context.prompt ? "prompt" : "prose",
+        context.style,
+      )}
       keyed={false}
     >
       {(segment) => (
@@ -373,14 +377,14 @@ export default function Blocks(props: {
   blocks: Block[];
   streaming?: boolean;
   conceal?: boolean;
-  compact?: boolean;
+  prompt?: boolean;
 }): import("solid-js").Element {
   const paths = usePathSemantics();
   return (
     <div
       class={["otk-text", {
         "otk-prose-unconcealed": props.conceal === false,
-        "otk-prose-compact": props.compact,
+        "otk-prose-compact": props.prompt,
       }]}
     >
       <ContentWindow
@@ -406,13 +410,16 @@ export default function Blocks(props: {
                   get style() {
                     return paths()?.style;
                   },
+                  get prompt() {
+                    return props.prompt;
+                  },
                 }}
               >
                 <BlockView
                   block={row().block}
                   streaming={streaming()}
                   conceal={props.conceal}
-                  compact={props.compact}
+                  compact={props.prompt}
                 />
               </PathContext>
             </div>

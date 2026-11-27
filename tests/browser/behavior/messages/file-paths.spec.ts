@@ -210,9 +210,16 @@ test(
   async ({ state, page }) => {
     const id = await startPaths(state, page);
     await state.queue(["Here it is."]);
-    await prompt(page, `Show \`${shot(state)}\``);
-    await expect(page.getByRole("button", { name: shot(state), exact: true }))
+    const source = `Show  \`${shot(state)}\`\n\n    **as written**`;
+    await prompt(page, source);
+    const bubble = page.locator(".otk-user-bubble .otk-text");
+    await expect(bubble.getByRole("button", { name: shot(state), exact: true }))
       .toBeVisible();
+    expect(await bubble.innerText()).toBe(source);
+    const dialog = await imagePreview(state, page);
+    await expect(dialog.locator("img")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
     await expect(page.getByText("Here it is.", { exact: true })).toBeVisible();
     await expect(status(page, id)).toHaveAttribute("data-status", "idle");
   },
