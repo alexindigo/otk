@@ -2,7 +2,7 @@
 .otk-turn-usage-trigger {
   font: inherit;
   color: inherit;
-  padding: 0;
+  padding: 0 var(--space-1);
 }
 .otk-usage-breakdown {
   --usage-call-width: calc(48 * var(--otk-unit));
@@ -155,4 +155,13 @@
   flex-direction: column;
   gap: var(--space-1);
   padding-inline: var(--space-2);
+}
+.otk-turn-usage-full {
+  display: var(--meta-label-full, inline);
+}
+.otk-turn-usage-compact {
+  display: var(--meta-label-compact, none);
+}
+.otk-turn-usage-compact::before {
+  content: attr(data-label);
 }

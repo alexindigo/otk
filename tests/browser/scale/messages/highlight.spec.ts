@@ -152,12 +152,14 @@ test("messages.highlight-2000-lines-passive-latency", {
       ),
     { timeout: 30_000 },
   ).toBe(true);
-  // WP16 puts successful native completion in the reply footer, not a trailing
-  // status row. Keep the completion witness without disclosing it during paint.
+  const workLog = page.locator(measuredReply).getByRole("button", {
+    name: "Work log",
+    exact: true,
+  });
+  // WP6 puts completion inside the reply's one Work log. Leave it closed
+  // during the paint measurement and verify the native result afterwards.
   if (state.controller.info!.version.startsWith("2.")) {
-    await expect(
-      page.locator(measuredReply + " .otk-record-completion button"),
-    ).toHaveAttribute("aria-expanded", "false");
+    await expect(workLog).toHaveAttribute("aria-expanded", "false");
   }
   await expect.poll(() =>
     page.locator(".otk-messages").evaluate((root) => {
@@ -261,9 +263,12 @@ test("messages.highlight-2000-lines-passive-latency", {
   assertHighlightBudget(evidence.blocks.slice(1), 20);
   assertHighlightBudget(evidence.revisions, 200);
   if (state.controller.info!.version.startsWith("2.")) {
-    await page.locator(measuredReply + " .otk-record-completion button")
-      .click();
-    await expect(page.getByText("Execution succeeded", { exact: true }).last())
+    await workLog.click();
+    await expect(
+      page.locator(measuredReply).getByText("Execution succeeded", {
+        exact: true,
+      }),
+    )
       .toBeVisible();
   }
   console.info(

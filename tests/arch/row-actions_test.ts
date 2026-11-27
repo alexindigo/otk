@@ -80,7 +80,7 @@ Deno.test("tab chrome has no menus and project row actions share an in-flow trai
     new URL("components/SidebarRow.tsx", ui),
   );
   assert(
-    /"otk-sidebar-slot otk-sidebar-meta", props.metaClass[\s\S]*?<MetaRow whole intrinsic>\{props.meta\}<\/MetaRow>\s*\{props.metaControl\}/
+    /"otk-sidebar-slot otk-sidebar-meta", props.metaClass[\s\S]*?<MetaRow whole intrinsic class="otk-sidebar-meta-track">\s*\{props.meta\}\s*<\/MetaRow>\s*\{props.metaControl\}/
       .test(sidebar),
   );
   assertEquals(

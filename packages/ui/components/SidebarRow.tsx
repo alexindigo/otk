@@ -83,7 +83,9 @@ export default function SidebarRow(props: {
           </button>
         </Show>
         <span class={["otk-sidebar-slot otk-sidebar-meta", props.metaClass]}>
-          <MetaRow whole intrinsic>{props.meta}</MetaRow>
+          <MetaRow whole intrinsic class="otk-sidebar-meta-track">
+            {props.meta}
+          </MetaRow>
           {props.metaControl}
         </span>
       </span>

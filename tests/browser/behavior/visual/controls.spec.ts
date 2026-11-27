@@ -164,7 +164,9 @@ test(
     );
     await page.keyboard.press("Escape");
     await expect(
-      page.locator("[data-role=assistant] .otk-message-footer time[title]"),
+      page.locator(
+        "[data-role=assistant] .otk-message-details > .otk-chrome-meta > time[title]",
+      ),
     )
       .toBeVisible();
     await page.keyboard.press("Control+k");

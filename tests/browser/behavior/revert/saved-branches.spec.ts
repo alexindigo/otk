@@ -45,12 +45,13 @@ async function noClippedRecovery(page: Page) {
     async () => (await visible()).every((control) => control.fits),
     { message: "All visible recovery controls fit whole after layout settles" },
   ).toBe(true);
-  const keep = row.getByRole("button", {
+  const recovery = copyRecoveryActions(page);
+  const keep = recovery.getByRole("button", {
     name: "Keep without a saved copy",
     exact: true,
   });
   if (!await keep.isVisible()) {
-    await row.getByRole("button", { name: "More actions", exact: true })
+    await recovery.getByRole("button", { name: "More actions", exact: true })
       .click();
     await expect(
       page.getByRole("menu").getByRole("menuitem", {
@@ -60,6 +61,16 @@ async function noClippedRecovery(page: Page) {
     ).toBeVisible();
     await page.keyboard.press("Escape");
   }
+}
+
+function copyRecoveryActions(page: Page) {
+  // The failure's Details may have its own More. Find the recovery actions
+  // by their specific offer, which is also mounted when folded into More.
+  return page.locator(".otk-composer-notice .otk-fitted-actions").and(
+    page.locator(":not(.otk-failure-content *)"),
+  ).filter({
+    has: page.locator('button[aria-label="Keep without a saved copy"]'),
+  });
 }
 
 test.use({
@@ -98,6 +109,10 @@ test("revert.saved-branch-survives-send-and-reload", {
     "data-status",
     "idle",
   );
+  const outcome = "[data-role=assistant] .otk-message-details > " +
+    ".otk-chrome-meta > time[title]";
+  await expect(page.locator(outcome)).toHaveAttribute("datetime", /^\d{4}-/);
+  const completedAt = (await page.locator(outcome).getAttribute("datetime"))!;
   const oldPrompt = (await messages(state, source.id)).find((m) =>
     m.info.role === "user"
   )!;
@@ -173,14 +188,9 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("The saved earlier reply.");
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
-  // Saved replies borrow the same sole footer clock as live replies.
-  await expect(
-    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
-  )
-    .toHaveAttribute(
-      "datetime",
-      /\d{4}-/,
-    );
+  // WP6 moves the separate agent disclosure into the footer; only the
+  // persistent outcome clock must retain the live reply's captured instant.
+  await expect(saved.locator(outcome)).toHaveAttribute("datetime", completedAt);
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -213,13 +223,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   // metadata window through the saved pane, not the live transcript.
   await saved.locator(".otk-saved-messages").hover();
   await page.mouse.wheel(0, 2_000);
-  await expect(
-    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
-  )
-    .toHaveAttribute(
-      "datetime",
-      /\d{4}-/,
-    );
+  await expect(saved.locator(outcome)).toHaveAttribute("datetime", completedAt);
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -388,19 +392,32 @@ test(
     await expect(alert).toHaveCount(1);
     await expect(alert).toContainText("Copy not saved");
     await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
+    await expect(choice.locator(".otk-failure-summary-reason")).toHaveText(
       "The replacement was not sent.",
     );
     await expect(alert.locator(".otk-failure-reason:visible")).toHaveText(
       plainReason,
     );
-    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+    const details = choice.getByRole("button", {
+      name: "Details",
+      exact: true,
+    });
+    const instructions = choice.locator(
+      ".otk-failure-detail-body .otk-failure-recovery",
+    );
+    await expect(instructions).toHaveCount(0);
+    await details.click();
+    await expect(instructions).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
     await expect(choice).not.toContainText(plainReason);
+    await details.click();
     await choice.getByRole("button", { name: "Save copy", exact: true })
       .click();
-    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+    await expect(choice.getByRole("button", { name: "Save copy", exact: true }))
+      .toBeEnabled();
+    await details.click();
+    await expect(instructions).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
     await expect(choice).not.toContainText(plainReason);
@@ -478,8 +495,9 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await expect(page.locator(".otk-composer-notice")).toContainText(
     "Saving the earlier conversation",
   );
-  await expect(page.locator(".otk-composer-notice .otk-failure-reason:visible"))
-    .toHaveText(plainReason + " The conversation was restored.");
+  await expect(
+    page.locator(".otk-composer-notice .otk-failure-summary-reason"),
+  ).toHaveText(plainReason + " The conversation was restored.");
   await expect(page.locator(".otk-composer-notice")).not.toContainText(
     "replacement was not sent",
   );
@@ -729,7 +747,10 @@ test(
     await expect(input).toHaveValue("Keep this narrow draft");
     await noClippedRecovery(page);
     const notice = page.locator(".otk-composer-notice");
-    await notice.getByRole("button", { name: "More actions", exact: true })
+    await copyRecoveryActions(page).getByRole("button", {
+      name: "More actions",
+      exact: true,
+    })
       .click();
     await page.getByRole("menuitem", {
       name: "Keep without a saved copy",

@@ -596,9 +596,11 @@ export default function Message(
                     </span>
                     <Show when={presentation().usage}>
                       {(usage) => (
-                        // Keep the usage disclosure ahead of descriptive meta
-                        // when the duration's counting cue needs more room.
-                        <MetaItem rank={2}>
+                        <MetaItem
+                          rank={2}
+                          compactInPlace
+                          required={!!props.openUsage}
+                        >
                           <TurnUsage
                             summary={usage().summary}
                             detail={() => props.usage}

@@ -55,12 +55,18 @@ export default function ChromeMeta(
 }
 
 /** Labels and adjacent meta are separate slots, never concatenated copy. */
+function SectionHeaderLabel(props: { label: string }): Element {
+  return (
+    <span class="otk-control-label" title={props.label}>{props.label}</span>
+  );
+}
+
 export function SectionHeaderMeta(
   props: { label: string; count?: number; metaClass?: string },
 ): Element {
   return (
     <>
-      <span class="otk-control-label" title={props.label}>{props.label}</span>
+      <SectionHeaderLabel label={props.label} />
       <Show when={props.count !== undefined}>
         <ChromeMeta class={props.metaClass}>{props.count}</ChromeMeta>
       </Show>
@@ -146,7 +152,7 @@ export function SectionHeader(props: {
                 lamp={props.leading?.()}
                 label={
                   <span class="otk-section-row-label">
-                    <span class="otk-control-label">{props.label}</span>
+                    <SectionHeaderLabel label={props.label} />
                     <span class="otk-section-header-rule" aria-hidden="true" />
                   </span>
                 }

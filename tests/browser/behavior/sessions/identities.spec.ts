@@ -67,7 +67,19 @@ test(
       new RegExp(`#/local/${root.id}/${helper.id}$`),
     );
     await page.reload();
-    await expect(page.locator(".otk-subagent-bar")).toBeVisible();
+    const trail = page.getByRole("navigation", { name: "Task sessions" });
+    await expect(trail.locator("[data-crumb]")).toHaveCount(2);
+    await expect(trail.getByRole("link", { name: root.title, exact: true }))
+      .toHaveAttribute("href", new RegExp(`${root.id}$`));
+    const current = trail.getByRole("link", {
+      name: "Helper created outside OTK",
+      exact: true,
+    });
+    await expect(current).toBeVisible();
+    await expect(current).toHaveAttribute("aria-current", "page");
+    await expect(current).toHaveAttribute("data-crumb", helper.id);
+    await expect(page.getByRole("navigation", { name: "Subagent siblings" }))
+      .toHaveCount(0);
     await expect(page.locator(".otk-messages")).toContainText(
       "External helper transcript.",
     );

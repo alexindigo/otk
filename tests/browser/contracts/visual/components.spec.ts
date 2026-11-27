@@ -245,7 +245,9 @@ test(
             ],
             pane: rect(pane),
             content: rect(content),
-            centres: Array.from(operation.children).map((el) => {
+            centres: Array.from(
+              operation.querySelectorAll(".otk-record-row-grid > *"),
+            ).map((el) => {
               const r = el.getBoundingClientRect();
               return r.y + r.height / 2;
             }),
@@ -253,11 +255,6 @@ test(
               document.querySelectorAll('[disabled],[aria-disabled="true"]')
                 .length,
             colour: getComputedStyle(operation).color,
-            signal: operation.querySelector(".otk-failure-signal")
-              ? getComputedStyle(
-                operation.querySelector(".otk-failure-signal")!,
-              ).boxShadow
-              : undefined,
           };
         });
         expect(g.disabled).toBe(0);
@@ -267,6 +264,7 @@ test(
         expect(
           Math.abs(g.pane[1] + g.pane[3] / 2 - g.content[1] - g.content[3] / 2),
         ).toBeLessThan(1);
+        expect(g.centres).toHaveLength(feedback === "error" ? 3 : 2);
         expect(Math.max(...g.centres) - Math.min(...g.centres)).toBeLessThan(1);
         if (feedback === "clear") baseline = g.boxes;
         else {
@@ -277,9 +275,12 @@ test(
           expect(g.boxes[1][3]).toBeGreaterThanOrEqual(baseline![1][3]);
         }
         if (feedback === "error") {
-          // Failure content keeps foreground text; its shared signal owns danger.
+          // WP5 paints danger on the icon, not the text or a second stripe.
           expect(g.colour).toBe("rgb(230, 234, 239)");
-          expect(g.signal).toBe("rgb(255, 128, 128) 2px 0px 0px 0px inset");
+          const notice = page.locator(".otk-operation-feedback");
+          await expect(notice.locator(".otk-failure-signal")).toHaveCount(0);
+          await expect(notice.locator(".otk-composer-notice-icon svg"))
+            .toHaveCSS("color", "rgb(255, 128, 128)");
         }
       }
     }
@@ -433,10 +434,10 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "lists");
-    const root = "root" + "w".repeat(100);
     await page.setViewportSize({ width: 600, height: 800 });
+    const tail = "w".repeat(100);
     await page.evaluate(
-      `styleTest.lists(${JSON.stringify([root, "leaf"])},'leaf')`,
+      `styleTest.lists(${JSON.stringify([`root ${tail}`, "leaf"])},'leaf')`,
     );
     const trail = page.locator(".otk-task-crumbs");
     await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
@@ -444,17 +445,27 @@ test(
       "compact",
     );
     await expect(trail.locator("[data-crumb]")).toHaveCount(2);
+    const first = trail.locator("[data-crumb] .otk-trail-first");
+    await expect(first).toHaveText("root");
     await expect.poll(() =>
-      trail.locator(".otk-trail-first:visible").evaluateAll((nodes) =>
-        nodes.every((node) => {
-          const word = node.getBoundingClientRect(),
-            frame = node.closest("[data-overflow-key]")!
-              .getBoundingClientRect();
-          return word.width > 0 && word.left >= frame.left &&
-            word.right <= frame.right;
-        })
-      )
+      first.evaluate((node) => {
+        const word = node.getBoundingClientRect(),
+          frame = node.closest(".otk-trail-title")!.getBoundingClientRect();
+        return word.width > 0 && word.left >= frame.left &&
+          word.right <= frame.right;
+      })
     ).toBe(true);
+
+    // An indivisible first word forces paging, rather than folding ancestors.
+    const root = `root${tail}`;
+    await page.evaluate(
+      `styleTest.lists(${JSON.stringify([root, "leaf"])},'leaf')`,
+    );
+    await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
+      "data-fit-mode",
+      "scroll",
+    );
+    await expect(trail.locator("[data-crumb]")).toHaveCount(2);
     await expect.poll(() =>
       trail.locator(".otk-overflow-items").evaluate((lane) =>
         lane.scrollWidth > lane.clientWidth
@@ -462,6 +473,12 @@ test(
     ).toBe(true);
     await expect(trail.getByRole("scrollbar", { name: "Horizontal scroll" }))
       .toBeAttached();
+    const ancestor = trail.getByRole("link", { name: root, exact: true });
+    await ancestor.scrollIntoViewIfNeeded();
+    await expect(ancestor).toBeInViewport();
+    const title = ancestor.locator(".otk-trail-title");
+    await expect(title).toHaveText(root);
+    await expect(title).toHaveCSS("text-overflow", "ellipsis");
   },
 );
 test(

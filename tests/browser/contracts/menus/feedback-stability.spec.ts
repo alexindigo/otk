@@ -132,7 +132,15 @@ for (const theme of themes) {
           ? 'styleTest.feedback("error")'
           : 'styleTest.fieldFailure("")',
       );
-      await expect(page.getByRole("alert")).toContainText("END OF REASON");
+      const alert = page.getByRole("alert");
+      await expect(alert).toHaveCount(1);
+      if (surface === "rollback") {
+        await expect(alert).toContainText("Restoring prompts failed");
+        await expect(alert).not.toContainText("END OF REASON");
+        unchanged(idle, await boxes(controls));
+        await alert.locator(".otk-record-group-toggle").click();
+      }
+      await expect(alert).toContainText("END OF REASON");
       unchanged(idle, await boxes(controls));
       await expect(input).toHaveValue("Retained prompt draft");
       if (surface !== "standalone") {

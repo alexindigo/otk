@@ -596,9 +596,10 @@ export async function collections456(input: Inputs) {
                 centre: Math.abs(a.y + a.height / 2 - r.y - r.height / 2),
                 icon:
                   action.querySelector("svg")!.getBoundingClientRect().width,
-                common:
-                  document.querySelector(".otk-prompt-actions > button svg")!
-                    .getBoundingClientRect().width,
+                common: document.querySelector(
+                  ".otk-prompt-actions [data-primary-action] svg",
+                )!
+                  .getBoundingClientRect().width,
               };
             });
             expect(geometry.inside && geometry.shared).toBe(true);
@@ -1133,8 +1134,14 @@ export async function collections456(input: Inputs) {
           if (mode === "error") {
             await expect(group).toHaveAttribute("role", "alert");
             await expect(group).toContainText(
+              "Rolling back conversation failed",
+            );
+            const details = group.locator(".otk-record-group-toggle");
+            await details.click();
+            await expect(group.locator(".otk-failure-reason")).toHaveText(
               "The requested rollback is no longer available",
             );
+            await details.click();
           }
           expect(
             await group.evaluate((el) => {
@@ -1341,12 +1348,12 @@ export async function collections456(input: Inputs) {
             await expect(page.locator("[data-tool=external] small")).toHaveText(
               "Output truncated.",
             );
-            await page.locator(".otk-reply-agent .otk-entity-pill").hover();
-            await expect(page.locator(".otk-reply-agent .otk-entity-pill"))
-              .toHaveCSS(
-                "color",
-                await token(page, "--otk-fg"),
-              );
+            const agent = page.locator("[data-reply-source] .otk-entity-pill");
+            await agent.hover();
+            await expect(agent).toHaveCSS(
+              "color",
+              await token(page, "--otk-fg"),
+            );
             await expect(page.locator(":popover-open .otk-entity-facts"))
               .toContainText("This reply");
             await page.mouse.move(1, 1);
@@ -1733,7 +1740,11 @@ export async function collections456(input: Inputs) {
                 "font",
                 await fold.evaluate((el) => getComputedStyle(el).font),
               );
-            const rule = await fold.locator(".otk-tree-icon-stem").evaluate(
+            const row = page.locator(".otk-work-log").filter({ has: fold });
+            const stem = row.locator(
+              ".otk-tree-heading .otk-record-row .otk-tree-icon-stem",
+            );
+            const rule = await stem.evaluate(
               (el) => {
                 const s = getComputedStyle(el);
                 return {
@@ -1741,7 +1752,11 @@ export async function collections456(input: Inputs) {
                   image: s.backgroundImage,
                   size: s.backgroundSize,
                   color: getComputedStyle(el.parentElement!).color,
-                  labelColor: getComputedStyle(el.closest("button")!).color,
+                  labelColor: getComputedStyle(
+                    el.closest(".otk-record-row")!.querySelector(
+                      ".otk-work-fold",
+                    )!,
+                  ).color,
                 };
               },
             );
@@ -1831,11 +1846,10 @@ export async function collections456(input: Inputs) {
             await expect(page.locator(".otk-queued")).toHaveCount(
               name === "queued" ? 1 : 0,
             );
-            await page.locator(".otk-reply-agent .otk-entity-pill").first()
-              .hover();
-            await expect(
-              page.locator(".otk-reply-agent .otk-entity-pill").first(),
-            ).toHaveCSS(
+            const agent = page.locator("[data-reply-source] .otk-entity-pill")
+              .first();
+            await agent.hover();
+            await expect(agent).toHaveCSS(
               "color",
               await token(page, "--otk-fg"),
             );

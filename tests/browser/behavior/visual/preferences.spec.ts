@@ -34,14 +34,10 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
     }),
   ).toHaveText("Preference proof.");
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
-  // Step-finish follows the answer text on both lanes, so transparent bookkeeping forms
-  // a second work group. Observe the completed turn, not a streaming prefix.
+  // The reply owns one Work log, including bookkeeping after the answer.
   const folds = page.locator(".otk-work-fold");
-  const count = 2;
-  await expect(folds).toHaveCount(count);
-  for (let i = 0; i < count; i++) {
-    await expect(folds.nth(i)).toHaveAttribute("aria-expanded", "false");
-  }
+  await expect(folds).toHaveCount(1);
+  await expect(folds).toHaveAttribute("aria-expanded", "false");
   await openWorkLogs(page);
   await expect(page.locator(".otk-reasoning-heading")).toContainText(
     "Thought",

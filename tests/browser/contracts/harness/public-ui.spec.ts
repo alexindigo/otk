@@ -9,10 +9,11 @@ test("harness.public-ui-unregistered-extension-fallbacks", {
   await page.goto(`${state.url}/?interaction-failures`);
   // NT1 presents unknown parts as native-record rows, not muted paragraphs.
   await expect(
-    page.locator('[data-native-record="consumer.unregistered"] .otk-tool-verb'),
-  ).toHaveText(
-    "Unsupported part: consumer.unregistered",
-  );
+    page.locator('[data-native-record="consumer.unregistered"]').getByText(
+      "Unsupported part: consumer.unregistered",
+      { exact: true },
+    ),
+  ).toBeVisible();
   // UX1 also folds this standalone consumer's work before its lazy tool body.
   await page.getByRole("button", { name: "Work log", exact: true }).click();
   await page.locator('.otk-tool-toggle[aria-expanded="false"]').click();

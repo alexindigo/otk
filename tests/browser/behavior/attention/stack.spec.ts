@@ -112,18 +112,25 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   for (const width of [600, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await expect(page.locator(".otk-toast")).toHaveCount(3);
-    const geometry = await page.locator(".otk-toasts").evaluate((stack) => {
+    const newestCard = page.locator(toast(sessions[7].id));
+    const allowOnce = newestCard.getByRole("button", {
+      name: "Allow once",
+      exact: true,
+    });
+    await expect(allowOnce).toBeVisible();
+    const geometry = await allowOnce.evaluate((control) => {
+      const stack = control.closest(".otk-toasts")!;
       const box = stack.getBoundingClientRect();
-      const close = stack.querySelector(".otk-toast-close")!;
+      const close = control.closest(".otk-toast")!.querySelector(
+        ".otk-toast-close",
+      )!;
       const icon = close.firstElementChild!.getBoundingClientRect();
       const c = close.getBoundingClientRect();
-      const allow = stack.querySelector(".otk-toast-action")!
-        .getBoundingClientRect();
+      const allow = control.getBoundingClientRect();
       const label = document.createRange();
-      label.selectNodeContents(stack.querySelector(".otk-toast-action")!);
+      label.selectNodeContents(control);
       const text = label.getBoundingClientRect();
-      const foot = stack.querySelector(".otk-toast-foot")!
-        .getBoundingClientRect();
+      const foot = control.closest(".otk-toast-foot")!.getBoundingClientRect();
       return {
         cardBottom: Array.from(stack.querySelectorAll(".otk-toast")).at(-1)!
           .getBoundingClientRect().bottom,
@@ -141,7 +148,7 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
           icon.top - c.top,
           c.bottom - icon.bottom,
         ],
-        actionRight: foot.right - allow.right,
+        actionRight: Math.abs(foot.right - allow.right),
         actionCenters: [
           Math.abs(
             text.left + text.width / 2 - allow.left - allow.width / 2,
@@ -194,28 +201,26 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   );
   expect(pending).toHaveLength(8);
   await badge(page, 8);
-  const firstPage = await page.locator(".otk-toast").evaluateAll((cards) =>
-    cards.map((card) => card.getAttribute("data-note"))
-  );
+  const cards = page.locator(".otk-toast");
+  const visible = () =>
+    cards.evaluateAll((items) =>
+      items.map((card) => card.getAttribute("data-note"))
+    );
+  const notes = (...indices: number[]) =>
+    indices.map((index) => `local/${sessions[index - 1].id}`);
+  await expect.poll(visible).toEqual(notes(6, 5, 4));
   await page.getByRole("button", { name: "3 more need you", exact: true })
     .click();
-  await expect(page.locator(".otk-toast")).toHaveCount(3);
-  await expect.poll(() =>
-    page.locator(".otk-toast").evaluateAll((cards) =>
-      cards.map((card) => card.getAttribute("data-note"))
-    )
-  ).not.toEqual(firstPage);
+  await expect.poll(visible).toEqual(notes(3, 2, 1));
   expect(replies()).toBe(before);
   await badge(page, 8);
-  // Overflow pages retained evidence; only explicit dismissal retires a note.
-  for (let remaining = 6; remaining > 0; remaining--) {
-    await page.locator(".otk-toast").first().getByRole("button", {
+  // Dismissal preserves page two until it is empty, then clamps to page one.
+  for (const remaining of [[2, 1], [1], [6, 5, 4], [5, 4], [4], []]) {
+    await cards.first().getByRole("button", {
       name: "Dismiss notification",
       exact: true,
     }).click();
-    await expect(page.locator(".otk-toast")).toHaveCount(
-      Math.min(3, remaining - 1),
-    );
+    await expect.poll(visible).toEqual(notes(...remaining));
   }
   await expect(page.locator(".otk-toast")).toHaveCount(0);
   for (const session of sessions) {

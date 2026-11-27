@@ -57,8 +57,6 @@
 .otk-transcript-viewport {
   position: relative;
   isolation: isolate;
-  /* Only notifications contribute intrinsic height to the shared row. */
-  contain: size;
   /* The scrollport's padding can exceed a fully-shrunk transcript track. */
   overflow: clip;
   display: flex;
@@ -73,6 +71,8 @@
 
 /* The transcript and notifications layer share one row above the dock. */
 .otk-transcript-stage {
+  /* The toast width query must not depend on the composer dock's presence. */
+  container: transcript-stage / inline-size;
   flex: 1;
   min-block-size: min-content;
   max-block-size: 100%;
@@ -84,15 +84,21 @@
 .otk-transcript-stage > * {
   grid-area: 1 / 1;
 }
+.otk-transcript-stage.has-notification-layer > .otk-transcript-viewport {
+  /* Only the notification layer sets the shared row's intrinsic floor. */
+  contain: size;
+}
 
 /* The content pane excludes the composer. A visible dock fills one half;
    the transcript fills the other, or the whole pane when no dock is shown. */
 .otk-session-content {
-  container: session-content / size;
   flex: 1;
   min-block-size: 0;
   display: flex;
   flex-direction: column;
+}
+.otk-session-content:has(> .otk-session-docks > .otk-composer-surface:not([hidden])) {
+  container: session-content / size;
 }
 .otk-session-docks {
   display: none;
