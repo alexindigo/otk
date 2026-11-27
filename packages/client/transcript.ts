@@ -194,6 +194,7 @@ export function createTranscript(
     connection(target.sidecarId).messages,
   entities?: EntityStateStore,
   disclosures?: Disclosures,
+  retireScope?: (scope: string) => void,
 ): TranscriptOwner {
   const requests = connection(target.sidecarId).attention;
   const requestEntry = (id: string) => entry(target.sidecarId, id);
@@ -350,10 +351,8 @@ export function createTranscript(
     });
     return early.promise;
   };
-  const interaction = createTranscriptInteraction(
-    disclosures,
-    sessionKey(target.sidecarId, target.sessionID),
-  );
+  const scope = sessionKey(target.sidecarId, target.sessionID);
+  const interaction = createTranscriptInteraction(disclosures, scope);
   const helper = (
     id: string,
   ): import("@otk/protocol").HelperSummary | undefined => {
@@ -1382,7 +1381,8 @@ export function createTranscript(
     usesMetadata: (ids) =>
       ids.has(target.sessionID) || projection.usesMetadata(ids),
     receive(sidecarId: string, frame: ServerFrame): void {
-      if (sidecarId === target.sidecarId && frame.t === "harness") {
+      if (sidecarId !== target.sidecarId) return;
+      if (frame.t === "harness") {
         const linked = frame.state === "connected";
         if (nativeConnected !== linked) {
           nativeConnected = linked;
@@ -1391,8 +1391,7 @@ export function createTranscript(
         }
       }
       if (
-        sidecarId === target.sidecarId && frame.t === "harness" && readFacts &&
-        readFacts.phase !== "ready"
+        frame.t === "harness" && readFacts && readFacts.phase !== "ready"
       ) {
         readFacts = {
           ...readFacts,
@@ -1401,6 +1400,13 @@ export function createTranscript(
             : "native unavailable",
         };
         readProgress.receive("page", readFacts);
+      }
+      const indexed = frame.t === "index.snapshot" || frame.t === "index.patch";
+      const known = indexed ? entry(sidecarId, target.sessionID) : undefined;
+      if (known?.deleted) {
+        // The tab's choice survives cooling, but not deletion of a cold body.
+        interaction.clear();
+        retireScope?.(scope);
       }
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "load.chunk") {
@@ -1435,9 +1441,8 @@ export function createTranscript(
         }
         return;
       }
-      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+      if (indexed) {
         requests.retireSessions((id) => !!entry(sidecarId, id)?.deleted);
-        const known = entry(sidecarId, selected.sessionID);
         const busyChanged = projection.busy(
           !!entities &&
             sessionRunning(entities, entityKey("session", target.sessionID)),
@@ -1447,7 +1452,6 @@ export function createTranscript(
             draft.content = attach(contentMetadata(draft.content));
           });
         }
-        if (known?.deleted) interaction.clear();
         if (
           !!known?.deleted !== (view === "deleted") ||
           (!subscribed && view !== "deleted")
@@ -1745,6 +1749,7 @@ export function createTranscript(
       snapshotLifetime.abort();
       readProgress.stop();
       interaction.clear();
+      retireScope?.(scope);
       sources.stop();
       owner.temperature("cold");
     },

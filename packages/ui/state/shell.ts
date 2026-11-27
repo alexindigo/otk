@@ -29,6 +29,7 @@ import {
   type ListInteraction,
   type ProjectSelection,
   route,
+  type Selection,
   type ServerResources,
   SESSION_TREE_DISCLOSURES,
   type SessionActions,
@@ -36,6 +37,8 @@ import {
   type SessionRename,
   type SessionRevert,
   type ShellNavigation,
+  type TranscriptOwner,
+  WorkPanel,
 } from "@otk/client";
 import {
   projectLayoutKey,
@@ -43,16 +46,25 @@ import {
   treeLayoutKey,
 } from "@otk/protocol";
 import { createToggles, type Toggles } from "../components/Toggles.ts";
+import { createWorkModel } from "../components/work-log.ts";
+import type { PartRegistry } from "../registries/renderers.ts";
 import { solidState } from "./binding.ts";
 import { createIndex } from "./index.ts";
 import { createSession } from "./session.ts";
 import { createSidecars } from "./sidecars.ts";
+
+export interface ShellWork {
+  panel: WorkPanel;
+  model(session: Selection): ReturnType<typeof createWorkModel> | undefined;
+  shows(session: Selection, turn: string): boolean;
+}
 
 export interface ShellState {
   reload: import("@otk/client").Reload;
   confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   disclosures: Disclosures;
+  work: ShellWork;
   toggles: Toggles;
   resources: ServerResources;
   session: ClientSession;
@@ -72,6 +84,7 @@ export interface ShellState {
 export function createShellState(
   o: {
     api: URL;
+    parts: PartRegistry;
     build?: string;
     policy?: import("@otk/protocol").ClientRequestPolicy;
     promptBlocks?(text: string): import("@otk/protocol").Block[];
@@ -134,6 +147,7 @@ export function createShellState(
     },
   });
   resources.observe({ removed: (id) => listScopes.remove(id) });
+  const panel = new WorkPanel(solidState);
   const session = createSession(
     (id) => sidecars.connection(id),
     entry,
@@ -152,7 +166,47 @@ export function createShellState(
         : undefined,
     (id) => resources.inbox(id).entities,
     disclosures,
+    (scope) => panel.retire(scope),
   );
+  const workModels = new WeakMap<
+    TranscriptOwner,
+    ReturnType<typeof createWorkModel>
+  >();
+  const workModel: ShellWork["model"] = (target) => {
+    // Recheck the collection when the selected session binds its body.
+    void session.state.content;
+    const transcript = session.transcripts.get(target);
+    if (!transcript) return;
+    let model = workModels.get(transcript);
+    if (!model) {
+      const prefs = () => toggles.state.prefs;
+      model = createWorkModel({
+        reply: (key) => transcript.state.repliesByID[key],
+        replyKeys: () => transcript.state.replyIDs,
+        presentation: (part) => o.parts.presentation(part, prefs()),
+        presentationRevision: prefs,
+        now: Date.now,
+      });
+      workModels.set(transcript, model);
+    }
+    return model;
+  };
+  const work: ShellWork = {
+    panel,
+    model: workModel,
+    shows(target, turn) {
+      const { rightView, rightCollapsed } = layout();
+      const selected = session.state.selection;
+      if (
+        rightView !== "work" || rightCollapsed ||
+        selected?.sidecarId !== target.sidecarId ||
+        selected.sessionID !== target.sessionID
+      ) return false;
+      const turns = workModel(target)?.turns() ?? [];
+      return panel.shown(sessionKey(target.sidecarId, target.sessionID), turns)
+        .turn === turn;
+    },
+  };
   const drafts = createDrafts(solidState);
   const hasServer = (id: string) =>
     sidecars.state.list.some((server) => server.id === id);
@@ -429,6 +483,7 @@ export function createShellState(
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
     disclosures,
+    work,
     toggles,
     resources,
     session,
