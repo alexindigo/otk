@@ -9,6 +9,7 @@ import {
   expectCompactionSummary,
   prompt,
   revealAcquired,
+  settledNativeReply,
   toolScript,
 } from "../../pages/transcript.ts";
 import { contextMenu, sessionContext } from "../../pages/sessions.ts";
@@ -255,6 +256,16 @@ test(
   "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork",
   { tag: ["@sessions", "@isolated"] },
   async ({ isolatedState: state, page, context }, info) => {
+    const completeTurn = async (id: string, input: string, reply: string) => {
+      await prompt(page, input);
+      // Forking consumes completed history, not the intermediate tool turn.
+      await settledNativeReply(state, id, reply);
+      await expect(page.locator(".otk-messages")).toContainText(reply);
+      await expect(page.locator(`[data-session="${id}"]`)).toHaveAttribute(
+        "data-status",
+        "idle",
+      );
+    };
     const original = await state.native<{ id: string }>("/session", "POST", {
       title: "Fork source",
     });
@@ -263,17 +274,9 @@ test(
       command: "pwd",
       description: "Read shared directory",
     }, "First grouped reply.");
-    await prompt(page, "First prompt");
-    await expect(page.locator(".otk-messages")).toContainText(
-      "First grouped reply.",
-    );
-    await expect(page.locator(`[data-session="${original.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await completeTurn(original.id, "First prompt", "First grouped reply.");
     await state.queue(["Second reply."]);
-    await prompt(page, "Second prompt");
-    await expect(page.locator(".otk-messages")).toContainText("Second reply.");
-    await expect(page.locator(`[data-session="${original.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await completeTurn(original.id, "Second prompt", "Second reply.");
     await revealAcquired(page, "[data-role=assistant]");
     // WP2: reply identity is now the shared entity pill.
     await page.locator("[data-role=assistant] .otk-entity-pill").first()
@@ -308,13 +311,10 @@ test(
       command: "echo shared > fork-shared.txt",
       description: "Write shared file",
     }, "Shared file written.");
-    await prompt(page, "Fork writes a shared file");
-    await expect(page.locator(".otk-messages")).toContainText(
+    await completeTurn(
+      fork,
+      "Fork writes a shared file",
       "Shared file written.",
-    );
-    await expect(page.locator(`[data-session="${fork}"]`)).toHaveAttribute(
-      "data-status",
-      "idle",
     );
     await expect(page.locator(".otk-fork-note")).toHaveCount(0);
     expect(await readFile(state.directory + "/fork-shared.txt", "utf8")).toBe(
