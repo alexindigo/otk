@@ -515,7 +515,7 @@ export class SessionScale {
           const id = `msg_scale${String(globalMessage++).padStart(9, "0")}`;
           const time = clock + m * 10;
           let data: Record<string, unknown>;
-          if (scaleRole(i, m, options.messages) === "user") {
+          if (scaleRole(i, m, options) === "user") {
             turn = id;
             data = {
               role: "user",

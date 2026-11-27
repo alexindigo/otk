@@ -1,7 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { Page } from "@playwright/test";
 import { expect, test } from "../../fixtures/evidence.ts";
+import type { TestState } from "../../fixtures/test-state.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import {
+  prompt,
+  settledNativeReply,
+  toolScript,
+} from "../../pages/transcript.ts";
+
+const prose = "The dependencies are catalogued.";
+
+async function replyWithWork(state: TestState, page: Page, sessionID: string) {
+  // D74 / wl-1: step and completion bookkeeping alone do not qualify as work.
+  await state.controller.call("writeProjectFiles", {
+    lease: state.lease.lease,
+    files: { "inventory.txt": "Dependencies catalogued." },
+  });
+  await toolScript(state, "read", {
+    filePath: `${state.directory}/inventory.txt`,
+  }, prose);
+  await prompt(page, "Inventory the facade dependencies.");
+  // The tool-call reply can render before the native continuation ends.
+  await settledNativeReply(state, sessionID, prose);
+}
 
 test("messages.reply-has-one-work-log-after-prose", {
   tag: "@messages",
@@ -10,10 +32,9 @@ test("messages.reply-has-one-work-log-after-prose", {
     title: "Work record review",
   });
   await openSession(state, page, session.id);
-  await state.queue(["The dependencies are catalogued."]);
-  await prompt(page, "Inventory the facade dependencies.");
+  await replyWithWork(state, page, session.id);
   const reply = page.locator("[data-role=assistant]").last();
-  const text = reply.getByText("The dependencies are catalogued.");
+  const text = reply.getByText(prose);
   await expect(text).toBeVisible();
   await expect(page.locator(`[data-session="${session.id}"]`))
     .toHaveAttribute("data-status", "idle");
@@ -27,24 +48,29 @@ test("messages.reply-has-one-work-log-after-prose", {
 test("messages.reply-footer-aligns-and-yields-whole-items", {
   tag: "@messages",
 }, async ({ state, page }) => {
-  await page.setViewportSize({ width: 900, height: 800 });
-  await state.product("prefs.set", { key: "textSize", value: "125" });
-  await state.product("layout.patch", {
-    leftCollapsed: false,
-    rightCollapsed: false,
-  });
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Reply metadata review",
   });
   await openSession(state, page, session.id);
-  await state.queue(["The dependencies are catalogued."]);
-  await prompt(page, "Inventory the facade dependencies.");
+  await replyWithWork(state, page, session.id);
   const reply = page.locator("[data-role=assistant]").last();
-  await expect(reply.getByText("The dependencies are catalogued."))
-    .toBeVisible();
+  await expect(reply.getByText(prose)).toBeVisible();
   await expect(page.locator(`[data-session="${session.id}"]`))
     .toHaveAttribute("data-status", "idle");
+  // D74: close the right sheet before measuring the narrow conversation.
+  await state.product("layout.patch", {
+    leftCollapsed: false,
+    rightCollapsed: true,
+  });
+  await state.product("prefs.set", { key: "textSize", value: "125" });
+  await page.setViewportSize({ width: 720, height: 800 });
+  await expect.poll(() =>
+    page.locator("html").evaluate((root) =>
+      Number(getComputedStyle(root).getPropertyValue("--otk-scale"))
+    )
+  ).toBe(1.25);
   const footer = reply.locator(".otk-message-footer");
+  await expect(reply.locator(".otk-work-label")).toBeVisible();
   await expect(footer).toBeVisible();
   await expect(footer.locator(".otk-record-completion")).toHaveCount(0);
   const widthAndAlignment = await footer.evaluate((el) => {

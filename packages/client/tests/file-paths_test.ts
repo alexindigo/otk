@@ -37,6 +37,22 @@ Deno.test("the shared linkifier recognizes native session IDs without changing t
   assertEquals(sessionMentionID(unknown), undefined);
 });
 
+Deno.test("literal prompt paths preserve delimiters, whitespace and non-file text", () => {
+  const text = "  **See** `/path/to/a.svg`\n\n\t` notes/plan.md:3-4 ` " +
+    "~/notes.txt `not a path` ses_de5e7f01fffeN4upKbwEeHRkSJ  ";
+  const segments = pathSegments(text, "prompt");
+  assertEquals(segments.map((segment) => segment.text).join(""), text);
+  assertEquals(segments.flatMap(({ mention }) => mention ? [mention] : []), [
+    { raw: "/path/to/a.svg", path: "/path/to/a.svg" },
+    {
+      raw: "notes/plan.md:3-4",
+      path: "notes/plan.md",
+      line: { start: 3, end: 4 },
+    },
+    { raw: "~/notes.txt", path: "~/notes.txt" },
+  ]);
+});
+
 Deno.test("path recognition is conservative in prose and whole-span code", () => {
   const mentions = (text: string, where: "prose" | "code" = "prose") =>
     pathSegments(text, where).flatMap(({ mention }) =>

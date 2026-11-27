@@ -84,8 +84,9 @@
 .otk-transcript-stage > * {
   grid-area: 1 / 1;
 }
-.otk-transcript-stage.has-notification-layer > .otk-transcript-viewport {
-  /* Only the notification layer sets the shared row's intrinsic floor. */
+.otk-transcript-stage.has-bounded-viewport > .otk-transcript-viewport {
+  /* A live transcript's demand comes from its viewport. Its rows cannot
+     size that viewport, even when no notification layer is mounted. */
   contain: size;
 }
 

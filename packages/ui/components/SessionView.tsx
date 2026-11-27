@@ -747,7 +747,8 @@ export default function SessionView(props: {
             <div class="otk-session-content">
               <div
                 class={["otk-transcript-stage", {
-                  "has-notification-layer": !!props.mountTranscriptLayer,
+                  "has-bounded-viewport": !!props.transcript ||
+                    !!props.mountTranscriptLayer,
                 }]}
                 ref={(element) => {
                   releaseTranscriptLayer = props.mountTranscriptLayer?.(

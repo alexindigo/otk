@@ -27,6 +27,24 @@ async function reply(state: TestState, page: Page, source: string) {
   await expect(page.locator(".otk-code code").first()).toBeVisible();
 }
 
+async function expectRunOutput(page: Page, first: string, last: string) {
+  // Issue 2.118: the actual grid can wrap the long shell prompt and move
+  // the first command's output into scrollback before the last one paints.
+  const output = viewport(page);
+  await expect(output).toHaveAttribute("aria-label", new RegExp(last));
+  const scrollback = page.getByRole("scrollbar", {
+    name: "Terminal scrollback",
+    exact: true,
+  });
+  const scrolled = !(await output.getAttribute("aria-label"))?.includes(first);
+  if (scrolled) {
+    await scrollback.press("Home");
+    await expect(scrollback).toHaveAttribute("aria-valuenow", "0");
+  }
+  await expect(output).toHaveAttribute("aria-label", new RegExp(first));
+  if (scrolled) await scrollback.press("End");
+}
+
 test(
   "terminal.run-code-multi-line-opens-dock-and-runs",
   { tag: "@terminal" },
@@ -42,12 +60,7 @@ test(
       await expect(
         page.getByRole("textbox", { name: "Terminal input", exact: true }),
       ).toBeFocused();
-      for (const part of ["run-a", "run-b"]) {
-        await expect(viewport(page)).toHaveAttribute(
-          "aria-label",
-          new RegExp(`otk-${part}`),
-        );
-      }
+      await expectRunOutput(page, "otk-run-a", "otk-run-b");
       if (capture) {
         for (const scale of ["100", "125"]) {
           await state.product("prefs.set", { key: "textSize", value: scale });
@@ -125,8 +138,7 @@ test(
         "```console\n$ " + first + "\nnoise-output\n$ " + second + "\n```",
       );
       await run(page).click();
-      await expect(viewport(page)).toHaveAttribute("aria-label", /otk-c1/);
-      await expect(viewport(page)).toHaveAttribute("aria-label", /otk-c2/);
+      await expectRunOutput(page, "otk-c1", "otk-c2");
       const input = wire.input.join("");
       expect(input).toContain(first);
       expect(input).toContain(second);
