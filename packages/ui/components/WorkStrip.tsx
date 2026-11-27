@@ -16,7 +16,7 @@ export default function WorkStrip(props: {
   shown: boolean;
   action(run?: string): ActionControl;
   onFeedback?: Parameters<typeof ActionButton>[0]["onFeedback"];
-}) {
+}): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
   createEffect(() => !!props.runs.live, (live) => {
     if (!live) return;

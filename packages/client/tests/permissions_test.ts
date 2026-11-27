@@ -85,6 +85,7 @@ Deno.test("tool waiting follows its call or delegated child, not an unrelated re
     status: "running" as const,
     time: {},
     command: "echo otk",
+    output: "",
   };
   const child = request("child", "child", 1);
   const direct = { ...request("direct", "root", 2), toolCall: "run" };
