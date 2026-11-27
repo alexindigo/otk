@@ -82,6 +82,55 @@ Deno.test("local pre-admission failures retain one presentation owner without a 
   rpc.requests.stop();
 });
 
+Deno.test("dismissing a retained notice preserves the request outcome and will not hide a newer notice", async () => {
+  const rpc = new Rpc(() => {}), owner = "tstv1-one";
+  rpc.requests.connect({
+    id: crypto.randomUUID(),
+    expiresAt: Date.now() + 60000,
+  }, 64);
+  const sink = rpc.feedback(owner);
+  const operation = rpc.start("session.rename", {
+    sessionID: owner,
+    title: "A title",
+  });
+  const result = operation.result.catch((cause) => cause);
+  assertEquals(sink.current()?.dismiss, undefined);
+  rpc.receive({
+    t: "request.accepted",
+    ref: operation.state.ref,
+    seq: 1,
+    acceptedAt: 1,
+    retentionUntil: 2,
+    replayed: false,
+  });
+  rpc.receive({
+    t: "request.result",
+    ref: operation.state.ref,
+    seq: 2,
+    outcome: {
+      ok: false,
+      error: { code: "session.busy", retry: "none", diagnosticID: "rename" },
+    },
+  });
+  await result;
+  sink.current()!.dismiss!();
+  assertEquals(sink.current(), undefined);
+  assertEquals(operation.state.error?.diagnosticID, "rename");
+  const reload = new Rpc(() => {});
+  reload.requests.restore(JSON.parse(JSON.stringify(rpc.requests.snapshot())));
+  assertEquals(reload.feedback(owner).current(), undefined);
+
+  sink.fail({ kind: "info", text: "Restored automatically" });
+  const dismiss = sink.current()!.dismiss!;
+  sink.fail({ kind: "info", text: "Newer result" });
+  dismiss();
+  assertEquals(sink.current()?.text, "Newer result");
+  sink.current()!.dismiss!();
+  assertEquals(sink.current(), undefined);
+  rpc.requests.stop();
+  reload.requests.stop();
+});
+
 Deno.test("late bookkeeping preserves a local Send outcome until a new primary intent", async () => {
   const rpc = new Rpc(() => {}), owner = "tstv1-one";
   rpc.requests.connect({

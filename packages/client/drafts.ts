@@ -21,11 +21,13 @@ export interface DraftRecovery {
   readonly cause?: "withdrawn" | "stop-unconfirmed";
   readonly draft: Draft;
   run(): void;
+  discard(): void;
 }
 
 type RecoveryOffer = Pick<DraftRecovery, "kind" | "cause">;
 type SavedSend = {
-  draft: Draft;
+  /** Discard can release custody while native observation is still pending. */
+  draft?: Draft;
   intent?: ClientIntent;
   vacancy?: number;
   waiting: boolean;
@@ -158,23 +160,24 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
     kind: DraftRecovery["kind"],
     cause?: DraftRecovery["cause"],
   ) => {
+    if (!value.saved.draft) return;
     if (value.recovery?.kind === kind && value.recovery.cause === cause) return;
+    const offered = () =>
+      active(key, owner, id, value) && value.recovery === recovery;
     const recovery: DraftRecovery = {
       id,
       kind,
       cause,
       get draft() {
         void store.state.revision;
-        return value.saved.draft;
+        return value.saved.draft ?? emptyDraft();
       },
       run() {
-        if (!active(key, owner, id, value) || value.recovery !== recovery) {
-          return;
-        }
+        const recovered = value.saved.draft;
+        if (!offered() || !recovered) return;
         if (kind === "uncertain") return value.check?.();
         // Exchange at the sole draft owner. Late native evidence cannot retire
         // the newer draft parked by this exchange.
-        const recovered = value.saved.draft;
         value.saved.draft = owner.draft;
         value.saved.waiting = false;
         if (cause === "stop-unconfirmed") {
@@ -186,6 +189,17 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
           } else owner.sends.delete(id);
         }
         writer(key)(recovered);
+      },
+      discard() {
+        if (!offered()) return;
+        if (value.saved.waiting) {
+          // Keep the correlation for reload/late native evidence, not the copy.
+          delete value.saved.draft;
+          delete value.saved.offer;
+          delete value.saved.vacancy;
+          delete value.recovery;
+        } else owner.sends.delete(id);
+        changed();
       },
     };
     value.saved.offer = { kind, cause };
@@ -214,9 +228,15 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
         }
       } else {
         value.saved.waiting = false;
+        const draft = value.saved.draft;
+        if (!draft) {
+          owner.sends.delete(id);
+          changed();
+          return;
+        }
         if (owner.revision === value.saved.vacancy) {
           owner.sends.delete(id);
-          writer(key)(value.saved.draft);
+          writer(key)(draft);
           return true;
         }
         offer(
@@ -235,7 +255,7 @@ export function createDrafts(factory: StateFactory = createState): Drafts {
       if (
         [...values.values()].some(({ draft, sends }) =>
           [draft, ...[...sends.values()].map((value) => value.saved.draft)]
-            .some((value) => value.chips.some((chip) => chip.pending))
+            .some((value) => value?.chips.some((chip) => chip.pending))
         )
       ) {
         throw new Error(
