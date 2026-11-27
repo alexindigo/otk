@@ -10,6 +10,7 @@ import {
   lamp,
   liveWork,
   sessionEvidence,
+  sessionRunning,
   sessionShells,
   sessionWorkStatus,
 } from "../entity-state.ts";
@@ -50,10 +51,12 @@ Deno.test("session execution excludes shell-only activity and stale evidence", a
     id: string,
   ) => boolean;
   let value = session("working");
+  value.evidence = { ...value.evidence!, nativeRun: true };
   const store = createEntityStateStore({ read: () => ({ [S]: value }) });
   assertEquals(running(store, S), true);
   value = {
     ...value,
+    evidence: { ...value.evidence!, nativeRun: undefined },
     shells: {
       items: [{
         id: "shell",
@@ -72,6 +75,36 @@ Deno.test("session execution excludes shell-only activity and stale evidence", a
   value = session("working");
   store.stale(true);
   assertEquals(running(store, S), false);
+});
+
+Deno.test("descendant work and a continuation are not stoppable own execution", () => {
+  const f = fixture();
+  try {
+    for (
+      const shells of [undefined, {
+        state: "working",
+        count: 1,
+        items: [],
+      }] as const
+    ) {
+      const input = session("working", { shells });
+      input.evidence = {
+        ...input.evidence!,
+        continuation: true,
+        liveWork: [{
+          id: "child",
+          kind: "helper",
+          label: "Helper",
+          title: "Child",
+          state: "working",
+        }],
+      };
+      f.put(input);
+      assertEquals(sessionRunning(f.store, S), false);
+    }
+  } finally {
+    f.store.stop();
+  }
 });
 
 Deno.test("evidence observers update without fabricating a lamp transition", () => {

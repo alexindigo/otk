@@ -123,17 +123,12 @@ Deno.test("client consumers never reconstruct activity from metadata or completi
   assertEquals(lamp(replica, key), "finished");
   replica.stop();
 });
-Deno.test("unacknowledged helper failure owns needs-you lamps and the project rollup", () => {
+Deno.test("only an uncovered helper failure owns needs-you lamps and the project rollup", () => {
   let seen = 0;
   const owner = new SessionSupervision();
   const row = entry({
     terminal: 100,
     outcome: "failed",
-    delivered: {
-      parentID: "opcv2-ses_parent",
-      receipt: "result",
-      terminal: 100,
-    },
   }, "opcv2-ses_parent");
   const summaries = new ProjectSummaries(
     () => ({ seen, finish: 100 }),
@@ -144,6 +139,22 @@ Deno.test("unacknowledged helper failure owns needs-you lamps and the project ro
   summaries.entry(row);
   assertEquals(owner.session(row, seen).state, "needsYou");
   assertEquals(summaries.values.get("/fixture")?.status, "blocked");
+  const delivered = {
+    ...row,
+    activity: {
+      ...row.activity,
+      delivered: {
+        parentID: "opcv2-ses_parent",
+        receipt: "result",
+        terminal: 100,
+      },
+    },
+  };
+  assertEquals(owner.session(delivered, seen).state, "none");
+  assertEquals(owner.session(delivered, seen).outcome, "failed");
+  summaries.entry(delivered);
+  assertEquals(summaries.values.get("/fixture")?.status, "none");
+  summaries.entry(row);
   seen = 100;
   summaries.mark(row.id);
   assertEquals(owner.session(row, seen).state, "none");

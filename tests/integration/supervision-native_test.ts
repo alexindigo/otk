@@ -135,8 +135,21 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
       return sessions.filter((session) => session.id !== parent.id);
     }, (rows) => rows.length > 0);
     const child = children[0];
-    // A parent receiving a failed result does not acknowledge it for the human.
-    // Inspect mandatory failure attention without acquiring a transcript.
+    // D81: V2 materializes a background failure receipt; the V1 foreground
+    // tool failure does not emit a completed or synthetic result envelope.
+    if (native instanceof OpencodeV2Test) {
+      await waitFor(
+        () => native.api.message.list({ sessionID: parent.nativeID }),
+        ({ data }) =>
+          data.some((row) =>
+            row.type === "synthetic" &&
+            row.metadata?.source === "subagent" &&
+            row.metadata.childID === child.nativeID &&
+            row.metadata.state === "error"
+          ),
+      );
+    }
+    const childState = v2 ? "none" : "blocked";
     client.lease({
       directory: native.directory,
       crumbs: [],
@@ -147,17 +160,21 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
       (inbox) =>
         inbox.entities?.[entityKey("session", parent.id)]?.state ===
           "blocked" &&
-        inbox.entities?.[entityKey("session", child.id)]?.state === "blocked",
+        inbox.entities?.[entityKey("session", child.id)]?.state ===
+          childState &&
+        inbox.entities?.[entityKey("session", child.id)]?.outcome === "failed",
     );
     for (const id of [parent.id, child.id]) {
       const entity = value.entities![entityKey("session", id)];
       assert(entity.terminal && entity.terminal > 0);
-      // 2.72: an unseen failed parent needs acknowledgement too. C1's failed
-      // helper contract is unchanged; neither terminal represents live work.
-      assertEquals(entity.state, "blocked");
-      assertEquals(entity.cause, id === child.id ? "failedHelper" : "failure");
+      const covered = id === child.id && v2;
+      assertEquals(entity.state, covered ? "none" : "blocked");
+      assertEquals(
+        entity.cause,
+        covered ? undefined : id === child.id ? "failedHelper" : "failure",
+      );
       assertEquals(entity.counts.working, 0);
-      assertEquals(entity.counts.unseen, 1);
+      assertEquals(entity.counts.unseen, covered ? 0 : 1);
       assertEquals(entity.outcome, "failed");
     }
     assertEquals(value.summaries?.[native.directory]?.status, "blocked");

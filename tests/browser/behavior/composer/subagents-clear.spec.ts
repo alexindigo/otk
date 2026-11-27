@@ -37,10 +37,10 @@ test("composer.subagents-clear-removes-only-finished", {
   });
 
   const pill = page.getByRole("button", {
-    name: "Subagents: 1 needs you, 5 finished, 2 running", // D78
+    name: "Subagents: 1 needs you, 4 finished, 2 running", // D78/D81
   });
   const lamps = pill.locator(".otk-status-light:visible");
-  await expect(pill).toHaveText(/^\s*1\s*5\s*2\s*$/);
+  await expect(pill).toHaveText(/^\s*1\s*4\s*2\s*$/);
   for (const [i, kind] of ["blocked", "finished", "working"].entries()) {
     await expect(lamps.nth(i)).toHaveAttribute("data-state", kind);
   }
@@ -49,12 +49,12 @@ test("composer.subagents-clear-removes-only-finished", {
   await pill.click();
   const dropdown = page.getByRole("menu", { name: "Subagents" });
   const button = page.getByRole("button", { name: "Clear finished" });
-  await expect(dropdown.getByRole("group", { name: "Finished 5" }))
+  await expect(dropdown.getByRole("group", { name: "Finished 4" }))
     .toBeVisible();
   await expect(
     dropdown.getByRole("menuitem", { name: "Reported helper failure" }),
   )
-    .toBeVisible();
+    .toHaveCount(0);
   await expect(dropdown.locator('.otk-status-light[data-state="none"]'))
     .toHaveCount(0);
   await expect(button).toBeVisible();

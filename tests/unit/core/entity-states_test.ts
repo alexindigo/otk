@@ -90,6 +90,27 @@ function owner() {
   return { entries, published, states, supervision, put, get, mature };
 }
 
+test("an orphan result and an in-flight settlement read prove no live session work", () => {
+  const o = owner();
+  for (const pending of ["native-confirmation", "result:orphan"]) {
+    o.put({
+      ...base,
+      activity: {
+        terminal: 50,
+        outcome: "succeeded",
+        completion: { pending: [pending] },
+        work: keys(),
+      },
+    }, 50);
+    const state = o.get(base.id);
+    assertEquals(state?.state, "none");
+    assertEquals(state?.evidence?.work, false);
+    assertEquals(state?.evidence?.nativeRun, undefined);
+    assertEquals(state?.evidence?.settlement, undefined);
+    assertEquals(o.states.composerLink(base.id), "none");
+  }
+});
+
 test("successful session settles only after native confirmation of its current work", () => {
   const o = owner();
   const success = {
@@ -104,7 +125,14 @@ test("successful session settles only after native confirmation of its current w
   put(success);
   assertEquals(settlement(), undefined);
   for (const pending of ["queued", "parked", "starting", "returning"]) {
-    put({ ...success, completion: { pending: [pending], confirmed: 50 } });
+    put({
+      ...success,
+      completion: {
+        pending: [pending],
+        continuation: [pending],
+        confirmed: 50,
+      },
+    });
     assertEquals(settlement(), undefined);
     assertEquals(o.get(base.id)?.state, "working");
     assertEquals(o.states.composerLink(base.id), "running");
@@ -415,9 +443,10 @@ test("retry evidence shares the interpreter's native freshness rather than retai
   assertEquals(o.get("s")?.evidence?.retry, undefined);
 });
 
-test("a failed helper delivered to its parent stays blocked until seen (C1 unchanged)", () => {
+test("D81: a delivered failed helper leaves attention but preserves its failure", () => {
   const o = owner();
-  o.put({ ...base, id: "parent" });
+  const parent = { ...base, id: "parent", activity: { work: keys("parent") } };
+  o.put(parent);
   const helper: IndexMetadata = {
     ...base,
     id: "helper",
@@ -425,15 +454,18 @@ test("a failed helper delivered to its parent stays blocked until seen (C1 uncha
     activity: {
       terminal: 70,
       outcome: "failed",
-      delivered: { parentID: "parent", receipt: "r", terminal: 70 },
     },
   };
   o.put(helper);
+  const roster = () => o.states.get(entityKey("task", "session/parent"));
   assertEquals(o.get("helper")?.state, "blocked");
   assertEquals(o.get("helper")?.cause, "failedHelper");
+  assertEquals(o.get("helper")?.evidence?.helper, "needsYou");
+  assertEquals(roster()?.state, "blocked");
+  assertEquals(roster()?.helpers?.counts.needsYou, 1);
   assertEquals(o.get("helper")?.outcome, "failed");
   // The parent's own lamp is its own state (D35); the child is evidence.
-  assertEquals(o.get("parent")?.state, "none");
+  assertEquals(o.get("parent")?.state, "working");
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 1);
   // An unseen failure is immediate, so a pending permission cannot grace it.
   o.put({
@@ -441,11 +473,23 @@ test("a failed helper delivered to its parent stays blocked until seen (C1 uncha
     activity: { ...helper.activity, permissions: keys("per_1") },
   });
   assertEquals(o.get("helper")?.cause, "failedHelper");
-  o.put(helper, 70);
+  // The existing blocker wins even after the child rewakes (F02).
+  o.put({ ...helper, activity: { ...helper.activity, work: keys("new-run") } });
+  assertEquals(o.get("helper")?.state, "blocked");
+  assertEquals(o.get("helper")?.evidence?.helper, "needsYou");
+  const delivered = { parentID: "parent", receipt: "r", terminal: 70 };
+  o.put({ ...helper, activity: { ...helper.activity, delivered } });
   assertEquals(o.get("helper")?.state, "none");
+  assertEquals(o.get("helper")?.outcome, "failed");
+  assertEquals(o.get("helper")?.evidence?.helper, undefined);
+  assertEquals(roster()?.state, "working");
+  assertEquals(roster()?.helpers?.counts.needsYou ?? 0, 0);
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 0);
   // A succeeded helper's delivery is its acknowledgement (D58).
-  o.put({ ...helper, activity: { ...helper.activity, outcome: "succeeded" } });
+  o.put({
+    ...helper,
+    activity: { ...helper.activity, delivered, outcome: "succeeded" },
+  });
   assertEquals(o.get("helper")?.state, "none");
 });
 
@@ -1175,7 +1219,7 @@ test("D70: moving a parent moves its entire subtree, and unlinking retires the o
   assertEquals(o.get("d")?.state, "working");
   assertEquals(get("session/d")?.counts.working, 1);
 });
-test("D66/D58/D78: one task publishes its ordered non-root dispositions", () => {
+test("D66/D58/D78/D81: one task publishes its ordered non-root dispositions", () => {
   const o = owner();
   o.put(base);
   const put = (
@@ -1217,7 +1261,7 @@ test("D66/D58/D78: one task publishes its ordered non-root dispositions", () => 
   put(6, { terminal: 80, outcome: "failed" }, "helper-0");
   const task = () => o.states.get(entityKey("task", "session/s"));
   assertEquals(task()?.helpers, {
-    counts: { running: 2, needsYou: 1, finished: 4 },
+    counts: { running: 2, needsYou: 2, finished: 2 },
     lamps: {
       all: { state: "blocked" },
       groups: {
@@ -1229,7 +1273,6 @@ test("D66/D58/D78: one task publishes its ordered non-root dispositions", () => 
     ids: [
       "helper-2",
       "helper-6",
-      "helper-5",
       "helper-4",
       "helper-3",
       "helper-0",
@@ -1238,9 +1281,9 @@ test("D66/D58/D78: one task publishes its ordered non-root dispositions", () => 
   });
   assertEquals(o.get("s")?.evidence?.helper, undefined);
   assertEquals(o.get("helper-2")?.evidence?.helper, "needsYou");
-  assertEquals(o.get("helper-5")?.state, "blocked");
-  assertEquals(o.get("helper-5")?.evidence?.helper, "finished");
-  assertEquals(o.get("helper-6")?.evidence?.helper, "finished");
+  assertEquals(o.get("helper-5")?.state, "none");
+  assertEquals(o.get("helper-5")?.evidence?.helper, undefined);
+  assertEquals(o.get("helper-6")?.evidence?.helper, "needsYou");
   put(1, running(5));
   assertEquals(task()?.helpers?.ids.slice(-2), ["helper-1", "helper-0"]);
 });

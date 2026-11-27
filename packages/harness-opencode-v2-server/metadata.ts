@@ -15,7 +15,12 @@ export type NativeSession =
   & Awaited<
     ReturnType<OpenCodeClient["session"]["get"]>
   >
-  & { activity?: number; terminal?: number; terminalError?: unknown };
+  & {
+    activity?: number;
+    terminal?: number;
+    terminalError?: unknown;
+    runID?: string;
+  };
 export type SessionFacts = Pick<
   NativeSession,
   | "id"
@@ -29,6 +34,7 @@ export type SessionFacts = Pick<
   | "activity"
   | "terminal"
   | "terminalError"
+  | "runID"
   | "subpath"
 >;
 export function millis(value: unknown): number {
@@ -88,7 +94,16 @@ export function terminalFacts(
 /** Scalar acquisition cannot certify activity or erase live attention. */
 export function metadata(raw: SessionFacts): SessionMetadata {
   const mapped = session(raw);
-  const terminal = terminalFacts(raw.time.idle, raw.outcome, raw.terminal);
+  // A top-level user shell can contribute its own completion history. A
+  // helper terminal is the model execution covered by a parent's receipt.
+  const terminal = terminalFacts(
+    raw.time.idle,
+    raw.outcome,
+    raw.parentID ? undefined : raw.terminal,
+  );
+  if (raw.parentID && raw.runID && terminal.terminal) {
+    terminal.runID = raw.runID;
+  }
   const failure =
     terminal.outcome === "failed" && terminal.terminal === millis(raw.time.idle)
       ? terminalFailure(

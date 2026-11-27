@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  aggregateTransition,
   archiveEntityID,
-  type BlockedCause,
   type ComposerLinkState,
   type EntityCounts,
   entityKey,
@@ -16,18 +16,14 @@ import {
   rollupStatus,
   type RunningShells,
   type SessionEvidence,
+  shellTransition,
   type Supervision,
   taskEntityID,
   type TaskHelpers,
 } from "@otk/protocol";
-import {
-  failedHelperNeedsAck,
-  type SessionInputs,
-  type SessionSupervision,
-} from "./supervision.ts";
+import type { SessionInputs, SessionSupervision } from "./supervision.ts";
 
 const PERMISSION_GRACE_MS = 500;
-const noShells: RunningShells = { items: [], count: 0, state: "none" };
 
 interface EntityClock {
   now(): number;
@@ -458,12 +454,14 @@ export class EntityStates {
     });
     const inputs = { ...native, permissions: permissions.length };
     const operation = this.#operations.get(entry.id);
+    const opened = this.openedByUser(entry.id);
     const verdict = this.supervision.session(
       entry,
       acknowledged,
       retainedTerminal,
       inputs,
       operation,
+      opened,
     );
     const upserts: EntityState[] = [], removals: string[] = [];
     const contribution = this.#contribution(entry.id);
@@ -481,7 +479,7 @@ export class EntityStates {
       this.#retire(entry.id, removals);
       this.#ancestors(entry.id, upserts);
     } else {
-      const state = this.supervision.status(verdict, operation);
+      const state = verdict.status;
       const counts = own(state, verdict.unseen === true);
       this.#own.set(entry.id, counts);
       const value = this.#session(
@@ -492,6 +490,7 @@ export class EntityStates {
         inputs,
         permissions,
         operation,
+        opened,
       );
       if (value.cause === "permission") {
         this.#graced.set(
@@ -811,20 +810,13 @@ export class EntityStates {
     dependencies = members.dependencies,
   ): EntityState {
     const { counts } = members;
-    const state = rollupStatus(
-      counts.blocked || forms ? "blocked" : undefined,
+    const { state, cause, liveWork } = aggregateTransition({
+      counts,
+      forms,
+      dependencies,
       operation,
-      counts.working ? "working" : undefined,
-      counts.finished ? "finished" : undefined,
-      dependencies ? "dependencies" : undefined,
-    );
-    const cause: BlockedCause | undefined = state !== "blocked"
-      ? undefined
-      : !counts.blocked
-      ? forms ? "form" : "operation"
-      : !forms && operation !== "blocked" && members.graced === counts.blocked
-      ? "permission"
-      : undefined;
+      graced: members.graced,
+    });
     const before = this.#states.get(entityKey(kind, id));
     let runStartedAt = Infinity;
     for (const at of members.runStarts.keys()) {
@@ -842,7 +834,7 @@ export class EntityStates {
         : before.previous,
       counts: { ...counts },
       ...(dependencies ? { dependencies } : {}),
-      ...(counts.working || operation === "working" ? { liveWork: true } : {}),
+      ...(liveWork ? { liveWork: true } : {}),
       ...(Number.isFinite(runStartedAt) ? { runStartedAt } : {}),
       ...(cause === "permission"
         ? {
@@ -885,8 +877,6 @@ export class EntityStates {
         (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
       a.id.localeCompare(b.id);
     const { running, needsYou, finished, opened } = groups;
-    // Group lamps describe the counted disposition, not the member's own
-    // session lamp (an unseen failure may still have a red session lamp).
     const lamps: NonNullable<TaskHelpers["lamps"]>["groups"] = {
       running: { state: running.length ? HELPER_LAMP_STATE.running : "none" },
       needsYou: {
@@ -1010,30 +1000,17 @@ export class EntityStates {
   }
   #session(
     entry: IndexMetadata,
-    verdict: Supervision,
+    verdict: ReturnType<SessionSupervision["session"]>,
     state: ProjectStatus,
     counts: EntityCounts,
     inputs: SessionInputs,
     permissionIDs: readonly string[],
-    operation?: "working" | "blocked",
+    operation: "working" | "blocked" | undefined,
+    opened: boolean,
   ): EntityState {
     const activity = entry.activity;
-    const cause: BlockedCause | undefined = state !== "blocked"
-      ? undefined
-      // Immediate causes win over the graced one: grace applies only when a
-      // permission is the sole reason.
-      : inputs.questions > 0
-      ? "question"
-      : operation === "blocked"
-      ? "operation"
-      : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
-      ? "failedHelper"
-      : verdict.outcome === "failed" && verdict.unseen
-      ? "failure"
-      : inputs.permissions > 0
-      ? "permission"
-      : undefined;
-    const items = inputs.work
+    const { cause, helper } = verdict;
+    const items = inputs.work && activity?.work?.fresh
       ? (activity?.work?.items ?? []).filter((item) =>
         activity?.work?.keys.includes(item.id)
       )
@@ -1054,22 +1031,7 @@ export class EntityStates {
       ? starts.length ? Math.min(...starts) : undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
-    // Live input and work take priority over a prior unseen run. Roster
-    // membership is independent of lamp policy and permission animation.
     const work = inputs.work || operation === "working";
-    const opened = this.openedByUser(entry.id);
-    const helper = !entry.parentID
-      ? undefined
-      : inputs.questions > 0 || inputs.permissions > 0 ||
-          operation === "blocked"
-      ? "needsYou"
-      : work
-      ? "running"
-      : verdict.unseen
-      ? "finished"
-      : opened
-      ? "opened"
-      : undefined;
     const evidence: SessionEvidence = {
       ...(verdict.settlement ? { settlement: verdict.settlement } : {}),
       ...(inputs.continuation ? { continuation: true as const } : {}),
@@ -1089,7 +1051,10 @@ export class EntityStates {
       work,
       // Some harnesses publish execution keys without detailed items. Only
       // identities accounted for by the shell roster are excluded.
-      ...(inputs.work && (activity?.work?.keys.length ?? 0) > shells.length
+      ...(inputs.work && activity?.work?.fresh &&
+          activity.work.keys.some((key) =>
+            !shells.some((shell) => shell.id === key)
+          )
         ? { nativeRun: true as const }
         : {}),
       permissions: inputs.permissions,
@@ -1136,14 +1101,15 @@ export class EntityStates {
       ...(opened ? { opened: true as const } : {}),
       ...(dependencies ? { dependencies } : {}),
       ...(verdict.terminal ? { terminal: verdict.terminal } : {}),
+      ...(activity?.runID && verdict.terminal === activity.terminal
+        ? { runID: activity.runID }
+        : {}),
       ...(verdict.outcome ? { outcome: verdict.outcome } : {}),
       ...(verdict.terminalOrigin
         ? { terminalOrigin: verdict.terminalOrigin }
         : {}),
       evidence,
-      shells: shells.length
-        ? { items: shells, count: shells.length, state: "working" }
-        : noShells,
+      shells: shellTransition(shells),
     };
   }
   #set(value: EntityState): boolean {

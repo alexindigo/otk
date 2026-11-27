@@ -52,11 +52,12 @@ export function awaitAcknowledged(
         (closed ?? []).every((id) =>
           !store.get(entityKey("session", id))?.opened
         ) &&
-        sessions.every(({ sessionID, terminal }) => {
+        sessions.every(({ sessionID, terminal, runID }) => {
           const value = store.get(entityKey("session", sessionID));
           // A receipt spans the whole subtree, not the socket's leased rows.
           // An unleased entity has no local lamp to wait for.
           return !value || (value.terminal ?? 0) > terminal ||
+            (!!runID && !!value.runID && value.runID !== runID) ||
             (value.counts.unseen === 0 &&
               value.evidence?.helper !== "finished");
         })
@@ -813,8 +814,14 @@ export function createInbox(
         current.inbox.entities?.[entityKey("session", sessionID)]?.terminal ??
           0,
     ): Promise<void> {
+      const value = entityStates.get(entityKey("session", sessionID));
+      const runID = value?.terminal === terminal ? value.runID : undefined;
       await rpc.call("projects.visit", { directory });
-      await rpc.call("sessions.seen", { sessionID, terminal });
+      await rpc.call("sessions.seen", {
+        sessionID,
+        terminal,
+        ...(runID ? { runID } : {}),
+      });
     },
     acknowledge,
     async clearAttention(scope: AcknowledgeScope, signal?: AbortSignal) {

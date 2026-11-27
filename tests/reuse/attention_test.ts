@@ -4,15 +4,17 @@ import {
   createAttentionProjection,
   createIndex,
   NotificationTriggers,
+  presentedEntity,
 } from "@otk/client";
-import type { IndexEntry } from "@otk/protocol";
+import type { EntityState, IndexEntry } from "@otk/protocol";
 
 Deno.test("independent plain consumer borrows keyed attention deltas without a notification index", () => {
   const index = createIndex(), notes: string[] = [];
+  const publications = new Map<string, EntityState>();
   const owner = createAttentionProjection({
     entry: (id) => index.get("external", id),
     ids: () => index.ids("external"),
-    completions: true,
+    entity: (id) => publications.get(id),
   });
   const trigger = new NotificationTriggers(
     (note) => notes.push(note.body!),
@@ -62,10 +64,13 @@ Deno.test("independent plain consumer borrows keyed attention deltas without a n
     }],
   });
   owner.update(index.changes("external")!.ids);
-  owner.finished(
-    entry.id,
-    index.get("external", entry.id)!.activity!.terminal!,
-  );
+  assertEquals(notes, [], "An index terminal is not a published live edge");
+  publications.set(entry.id, {
+    ...presentedEntity("session", entry.id, "finished", true),
+    terminal: 2,
+    terminalOrigin: "live",
+  });
+  owner.update([entry.id]);
   assertEquals(notes, ["External job"]);
   release();
   trigger.reset("external");

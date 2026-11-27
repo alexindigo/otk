@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { countLabel, type NotificationHub } from "@otk/client";
-/** One favicon owner, counting root-session keys rather than delivery events. */
-export function registerBadgeChannel(hub: NotificationHub): () => void {
-  const ids = new Set<string>();
+import { countLabel } from "@otk/client";
+/** Paint a canonical session count; the favicon is not a delivery channel. */
+export function attentionBadge(): { update(next: number): void; stop(): void } {
+  let count = 0;
   const original = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   const icon = original ?? document.createElement("link");
   const href = original?.getAttribute("href"),
@@ -22,7 +22,6 @@ export function registerBadgeChannel(hub: NotificationHub): () => void {
       ).replaceAll(">", "&gt;");
     const font = escape(style.getPropertyValue("--font-ui").trim());
     const attention = style.getPropertyValue("--otk-attention").trim();
-    const count = ids.size;
     const svg =
       `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="3" fill="${bg}"/><text x="16" y="22" text-anchor="middle" font-family="${font}" font-size="18" fill="${fg}">O</text>${
         count
@@ -42,29 +41,21 @@ export function registerBadgeChannel(hub: NotificationHub): () => void {
     attributeFilter: ["style"],
   });
   paint();
-  const release = hub.registerChannel({
-    id: "badge",
-    available: () => true,
-    deliver(note) {
-      if (note.sessionRef && note.kind !== "error") {
-        ids.add(note.id);
-        paint();
-      }
-    },
-    retract(id) {
-      ids.delete(id);
+  return {
+    update(next: number) {
+      if (count === next) return;
+      count = next;
       paint();
     },
-  });
-  return () => {
-    release();
-    observer.disconnect();
-    if (!original) icon.remove();
-    else {
-      if (href === null) icon.removeAttribute("href");
-      else if (href !== undefined) icon.setAttribute("href", href);
-      if (title === null) icon.removeAttribute("title");
-      else if (title !== undefined) icon.setAttribute("title", title);
-    }
+    stop() {
+      observer.disconnect();
+      if (!original) icon.remove();
+      else {
+        if (href === null) icon.removeAttribute("href");
+        else if (href !== undefined) icon.setAttribute("href", href);
+        if (title === null) icon.removeAttribute("title");
+        else if (title !== undefined) icon.setAttribute("title", title);
+      }
+    },
   };
 }

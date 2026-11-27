@@ -36,18 +36,19 @@ Deno.test("V1 intermediate calls and scalar candidates cannot publish a proven f
   assertEquals(terminalToken({ ...info, finish: "stop" }), 20);
   assertEquals(terminalFacts({ ...info, finish: "stop" }), {
     terminal: 20,
+    runID: "message",
     outcome: "succeeded",
   });
   assertEquals(
     terminalFacts({ ...info, error: { name: "APIError", data: {} } }),
-    { terminal: 20, outcome: "failed" },
+    { terminal: 20, runID: "message", outcome: "failed" },
   );
   assertEquals(
     terminalFacts({
       ...info,
       error: { name: "MessageAbortedError", data: {} },
     }),
-    { terminal: 20, outcome: "interrupted" },
+    { terminal: 20, runID: "message", outcome: "interrupted" },
   );
   assertEquals(
     terminalToken({
@@ -120,6 +121,7 @@ Deno.test("V1 later intermediate or unfinished calls cannot erase an earlier pro
     );
     assertEquals(terminalSessions(db, "", 1)[0]?.activity, {
       terminal: 70,
+      runID: "failed",
       outcome: "failed",
       terminalOrigin: "historical",
     });

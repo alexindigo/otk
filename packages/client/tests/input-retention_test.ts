@@ -65,6 +65,34 @@ Deno.test("release of another draft cannot consume current retained request inpu
   assertEquals(discarded, 0);
 });
 
+Deno.test("closing a deleted view guards retained input without dropping the stored composer draft", async () => {
+  const drafts = createDrafts();
+  drafts.writer("deleted")({ ...emptyDraft(), input: "Stored draft" });
+  let confirmed = false, discarded = 0;
+  const guard = createInputGuard({
+    drafts,
+    key: () => "deleted",
+    confirm: () => confirmed,
+    retention: () => ({
+      owners: ["permissions"],
+      inputs: [{ owner: "permissions", value: "Unsent reason" }],
+      discard: () => {
+        discarded++;
+      },
+    }),
+  });
+  const close = () => guard.release({ draft: "dropped", retainedOnly: true });
+  assertEquals(await close(), false);
+  assertEquals(discarded, 0);
+  confirmed = true;
+  const discard = await close();
+  if (!discard) throw new Error("Expected consent");
+  assertEquals(discarded, 0);
+  discard();
+  assertEquals(discarded, 1);
+  assertEquals(drafts.current("deleted").input, "Stored draft");
+});
+
 Deno.test("canonical request ownership excludes a stale mounted-view mirror after confirmed settlement", () => {
   let inputs = [{ owner: "permissions", value: "Submitted feedback" }];
   let confirmations = 0;

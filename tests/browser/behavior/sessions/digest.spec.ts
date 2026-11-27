@@ -164,12 +164,21 @@ isolatedTest.describe("dirty permission deletion", () => {
         });
       }
       await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
-      page.once("dialog", (d) => d.dismiss());
+      const confirmation = page.getByRole("dialog", { name: "Confirm action" });
       await details.locator(".otk-control-row button").last().click();
+      await expect(confirmation).toContainText(
+        "Discard your unsent request input",
+      );
+      await confirmation.getByRole("button", { name: "Cancel", exact: true })
+        .click();
       await expect(page).toHaveURL(new RegExp(`${s.id}$`));
       await expect(details).toContainText("Keep my unsent permission feedback");
-      page.once("dialog", (d) => d.accept());
       await details.locator(".otk-control-row button").last().click();
+      await expect(confirmation).toContainText(
+        "Discard your unsent request input",
+      );
+      await confirmation.getByRole("button", { name: "Continue", exact: true })
+        .click();
       await expect(details).toHaveCount(0);
     },
   );

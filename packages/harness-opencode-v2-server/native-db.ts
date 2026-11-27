@@ -27,6 +27,7 @@ export class V2NativeDb {
   readonly identity: string;
   readonly columns: Set<string>;
   readonly messageClocks: boolean;
+  readonly messageIDs: boolean;
   readonly worktreeColumns: Set<string>;
   constructor(
     readonly file: string,
@@ -62,6 +63,7 @@ export class V2NativeDb {
       );
       this.messageClocks = ["session_id", "seq", "type", "time_created", "data"]
         .every((name) => messages.has(name));
+      this.messageIDs = messages.has("id");
       this.worktreeColumns = new Set(
         db.prepare("PRAGMA table_info(worktree)").all().map((row) =>
           String(row.name)
@@ -109,6 +111,11 @@ export class V2NativeDb {
         ? "coalesce((SELECT json_extract(m.data,'$.time.completed') FROM session_message m WHERE m.session_id=s.id AND m.type='shell' AND json_valid(m.data) AND json_extract(m.data,'$.time.completed')>0 ORDER BY m.seq DESC LIMIT 1),0)"
         : "0") +
       " AS terminal," +
+      (this.messageClocks && this.messageIDs && this.columns.has("time_idle") &&
+          this.columns.has("idle_outcome")
+        ? "(SELECT m.id FROM session_message m WHERE s.parent_id IS NOT NULL AND m.session_id=s.id AND m.type='idle' AND m.time_created=s.time_idle AND json_valid(m.data) AND json_extract(m.data,'$.outcome')=s.idle_outcome ORDER BY m.seq DESC LIMIT 1)"
+        : "NULL") +
+      " AS run_id," +
       (this.messageClocks && this.columns.has("time_idle") &&
           this.columns.has("idle_outcome")
         ? "(SELECT json_object('type',json_extract(m.data,'$.error.type'),'message',json_extract(m.data,'$.error.message')) FROM session_message m WHERE s.idle_outcome='failed' AND m.session_id=s.id AND m.type='idle' AND m.time_created=s.time_idle AND json_valid(m.data) AND json_extract(m.data,'$.outcome')='failed' ORDER BY m.seq DESC LIMIT 1)"
@@ -141,7 +148,7 @@ export class V2NativeDb {
     const terminal = terminalFacts(
       row.time_idle,
       row.idle_outcome,
-      Number(row.terminal),
+      row.parent_id == null ? Number(row.terminal) : undefined,
     );
     const failure = terminal.outcome === "failed" &&
         terminal.terminal === Number(row.time_idle)
@@ -179,6 +186,9 @@ export class V2NativeDb {
       activityAuthority: "unknown",
       activity: {
         ...terminal,
+        ...(terminal.terminal && typeof row.run_id === "string"
+          ? { runID: row.run_id }
+          : {}),
         ...(failure ? { terminalFailure: failure } : {}),
       },
       attention: {
@@ -202,7 +212,7 @@ export class V2NativeDb {
   terminals(after: string, limit: number): SessionMetadata[] {
     this.observe?.("supervision-terminals");
     return this.db.prepare(
-      `SELECT * FROM (SELECT ${this.#projection()} FROM session_v2 s WHERE s.id>?) WHERE (time_idle>0 AND idle_outcome IN ('succeeded','failed','interrupted')) OR terminal>0 ORDER BY id LIMIT ?`,
+      `SELECT * FROM (SELECT ${this.#projection()} FROM session_v2 s WHERE s.id>?) WHERE (time_idle>0 AND idle_outcome IN ('succeeded','failed','interrupted')) OR (parent_id IS NULL AND terminal>0) ORDER BY id LIMIT ?`,
     ).all(after ? ids.decode(after) : "", limit).map((row) =>
       this.#metadata(row)
     );
@@ -217,6 +227,7 @@ export class V2NativeDb {
     )
       .all(JSON.stringify([...new Set(keys.map(ids.decode))])).map((row) => ({
         id: String(row.id),
+        ...(typeof row.run_id === "string" ? { runID: row.run_id } : {}),
         projectID: String(row.project_id),
         activity: Number(row.activity_time),
         ...(Number(row.terminal) > 0 ? { terminal: Number(row.terminal) } : {}),

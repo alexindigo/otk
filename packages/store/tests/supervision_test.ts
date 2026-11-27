@@ -42,6 +42,10 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
       })
     );
     assertEquals(seen.tokens().length, 1);
+    seen.acknowledge("alice", "s", 200, undefined, "run-a");
+    assertEquals(seen.runTerminal("alice", "s", "run-a"), 200);
+    assertEquals(seen.runTerminal("alice", "s", "run-b"), 0);
+    assertEquals(seen.runTerminal("bob", "s", "run-a"), 0);
     assertThrows(() => seen.acknowledge("alice", "s", -1));
     db.close();
     db = new OtkDb(path, [seenMigrations, finishesMigrations], {
@@ -49,6 +53,8 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
     });
     assertEquals(new Finishes(db).tokens(), { s: 200 });
     const restored = new Seen(db);
+    assertEquals(restored.runTerminal("alice", "s", "run-a"), 200);
+    assertEquals(restored.runTerminal("alice", "s", "run-b"), 0);
     assertEquals(restored.tokens(), [{
       user: "alice",
       session: "s",

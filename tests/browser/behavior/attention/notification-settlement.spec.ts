@@ -140,7 +140,7 @@ test(
 test(
   "attention.settlement-notifies-once-and-retracts-when-work-restarts",
   tags,
-  async ({ isolatedState: state, page }) => {
+  async ({ isolatedState: state, page }, info) => {
     const target = await seed(state, "Plain settlement");
     const observed = await observe(page, state, target.id);
     // Delay only the accepted owner publication, not native/index evidence.
@@ -156,6 +156,15 @@ test(
       expect(await observed.count()).toBe(0);
     } finally {
       observed.stream.release();
+      await info.attach("settlement-release", {
+        body: JSON.stringify(
+          observed.stream.received.filter((frame) =>
+            frame.t === "inbox.snapshot" || frame.t === "inbox.patch" ||
+            frame.t === "inbox.settlement"
+          ),
+        ),
+        contentType: "application/json",
+      });
     }
     await expect(observed.note).toContainText("Session done");
     expect(await active(state, target.id)).toBe(false);
