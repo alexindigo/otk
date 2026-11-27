@@ -32,6 +32,7 @@ export const PathContext = createContext<
     readonly streaming: boolean;
     readonly style?: PathSemantics["style"];
     readonly inLink?: boolean;
+    readonly prompt?: boolean;
   } | null
 >(null);
 export interface FilePathPorts {

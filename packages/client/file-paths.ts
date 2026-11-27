@@ -17,6 +17,7 @@ export type SessionMention = { raw: string; sessionID: string };
 export type InlineMention = PathMention | SessionMention;
 export type PathSegment = { text: string; mention?: InlineMention };
 type Where = "prose" | "code";
+type TextContext = Where | "prompt";
 type PathStyle = PathSemantics["style"];
 
 /** Native IDs in a reply use the reply's provider namespace. */
@@ -53,6 +54,10 @@ const sessionToken = new RegExp(`^${sessionID}$`);
 const candidates = new RegExp(
   String
     .raw`(?<![\p{L}\p{N}\p{M}_/])(?<session>${sessionID})(?![\p{L}\p{N}\p{M}_/])|(?:^|(?<=[\s(["'<]))~?/${character}*(?::\d+(?::\d+|-\d+)?|#L\d+(?:-L\d+)?)?`,
+  "gu",
+);
+const promptCandidates = new RegExp(
+  "`(?<quoted>[^`\\r\\n]+)`|" + candidates.source,
   "gu",
 );
 const scheme = /^[a-z][a-z0-9+.-]*:/i;
@@ -102,7 +107,7 @@ function recognize(raw: string, where: Where): PathMention | undefined {
 const cache = new Map<string, readonly PathSegment[]>();
 export function pathSegments(
   text: string,
-  where: Where,
+  where: TextContext,
   style: PathStyle = "posix",
 ): readonly PathSegment[] {
   const key = `${where}\0${style}\0${text}`;
@@ -123,17 +128,28 @@ export function pathSegments(
     segments.push(mention ? { text, mention } : { text });
   } else {
     let cursor = 0;
-    for (const { 0: candidate, index, groups } of text.matchAll(candidates)) {
-      const raw = candidate.replace(/[.,]+$/, "");
+    const prompt = where === "prompt";
+    for (
+      const { 0: candidate, index, groups } of text.matchAll(
+        prompt ? promptCandidates : candidates,
+      )
+    ) {
+      // A backtick-delimited path can use whole-span recognition without
+      // treating the delimiters, or any other prompt text, as Markdown.
+      const quoted = groups?.quoted;
+      const raw = quoted?.trim() ?? candidate.replace(/[.,]+$/, "");
+      const start = quoted === undefined
+        ? index
+        : index + 1 + quoted.length - quoted.trimStart().length;
       const mention = groups?.session
-        ? { raw, sessionID: raw }
+        ? (prompt ? undefined : { raw, sessionID: raw })
         : style === "posix"
-        ? recognize(raw, where)
+        ? recognize(raw, quoted === undefined ? "prose" : "code")
         : undefined;
       if (!mention) continue;
-      if (cursor < index) segments.push({ text: text.slice(cursor, index) });
+      if (cursor < start) segments.push({ text: text.slice(cursor, start) });
       segments.push({ text: raw, mention });
-      cursor = index + raw.length;
+      cursor = start + raw.length;
     }
     if (cursor < text.length || !segments.length) {
       segments.push({ text: text.slice(cursor) });

@@ -319,7 +319,7 @@ export class V2SessionScale {
         const parts = Array.from({
           length: index === 0 ? 3 + (rank < 1097 ? 1 : 0) : 1,
         }, (_, part) => scaleParts(index, rank, part, directory, options));
-        if (scaleRole(index, rank, options.messages) === "user") {
+        if (scaleRole(index, rank, options) === "user") {
           turn = id;
           return {
             id,

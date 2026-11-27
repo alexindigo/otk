@@ -12,7 +12,7 @@ export function registerTextPart(parts: PartRegistry): void {
           blocks={props.part.blocks}
           streaming={props.streaming}
           conceal={props.prefs.conceal}
-          compact={props.user}
+          prompt={props.user}
         />
       </Show>
     ),
