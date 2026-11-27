@@ -2,7 +2,7 @@
 .otk-prompt {
   --prompt-input-min-height: calc(48 * var(--otk-unit));
   --prompt-input-max-height: calc(240 * var(--otk-unit));
-  padding-block: var(--space-3) var(--space-2);
+  padding-block: var(--composer-content-inset, var(--space-4)) var(--space-2);
   padding-inline: var(--composer-content-inset, var(--space-4));
 }
 .otk-prompt > label {
@@ -68,4 +68,22 @@ textarea.otk-prompt-input:focus-visible {
   flex: none;
   inline-size: var(--send-button-size);
   min-block-size: var(--send-button-size);
+}
+.otk-prompt-field {
+  display: grid;
+  grid-template-columns: [text] minmax(0, 1fr);
+  align-items: start;
+}
+.otk-prompt-field.has-corner {
+  grid-template-columns: [text] minmax(0, 1fr) [corner] var(--control-size);
+  column-gap: var(--space-2);
+}
+.otk-prompt-body {
+  grid-column: text;
+  min-inline-size: 0;
+}
+.otk-prompt-corner {
+  grid-column: corner;
+  grid-row: 1;
+  display: grid;
 }

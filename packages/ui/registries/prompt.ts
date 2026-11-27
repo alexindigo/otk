@@ -85,6 +85,8 @@ export interface PromptFeature {
   placeholder?(): string;
   beforeInput?(): Element;
   actions?(): Element;
+  /** A control in the input's top-right corner slot. */
+  corner?(): Element;
   overlay?(): Element;
 }
 export interface PromptDefinition {

@@ -364,40 +364,53 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       <label for="otk-prompt-input">
         {features.find((feature) => feature.label)?.label?.() ?? "Prompt"}
       </label>
-      {completion.beforeInput?.()}
-      <For each={features}>{(feature) => feature.beforeInput?.()}</For>
-      <ContentTextarea
-        class="otk-prompt-input"
-        ref={(element) => {
-          input = element;
-        }}
-        id="otk-prompt-input"
-        name="prompt"
-        placeholder={features.find((feature) => feature.placeholder)
-          ?.placeholder?.() ??
-          "Ask for a change, @ to add files, / for commands"}
-        value={props.value.input}
-        onPaste={(event) => {
-          for (const feature of features) {
-            if (feature.paste) {
-              interact(() => feature.paste!(event));
-              break;
-            }
-          }
-        }}
-        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-        onClick={(event) => setCaret(event.currentTarget.selectionStart)}
-        onInput={(event) => {
-          setRefusal(undefined);
-          setCaret(event.currentTarget.selectionStart);
-          const value = event.currentTarget.value;
-          change((current) => editDraft(current, value));
-        }}
-        onKeyDown={(event) => {
-          if (completion.key?.(event)) return;
-          for (const feature of features) if (feature.key?.(event)) return;
-        }}
-      />
+      <div
+        class={["otk-prompt-field", {
+          "has-corner": features.some((feature) => feature.corner),
+        }]}
+      >
+        <div class="otk-prompt-body">
+          {completion.beforeInput?.()}
+          <For each={features}>{(feature) => feature.beforeInput?.()}</For>
+          <ContentTextarea
+            class="otk-prompt-input"
+            ref={(element) => {
+              input = element;
+            }}
+            id="otk-prompt-input"
+            name="prompt"
+            placeholder={features.find((feature) => feature.placeholder)
+              ?.placeholder?.() ??
+              "Ask for a change, @ to add files, / for commands"}
+            value={props.value.input}
+            onPaste={(event) => {
+              for (const feature of features) {
+                if (feature.paste) {
+                  interact(() => feature.paste!(event));
+                  break;
+                }
+              }
+            }}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+            onClick={(event) => setCaret(event.currentTarget.selectionStart)}
+            onInput={(event) => {
+              setRefusal(undefined);
+              setCaret(event.currentTarget.selectionStart);
+              const value = event.currentTarget.value;
+              change((current) => editDraft(current, value));
+            }}
+            onKeyDown={(event) => {
+              if (completion.key?.(event)) return;
+              for (const feature of features) if (feature.key?.(event)) return;
+            }}
+          />
+        </div>
+        <Show when={features.some((feature) => feature.corner)}>
+          <div class="otk-prompt-corner">
+            <For each={features}>{(feature) => feature.corner?.()}</For>
+          </div>
+        </Show>
+      </div>
       <div class="otk-prompt-actions">
         <Show when={armed()}>
           <span
