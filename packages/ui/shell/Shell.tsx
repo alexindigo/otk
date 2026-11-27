@@ -1005,9 +1005,13 @@ export default function Shell(
                                 }
                               >
                                 {(owner) => {
+                                  // A default lookup chooses a route, not what
+                                  // the Sessions collection is known to contain.
                                   const state = createMemo(() =>
-                                    navigation.state.projectSelection ??
-                                      resources.projectContents(owner())
+                                    navigation.state.projectSelection ===
+                                        "unavailable"
+                                      ? "unavailable"
+                                      : resources.projectContents(owner())
                                   );
                                   return (
                                     <Show when={state() !== "items"}>
