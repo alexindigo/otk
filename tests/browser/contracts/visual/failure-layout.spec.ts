@@ -20,19 +20,30 @@ test("visual.record-tree-content-gutter-preserves-both-artwork-axes", {
           .styleTest.theme(theme),
       theme,
     );
-    for (const record of await page.locator(".otk-native-record").all()) {
-      await record.locator(".otk-tool-toggle").press("ArrowRight");
+    const records = page.locator('[data-native-record="consumer/record-axis"]');
+    await expect(records).toHaveCount(2);
+    for (const record of await records.all()) {
+      const toggle = record.locator(".otk-tool-toggle");
+      await toggle.press("ArrowRight");
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
       const axes = await record.evaluate((el) => {
-        const art = el.querySelector(".otk-tree-node-slot")!
-          .getBoundingClientRect();
-        const guide = el.querySelector(".otk-tree-region .otk-tree-junction")!
-          .getBoundingClientRect();
-        return { art: art.x + art.width / 2, guide: guide.x + guide.width / 2 };
+        // Tree lanes place spanning disclosure artwork on the node track.
+        const axis = (selector: string) => {
+          const box = el.querySelector(selector)!.getBoundingClientRect();
+          return box.x + box.width / 2;
+        };
+        return {
+          art: axis(".otk-tree-trigger > .otk-disclosure-lead"),
+          guide: axis(".otk-tree-region .otk-tree-junction"),
+          box: axis(".otk-tree-trigger > .otk-disclosure-icon"),
+          junction: axis(".otk-tool-state > .otk-tree-junction"),
+        };
       });
       expect(
         Math.abs(axes.art - axes.guide),
         `${theme} ${await record.textContent()}`,
       ).toBeLessThanOrEqual(1);
+      expect(Math.abs(axes.box - axes.junction), theme).toBeLessThanOrEqual(1);
     }
   }
 });
@@ -165,12 +176,15 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).all()
       ) {
         const edges = await record.evaluate((el) => {
-          const heading = el.querySelector(".otk-tool-state")!
-            .firstElementChild!;
+          // The spanning trigger includes both artwork lanes. Its caption,
+          // not the hit target's outer edge, shares the failure text track.
+          const heading = el.querySelector(
+            ".otk-tool-state > .otk-tree-trigger .otk-disclosure-label",
+          )!;
           return [
             heading,
             el.querySelector(".otk-failure-main-reason")!,
-            el.querySelector(".otk-disclosure-label")!,
+            el.querySelector(".otk-failure-details .otk-disclosure-label")!,
           ].map((node) => node.getBoundingClientRect().left);
         });
         expect(
@@ -354,8 +368,10 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           "1:16 AM",
           "1:23 AM",
         ]);
-        await expect(page.getByText("Time unknown", { exact: true }))
-          .toBeVisible();
+        await expect(
+          page.locator(".otk-message-footer .otk-turn-time")
+            .filter({ hasText: /^Time unknown$/ }),
+        ).toBeVisible();
       }
       if (surface === "send") {
         const pending = page.locator('[data-message="unknown"]');
@@ -380,7 +396,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       if (surface === "icons") {
         await expect(
           page.locator(
-            "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot svg",
+            "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
           ),
         )
           .toHaveCount(6);
@@ -388,7 +404,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           4,
         );
         await expect(
-          page.locator(".otk-state-shape text, .otk-tree-node-slot text"),
+          page.locator(".otk-state-shape text, .otk-disclosure-lead text"),
         ).toHaveCount(0);
         await expect(
           page.getByText(
@@ -399,9 +415,11 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           .toHaveText(/Nov 20, 2026.*1:23:00\.107 AM PST/);
       }
       if (surface === "tree") {
-        const fills = await page.locator(".otk-tree-toggle rect").evaluateAll((
-          elements,
-        ) => elements.map((el) => getComputedStyle(el).fill));
+        const fills = await page.locator(
+          ".otk-tree-heading .otk-disclosure-icon rect",
+        ).evaluateAll((elements) =>
+          elements.map((el) => getComputedStyle(el).fill)
+        );
         expect(fills.length).toBeGreaterThan(0);
         expect(fills.every((fill) => fill === "none")).toBe(true);
       }
