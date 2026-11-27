@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { type CollectionState, collectionState } from "./collection-state.ts";
 import type { TerminalInfo } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import { type FailureValue, failureValue } from "./failure-features.ts";
@@ -456,6 +457,7 @@ function liveInfo(info: TerminalInfo, change?: TerminalMeta): TerminalInfo {
 
 /** Session-owned list and four renderer leases; disposal leaves shells running. */
 export class SessionTerminals {
+  #answered = false;
   #current: SessionTerminalsState = {
     list: [],
     retained: [],
@@ -497,6 +499,9 @@ export class SessionTerminals {
     void this.#store.state.revision;
     return this.#current;
   }
+  get listState(): CollectionState {
+    return collectionState(this.#answered, this.state.list.length);
+  }
   subscribe(listener: (state: SessionTerminalsState) => void): () => void {
     return this.#store.subscribe(() => listener(this.#current));
   }
@@ -533,6 +538,7 @@ export class SessionTerminals {
         ) this.#release(id);
       }
       if (!current()) return;
+      this.#answered = true;
       this.#update((state) => {
         state.list = list.map((info) => liveInfo(info, changes.get(info.id)));
         state.disconnected = state.disconnected.filter((id) => ids.has(id));

@@ -841,7 +841,7 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
   const f = fixture(), project = { sidecarId: "local", directory: "/p" };
   f.resources.scope(project);
   const epoch = f.connections.get("local")!.viewEpoch;
-  assertEquals(f.resources.sessionRowsReady(project), false);
+  assertEquals(f.resources.projectContents(project), "loading");
   f.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
@@ -868,7 +868,7 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
     },
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assertEquals(f.resources.sessionRowsReady(project), false);
+  assertEquals(f.resources.projectContents(project), "loading");
   f.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
@@ -876,19 +876,81 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
     inbox: metadata(),
     epoch,
   });
-  assertEquals(f.resources.sessionRowsReady(project), true);
+  assertEquals(f.resources.projectContents(project), "items");
   assertEquals(f.resources.sessionRows(project)[0].key, "heading:task");
   f.resources.visibleRows(project, ["session"]);
-  assertEquals(f.resources.sessionRowsReady(project), true);
+  assertEquals(f.resources.projectContents(project), "items");
   const other = { ...project, directory: "/other" };
   f.resources.scope(other);
-  assertEquals(f.resources.sessionRowsReady(other), false);
+  assertEquals(f.resources.projectContents(other), "loading");
   assertEquals(
-    f.resources.sessionRowsReady(project),
-    true,
+    f.resources.projectContents(project),
+    "items",
     "same-directory retained inbox and page remain coherent",
   );
   f.resources.stop();
+});
+
+Deno.test("project collection distinguishes unknown, confirmed empty and items by project", async () => {
+  const f = fixture();
+  const empty = { sidecarId: "local", directory: "/empty" };
+  const items = { ...empty, directory: "/other" };
+  const list = f.resources.projectContents;
+  const snapshot = (revision: number) =>
+    f.receive("local", {
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision,
+      inbox: { ...metadata(), tasks: [] },
+      epoch: f.connections.get("local")!.viewEpoch,
+    });
+  const answer = async (p: typeof empty, hasItem: boolean) => {
+    const read = f.listReads.findLast((read) =>
+      read.input.directory === p.directory
+    )!;
+    read.resolve({
+      items: hasItem
+        ? [{
+          id: "item",
+          title: "Item",
+          directory: p.directory,
+          timeCreated: 1,
+        }]
+        : [],
+      older: null,
+      load: {
+        id: read.intent!.key,
+        scope: { kind: "project-sessions", directory: p.directory },
+        boundary: { kind: "page", limit: 20 },
+        generation: "source",
+        revision: 1,
+        state: "complete",
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  try {
+    f.resources.scope(empty);
+    assertEquals(list(empty), "loading");
+    snapshot(1);
+    assertEquals(list(empty), "loading");
+    await answer(empty, false);
+    assertEquals(list(empty), "empty");
+
+    f.resources.scope(items);
+    assertEquals(list(items), "loading");
+    await answer(items, true);
+    assertEquals(list(items), "loading", "waiting for the scoped task answer");
+    snapshot(2);
+    assertEquals(list(items), "items");
+
+    f.resources.scope(empty);
+    assertEquals(list(empty), "empty", "revisit with a valid cache");
+    f.resources.scope(items);
+    assertEquals(list(items), "items", "revisit with a valid cache");
+  } finally {
+    f.resources.stop();
+  }
 });
 
 Deno.test("mandatory and task context paints with a coherent inbox while its list boundary is still loading", () => {
@@ -908,8 +970,9 @@ Deno.test("mandatory and task context paints with a coherent inbox while its lis
     revision: 0,
     inbox: metadata(),
   });
-  assertEquals(f.resources.sessionRowsReady(project), true);
-  assertEquals(f.resources.sessionRowsLoading(project), true);
+  const collection = f.resources.sessionCollection(project);
+  assertEquals(collection.state, "items");
+  assertEquals(collection.progress.busy, true);
   assert(f.resources.sessionRows(project).some((row) => row.key === "session"));
   f.resources.stop();
 });

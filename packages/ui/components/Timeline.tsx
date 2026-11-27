@@ -7,13 +7,14 @@ import {
   onCleanup,
   Show,
 } from "solid-js";
-import type { Selection, TimelinePrompt } from "@otk/client";
+import type { CollectionState, Selection, TimelinePrompt } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { contextTarget } from "./context-target.ts";
 import MessageFooter from "./MessageFooter.tsx";
 import SidebarRow from "./SidebarRow.tsx";
 import { EmptyState } from "./View.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import VirtualList from "./VirtualList.tsx";
 import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 
@@ -71,6 +72,7 @@ function PromptRow(props: {
 export default function Timeline(props: {
   session?: Selection;
   prompts: TimelinePrompt[];
+  state?: CollectionState;
   exhausted: boolean;
   paging: boolean;
   directory?: string;
@@ -118,10 +120,10 @@ export default function Timeline(props: {
         when={props.session}
         fallback={<EmptyState>Open a session to see its prompts.</EmptyState>}
       >
-        <Show when={!props.exhausted}>
+        <Show when={props.state === "loading" || !props.exhausted}>
           <Show
-            when={!props.paging}
-            fallback={<p class="otk-muted" role="status">Loading prompts...</p>}
+            when={props.state !== "loading" && !props.paging}
+            fallback={<ProgressStatus text="Loading prompts..." />}
           >
             <button
               type="button"
@@ -132,7 +134,7 @@ export default function Timeline(props: {
             </button>
           </Show>
         </Show>
-        <Show when={!props.prompts.length && !props.paging}>
+        <Show when={props.state === "empty" && !props.paging}>
           <EmptyState>No prompts yet.</EmptyState>
         </Show>
         <VirtualList

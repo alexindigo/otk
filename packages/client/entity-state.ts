@@ -12,6 +12,7 @@ import type {
 } from "@otk/protocol";
 import { entityKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { type CollectionState, collectionState } from "./collection-state.ts";
 
 export interface EntityTransition {
   key: string;
@@ -201,6 +202,14 @@ export function taskHelpers(
   return store.isStale || !key ? undefined : store.get(key)?.helpers;
 }
 
+export function taskHelpersState(
+  store?: EntityStateStore,
+  key?: string,
+): CollectionState {
+  const helpers = store && taskHelpers(store, key);
+  return collectionState(helpers !== undefined, helpers?.ids.length ?? 0);
+}
+
 export function helperDisposition(
   store: EntityStateStore,
   key: string,
@@ -213,6 +222,14 @@ export function sessionShells(
   key: string,
 ): RunningShells | undefined {
   return store.isStale ? undefined : store.get(key)?.shells;
+}
+
+export function sessionShellsState(
+  store?: EntityStateStore,
+  key?: string,
+): CollectionState {
+  const session = !store || !key || store.isStale ? undefined : store.get(key);
+  return collectionState(session !== undefined, session?.shells?.count ?? 0);
 }
 
 /** Own-session evidence only. Descendant counts retain their explicit scope. */
