@@ -76,7 +76,14 @@ for (const kind of ["permission", "question"] as const) {
         lease: state.lease.lease,
         action: "succeed",
       });
-      await submit.click();
+      if (kind === "question") {
+        const recover = dock.getByRole("button", {
+          name: "Retry response",
+          exact: true,
+        });
+        await expect(recover).toHaveCount(1);
+        await recover.click();
+      } else await submit.click();
       await expect(pending).toBeVisible();
       await state.controller.call("scenario", {
         lease: state.lease.lease,
