@@ -81,13 +81,15 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       ) => elements.filter((el) => el.scrollWidth > el.clientWidth + 1).length);
       expect(overflow).toBe(0);
       for (
-        const details of await page.locator(".otk-failure-details:visible")
+        const details of await page.locator(
+          ".otk-failure-details button:visible",
+        )
           .all()
       ) {
         const trailing = await details.evaluate((el) => {
           const text = document.createRange();
           text.selectNodeContents(
-            el.querySelector(".otk-failure-detail-toggle")!,
+            el.querySelector(".otk-disclosure-label")!,
           );
           return el.getBoundingClientRect().right -
             text.getBoundingClientRect().right;
@@ -126,7 +128,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       for (const failure of await page.locator(".otk-failure-content").all()) {
         const edges = await failure.evaluate((el) =>
           Array.from(el.querySelectorAll(
-            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action, .otk-failure-detail-toggle",
+            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action, .otk-disclosure-label",
           )).filter((node) => node.getClientRects().length).map((node) =>
             node.getBoundingClientRect().left
           )
@@ -144,12 +146,10 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
             await expect(
               page.getByRole("menuitem", { name: "Details", exact: true }),
             )
-              .toHaveAttribute("aria-expanded", "false");
+              .toHaveCount(0);
             await page.keyboard.press("Escape");
-          } else {await expect(disclosure).toHaveAttribute(
-              "aria-expanded",
-              "false",
-            );}
+          }
+          await expect(disclosure).toHaveAttribute("aria-expanded", "false");
         } else await expect(failure.locator("[aria-expanded]")).toHaveCount(1);
         await expect(failure.locator(".otk-tree-node, .otk-tree-connector"))
           .toHaveCount(0);
@@ -171,7 +171,7 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           return [
             heading,
             el.querySelector(".otk-failure-main-reason")!,
-            el.querySelector(".otk-failure-detail-toggle")!,
+            el.querySelector(".otk-disclosure-label")!,
           ].map((node) => node.getBoundingClientRect().left);
         });
         expect(
@@ -180,7 +180,9 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toBeLessThanOrEqual(1);
       }
       for (
-        const toggle of await page.locator(".otk-disclosure-toggle:visible")
+        const toggle of await page.locator(
+          ".otk-disclosure-toggle:visible, .otk-disclosure-button:visible",
+        )
           .all()
       ) {
         const gaps = await toggle.evaluate((el) => {
@@ -252,7 +254,10 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         for (const offset of toastOffsets) {
           expect(Math.abs(offset)).toBeLessThanOrEqual(1);
         }
-        const failure = page.locator(".otk-inbox-footer .otk-failure-details");
+        const failure = page.locator(".otk-inbox-footer").getByRole("button", {
+          name: "Details",
+          exact: true,
+        });
         const toggle = failure;
         await toggle.press("ArrowRight");
         await expect(toggle).toHaveAttribute("aria-expanded", "true");

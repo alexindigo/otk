@@ -387,7 +387,13 @@ function RequestDock(
         )}
       >
         <RequestAge value={props.activity?.lead ? props.activity : undefined} />
-        <PermissionSummary request={props.request} />
+        <PermissionSummary
+          request={props.request}
+          focusHome={() => {
+            if (card.isConnected) card.focus({ preventScroll: true });
+            else props.focusNotice?.();
+          }}
+        />
         <Show when={error()}>
           <FeedbackStatus feedback={errorFeedback(error())} />
         </Show>

@@ -354,6 +354,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         <ComposerNotice>
           <OperationFeedback
             feedback={feedback() ?? { kind: "pending", text: "Sending" }}
+            focusHome={ctx.focus}
           />
         </ComposerNotice>
       </Show>

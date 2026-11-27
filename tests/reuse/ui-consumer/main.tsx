@@ -3,6 +3,7 @@ import { createEffect, createSignal, type Element, For, Show } from "solid-js";
 import { render } from "@solidjs/web";
 import {
   CommandHub,
+  createDisclosures,
   createDrafts,
   createSessionSubmission,
   emptyDraft,
@@ -24,6 +25,7 @@ import {
   ComposerTakeovers,
   createUiRegistries,
   DialogHost,
+  DisclosuresContext,
   DisplayMenu,
   Docks,
   LIGHT_STATES,
@@ -779,35 +781,41 @@ function ScrollbarProbe(): Element {
     </>
   );
 }
+const Scene = new URL(location.href).searchParams.has("action-toasts")
+  ? ActionToasts
+  : new URL(location.href).searchParams.has("scrollbars")
+  ? ScrollbarProbe
+  : new URL(location.href).searchParams.has("source-ownership")
+  ? SourceOwnership
+  : new URL(location.href).searchParams.has("child-navigation")
+  ? ChildNavigation
+  : new URL(location.href).searchParams.has("picker-lifetime")
+  ? PickerLifetime
+  : new URL(location.href).searchParams.has("lazy-preview")
+  ? LazyPreview
+  : new URL(location.href).searchParams.has("layout-tabs")
+  ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("layout-controls")
+  ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("indicators")
+  ? () => <Indicators onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("interaction-failures")
+  ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("secondary-failures")
+  ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("error-boundaries")
+  ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("shared-controls")
+  ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("metadata-policy")
+  ? MetadataPolicy
+  : Consumer;
+const disclosures = createDisclosures({});
 render(
-  new URL(location.href).searchParams.has("action-toasts")
-    ? ActionToasts
-    : new URL(location.href).searchParams.has("scrollbars")
-    ? ScrollbarProbe
-    : new URL(location.href).searchParams.has("source-ownership")
-    ? SourceOwnership
-    : new URL(location.href).searchParams.has("child-navigation")
-    ? ChildNavigation
-    : new URL(location.href).searchParams.has("picker-lifetime")
-    ? PickerLifetime
-    : new URL(location.href).searchParams.has("lazy-preview")
-    ? LazyPreview
-    : new URL(location.href).searchParams.has("layout-tabs")
-    ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("layout-controls")
-    ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("indicators")
-    ? () => <Indicators onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("interaction-failures")
-    ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("secondary-failures")
-    ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("error-boundaries")
-    ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("shared-controls")
-    ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("metadata-policy")
-    ? MetadataPolicy
-    : Consumer,
+  () => (
+    <DisclosuresContext value={disclosures}>
+      <Scene />
+    </DisclosuresContext>
+  ),
   document.getElementById("app")!,
 );

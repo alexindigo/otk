@@ -1117,6 +1117,7 @@ export function conventionErrors(
       if (
         rule === "disclosure" &&
         path !== "packages/ui/components/DisclosureToggle.css" &&
+        path !== "packages/ui/components/Disclosure.css" &&
         /\.otk-disclosure-[\w-]+/.test(selector)
       ) fail(selector);
       if (

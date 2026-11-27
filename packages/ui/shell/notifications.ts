@@ -2,6 +2,7 @@
 import {
   commandFailureFacts,
   type CommandHub,
+  type Disclosures,
   type EntityStateStore,
   type EntryChanges,
   failureNote,
@@ -69,6 +70,7 @@ export function serverNotifications(hub: NotificationHub) {
 /** The application selects channels and supplies live host/selection/RPC ports. */
 export function applicationNotifications(input: {
   commands: CommandHub;
+  disclosures?: Disclosures;
   prefs(): Preferences;
   selection(): Selection | undefined;
   viewing(): boolean;
@@ -129,7 +131,7 @@ export function applicationNotifications(input: {
           : undefined,
       }),
   );
-  const toast = registerToastChannel(hub),
+  const toast = registerToastChannel(hub, input.disclosures),
     os = registerOsChannel(hub),
     sound = registerSoundChannel(hub),
     stopBadge = registerBadgeChannel(hub);

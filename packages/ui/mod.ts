@@ -138,6 +138,7 @@ export { solidState } from "./state/binding.ts";
 export { selection } from "./components/selection.ts";
 export { contextTarget } from "./components/context-target.ts";
 export { default as ContextMenu } from "./components/ContextMenu.tsx";
+export { DisclosuresContext } from "./components/Disclosure.tsx";
 export {
   type ContentIdentity,
   ContentIdentityProvider,

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   createState,
+  type Disclosures,
   type Note,
   type NoteDelivery,
   type NotificationHub,
@@ -28,6 +29,7 @@ const lastPage = (count: number) =>
 /** Keyed input, error and server chips persist; transient information owns its timer. */
 export function registerToastChannel(
   hub: NotificationHub,
+  disclosures?: Disclosures,
 ): { model: ToastsModel; stop(): void } {
   const store = createState<ToastState>({ items: [], page: 0 });
   const pageStart = () => store.state.page * TOAST_PAGE_SIZE;
@@ -63,6 +65,7 @@ export function registerToastChannel(
     available: () => true,
     retract(id) {
       cancelExpiry(id);
+      disclosures?.retire({ scope: id });
       setItems(without(id));
     },
     deliver(note, delivery) {

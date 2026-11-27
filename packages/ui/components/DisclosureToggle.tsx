@@ -1,20 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type Element, Show } from "solid-js";
+import type { Element } from "solid-js";
+import { DisclosureIcon } from "./Disclosure.tsx";
 import "./DisclosureToggle.css" with { type: "text" };
 
-export function DisclosureIcon(props: { open?: boolean }): Element {
-  return (
-    <span class="otk-disclosure-icon" aria-hidden="true">
-      <svg viewBox="0 0 9 9" fill="none">
-        <rect x=".5" y=".5" width="8" height="8" />
-        <path d="M2.5 4.5h4" />
-        <Show when={!props.open}>
-          <path d="M4.5 2.5v4" />
-        </Show>
-      </svg>
-    </span>
-  );
-}
+export { DisclosureIcon };
 
 /** Decorative junction for a header's existing button; shares the same owned
  * tree geometry as the independent disclosure button. */

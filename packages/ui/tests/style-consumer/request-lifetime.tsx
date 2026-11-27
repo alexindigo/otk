@@ -20,7 +20,8 @@ import "./request-lifetime.css" with { type: "text" };
 import { CommandProvider } from "../../keyboard/context.tsx";
 import { registerAttentionCommands } from "../../shell/commands/attention.ts";
 export default function RequestLifetimeScene() {
-  const kind = new URL(location.href).searchParams.get("kind") ?? "question";
+  const params = new URL(location.href).searchParams;
+  const kind = params.get("kind") ?? "question";
   const [dirty, setDirty] = createSignal(false);
   const [revision, setRevision] = createSignal(0),
     [connected, setConnected] = createSignal(true),
@@ -45,7 +46,11 @@ export default function RequestLifetimeScene() {
     kind: "bash",
     title: "Probe",
     detail: { kind: "bash", command: "echo probe" },
-    patterns: ["echo probe"],
+    patterns: params.get("patterns") === "0"
+      ? []
+      : params.get("patterns") === "2"
+      ? ["echo probe", "pwd"]
+      : ["echo probe"],
     alwaysPatterns: [],
     time: 1,
   };
