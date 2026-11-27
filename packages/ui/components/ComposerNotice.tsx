@@ -30,7 +30,6 @@ export function ComposerNoticeRow(props: {
   "aria-hidden"?: "true";
   focusable?: boolean;
   control?(control: { focus(): void }): void;
-  expanded?: boolean;
   onClick?(): void;
 }): Element {
   const Control = dynamic(() => props.onClick ? "button" : "div");
@@ -53,11 +52,6 @@ export function ComposerNoticeRow(props: {
       role={props.role}
       aria-atomic={props["aria-atomic"]}
       aria-hidden={props["aria-hidden"]}
-      aria-expanded={props.expanded === undefined
-        ? undefined
-        : props.expanded
-        ? "true"
-        : "false"}
       {...native.attributes}
     >
       <Show

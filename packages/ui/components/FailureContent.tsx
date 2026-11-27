@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { FailurePresentation, Feedback } from "@otk/client";
-import { createSignal, type Element, Show } from "solid-js";
-import DisclosureToggle from "./DisclosureToggle.tsx";
+import { type Element, Show } from "solid-js";
+import Disclosure from "./Disclosure.tsx";
 import Clock from "./Clock.tsx";
 import FailureSignal, { type FailureAnnouncement } from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
@@ -23,8 +23,9 @@ export default function FailureContent(
       action?: Feedback["action"];
       onReveal?(messageID: string): void;
       compact?: boolean;
-      /** An expanded disclosure keeps the full reason visible at every width. */
-      expanded?: boolean;
+      fullReason?: boolean;
+      occurrence?: string;
+      focusHome?(): void;
       time?: number;
       /** A containing surface may own the failure signal on its outer edge. */
       signal?: boolean;
@@ -39,7 +40,7 @@ export default function FailureContent(
       announcement?: FailureAnnouncement;
       class?: string;
     }
-    & ({ placement?: "record" } | {
+    & ({ placement?: "record" | "inline" | "field" | "toast" } | {
       placement: "feedback";
       row(input: FailureFeedbackRow): Element;
       icon?(): Element;
@@ -47,17 +48,6 @@ export default function FailureContent(
     }),
 ) {
   const compact = () => props.compact || props.inline;
-  const [open, setOpen] = createSignal(false);
-  const toggle = () => (
-    <DisclosureToggle
-      class="otk-failure-details"
-      label="Details"
-      open={open()}
-      onOpen={setOpen}
-    >
-      <span class="otk-failure-detail-toggle">Details</span>
-    </DisclosureToggle>
-  );
   const reason = () => (
     <div class="otk-failure-body">
       <p class="otk-failure-reason">{props.failure.reason}</p>
@@ -94,6 +84,25 @@ export default function FailureContent(
       </Show>
     </ScrollRegion>
   );
+  const details = () => (
+    <div class="otk-failure-details">
+      <Disclosure
+        kind="failureDetails"
+        variant="label"
+        identity={{
+          scope: props.occurrence ?? props.failure.occurrence,
+          id: props.placement === "feedback"
+            ? "notice"
+            : props.placement ?? "inline",
+        }}
+        label="Details"
+        hasContent={() => true}
+        focusHome={props.focusHome}
+      >
+        {detailBody}
+      </Disclosure>
+    </div>
+  );
   if (props.placement === "feedback") {
     const reference = () => props.failure.reference;
     // The producer's retained reference distinguishes a refused prompt from a
@@ -121,12 +130,6 @@ export default function FailureContent(
       }
       return [
         ...(props.action ? [{ key: "recover", ...props.action }] : []),
-        {
-          key: "details",
-          label: "Details",
-          expanded: open(),
-          run: () => setOpen((value) => !value),
-        },
         ...(props.onDismiss
           ? [{
             key: "dismiss",
@@ -139,7 +142,7 @@ export default function FailureContent(
     };
     return (
       <div
-        class={["otk-failure-content is-feedback", {
+        class={["otk-failure-content otk-disclosure-layout is-feedback", {
           "is-error": props.failure.tone === "error",
         }]}
       >
@@ -167,9 +170,7 @@ export default function FailureContent(
             </span>
           ),
         })}
-        <Show when={open() && !reference()}>
-          <div class="otk-failure-detail-track">{detailBody()}</div>
-        </Show>
+        <Show when={!reference()}>{details()}</Show>
       </div>
     );
   }
@@ -186,7 +187,7 @@ export default function FailureContent(
         props.class,
         "otk-disclosure-layout",
         compact() ? "is-compact" : "",
-        props.expanded ? "is-expanded" : "",
+        props.fullReason ? "shows-full-reason" : "",
         props.failure.reference ? "is-reference" : "",
         props.placement === "record" ? "is-record" : "",
         props.subgrid ? "uses-subgrid" : "",
@@ -255,13 +256,8 @@ export default function FailureContent(
                   </button>
                 )}
               </Show>
-              <Show when={props.controls} fallback={toggle()}>
-                <div class="otk-failure-control-row">
-                  {toggle()}
-                  {props.controls}
-                </div>
-              </Show>
-              <Show when={open()}>{detailBody()}</Show>
+              {details()}
+              {props.controls}
             </div>
           </>
         }

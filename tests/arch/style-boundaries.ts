@@ -205,7 +205,8 @@ export function styleBoundaryErrors(files: Map<string, string>): string[] {
         }
       }
       if (
-        path !== "packages/ui/components/DisclosureToggle.css" && (
+        path !== "packages/ui/components/DisclosureToggle.css" &&
+        path !== "packages/ui/components/Disclosure.css" && (
           /\.otk-disclosure-[\w-]+/.test(selector) ||
           targets(selector).some((name) => disclosures.has(name)) &&
             [...declarations.keys()].some((key) =>

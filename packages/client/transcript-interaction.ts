@@ -22,6 +22,7 @@ interface Disclosure {
 
 /** Source-free choices survive virtual unmount and body cooling, not deletion. */
 export interface TranscriptInteraction {
+  readonly disclosures: Disclosures;
   defaultFor(
     category: DisclosureCategory,
     prefs?: Partial<Preferences>,
@@ -81,6 +82,7 @@ export function createTranscriptInteraction(
     };
   };
   return {
+    disclosures,
     defaultFor: (category, prefs = {}) =>
       disclosures.defaultFor("recordKinds", { category, prefs: () => prefs }),
     disclosure,

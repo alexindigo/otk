@@ -79,7 +79,7 @@ export default function ToolFrame(props: {
                     ...identity(),
                     label: props.presentation?.target ?? props.call.tool,
                   },
-                })}
+                }, props.call)}
               />
             )
             : undefined}

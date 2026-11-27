@@ -94,6 +94,10 @@
 .otk-overflow-row.is-intrinsic > .otk-overflow-more {
   grid-area: 1 / -2;
 }
+.otk-overflow-row.is-intrinsic.has-overflow:not(.is-progressive):not(:has(.otk-overflow-item:not([hidden]))) {
+  /* With only More visible, the measuring row must not widen its live slot. */
+  grid-template-columns: minmax(0, 1fr);
+}
 .otk-overflow-row.is-single-line .otk-overflow-items {
   flex-wrap: nowrap;
 }

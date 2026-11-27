@@ -98,6 +98,7 @@ export interface ConnectionSink {
   frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
+  retireRequestDisclosures?(scope: string): void;
   /** Application-owned lossless reload; the transport never reloads the page. */
   reload?(): void | Promise<void>;
   page?: { build?: string };
@@ -140,7 +141,7 @@ function browserStorage(server: string): RequestTrackerOptions["storage"] {
 }
 export class SidecarConnection {
   readonly base: URL;
-  readonly attention: RequestLifetimes = new RequestLifetimes();
+  readonly attention: RequestLifetimes;
   readPermissions(
     scope: string,
     entry: import("@otk/protocol").SessionLookup,
@@ -298,6 +299,10 @@ export class SidecarConnection {
     readonly options: ConnectionOptions = {},
   ) {
     this.base = options.api ?? apiBase(baseUrl);
+    this.attention = new RequestLifetimes(
+      undefined,
+      options.retireRequestDisclosures,
+    );
     this.#memory = { page: options.page };
     this.#policy = options.policy && clientRequestPolicyFrom(options.policy);
     const metadata = createRequestMetadata();

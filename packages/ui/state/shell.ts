@@ -92,6 +92,7 @@ export function createShellState(
           page: { build: o.build },
           policy: o.policy,
           reload: () => reload.run(),
+          retireRequestDisclosures: (scope) => disclosures.retire({ scope }),
         },
         sessionTitle: (sidecarId, sessionID) =>
           index.get(sidecarId, sessionID)?.title,

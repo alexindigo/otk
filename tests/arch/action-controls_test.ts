@@ -181,6 +181,8 @@ Deno.test("action-control architecture has no new owner bypasses", async () => {
       assert(!text.includes("props.onClick"));
       continue;
     }
+    // Disclosure is the shared owner of native in-flow fold triggers, not an action caller.
+    if (path === "packages/ui/components/Disclosure.tsx") continue;
     const lines = actionControls(path, text);
     if (lines.length) actual[path] = lines.length;
   }

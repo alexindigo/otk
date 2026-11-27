@@ -15,7 +15,7 @@ import {
   type TranscriptVersion,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
-import { RequestFailure } from "./failures.ts";
+import { RequestFailure, retireFailureOccurrence } from "./failures.ts";
 import { createProgress, type ProgressDisplay } from "./progress.ts";
 import {
   type FailureValue,
@@ -404,7 +404,22 @@ export function createTranscript(
       op.op === "message.upsert" && hasBaseline &&
       outsideAcquiredRange(op, firstRetained(), acquired.next !== null)
     ) return content;
-    if (op.op === "part.remove") interaction.retireIdentity(op.partID);
+    const retirePartFailure = (part: Part) => {
+      retireFailureOccurrence(interaction.disclosures, part);
+      if (part.kind === "external" && part.failure) {
+        retireFailureOccurrence(interaction.disclosures, part.failure);
+      }
+      if (part.kind === "tool") {
+        retireFailureOccurrence(interaction.disclosures, part.call);
+      }
+    };
+    if (op.op === "part.remove") {
+      const part = projection.state.messagesByID[op.messageID]?.parts.find(
+        (part) => part.id === op.partID,
+      );
+      if (part) retirePartFailure(part);
+      interaction.retireIdentity(op.partID);
+    }
     const removedReply = op.op === "message.remove"
       ? projection.entry(op.messageID)?.key
       : undefined;
@@ -413,7 +428,10 @@ export function createTranscript(
       interaction.retireIdentity(op.messageID);
       for (
         const part of projection.state.messagesByID[op.messageID]?.parts ?? []
-      ) interaction.retireIdentity(part.id);
+      ) {
+        retirePartFailure(part);
+        interaction.retireIdentity(part.id);
+      }
     }
     const previous = op.op === "part.upsert"
       ? projection.state.messagesByID[op.messageID]

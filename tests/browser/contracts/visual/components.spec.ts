@@ -238,6 +238,14 @@ test(
           const pane = document.querySelector(".request-feedback-pane")!;
           const content = pane.querySelector(".otk-pane-state-content")!;
           const operation = document.querySelector(".otk-operation-feedback")!;
+          const row = operation.querySelector(".otk-record-row-grid")!;
+          const fold = operation.parentElement?.querySelector(
+            ".otk-failure-details button",
+          );
+          const axis = (element: Element) => {
+            const box = element.getBoundingClientRect();
+            return box.x + box.width / 2;
+          };
           return {
             boxes: [
               rect(document.querySelector(".request-feedback-form input")!),
@@ -246,7 +254,7 @@ test(
             pane: rect(pane),
             content: rect(content),
             centres: Array.from(
-              operation.querySelectorAll(".otk-record-row-grid > *"),
+              row.children,
             ).map((el) => {
               const r = el.getBoundingClientRect();
               return r.y + r.height / 2;
@@ -255,6 +263,14 @@ test(
               document.querySelectorAll('[disabled],[aria-disabled="true"]')
                 .length,
             colour: getComputedStyle(operation).color,
+            fold: fold && {
+              below: fold.getBoundingClientRect().top >=
+                row.getBoundingClientRect().bottom,
+              gutter: Math.abs(
+                axis(fold.querySelector(".otk-disclosure-icon")!) -
+                  axis(row.querySelector(".otk-composer-notice-icon")!),
+              ),
+            },
           };
         });
         expect(g.disabled).toBe(0);
@@ -264,8 +280,13 @@ test(
         expect(
           Math.abs(g.pane[1] + g.pane[3] / 2 - g.content[1] - g.content[3] / 2),
         ).toBeLessThan(1);
-        expect(g.centres).toHaveLength(feedback === "error" ? 3 : 2);
+        // 2.114 R2/R11: Details is a second row, not a fitted third cell.
+        expect(g.centres).toHaveLength(2);
         expect(Math.max(...g.centres) - Math.min(...g.centres)).toBeLessThan(1);
+        if (feedback === "error") {
+          expect(g.fold?.below).toBe(true);
+          expect(g.fold?.gutter).toBeLessThanOrEqual(1);
+        } else expect(g.fold).toBeNull();
         if (feedback === "clear") baseline = g.boxes;
         else {
           expect(g.boxes[0]).toEqual(baseline![0]);
@@ -542,7 +563,9 @@ test(
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "journal");
     for (
-      const toggle of await page.locator(".otk-permission-scope").all()
+      const toggle of await page.getByRole("button", {
+        name: /^Requested scope/,
+      }).all()
     ) await toggle.click();
     const values = await page.evaluate(() =>
       ["summary", "activity"].map((id) =>

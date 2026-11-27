@@ -13,6 +13,7 @@ import {
   type Feedback,
   type FeedbackOwner,
   GENERIC_FAILURE_REASON,
+  inheritFailureOccurrence,
   sameView,
 } from "./failures.ts";
 import type {
@@ -172,20 +173,23 @@ export function validationFeedback(text: string): Feedback {
 export function errorFeedback(
   value: string | Feedback | undefined,
   context?: FailureFacts,
+  occurrenceSource?: object,
 ): Feedback | undefined {
   if (!value) return;
   if (typeof value !== "string" && (value.kind !== "error" || value.failure)) {
     return value;
   }
   const text = typeof value === "string" ? value : value.text;
-  const described = shipped.describe({
+  const raw: PublicFailure = {
     code: "action.validation",
     retry: "new-intent",
     diagnosticID: typeof value === "string"
       ? "validation"
       : value.diagnosticID ?? "validation",
     facts: { ...context, reason: text },
-  });
+  };
+  const source = occurrenceSource ?? (typeof value === "string" ? raw : value);
+  const described = shipped.describe(inheritFailureOccurrence(source, raw));
   return typeof value === "string"
     ? described
     : { ...value, failure: described.failure };
@@ -239,6 +243,8 @@ export function failureNote(
       context,
     );
   const feedback = shipped.present(failure, { surface: "notification" });
+  // Delivery compares public facts. The notification itself owns occurrence.
+  const { occurrence: _occurrence, ...value } = feedback.failure!;
   const target = failure.facts?.target;
   return {
     id: failure.code.startsWith("storage.")
@@ -248,7 +254,7 @@ export function failureNote(
     dismissalKey: `failure/${feedback.failure!.count}`,
     dismissOnView: false,
     title: feedback.text,
-    detail: { kind: "failure", value: feedback.failure },
+    detail: { kind: "failure", value },
     sessionRef: target?.sessionID
       ? { sidecar: target.sidecarId ?? "local", session: target.sessionID }
       : undefined,
@@ -294,9 +300,11 @@ export function notificationFailure(
   note: Note,
 ): FailurePresentation | undefined {
   const detail = note.detail as
-    | { kind?: string; value?: FailurePresentation }
+    | { kind?: string; value?: Omit<FailurePresentation, "occurrence"> }
     | undefined;
-  if (detail?.kind === "failure") return detail.value;
+  if (detail?.kind === "failure" && detail.value) {
+    return { ...detail.value, occurrence: note.id } as FailurePresentation;
+  }
   if (note.kind !== "error") return;
   const failure = errorFeedback(note.body || GENERIC_FAILURE_REASON)!.failure!;
   // A notification title is already an outcome heading, not an action verb.
@@ -309,7 +317,7 @@ export function sessionFailure(
 ): PublicFailure | undefined {
   if (!observation && !reason) return;
   const prior = observation?.failure;
-  return {
+  const failure: PublicFailure = {
     code: prior?.code ?? "session.failure",
     retry: prior?.retry ?? "none",
     diagnosticID: prior?.diagnosticID ?? observation?.id ??
@@ -327,6 +335,7 @@ export function sessionFailure(
       status: prior?.facts?.status ?? observation?.status,
     },
   };
+  return observation ? inheritFailureOccurrence(observation, failure) : failure;
 }
 export function presentFailure(
   failure: import("@otk/protocol").PublicFailure,
@@ -381,6 +390,7 @@ export function composerPointer(
       text: shown.text,
       failure: {
         ...shown.failure!,
+        occurrence: value.occurrence,
         count: value.count,
         occurrences: value.occurrences,
       },

@@ -803,7 +803,8 @@ export async function remainder(
           await page.keyboard.press("Escape");
         }
         await page.locator(".otk-tool-line.is-error .otk-failure-details")
-          .first().click();
+          .first().getByRole("button", { name: "Details", exact: true })
+          .click();
         await expect(
           page.locator(
             ".otk-tool-line.is-error .otk-feedback-status[role=alert]",
@@ -817,7 +818,8 @@ export async function remainder(
         await labels(page);
         await shot(`labels-error-${width}-${theme.id}`);
         await page.locator(".otk-tool-line.is-error .otk-failure-details")
-          .first().click();
+          .first().getByRole("button", { name: "Details", exact: true })
+          .click();
         await page.locator(".otk-tool-toggle").first().focus();
         await page.keyboard.press("Shift+F10");
         await expect(page.locator(":popover-open [role=menu]")).toBeVisible();

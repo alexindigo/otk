@@ -10,7 +10,7 @@ export default function FieldFeedback(
     feedback?: Feedback;
     validation?: string;
     action?: boolean;
-    expanded?: boolean;
+    fullReason?: boolean;
     placement?: "record";
   },
 ): Element {
@@ -20,8 +20,8 @@ export default function FieldFeedback(
       class={`otk-field-feedback${props.action ? " is-action" : ""}`}
       feedback={props.feedback}
       validation={props.validation}
-      expanded={props.expanded}
-      placement={props.placement}
+      fullReason={props.fullReason}
+      placement={props.placement ?? "field"}
     />
   );
 }
