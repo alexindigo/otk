@@ -31,9 +31,10 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { solidState } from "../state/binding.ts";
 import ActionButton from "./ActionButton.tsx";
+import TerminateButton from "./TerminateButton.tsx";
 import StatusLight from "./StatusLight.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
-import { CheckAllIcon, StopIcon } from "./ChromeIcons.tsx";
+import { CheckAllIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta, { MetaItem, MetaRow } from "./ChromeMeta.tsx";
 import EntityPill from "./EntityPill.tsx";
@@ -132,14 +133,14 @@ export default function Subagents(
   const stopCommand = `subagents.stop@${createUniqueId()}`;
   ownedCommand(ports, {
     id: stopCommand,
-    title: "Stop subagent",
+    title: "Terminate subagent",
     category: "Session",
     scope: "control",
     arguments: { type: "string" },
     availability: (_context, id: string) =>
       props.owner?.canStop(workID(id)) ? { available: true } : {
         available: false,
-        reason: "Subagent cannot be stopped",
+        reason: "Subagent cannot be terminated",
         hidden: true,
       },
     run: (_context, id: string) => props.owner?.stop(workID(id)),
@@ -147,11 +148,10 @@ export default function Subagents(
   const stopAction = (id: string) =>
     ports.commands.control(stopCommand, id, {
       target: { label: props.title(id) },
-      // The stop request has settled; the lamp still follows native work evidence.
+      // The request has settled; the lamp still follows native work evidence.
       shown: () => true,
-      unshown: "The stop request did not complete.",
-      recovery:
-        "Check the subagent and try stopping it again if it is still running",
+      unshown: "The termination request did not complete.",
+      recovery: "Check the subagent and try again if it is still running",
     });
   const clearTitle = (bind: (button: HTMLElement) => void) => (
     <ActionButton
@@ -297,18 +297,13 @@ export default function Subagents(
                             </MetaItem>
                           </MetaRow>
                         </div>
-                        <div class="otk-subagent-stop">
+                        <div class="otk-subagent-terminate">
                           <Show when={group().kind === "running"}>
-                            <ActionButton
-                              class="otk-icon-button otk-subagent-stop-button"
+                            <TerminateButton
                               action={stopAction(id)}
-                              label={`Stop ${props.title(id)}`}
-                              title={`Stop ${props.title(id)}`}
-                              pendingLabel="Stopping..."
+                              name={props.title(id)}
                               busy={stopping(id)}
-                            >
-                              <StopIcon />
-                            </ActionButton>
+                            />
                           </Show>
                         </div>
                       </div>

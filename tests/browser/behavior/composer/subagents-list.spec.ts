@@ -310,7 +310,7 @@ test(
     for (const [index, id] of rowsInOrder.entries()) {
       await expect(
         menu.locator(`[data-subagent="${id}"]`).getByRole("menuitem", {
-          name: /^Stop /,
+          name: /^Terminate /,
         }),
       ).toHaveCount(index === 1 || index === 2 ? 1 : 0);
     }
@@ -348,22 +348,22 @@ test(
           const glyphs = document.createRange();
           glyphs.selectNodeContents(content);
           const textRight = glyphs.getBoundingClientRect().right;
-          const cell = row.querySelector(".otk-subagent-stop")!;
-          const stop = cell.querySelector("button");
-          const svg = stop?.querySelector("svg")?.getBoundingClientRect();
-          const stopBox = stop?.getBoundingClientRect();
-          const gaps = stopBox && svg
+          const cell = row.querySelector(".otk-subagent-terminate")!;
+          const terminate = cell.querySelector("button");
+          const svg = terminate?.querySelector("svg")?.getBoundingClientRect();
+          const target = terminate?.getBoundingClientRect();
+          const gaps = target && svg
             ? [
-              svg.top - stopBox.top,
-              stopBox.bottom - svg.bottom,
-              svg.left - stopBox.left,
-              stopBox.right - svg.right,
+              svg.top - target.top,
+              target.bottom - svg.bottom,
+              svg.left - target.left,
+              target.right - svg.right,
             ]
             : undefined;
           return {
             timeRight: time.right,
             textRight,
-            stopLeft: cell.getBoundingClientRect().left,
+            terminateLeft: cell.getBoundingClientRect().left,
             gaps,
             title: title.getAttribute("title"),
             truncated: title.scrollWidth > title.clientWidth,
@@ -380,7 +380,10 @@ test(
           `${context}: drawn time text`,
         )
           .toBeLessThanOrEqual(.5);
-        expect.soft(Math.abs(pos.stopLeft - positions[0].stopLeft), context)
+        expect.soft(
+          Math.abs(pos.terminateLeft - positions[0].terminateLeft),
+          context,
+        )
           .toBeLessThanOrEqual(.5);
         if (pos.truncated) {
           expect.soft(Math.abs(panel.width - line.width), context)
