@@ -139,6 +139,34 @@ test("messages.work-reveal-survives-virtual-segment-replacement", {
   await expect(strip).toBeInViewport();
 });
 
+test.describe("direct Work part reveal", () => {
+  test.use({ profile: "contract-menus-work-reveal" });
+  test("messages.transcript-reveal-selects-the-requested-work-part", {
+    tag: ["@messages", "@contracts"],
+  }, async ({ page, isolatedState: state }) => {
+    await state.product("layout.patch", {
+      rightView: "sessions",
+      rightCollapsed: false,
+    });
+    await page.goto(
+      `${state.url}/?revealMessage=reply&revealPart=edit#/local/tstv1-otk`,
+    );
+    const strip = page.locator('[data-message="reply"] .otk-work-strip');
+    await expect(strip).toBeAttached();
+    await expect(workPanel(page)).toHaveCount(0);
+    await page.getByRole("button", { name: "Reveal fixture part" }).click();
+    // Omitting the part ID on this reply would select bash, its first run.
+    await expect(workPanel(page).locator("[data-work-run].is-selected"))
+      .toHaveAttribute("data-work-run", "edit");
+    await expect(
+      workPanel(page).locator("[data-work-run=edit] [data-tool=edit]"),
+    )
+      .toBeVisible();
+    await expect(strip).toHaveAttribute("aria-current", "true");
+    await expect(strip).toBeInViewport();
+  });
+});
+
 test("messages.work-reveal-reacquires-a-retired-disclosure", {
   tag: ["@messages", "@contracts"],
 }, async ({ page }) => {
