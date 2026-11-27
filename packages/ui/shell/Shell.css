@@ -8,7 +8,12 @@
   overflow: clip;
 }
 .otk-main {
-  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+}
+.otk-main-content {
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -56,4 +61,31 @@
 }
 .otk-app[data-right-collapsed="true"] {
   --toast-narrow-alignment: end;
+}
+
+.otk-stage {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr) auto;
+}
+.otk-stage.is-sheet {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stage";
+}
+.otk-stage.is-sheet > * {
+  grid-area: stage;
+}
+.otk-stage.is-sheet > .otk-main {
+  isolation: isolate;
+  /* Keep the mounted conversation in the same lane it returns to on Back. */
+  grid-template-columns: minmax(0, 1fr) var(--rail-width);
+}
+.otk-corner-back {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  gap: var(--space-2);
 }

@@ -17,11 +17,13 @@ import { nativeAttributes } from "./native-attributes.ts";
 import SidebarRail from "./SidebarRail.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import { contextTarget } from "./context-target.ts";
+import type { PanelPresentation } from "../state/panel-presentation.ts";
 
 /** A feature-agnostic host. Registrations own their content and read public
  * context ports; the panel owns only layout and view selection. */
 export default function RightPanel(props: {
   layout: Preferences["shellLayout"];
+  presentation?: PanelPresentation;
   collapseToggle?: Element;
   ready: boolean;
   supports(capability: CapabilityName): boolean;
@@ -34,9 +36,11 @@ export default function RightPanel(props: {
   );
   const [error, setError] = createSignal<FailureValue>("");
   const bounds = SHELL_WIDTHS.right;
+  const collapsed = () => props.layout.rightCollapsed;
+  const sheet = () => props.presentation === "sheet";
   const resize = createResize({
     width: () => props.layout.rightWidth ?? bounds.default,
-    ready: () => props.ready && !props.layout.rightCollapsed,
+    ready: () => props.ready && !collapsed() && !sheet(),
     direction: -1,
     bounds,
     save: async (rightWidth) => {
@@ -47,7 +51,6 @@ export default function RightPanel(props: {
       setError(failureValue(error, { actionLabel: "Saving panel layout" })),
   });
   const width = resize.width;
-  const collapsed = () => props.layout.rightCollapsed;
   const native = nativeAttributes(() => resize.handlers);
   const save = async (patch: Partial<Preferences["shellLayout"]>) => {
     try {
@@ -108,13 +111,19 @@ export default function RightPanel(props: {
       class={collapsed() ? "otk-right-rail" : "otk-right-panel"}
       side="right"
       collapsed={collapsed()}
-      width={width()}
+      width={sheet() ? undefined : width()}
       header={
-        <div class={["otk-panel-header", { "is-collapsed": collapsed() }]}>
+        <div
+          class={[
+            "otk-panel-header",
+            { "is-collapsed": collapsed(), "is-sheet": sheet() },
+          ]}
+        >
+          <Show when={sheet()}>{props.collapseToggle}</Show>
           <Show when={!collapsed()}>
             <Views rail={false} />
           </Show>
-          {props.collapseToggle}
+          <Show when={!sheet()}>{props.collapseToggle}</Show>
         </div>
       }
       body={
@@ -154,7 +163,7 @@ export default function RightPanel(props: {
         </Show>
       }
       resizer={
-        <Show when={!collapsed()}>
+        <Show when={!collapsed() && !sheet()}>
           <div
             class="otk-panel-resizer"
             ref={native.ref}

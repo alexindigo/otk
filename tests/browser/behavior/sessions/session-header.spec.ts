@@ -6,7 +6,6 @@ import { prompt } from "../../pages/transcript.ts";
 test("sessions.header-title-and-usage-fit-on-one-line", {
   tag: "@sessions",
 }, async ({ state, page }) => {
-  await page.setViewportSize({ width: 900, height: 800 });
   await state.product("prefs.set", { key: "textSize", value: "125" });
   await state.product("layout.patch", {
     leftCollapsed: false,
@@ -24,6 +23,9 @@ test("sessions.header-title-and-usage-fit-on-one-line", {
     sessions: [session.id],
   });
   await openSession(state, page, session.id);
+  // D74: the narrow panel covers the conversation until Back is pressed.
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.getByRole("button", { name: "Back to conversation" }).click();
   await state.queue(["The dependencies are catalogued."]);
   await prompt(page, "Inventory the facade dependencies.");
   await expect(page.locator(".otk-messages")).toContainText(

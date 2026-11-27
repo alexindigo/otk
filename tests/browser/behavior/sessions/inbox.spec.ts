@@ -156,7 +156,16 @@ test.describe("inbox ownership", () => {
         "position",
         "relative",
       );
-      await openSession(state, page, "tstv1-otk");
+      // D74: switch projects with the conversation exposed, not via a sheet.
+      await state.product("layout.patch", { rightCollapsed: true });
+      await expect(page.locator(".otk-right-rail")).toBeVisible();
+      const project = page.locator(
+        `[data-project=${
+          JSON.stringify(entries[0].directory)
+        }] .otk-project-open`,
+      );
+      await project.click();
+      await expect(page).toHaveURL(/tstv1-otk$/);
       await page.locator("textarea[name=prompt]").fill("Keep this work");
       const target = page.locator(
         `[data-project=${
@@ -165,7 +174,8 @@ test.describe("inbox ownership", () => {
       );
       await target.click();
       await expect(page).toHaveURL(/tstv1-atmosphera$/);
-      await openSession(state, page, "tstv1-otk");
+      await project.click();
+      await expect(page).toHaveURL(/tstv1-otk$/);
       await expect(page.locator("textarea[name=prompt]")).toHaveValue(
         "Keep this work",
       );

@@ -332,6 +332,9 @@ test("visual.row-title-min", { tag: ["@visual", "@isolated"] }, async (
       await capture(`timeline-${width}-${label}`);
     }
   }
+  // D74: the composer and records are measured with the conversation exposed.
+  await page.getByRole("button", { name: "Collapse right panel" }).click();
+  await expect(page.locator(".otk-right-rail")).toBeVisible();
   for (const width of [1280, 900]) {
     await page.setViewportSize({ width, height: 800 });
     for (const [theme, label] of themes) {

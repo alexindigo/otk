@@ -28,7 +28,9 @@ export default function SidebarRail(props: {
       aria-label={props.label}
       data-side={props.side}
       data-collapsed={props.collapsed ? "true" : "false"}
-      style={props.collapsed ? undefined : { width: `${props.width}px` }}
+      style={props.collapsed || props.width === undefined
+        ? undefined
+        : { width: `${props.width}px` }}
     >
       <header class="otk-rail-header">{props.header}</header>
       {props.leading}

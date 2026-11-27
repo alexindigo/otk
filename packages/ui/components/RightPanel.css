@@ -86,3 +86,9 @@
   --selection-padding: 0;
   padding: 0;
 }
+.otk-panel-header.is-sheet {
+  padding-inline: var(--chrome-inset);
+}
+.otk-panel-header.is-sheet .otk-panel-icons {
+  flex: none;
+}

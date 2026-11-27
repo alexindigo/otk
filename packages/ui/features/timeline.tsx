@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createMemo } from "solid-js";
 import { timelinePrompts } from "@otk/client";
-import { useCommandPorts } from "../keyboard/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
@@ -17,7 +16,7 @@ export function registerTimelinePanel(
     title: "Timeline",
     icon: TimelineIcon,
     component: () => {
-      const shell = useShellPorts(), { commands } = useCommandPorts();
+      const shell = useShellPorts();
       const { parts } = useUiRegistries();
       const prompts = createMemo(() =>
         timelinePrompts(
@@ -46,8 +45,7 @@ export function registerTimelinePanel(
             entry.id === shell.selection()?.sessionID
           )?.directory}
           onOlder={() => shell.transcript.older()}
-          onReveal={(messageID) =>
-            commands.run("transcript.reveal", { messageID })}
+          onReveal={shell.transcript.reveal}
         />
       );
     },
