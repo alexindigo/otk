@@ -41,6 +41,27 @@ test("composer.prompt-toolbar-keeps-controls-in-separate-tracks", {
         Number(getComputedStyle(html).getPropertyValue("--otk-scale"))
       )
     ).toBe(Number(scale) / 100);
+    if (width === 900) {
+      // D74 / WL3: the right panel no longer squeezes a live conversation at
+      // this width. Use the expanded projects column to exercise the fold.
+      await page.getByRole("button", {
+        name: "Back to conversation",
+        exact: true,
+      })
+        .click();
+      await state.product("layout.patch", { leftWidth: 360 });
+      await expect(page.locator(".otk-project-inbox")).toHaveCSS(
+        "width",
+        "360px",
+      );
+    } else {
+      await state.product("layout.patch", {
+        leftWidth: 250,
+        rightCollapsed: false,
+      });
+      await expect(page.getByRole("separator", { name: "Right panel width" }))
+        .toBeVisible();
+    }
     await page.evaluate(() => document.fonts.ready);
     await expect.poll(() =>
       toolbar.evaluate((row) => {

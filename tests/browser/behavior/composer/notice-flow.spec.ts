@@ -49,6 +49,16 @@ test("composer.notice-flow-keeps-transcript-tail-uncovered", {
   await expect(prompt(page)).toHaveValue("/probe retain this draft");
   for (const width of [1440, 760]) {
     await page.setViewportSize({ width, height: 900 });
+    if (width === 760) {
+      // D74 / WL3: the right panel intentionally covers the conversation in
+      // sheet mode. Test notice placement in the exposed conversation.
+      await page.getByRole("button", {
+        name: "Back to conversation",
+        exact: true,
+      })
+        .click();
+      await expect(page.locator(".otk-main")).not.toHaveAttribute("inert");
+    }
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(

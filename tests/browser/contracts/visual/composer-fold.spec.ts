@@ -120,6 +120,13 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
         rightCollapsed: false,
         leftWidth: 200,
       };
+      const separator = page.getByRole("separator", {
+        name: "Right panel width",
+      });
+      const back = page.getByRole("button", {
+        name: "Back to conversation",
+        exact: true,
+      });
       const more = toolbar.getByRole("button", { name: "More actions" });
       const measure = () =>
         frame.evaluate((box) => {
@@ -248,7 +255,18 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
           )
         ).toBe(Number(scale) / 100);
         await page.evaluate(() => document.fonts.ready.then(() => {}));
-        const corners = new Map<number, number[]>();
+        const corners = new Map<string, number[]>();
+        const inline = zoom === 1;
+        if (!inline) {
+          // D74 / WL3: a narrow sheet has Back instead of a width separator.
+          await state.product("layout.patch", { ...layout, rightWidth: 480 });
+          await page.setViewportSize(viewport);
+          await expect(back).toBeVisible();
+          await expect(separator).toHaveCount(0);
+          await expect(page.locator(".otk-main")).toHaveAttribute("inert", "");
+          await back.click();
+          await expect(page.locator(".otk-right-rail")).toBeVisible();
+        }
         let checkedMore = false;
         for (const long of [false, true]) {
           // Enter the draft before narrowing: a below-floor shell can leave no
@@ -267,10 +285,40 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
           }
           await page.setViewportSize(viewport);
           let previous = 0;
-          for (const rightWidth of [280, 320, 360, 400, 440, 480]) {
-            await state.product("layout.patch", { ...layout, rightWidth });
-            await expect(page.getByRole("separator", { name: /right/i }))
-              .toHaveAttribute("aria-valuenow", String(rightWidth));
+          // With the sheet closed, shrink the exposed composer via the window
+          // and projects column, not the stored width of an inactive panel.
+          const steps = inline
+            ? [280, 320, 360, 400, 440, 480].map((size) => ({
+              label: `right panel ${size}`,
+              size,
+              width: viewport.width,
+            }))
+            : [200, 232, 264, 296, 328, 360].map((size, i, sizes) => ({
+              label: `projects ${size}`,
+              size,
+              width: Math.round(
+                viewport.width +
+                  (600 - viewport.width) * i / (sizes.length - 1),
+              ),
+            }));
+          for (const { label, size, width: viewportWidth } of steps) {
+            if (inline) {
+              await state.product("layout.patch", {
+                ...layout,
+                rightWidth: size,
+              });
+              await expect(separator).toHaveAttribute(
+                "aria-valuenow",
+                String(size),
+              );
+            } else {
+              await page.setViewportSize({ ...viewport, width: viewportWidth });
+              await state.product("layout.patch", { leftWidth: size });
+              await expect(
+                page.getByRole("separator", { name: "Project column width" }),
+              )
+                .toHaveAttribute("aria-valuenow", String(size));
+            }
             await page.evaluate(() =>
               new Promise<void>((resolve) =>
                 requestAnimationFrame(() =>
@@ -285,9 +333,9 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
               errors.push(`fold order regressed to ${mode}`);
             }
             previous = current;
-            if (!long) corners.set(rightWidth, corner);
+            if (!long) corners.set(label, corner);
             else {
-              const empty = corners.get(rightWidth);
+              const empty = corners.get(label);
               if (
                 empty &&
                 corner.some((value, i) => Math.abs(value - empty[i]) > .5)
@@ -311,7 +359,7 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
             }
             problems.push(
               ...errors.map((error) =>
-                `${scale}% text, panel ${rightWidth}, frame ${width}, draft ${long}: ${error}`
+                `${scale}% text, ${label}, frame ${width}, draft ${long}: ${error}`
               ),
             );
             if (width <= floor + 8) break;
