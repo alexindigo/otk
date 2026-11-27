@@ -3,6 +3,45 @@ import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
 
+test("messages.session-link-restored-without-sidebar-row", {
+  tag: "@messages",
+}, async ({ state, page }) => {
+  const { id } = await state.native<{ id: string }>("/session", "POST", {
+    title: "Parent conversation",
+  });
+  const child = await state.native<{ id: string }>("/session", "POST", {
+    parentID: id,
+    title: "Settings design with the user",
+  });
+  const raw = child.id.slice(child.id.indexOf("-") + 1);
+  const unknown = "ses_000000000000UnknownSession";
+  await openSession(state, page, id);
+  await state.product("layout.patch", { rightCollapsed: true });
+  await expect(page.locator('aside[data-side="right"]')).toHaveAttribute(
+    "data-collapsed",
+    "true",
+  );
+  const reply = page.locator('[data-role="assistant"]');
+  await state.queue([`Follow up in \`${raw}\`. Unresolved: \`${unknown}\`.`]);
+  await prompt(page, "Which helper handled settings?");
+  await expect(reply.getByText(unknown, { exact: true })).toBeVisible();
+  await expect(page.locator(".otk-turn-time")).toHaveText(/^Worked for /);
+  await page.reload();
+  await expect(page.locator('aside[data-side="right"]')).toHaveAttribute(
+    "data-collapsed",
+    "true",
+  );
+  const link = reply.getByRole("link", {
+    name: "Settings design with the user",
+  });
+  await expect(link).toBeVisible();
+  await expect(link.locator(".otk-status-light")).toBeVisible();
+  await expect(reply.locator("code").filter({ hasText: unknown }))
+    .toBeVisible();
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`/${child.id}$`));
+});
+
 test(
   "messages.session-link-opens-referenced-session",
   { tag: "@messages" },

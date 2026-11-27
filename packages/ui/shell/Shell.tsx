@@ -650,6 +650,7 @@ export default function Shell(
             filePaths: {
               facts: resources.fileFacts,
               entry: resources.entry,
+              retainSessionReference: resources.retainSessionReference,
               entities: resources.entities,
               openMenu: (element) => openFileMenu?.(element),
               fail,

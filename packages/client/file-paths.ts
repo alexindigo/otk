@@ -20,14 +20,13 @@ type Where = "prose" | "code";
 type PathStyle = PathSemantics["style"];
 
 /** Native IDs in a reply use the reply's provider namespace. */
-export function resolveSessionMention<T>(
+export function sessionMentionID(
   id: string,
-  from: string | undefined,
-  get: (canonical: string) => T | undefined,
-): T | undefined {
-  if (isSessionID(id)) return get(id);
+  from?: string,
+): string | undefined {
+  if (isSessionID(id)) return id;
   if (from && isSessionID(from)) {
-    return get(from.slice(0, from.indexOf("-") + 1) + id);
+    return from.slice(0, from.indexOf("-") + 1) + id;
   }
 }
 
