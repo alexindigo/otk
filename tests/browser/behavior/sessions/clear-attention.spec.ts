@@ -40,7 +40,7 @@ test("sessions.clear-attention-reviews-a-subtree-and-keeps-live-input", {
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "hold",
-    target: "helper-review",
+    target: "helper-review-unseen-failure",
   });
   const row = (id: string, view = page) =>
     view.getByRole("complementary", { name: "Right panel" }).locator(
