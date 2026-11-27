@@ -8,10 +8,103 @@ import {
   prompt,
   revealAcquired,
   runNativeTool,
+  scrollTranscript,
+  settledNativeReply,
   toolScript,
 } from "../../pages/transcript.ts";
 test.describe("actual tool forms", () => {
   test.use({ profile: "messages-forms" });
+  test("messages.native-work-log-omits-step-and-success-bookkeeping", {
+    tag: ["@messages"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await page.setViewportSize({ width: 1315, height: 1200 });
+    await state.product("prefs.set", { key: "expandStepMarkers", value: true });
+    await state.product("prefs.set", { key: "animationsOff", value: true });
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Work log review",
+    });
+    await openSession(state, page, session.id);
+    await state.controller.call("queueScript", {
+      lease: state.lease.lease,
+      chunks: [],
+      tool: {
+        name: "bash",
+        input: { command: "pwd", description: "Find project directory" },
+      },
+    });
+    const answer =
+      "I found the project directory. The verification command exited with code 7.";
+    await toolScript(
+      state,
+      "bash",
+      {
+        command: "exit 7",
+        description: "Verify the test command",
+      },
+      answer,
+    );
+    await prompt(
+      page,
+      "Find the project directory and run the verification command.",
+    );
+    await settledNativeReply(state, session.id, answer);
+    await scrollTranscript(page, true);
+    await expect(page.locator(".otk-message-flow")).toContainText(
+      "I found the project directory.",
+    );
+    await expect(page.locator(`[data-session="${session.id}"]`))
+      .toHaveAttribute(
+        "data-status",
+        "idle",
+      );
+    const work = page.locator(".otk-work-log");
+    await expect(work.locator(".otk-work-fold")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(work.locator("[data-tool=bash]")).toHaveCount(2);
+    await expect(work.locator("[data-tool=bash].is-error").getByRole("alert"))
+      .toContainText("Exited with code 7");
+    await expect(page.locator(".otk-turn-usage > button")).toHaveText(
+      /^3 model calls\b/,
+    );
+    await expect(page.locator(".otk-turn-time")).toHaveText(/^Worked for /);
+    if (process.env.OTK_WORK_LOG_CAPTURES === "1") {
+      for (
+        const [name, theme] of [["dark", "otk-dark"], ["linen", "otk-light"], [
+          "stone",
+          "otk-light-stone",
+        ]]
+      ) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await page.evaluate(() => document.fonts.ready);
+        await page.mouse.move(0, 0);
+        await page.screenshot({
+          path: info.outputPath(`work-log-${name}.png`),
+        });
+      }
+      console.info(
+        "Work log rows:",
+        await work.locator(
+          ".otk-work-body :is([data-tool], [data-native-record])",
+        ).count(),
+      );
+    }
+    const body = work.locator(".otk-work-body");
+    await expect(body).not.toContainText(
+      /Step started|Step finished|Execution succeeded/,
+    );
+    await expect(
+      body.locator(
+        '[data-native-record=step], [data-native-record^="opencode-v1/step-"]',
+      ),
+    )
+      .toHaveCount(0);
+  });
   test("messages.native-failed-shell-visible-under-collapsed-defaults", {
     tag: ["@messages"],
   }, async ({ isolatedState: state, page }, info) => {
@@ -57,36 +150,6 @@ test.describe("actual tool forms", () => {
         path: info.outputPath(`failure-${theme}.png`),
         fullPage: true,
       });
-    }
-    // Virtualization changes the first mounted row; explicit choice belongs to one stable record.
-    // V1 owns qualified step records (NT4); V2 steps are the neutral step part.
-    if (!state.controller.info!.version.startsWith("2.")) {
-      await state.product("prefs.set", {
-        key: "expandStepMarkers",
-        value: true,
-      });
-    }
-    const steps = state.controller.info!.version.startsWith("2.")
-      ? "[data-native-record=step]"
-      : '[data-native-record^="opencode-v1/step-"]';
-    const key = await page.locator(steps).first()
-      .evaluate((row) =>
-        row.closest("[data-virtual-key]")!.getAttribute("data-virtual-key")
-      );
-    const selector = `[data-virtual-key=${
-      JSON.stringify(key)
-    }] ${steps} .otk-tool-state > .otk-tool-toggle`;
-    const record = page.locator(selector);
-    await expect(record).toHaveAttribute("aria-expanded", "false");
-    await state.product("prefs.set", { key: "expandRecords", value: true });
-    await revealAcquired(page, selector);
-    await expect(record).toHaveAttribute("aria-expanded", "true");
-    await record.click();
-    await expect(record).toHaveAttribute("aria-expanded", "false");
-    for (const value of [false, true]) {
-      await state.product("prefs.set", { key: "expandRecords", value });
-      await revealAcquired(page, selector);
-      await expect(record).toHaveAttribute("aria-expanded", "false");
     }
   });
   test(
@@ -146,6 +209,11 @@ test.describe("actual tool forms", () => {
       const toggle = instructions.locator(".otk-tool-toggle");
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
       await toggle.click();
+      // A visible heading does not acquire the virtualized prose in its body.
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/synthetic"] .otk-tool-body',
+      );
       await expect(instructions.locator(".otk-tool-body")).toContainText(
         "Instructions from: " + state.directory + "/src/AGENTS.md",
       );
