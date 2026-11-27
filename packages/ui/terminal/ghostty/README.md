@@ -41,3 +41,9 @@ revokes pending clipboard paste intent without stopping its retained output
 parser. The scrollbar names the unique accessible output canvas it controls;
 terminal cells use physical left alignment independently of surrounding UI
 direction.
+
+The mount's computed font size and line height are the layout inputs for the
+canvas. An invisible `em`/`lh` probe wakes the same fit path as a viewport
+resize, even when text size changes without changing the mount's box. Fit
+measures cells in CSS pixels and requests the corresponding PTY grid; device
+pixel ratio configures the canvas backing store, not the application text size.

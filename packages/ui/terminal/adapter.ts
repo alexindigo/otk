@@ -78,7 +78,7 @@ export async function createTerminalRenderer(
   const active = await GhosttyTerminalSurface.create(mount, {
     theme: terminalTheme(ports.colors),
     visible: false,
-    font: { family: '"IBM Plex Mono"', size: 12 },
+    fontFamily: '"IBM Plex Mono"',
     onData: terminalInput(ports.input),
     onResize: ports.resize,
     onSelectionChange: () =>

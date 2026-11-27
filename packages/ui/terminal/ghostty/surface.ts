@@ -28,9 +28,6 @@ const symbolsFontUrl = new URL(
 const SELECTION_MULTI_CLICK_INTERVAL_MS = 500;
 let nextSurfaceID = 0;
 
-const DEFAULT_TERMINAL_FONT_SIZE = 12;
-const MIN_TERMINAL_FONT_SIZE = 6;
-const MAX_TERMINAL_FONT_SIZE = 32;
 const TERMINAL_GLYPH_FALLBACKS =
   '"Symbols Nerd Font Mono", "Symbols Nerd Font", "JetBrainsMono Nerd Font", ' +
   '"JetBrainsMono NF", "FiraCode Nerd Font", "Hack Nerd Font", "MesloLGS NF", ' +
@@ -53,11 +50,6 @@ const TERMINAL_FONT_LOAD_VARIANTS = [
   "italic 400",
   "italic 700",
 ] as const;
-
-export interface GhosttyTerminalFont {
-  readonly family?: string;
-  readonly size?: number;
-}
 
 let symbolsFontLoad: Promise<void> | null = null;
 
@@ -129,14 +121,14 @@ async function loadTerminalFontFamily(
   return (environment?.resolve ?? terminalFontFamily)(family);
 }
 
-function terminalFontSize(size?: number): number {
-  if (size === undefined || !Number.isFinite(size)) {
-    return DEFAULT_TERMINAL_FONT_SIZE;
-  }
-  return Math.max(
-    MIN_TERMINAL_FONT_SIZE,
-    Math.min(MAX_TERMINAL_FONT_SIZE, Math.round(size)),
-  );
+function terminalTypography(mount: HTMLElement) {
+  const style = getComputedStyle(mount);
+  return {
+    // An unmounted surface has no used font size and cannot paint yet.
+    fontSize: parseFloat(style.fontSize) || 1,
+    lineHeight: parseFloat(style.lineHeight) || 0,
+    ratio: globalThis.devicePixelRatio || 1,
+  };
 }
 
 function shouldBlinkTerminalCursor(state: {
@@ -594,7 +586,7 @@ export interface GhosttySelectionPosition {
 
 export interface GhosttyTerminalSurfaceOptions {
   readonly theme: GhosttyTheme;
-  readonly font?: GhosttyTerminalFont;
+  readonly fontFamily?: string;
   /** Read after font and WASM loading. */
   readonly visible?: boolean;
   readonly onData: (
@@ -633,10 +625,9 @@ export class GhosttyTerminalSurface {
   private hasSize = false;
   private metrics: GhosttyCellMetrics;
   private fontFamily: string;
-  private requestedFontFamily: string | undefined;
-  private fontSize: number;
-  private fontEpoch = 0;
-  private pendingFontEpoch: number | null = null;
+  private typography: ReturnType<typeof terminalTypography>;
+  private fontsDirty = false;
+  private readonly typeProbe: HTMLElement;
   private readonly stopObservingResize: () => void;
   private readonly scrollbarThumb: HTMLDivElement;
   private snapshot: GhosttySnapshot | null = null;
@@ -747,6 +738,8 @@ export class GhosttyTerminalSurface {
     core: GhosttyTerminalCore,
     metrics: GhosttyCellMetrics,
     fontFamily: string,
+    typography: ReturnType<typeof terminalTypography>,
+    typeProbe: HTMLElement,
     options: GhosttyTerminalSurfaceOptions,
   ) {
     this.mount = mount;
@@ -763,8 +756,8 @@ export class GhosttyTerminalSurface {
     this.inputAdmission = this.visible ? {} : null;
     this.theme = options.theme;
     this.fontFamily = fontFamily;
-    this.requestedFontFamily = options.font?.family;
-    this.fontSize = terminalFontSize(options.font?.size);
+    this.typography = typography;
+    this.typeProbe = typeProbe;
     this.installEvents();
     this.watchDevicePixelRatio();
     this.reducedMotionMedia?.addEventListener(
@@ -772,7 +765,11 @@ export class GhosttyTerminalSurface {
       this.onReducedMotionChange,
     );
     document.fonts.addEventListener("loadingdone", this.onFontsLoaded);
-    this.stopObservingResize = observeResize(mount, () => this.fit());
+    // An app text-size change can leave the viewport's own dimensions intact.
+    this.stopObservingResize = observeResize(
+      [mount, typeProbe],
+      () => this.fit(),
+    );
   }
 
   static async create(
@@ -807,14 +804,16 @@ export class GhosttyTerminalSurface {
     const scrollbarThumb = document.createElement("div");
     scrollbarThumb.className = "otk-ghostty-scrollbar-thumb";
     scrollbar.append(scrollbarThumb);
-    mount.replaceChildren(canvas, input, scrollbar);
+    const typeProbe = document.createElement("span");
+    typeProbe.className = "otk-ghostty-type-probe";
+    typeProbe.setAttribute("aria-hidden", "true");
+    mount.replaceChildren(canvas, input, scrollbar, typeProbe);
 
     const context = canvas.getContext("2d", { alpha: false });
     if (!context) throw new Error("Canvas 2D is unavailable");
     context.fillStyle =
       `rgb(${options.theme.background.r}, ${options.theme.background.g}, ${options.theme.background.b})`;
     context.fillRect(0, 0, canvas.width, canvas.height);
-    const fontSize = terminalFontSize(options.font?.size);
     try {
       // Load bundled fonts before measuring; fallback metrics would size the wrong grid.
       await ensureTerminalSymbolsFont();
@@ -822,10 +821,16 @@ export class GhosttyTerminalSurface {
       // Rendering can continue with platform glyph fallbacks.
     }
     const fontFamily = await loadTerminalFontFamily(
-      options.font?.family,
-      fontSize,
+      options.fontFamily,
+      terminalTypography(mount).fontSize,
     );
-    const metrics = measureGhosttyCell(context, fontSize, fontFamily);
+    const typography = terminalTypography(mount);
+    const metrics = measureGhosttyCell(
+      context,
+      typography.fontSize,
+      fontFamily,
+      typography.lineHeight,
+    );
     const grid = terminalGridSize(
       mount.clientWidth,
       mount.clientHeight,
@@ -849,6 +854,8 @@ export class GhosttyTerminalSurface {
       core,
       metrics,
       fontFamily,
+      typography,
+      typeProbe,
       options,
     );
     surface.fit();
@@ -918,41 +925,6 @@ export class GhosttyTerminalSurface {
     return Math.ceil(rows * this.metrics.height + CONTENT_PADDING * 2);
   }
 
-  async setFont(font: GhosttyTerminalFont): Promise<void> {
-    if (this.disposed) return;
-    const fontSize = terminalFontSize(font.size);
-    // Commit fields with loaded metrics; the epoch makes the newest overlapping call win.
-    const epoch = ++this.fontEpoch;
-    this.pendingFontEpoch = epoch;
-    const fontFamily = await loadTerminalFontFamily(font.family, fontSize);
-    if (this.disposed || epoch !== this.fontEpoch) return;
-    this.pendingFontEpoch = null;
-    this.fontFamily = fontFamily;
-    this.requestedFontFamily = font.family;
-    this.fontSize = fontSize;
-    this.applyFontMetrics();
-  }
-
-  private applyFontMetrics(): void {
-    this.metrics = measureGhosttyCell(
-      this.context,
-      this.fontSize,
-      this.fontFamily,
-    );
-    this.core.resize(
-      this.cols,
-      this.rows,
-      this.metrics.width,
-      this.metrics.height,
-    );
-    this.inputLeft = -1;
-    this.inputTop = -1;
-    this.forceFullRender = true;
-    this.scrollbarDirty = true;
-    this.fit();
-    this.requestRender();
-  }
-
   private readonly onReducedMotionChange = () => {
     if (this.disposed) return;
     // Restart from render; reduced motion left the steady cursor with no blink timer.
@@ -961,28 +933,8 @@ export class GhosttyTerminalSurface {
   };
 
   private readonly onFontsLoaded = () => {
-    if (this.disposed) return;
-    // Explicit loads validate and apply the newest request; ignore their events for the old face.
-    if (this.pendingFontEpoch !== null) return;
-    const fontFamily = terminalFontFamily(this.requestedFontFamily);
-    if (fontFamily !== this.fontFamily) {
-      this.fontFamily = fontFamily;
-      this.applyFontMetrics();
-      return;
-    }
-    const metrics = measureGhosttyCell(
-      this.context,
-      this.fontSize,
-      this.fontFamily,
-    );
-    if (
-      metrics.width === this.metrics.width &&
-      metrics.height === this.metrics.height &&
-      metrics.baseline === this.metrics.baseline
-    ) {
-      return;
-    }
-    this.applyFontMetrics();
+    this.fontsDirty = true;
+    this.fit();
   };
 
   resendSize(): void {
@@ -1001,7 +953,33 @@ export class GhosttyTerminalSurface {
       return false;
     }
     this.hasSize = true;
-    const ratio = globalThis.devicePixelRatio || 1;
+    const typography = terminalTypography(this.mount);
+    const { fontSize, lineHeight, ratio } = typography;
+    let cellSizeChanged = false;
+    if (
+      fontSize !== this.typography.fontSize ||
+      lineHeight !== this.typography.lineHeight ||
+      ratio !== this.typography.ratio || this.fontsDirty
+    ) {
+      if (this.fontsDirty) {
+        this.fontFamily = terminalFontFamily(this.options.fontFamily);
+        this.fontsDirty = false;
+      }
+      this.typography = typography;
+      const metrics = measureGhosttyCell(
+        this.context,
+        fontSize,
+        this.fontFamily,
+        lineHeight,
+      );
+      cellSizeChanged = metrics.width !== this.metrics.width ||
+        metrics.height !== this.metrics.height;
+      this.metrics = metrics;
+      this.inputLeft = -1;
+      this.inputTop = -1;
+      this.forceFullRender = true;
+      this.scrollbarDirty = true;
+    }
     const pixelWidth = Math.max(1, Math.round(width * ratio));
     const pixelHeight = Math.max(1, Math.round(height * ratio));
     let shouldRender = false;
@@ -1039,7 +1017,7 @@ export class GhosttyTerminalSurface {
       this.measuredRows = grid.rows;
       this.notifyResize();
     }
-    if (this.applyGrid()) shouldRender = true;
+    if (this.applyGrid(cellSizeChanged)) shouldRender = true;
     // Repaint synchronously before paint so resize never stretches the old backing store.
     if (shouldRender || this.forceFullRender) this.renderFrame();
     return true;
@@ -1063,10 +1041,12 @@ export class GhosttyTerminalSurface {
     if (this.applyGrid()) this.requestRender();
   }
 
-  private applyGrid(): boolean {
+  private applyGrid(cellSizeChanged = false): boolean {
     const cols = this.sharedGrid?.cols ?? this.measuredCols;
     const rows = this.sharedGrid?.rows ?? this.measuredRows;
-    if (cols === this.cols && rows === this.rows) return false;
+    if (!cellSizeChanged && cols === this.cols && rows === this.rows) {
+      return false;
+    }
     this.cols = cols;
     this.rows = rows;
     this.core.resize(cols, rows, this.metrics.width, this.metrics.height);
@@ -1293,6 +1273,7 @@ export class GhosttyTerminalSurface {
       this.input.remove();
       this.scrollbar.remove();
     }
+    this.typeProbe.remove();
   }
 
   private retireInput(): void {
@@ -2420,7 +2401,7 @@ export class GhosttyTerminalSurface {
       context: this.context,
       snapshot: this.snapshot,
       metrics: this.metrics,
-      fontSize: this.fontSize,
+      fontSize: this.typography.fontSize,
       fontFamily: this.fontFamily,
       padding: CONTENT_PADDING,
       originY: this.originY,
