@@ -936,12 +936,13 @@ try {
         case "nativeRequest": {
           const params = frame.params;
           if (
-            params.path.startsWith("/experimental/job?") &&
+            (params.path.startsWith("/experimental/job?") ||
+              params.path === "/shell") &&
             (profile !== "attention-orphaned-jobs" || params.target ||
               params.project)
           ) {
             throw new Error(
-              "Job evidence belongs to the isolated orphan-job scenario",
+              "Job and shell inventories belong to the isolated orphan-job scenario",
             );
           }
           if (params.target === "remote") {

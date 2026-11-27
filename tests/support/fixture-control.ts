@@ -410,7 +410,7 @@ export function request(value: unknown): ControlRequest {
         !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|model|command|experimental\/tool\/ids)$/
           .test(new URL(String(p.path), "http://fixture").pathname) &&
         !((p.method === undefined || p.method === "GET") &&
-          /^\/experimental\/job\?sessionID=ses_[a-zA-Z0-9]+$/.test(
+          /^(?:\/shell|\/experimental\/job\?sessionID=ses_[a-zA-Z0-9]+)$/.test(
             String(p.path),
           ))
       ) {
