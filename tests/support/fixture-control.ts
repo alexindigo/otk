@@ -48,6 +48,7 @@ export const profiles = {
   "revert-native": "v1",
   "sessions-tasks": "v1",
   "attention-failed-helper": "v1",
+  "attention-orphaned-jobs": "v1",
   "sessions-discovery": "v1",
   "contract-sessions-inbox": "neutral",
   "contract-sessions-panel": "neutral",
@@ -212,6 +213,7 @@ export interface Commands {
   scenario: {
     lease: string;
     action:
+      | "seed-orphaned-job"
       | "hold"
       | "release"
       | "freeze"
@@ -406,7 +408,11 @@ export function request(value: unknown): ControlRequest {
       text(p.path);
       if (
         !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|model|command|experimental\/tool\/ids)$/
-          .test(new URL(String(p.path), "http://fixture").pathname)
+          .test(new URL(String(p.path), "http://fixture").pathname) &&
+        !((p.method === undefined || p.method === "GET") &&
+          /^\/experimental\/job\?sessionID=ses_[a-zA-Z0-9]+$/.test(
+            String(p.path),
+          ))
       ) {
         throw new Error("Native path outside fixture vocabulary");
       }
@@ -469,6 +475,7 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "hold",
+          "seed-orphaned-job",
           "release",
           "freeze",
           "thaw",

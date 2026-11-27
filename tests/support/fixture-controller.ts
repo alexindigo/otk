@@ -2,6 +2,7 @@
 import "./fixture-diagnostics.ts";
 import { decodeBase64 } from "@std/encoding/base64";
 import { fromFileUrl, join, relative, resolve } from "@std/path";
+import { DatabaseSync } from "node:sqlite";
 import { nativeFixture } from "./native-fixture.ts";
 import { submitFailureScenario } from "./request-failure-fixture.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
@@ -934,6 +935,15 @@ try {
           };
         case "nativeRequest": {
           const params = frame.params;
+          if (
+            params.path.startsWith("/experimental/job?") &&
+            (profile !== "attention-orphaned-jobs" || params.target ||
+              params.project)
+          ) {
+            throw new Error(
+              "Job evidence belongs to the isolated orphan-job scenario",
+            );
+          }
           if (params.target === "remote") {
             if (profile !== "composer-history" || !remote || params.project) {
               throw new Error(
@@ -1113,6 +1123,66 @@ try {
           }
           return null;
         case "scenario":
+          if (frame.params.action === "seed-orphaned-job") {
+            if (
+              profile !== "attention-orphaned-jobs" || !lease ||
+              fixture!.oc.kind !== "opencode-v2-server" ||
+              !frame.params.sessionID
+            ) {
+              throw new Error(
+                "Expected the isolated native orphan-job scenario",
+              );
+            }
+            const sessionID = frame.params.sessionID.replace(/^opcv2-/, "");
+            const { nativeID: childID } = await fixture!.oc.session<
+              { id: string }
+            >(
+              "/session",
+              {
+                method: "POST",
+                body: { title: "Orphaned native job", parentID: sessionID },
+                directory: lease.directory,
+              },
+            );
+            createdIDs.push(browserSessionID(childID));
+            const native = new DatabaseSync(fixture!.oc.db);
+            try {
+              const parent = native.prepare(
+                "SELECT directory FROM session_v2 WHERE id=?",
+              ).get(sessionID);
+              if (parent?.directory !== lease.directory) {
+                throw new Error("Foreign orphan-job parent");
+              }
+              // Reproduce a leftover durable record in the disposable stock DB,
+              // not a live executor entry, an inbox item, or an OTK publication.
+              const notification = `msg_${
+                crypto.randomUUID().replaceAll("-", "")
+              }`;
+              const created = Date.now() - 60_000;
+              native.prepare(
+                `INSERT INTO job(notification_id,id,session_id,child_session_id,kind,title,status,recovery,time_created,time_updated)
+                VALUES(?,?,?,?,'subagent','Orphaned native job','running',?,?,?)`,
+              )
+                .run(
+                  notification,
+                  childID,
+                  sessionID,
+                  childID,
+                  JSON.stringify({
+                    kind: "subagent",
+                    parentSessionID: sessionID,
+                    childSessionID: childID,
+                    agent: "explore",
+                    description: "Orphaned native job",
+                  }),
+                  created,
+                  created,
+                );
+            } finally {
+              native.close();
+            }
+            return { childID };
+          }
           if (
             profile === "composer-request-failure" &&
             frame.params.action === "fail"
