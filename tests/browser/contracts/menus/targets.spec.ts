@@ -235,12 +235,19 @@ test("menus.stale-task-and-session-commands-preserve-captured-identities", {
   );
   await expect(page).toHaveURL(/\/tstv1-otk$/);
   await rightClick(page, '[data-tab="tstv1-otk"]');
+  // Right click completes before the owner's post-pointerup opening task.
+  // Capture the original session action before changing the route.
+  const copyTitle = contextMenu(page).getByRole("menuitem", {
+    name: "Copy session title",
+    exact: true,
+  });
+  await expect(copyTitle).toBeVisible();
   await page.evaluate(() =>
     location.hash = location.hash.slice(0, location.hash.lastIndexOf("/") + 1) +
       "tstv1-atmosphera"
   );
   await expect(page).toHaveURL(/\/tstv1-atmosphera$/);
-  await pick(page, "Copy session title");
+  await copyTitle.click();
   await copied(page, "Execution");
   await expect(page).toHaveURL(/\/tstv1-atmosphera$/);
 });
