@@ -24,9 +24,12 @@ export class DeliveryIndex {
     const stored = this.sql.prepare(
       `SELECT * FROM ${table}_scan WHERE parent_id=?`,
     ).get(input.parentID);
-    const reset = !stored || stored.source !== source ||
-      stored.revision !== revision ||
-      input.refresh && input.after === undefined;
+    // A credited scan owns its cursor until it reaches the tail. The parent's
+    // mutable revision is an invalidation for the next pass, not a generation
+    // change for the active pass. Otherwise a busy parent can starve discovery
+    // even though every requested page has successfully run.
+    const reset = !stored || stored.source !== source || !!stored.complete &&
+      (stored.revision !== revision || input.refresh && input.after === undefined);
     const cursor = reset ? "" : String(stored.cursor);
     if (reset || !stored.complete) {
       const page = scan(cursor);
@@ -46,7 +49,7 @@ export class DeliveryIndex {
         ).run(
           input.parentID,
           source,
-          revision,
+          reset ? revision : stored.revision,
           page.cursor,
           Number(page.complete),
         );
