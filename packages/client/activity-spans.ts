@@ -2,6 +2,7 @@
 import type { Activity } from "@otk/protocol";
 import type { TranscriptReply } from "./transcript-projection.ts";
 import { workLogBookkeeping } from "./record-folds.ts";
+import { sessionBoundary } from "./boundaries.ts";
 
 export interface ActivityGroup {
   key: string;
@@ -160,12 +161,16 @@ export function createRecordProjection(): {
         }
         const id = ids[index];
         const reply = replies[id];
-        if (reply.message.role === "context" && index >= contextEnd) {
+        const boundary = sessionBoundary(reply.message);
+        if (
+          !boundary && reply.message.role === "context" && index >= contextEnd
+        ) {
           contextEnd = index;
           contextHasContent = false;
           while (
             contextEnd < ids.length &&
-            replies[ids[contextEnd]].message.role === "context"
+            replies[ids[contextEnd]].message.role === "context" &&
+            !sessionBoundary(replies[ids[contextEnd]].message)
           ) {
             contextHasContent ||= !!replies[ids[contextEnd]].message.parts
               .length;
@@ -174,7 +179,9 @@ export function createRecordProjection(): {
         }
         // Headers alone cannot offer an activity disclosure. Once the interval
         // has content, retain every source row, including empty breakouts.
-        if (reply.message.role !== "context" || !contextHasContent) {
+        if (
+          boundary || reply.message.role !== "context" || !contextHasContent
+        ) {
           interval = undefined;
           conversation = id;
           next.keys.push(id);

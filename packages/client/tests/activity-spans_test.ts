@@ -31,6 +31,25 @@ function record(id: string, activity: Partial<Activity> = {}): Message {
     }],
   };
 }
+function answer(
+  id: string,
+  replyTo?: string,
+): Extract<Message, { role: "assistant" }> {
+  return {
+    id,
+    sessionID: "session",
+    role: "assistant",
+    replyTo,
+    time: { created: Number(id.replace(/\D/g, "")) * 1000, completed: 5000 },
+    agent: "build",
+    model: { provider: "test", model: "test" },
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    cost: 0,
+    interrupted: false,
+    parts: [],
+  };
+}
+
 function group(messages: Message[]) {
   const projection = createTranscriptProjection();
   projection.reset(messages);
@@ -195,7 +214,6 @@ Deno.test("unsafe records break out inside one interval; conversation separates 
           facts: { active: false, terminal: false },
         },
       },
-      { layout: "boundary" as const },
     ]
   ) {
     const value = group([
@@ -222,6 +240,68 @@ Deno.test("unsafe records break out inside one interval; conversation separates 
       .keys,
     ["activity:r1", "r3", "activity:r4"],
   );
+});
+
+Deno.test("boundary between interval members splits the interval", () => {
+  const helper = {
+    kind: "helper",
+    noun: "helper finished",
+    plural: "helpers finished",
+  };
+  const value = group([
+    answer("a1"),
+    record("r2", { summary: helper }),
+    record("r3", {
+      summary: { kind: "shell", noun: "shell", plural: "shells" },
+    }),
+    record("r4", { layout: "boundary", category: "compaction" }),
+    record("r5", { summary: helper }),
+  ]);
+  assertEquals(value.keys, ["reply:a1", "activity:r2", "r4", "activity:r5"]);
+  assertEquals(value.owners.r4, "r4");
+  assertEquals(
+    Object.values(value.groups).map((group) => ({
+      members: group.members,
+      breakouts: group.breakouts,
+      children: group.children?.flatMap((child) => child.members),
+    })),
+    [
+      { members: ["r2", "r3"], breakouts: [], children: ["r2", "r3"] },
+      { members: ["r5"], breakouts: [], children: ["r5"] },
+    ],
+  );
+});
+
+Deno.test("boundary alone after a reply", () => {
+  const value = group([answer("a1"), record("r2", { layout: "boundary" })]);
+  assertEquals(value.keys, ["reply:a1", "r2"]);
+  assertEquals(Object.keys(value.groups), []);
+  assertEquals(value.completions["reply:a1"], undefined);
+});
+
+Deno.test("records after a boundary are not the completion of the reply before it", () => {
+  const value = group([
+    answer("a1"),
+    record("r2", { layout: "boundary" }),
+    record("r3", { completion: { placement: "footer" } }),
+  ]);
+  assertEquals(value.completions["reply:a1"], undefined);
+  assertEquals(value.keys, ["reply:a1", "r2", "activity:r3"]);
+});
+
+Deno.test("mid-turn compaction follows the grouped reply", () => {
+  const projection = createTranscriptProjection();
+  projection.reset([
+    { ...record("p1"), role: "user", parts: [] },
+    answer("a2", "p1"),
+    record("r3", { layout: "boundary", category: "compaction" }),
+    answer("a4", "p1"),
+  ]);
+  assertEquals(projection.state.records.keys, ["p1", "reply:p1", "r3"]);
+  assertEquals(projection.state.repliesByID["reply:p1"].messageIDs, [
+    "a2",
+    "a4",
+  ]);
 });
 
 Deno.test("singletons mint intervals and identical groups do not cross kinds or details", () => {
