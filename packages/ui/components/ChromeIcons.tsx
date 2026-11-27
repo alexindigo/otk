@@ -11,6 +11,15 @@ function Icon(props: { children: Element; class?: string }): Element {
     </SvgIcon>
   );
 }
+export const GapIcon = () => (
+  <Icon>
+    <g fill="currentColor" stroke="none">
+      <circle cx="12" cy="5" r="1.85" />
+      <circle cx="12" cy="12" r="1.85" />
+      <circle cx="12" cy="19" r="1.85" />
+    </g>
+  </Icon>
+);
 export const ArrowLeftIcon = () => (
   <Icon>
     <path d="m11 18-6-6 6-6M19 12H5" />

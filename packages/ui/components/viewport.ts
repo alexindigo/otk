@@ -91,7 +91,8 @@ export interface ViewportGeometry {
   id: string;
   depth: number;
   distance?(): number;
-  anchor(): WindowAnchor | undefined;
+  anchorable?(key: string): boolean;
+  anchor(anchorable?: (key: string) => boolean): WindowAnchor | undefined;
   resolve(anchor: WindowAnchor): number | undefined;
   /** Retain the source and every enclosing window row until anchor transfer. */
   retain?(anchor: WindowAnchor): () => void;
@@ -321,6 +322,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     releaseAnchor = release;
     previous?.();
   };
+  const anchorable = (id: string, key: string) =>
+    geometries.get(id)?.anchorable?.(key) !== false;
   const capture = () => {
     if (mode === "following") {
       readerCapturePending = false;
@@ -334,8 +337,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (mode === "user-pinned" || navigation) return;
     if (leases || changing) return;
     const candidates = [...geometries.values()].flatMap((geometry) => {
-      const anchor = geometry.anchor();
-      if (!anchor) return [];
+      const anchor = geometry.anchor(geometry.anchorable);
+      if (!anchor || !anchorable(geometry.id, anchor.key)) return [];
       const prefix = `${geometry.id}/${encodeURIComponent(anchor.key)}/`;
       // A container covering estimated descendant spacers is not a source.
       if ([...geometries.keys()].some((id) => id.startsWith(prefix))) return [];
@@ -450,13 +453,17 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
           if (!leases && target.measured && appliedRevision === revision) {
             navigation = undefined;
             geometryPending = false;
+            const source = target.anchor &&
+                anchorable(target.anchor.id, target.anchor.key)
+              ? target.anchor
+              : undefined;
             if (request.intent === "user") {
-              setMode(target.anchor ? "user-pinned" : "free-scrolled");
+              setMode(source ? "user-pinned" : "free-scrolled");
             }
-            if (mode !== "following" && target.anchor) {
-              attach(target.anchor.id, {
-                key: target.anchor.key,
-                offset: position - target.anchor.start,
+            if (mode !== "following" && source) {
+              attach(source.id, {
+                key: source.key,
+                offset: position - source.start,
               });
             } else capture();
             request.resolve();
@@ -811,7 +818,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       const saved = anchors.find((saved) => saved.id === id);
       if (!saved) return;
       const anchor = change(saved.anchor);
-      if (anchor) attach(id, anchor);
+      if (anchor && anchorable(id, anchor.key)) attach(id, anchor);
       else {
         if (mode === "user-pinned") setMode("free-scrolled");
         anchors = [];

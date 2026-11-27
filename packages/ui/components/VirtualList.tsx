@@ -127,6 +127,7 @@ export default function VirtualList(props: {
   retainExcluded?: boolean;
   measurements?(path: string): Map<string, number>;
   measurementKey?(key: string): string;
+  anchorable?(key: string): boolean;
   revision?: unknown;
   intrinsic?: boolean;
   overscan?: number;
@@ -225,10 +226,14 @@ export default function VirtualList(props: {
     const offset = model.offset(key);
     return offset === undefined ? undefined : origin() + offset;
   };
-  const logicalAnchor = () => {
+  const anchorable = (key: string) => props.anchorable?.(key) !== false;
+  const logicalAnchor = (eligible = anchorable) => {
     const root = viewport(), bounds = root.getBoundingClientRect();
     const candidates = [...elements].flatMap(([key, element]) => {
-      if (!element.isConnected || measuring.has(key) || !model.measured(key)) {
+      if (
+        !eligible(key) || !element.isConnected || measuring.has(key) ||
+        !model.measured(key)
+      ) {
         return [];
       }
       const rect = element.getBoundingClientRect();
@@ -480,10 +485,10 @@ export default function VirtualList(props: {
       transaction(() => {
         const previous = currentKeys;
         positionOwner?.remap(path, (anchor) => {
-          if (included.has(anchor.key)) return anchor;
+          if (included.has(anchor.key) && anchorable(anchor.key)) return anchor;
           const at = previous?.indexOf(anchor.key) ?? -1;
           const measuredNeighbor = (key: string) =>
-            included.has(key) &&
+            included.has(key) && anchorable(key) &&
             elements.get(key)?.isConnected && model.measured(key) &&
             !measuring.has(key);
           const neighbor = previous?.slice(at + 1).find((key) =>
@@ -645,9 +650,8 @@ export default function VirtualList(props: {
       id: path,
       depth: path.split("/").length,
       distance: () => Math.max(0, -(logicalAnchor()?.offset ?? -Infinity)),
-      anchor() {
-        return logicalAnchor();
-      },
+      anchorable,
+      anchor: logicalAnchor,
       resolve: (anchor) => {
         const element = elements.get(anchor.key);
         const base = element?.isConnected ? rowStart(anchor.key) : undefined;

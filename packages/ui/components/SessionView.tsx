@@ -92,6 +92,7 @@ import {
 import { TranscriptContext } from "../features/transcript-context.tsx";
 import { contextTarget } from "./context-target.ts";
 import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
+import TranscriptGap from "./TranscriptGap.tsx";
 import { activityRecord } from "./activity-record.ts";
 /** Acquisition status for the host's fixed status slot, never the message flow. */
 export function transcriptStatus(input: {
@@ -263,7 +264,22 @@ export default function SessionView(props: {
         ))}
     />
   );
-  const renderGroup = (key: string, one: (key: string) => Element) => (
+  const gapKey = (key: string) => key.startsWith("gap:");
+  const gaps = () => props.transcript?.state.gaps;
+  const renderGroup = (key: string, one: (key: string) => Element) =>
+    gapKey(key)
+      ? (
+        <Show when={gaps()?.find((gap) => gap.key === key)}>
+          {(gap) => (
+            <TranscriptGap
+              gap={gap}
+              onLoad={() => void props.transcript?.bridge(key)}
+            />
+          )}
+        </Show>
+      )
+      : renderRecord(key, one);
+  const renderRecord = (key: string, one: (key: string) => Element) => (
     <Show
       when={isRevert(key)}
       fallback={
@@ -805,7 +821,12 @@ export default function SessionView(props: {
                                 Load older messages
                               </button>
                             </Show>
-                            <Show when={props.error && !!count()}>
+                            <Show
+                              when={props.error && !!count() &&
+                                !gaps()?.some((gap) =>
+                                  gap.failure === props.error
+                                )}
+                            >
                               <PaneState
                                 feedback={{
                                   ...errorFeedback(props.error)!,
@@ -889,10 +910,13 @@ export default function SessionView(props: {
                                   <VirtualList
                                     keys={transcriptKeys()}
                                     revision={recordGroups().revision}
+                                    anchorable={(key) => !gapKey(key)}
                                     measurementKey={(key) =>
-                                      `${key}:${
-                                        recordGroups().revisions[key] ?? 0
-                                      }:${logCompletion(key)?.revision ?? 0}`}
+                                      gapKey(key)
+                                        ? key
+                                        : `${key}:${
+                                          recordGroups().revisions[key] ?? 0
+                                        }:${logCompletion(key)?.revision ?? 0}`}
                                     label="Transcript messages"
                                     viewport={() => list}
                                     samples={[{
