@@ -13,6 +13,7 @@ import {
   type CodeBlockSource,
   createTranscriptInteraction,
   type DisclosureContextInput,
+  type DisclosureIdentity,
   type NativeSourceOwner,
   recordKindKey,
   type TranscriptInteraction,
@@ -65,7 +66,13 @@ interface ContentActions {
 }
 const Identity = createContext<ContentIdentity>({});
 const Actions = createContext<ContentActions | null>(null);
-const Interaction = createContext<TranscriptInteraction | null>(null);
+type RecordPlacement = NonNullable<DisclosureIdentity["placement"]>;
+const Interaction = createContext<
+  {
+    owner: TranscriptInteraction;
+    placement: RecordPlacement;
+  } | null
+>(null);
 type SourceReader = (
   ref: string,
 ) => NativeSourceOwner;
@@ -74,15 +81,20 @@ const Sources = createContext<SourceReader | null>(null);
 export function useNativeSource(): SourceReader | null {
   return useContext(Sources);
 }
-/** Record surfaces borrow the same identity and lazy Source resources. */
+/** Record surfaces share their source resource and lifetime, not fold intent. */
 export function TranscriptRecords(props: {
   interaction: TranscriptInteraction;
+  placement: RecordPlacement;
   nativeSource?: SourceReader;
   children: Element;
 }): Element {
   return (
     <Sources value={props.nativeSource ?? null}>
-      <Interaction value={props.interaction}>{props.children}</Interaction>
+      <Interaction
+        value={{ owner: props.interaction, placement: props.placement }}
+      >
+        {props.children}
+      </Interaction>
     </Sources>
   );
 }
@@ -91,21 +103,19 @@ export function TranscriptRecords(props: {
 export function TranscriptSnapshot(props: { children: Element }): Element {
   const interaction = createTranscriptInteraction();
   return (
-    <Sources value={null}>
-      <Actions value={null}>
-        <Visibility value={null}>
-          <Interaction value={interaction}>
-            <DisclosuresProvider owner={interaction.disclosures}>
-              {props.children}
-            </DisclosuresProvider>
-          </Interaction>
-        </Visibility>
-      </Actions>
-    </Sources>
+    <Actions value={null}>
+      <Visibility value={null}>
+        <TranscriptRecords interaction={interaction} placement="transcript">
+          <DisclosuresProvider owner={interaction.disclosures}>
+            {props.children}
+          </DisclosuresProvider>
+        </TranscriptRecords>
+      </Visibility>
+    </Actions>
   );
 }
 export function contentGeneration() {
-  const interaction = useContext(Interaction);
+  const interaction = useContext(Interaction)?.owner;
   return (id: string) => interaction?.generation(id) ?? id;
 }
 const Visibility = createContext<
@@ -143,8 +153,11 @@ export function transcriptDisclosureIdentity() {
       : owner ?? key(content);
     const generation = owner ?? content.partID ?? content.ownerID ??
       content.messageID ?? id;
-    return interaction?.identify(id, interaction.generation(generation)) ??
-      { scope: "standalone", id };
+    return interaction?.owner.identify(
+      id,
+      interaction.owner.generation(generation),
+      interaction.placement,
+    ) ?? { scope: "standalone", id };
   };
 }
 
@@ -269,6 +282,7 @@ export function TranscriptContext(
     <Visibility value={props.visibility ?? null}>
       <TranscriptRecords
         interaction={interaction}
+        placement="transcript"
         nativeSource={props.nativeSource}
       >
         <Actions

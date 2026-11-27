@@ -203,6 +203,7 @@ export default function WorkPanelView(): Element {
               {(_key) => (
                 <TranscriptRecords
                   interaction={owner().interaction}
+                  placement="workPanel"
                   nativeSource={owner().nativeSource}
                 >
                   <ContentIdentityProvider
