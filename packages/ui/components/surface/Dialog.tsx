@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { focusControl } from "../../keyboard/focus.ts";
 import "./Dialog.css" with { type: "text" };
 import { type Element, onSettled } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
@@ -35,7 +36,11 @@ export default function Dialog(props: {
       const origin = originID
         ? document.getElementById(originID) ?? prior
         : prior;
-      if (origin?.isConnected) origin.focus();
+      focusControl(origin, {
+        focusVisible: ports.keyboard?.focusOwner.modality() === "pointer"
+          ? false
+          : undefined,
+      });
       if (
         origin &&
         (!origin.isConnected || document.activeElement === document.body) &&

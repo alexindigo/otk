@@ -87,6 +87,53 @@ test.beforeEach(async ({ isolatedState: state, page }) => {
 });
 
 test(
+  "projects.pointer-rename-return-does-not-paint-selection",
+  { tag },
+  async ({
+    isolatedState: state,
+    page,
+  }) => {
+    const other = await state.controller.call<
+      { directory: string; id: string }
+    >(
+      "nativeRequest",
+      {
+        lease: state.lease.lease,
+        path: "/session",
+        method: "POST",
+        project: "secondary",
+        body: { title: "Another project's session" },
+      },
+    );
+    const old = row(state, page);
+    const target = page.locator(
+      `[data-project=${JSON.stringify(other.directory)}] .otk-project-open`,
+    );
+    const quiet = async () => {
+      await expect.soft(old.locator(":focus-visible")).toHaveCount(0);
+      await expect.soft(old.locator(".otk-project-menu")).toHaveCSS(
+        "opacity",
+        "0",
+      );
+    };
+    await begin(state, page);
+    await page.mouse.move(700, 400);
+    await save(state, page, "Renamed project");
+    await quiet();
+    await target.click();
+    await expect(page).toHaveURL(new RegExp(`${other.id}$`));
+    await page.mouse.move(700, 400);
+    await quiet();
+    await expect(
+      page.locator(
+        `[data-project=${JSON.stringify(other.directory)}] .otk-project-menu`,
+      ),
+    )
+      .toHaveCSS("opacity", "0");
+  },
+);
+
+test(
   "projects.sidebar-rename-inline",
   { tag },
   async ({ isolatedState: state, page }) => {

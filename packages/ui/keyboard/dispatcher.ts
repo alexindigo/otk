@@ -1,75 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub } from "@otk/client";
-import { localKeyboard, nativeTextField } from "./ownership.ts";
+import { localKeyboard } from "./ownership.ts";
 import { type KeyEvent, type Keymap, makeKeymap } from "./keys.ts";
-
-type FocusHome = () => HTMLTextAreaElement | undefined;
+import { createFocusOwner } from "./focus.ts";
 
 export interface Keyboard {
   keymap: Keymap;
   focus(): string;
-  focusHome(home: FocusHome): () => void;
+  focusOwner: ReturnType<typeof createFocusOwner>;
+  focusHome: ReturnType<typeof createFocusOwner>["home"];
   layer(command: string, when?: () => boolean, rank?: number): () => void;
   onLayerClose(command: string): () => void;
   close(event: KeyEvent): boolean;
   start(target?: Document, hasSession?: () => boolean): () => void;
-}
-
-function startWindowFocus(
-  doc: Document,
-  hasSession: () => boolean,
-  home: FocusHome,
-) {
-  const empty = (node: EventTarget | null) =>
-    !node || node === doc || node === doc.body || node === doc.documentElement;
-  let lastText: WeakRef<HTMLElement> | undefined;
-  const remember = (node: EventTarget | null) => {
-    if (!empty(node)) {
-      lastText = nativeTextField(node) ? new WeakRef(node) : undefined;
-    }
-  };
-  const focusIn = (event: FocusEvent) => remember(event.target);
-  const available = (node: HTMLElement | undefined): node is HTMLElement =>
-    !!node && node.isConnected && !node.closest("[inert], :disabled") &&
-    node.checkVisibility({ visibilityProperty: true });
-  const restore = () => {
-    if (
-      doc.visibilityState !== "visible" || !hasSession() ||
-      !empty(doc.activeElement) ||
-      doc.querySelector("dialog[open], :popover-open") ||
-      doc.getSelection()?.isCollapsed === false
-    ) return;
-
-    const composer = home();
-    const previous = lastText?.deref();
-    if (available(previous)) {
-      if (
-        (previous instanceof HTMLInputElement ||
-          previous instanceof HTMLTextAreaElement) &&
-        previous.selectionStart !== previous.selectionEnd
-      ) return;
-      if (previous !== composer) {
-        previous.focus({ preventScroll: true });
-        if (!empty(doc.activeElement)) return;
-      }
-    }
-    if (!composer || !available(composer)) return;
-    composer.focus({ preventScroll: true });
-    if (doc.activeElement === composer) {
-      const end = composer.value.length;
-      composer.setSelectionRange(end, end);
-    }
-  };
-  remember(doc.activeElement);
-  const window = doc.defaultView;
-  doc.addEventListener("focusin", focusIn, true);
-  doc.addEventListener("visibilitychange", restore);
-  window?.addEventListener("focus", restore);
-  return () => {
-    doc.removeEventListener("focusin", focusIn, true);
-    doc.removeEventListener("visibilitychange", restore);
-    window?.removeEventListener("focus", restore);
-  };
 }
 
 /** One listener lifetime per consumer; layers contain command IDs only. */
@@ -92,8 +35,8 @@ export function createKeyboard(
     },
   }, mac);
   const layers: { command: string; when: () => boolean; rank: number }[] = [];
+  const focusOwner = createFocusOwner();
   const resets = new Set<string>();
-  let home: FocusHome | undefined;
   const close = (e: KeyEvent): boolean => {
     if (
       e.key !== "Escape" || e.isComposing || e.repeat || e.defaultPrevented ||
@@ -114,12 +57,8 @@ export function createKeyboard(
   return {
     keymap,
     focus: () => document.activeElement?.getAttribute("name") ?? "",
-    focusHome(target) {
-      home = target;
-      return () => {
-        if (home === target) home = undefined;
-      };
-    },
+    focusHome: focusOwner.home,
+    focusOwner,
     onLayerClose(command: string): () => void {
       resets.add(command);
       return () => {
@@ -140,8 +79,7 @@ export function createKeyboard(
     },
     close,
     start(target: Document = document, hasSession?: () => boolean): () => void {
-      const stopFocus = hasSession &&
-        startWindowFocus(target, hasSession, () => home?.());
+      const stopFocus = focusOwner.start(target, hasSession);
       const capture = (event: KeyboardEvent) => {
         if (close(event)) event.stopPropagation();
       };
@@ -149,7 +87,7 @@ export function createKeyboard(
       target.addEventListener("keydown", capture, true);
       target.addEventListener("keydown", dispatch);
       return () => {
-        stopFocus?.();
+        stopFocus();
         target.removeEventListener("keydown", capture, true);
         target.removeEventListener("keydown", dispatch);
       };

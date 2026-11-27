@@ -15,11 +15,12 @@ import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
 import { selection } from "../selection.ts";
 import { hoverIntent } from "../hover-intent.ts";
+import { focusControl } from "../../keyboard/focus.ts";
 
 export type PopoverOpenReason = "pointer" | "keyboard";
 export interface PopoverControl {
   open(anchor?: PointAnchor, reason?: PopoverOpenReason): void;
-  close(focus?: () => void): void;
+  close(restore?: false | (() => void), reason?: PopoverOpenReason): void;
   contains(target: Node): boolean;
   /** Notify the retained origin that its captured action was activated. */
   activateOrigin?(): void;
@@ -30,7 +31,8 @@ export interface PointAnchor {
   width?: number;
   height?: number;
   origin: HTMLElement;
-  focus(): void;
+  returnTo?: HTMLElement | null;
+  focus?(): void;
 }
 
 export const POPOVER_BOUNDS = "otk-popover-bounds";
@@ -116,16 +118,26 @@ export default function Popover(props: {
     if (notify) props.onClose?.();
   };
   onCleanup(release);
-  const dismiss = (focus?: () => void) => {
-    const origin = props.preview && previewFocus?.isConnected
+  const dismiss = (
+    restore?: false | (() => void),
+    reason = ports.keyboard?.focusOwner.modality() ?? openedBy,
+  ) => {
+    const placement = point();
+    const { focus: returnToInput } = placement ?? {};
+    const origin = placement
+      ? placement.returnTo
+      : props.preview && previewFocus?.isConnected
       ? previewFocus
       : trigger;
-    const restore = focus ?? point()?.focus ?? (() => origin?.focus());
     restoringFocus = true;
     try {
       panel?.hidePopover();
       release();
-      restore();
+      if (restore !== false) {
+        const callback = restore ?? returnToInput;
+        if (callback) callback();
+        else focusControl(origin, { focusVisible: reason === "keyboard" });
+      }
     } finally {
       restoringFocus = false;
     }
@@ -188,7 +200,7 @@ export default function Popover(props: {
         ) return;
         event.preventDefault();
         event.stopPropagation();
-        dismiss();
+        dismiss(undefined, "keyboard");
       };
       if (!ports.keyboard) document.addEventListener("keydown", escape, true);
       stopWatching = () => {
@@ -223,7 +235,7 @@ export default function Popover(props: {
     id: closeId,
     title: `Close ${props.label}`,
     category: "Controls",
-    run: () => dismiss(),
+    run: () => dismiss(undefined, "keyboard"),
   });
   onSettled(() =>
     ports.keyboard?.layer(closeId, () => panel.matches(":popover-open"), 31)
@@ -262,7 +274,7 @@ export default function Popover(props: {
             event.preventDefault();
             if (props.onActivate) {
               const activate = props.onActivate;
-              dismiss();
+              dismiss(undefined, event.detail ? "pointer" : "keyboard");
               activate();
               return;
             }
@@ -271,8 +283,12 @@ export default function Popover(props: {
               if (!panel.matches(":popover-open")) show(undefined, openedBy);
               return;
             }
-            if (panel.matches(":popover-open")) dismiss();
-            else show(undefined, openedBy);
+            if (panel.matches(":popover-open")) {
+              dismiss(
+                undefined,
+                event.detail ? "pointer" : "keyboard",
+              );
+            } else show(undefined, openedBy);
           }}
           onPointerDown={() => {
             openedBy = "pointer";
@@ -337,7 +353,7 @@ export default function Popover(props: {
             onClick={(event) => {
               const button = (event.target as HTMLElement).closest("button");
               if (props.dismissOnAction && button && !button.disabled) {
-                dismiss();
+                dismiss(undefined, event.detail ? "pointer" : "keyboard");
               }
             }}
           >

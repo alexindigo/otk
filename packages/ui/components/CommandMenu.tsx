@@ -21,6 +21,7 @@ import {
   type ContextTarget,
 } from "@otk/client";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { commandRows } from "./list-presentation.ts";
@@ -142,7 +143,7 @@ export default function CommandMenu(props: {
     });
     try {
       await commands.runContext(action);
-      if (current === generation) menu.close(() => {});
+      if (current === generation) menu.close(false);
     } catch (cause) {
       if (current !== generation) return;
       if (ports.failureOwned?.(cause)) {
@@ -175,8 +176,8 @@ export default function CommandMenu(props: {
             if (capture()) control.open(anchor, reason);
             else clear();
           },
-          close: (focus) => {
-            control.close(focus);
+          close: (restore, reason) => {
+            control.close(restore, reason);
             clear();
           },
           contains: control.contains,
@@ -209,8 +210,16 @@ export default function CommandMenu(props: {
               <For each={group()} keyed={(row) => row.action.key}>
                 {(row) => {
                   const action = () => row().action;
-                  let status: { focus(): void } | undefined,
+                  let focusStatus: (() => void) | undefined,
                     button!: HTMLButtonElement;
+                  const focusAction = () => {
+                    focusControl(button, {
+                      focusVisible:
+                        ports.keyboard?.focusOwner.modality() === "pointer"
+                          ? false
+                          : undefined,
+                    });
+                  };
                   return (
                     <>
                       <Show
@@ -224,8 +233,8 @@ export default function CommandMenu(props: {
                         feedback={pending() === action().key
                           ? { kind: "pending", text: "Working..." }
                           : undefined}
-                        control={(control) => status = control}
-                        focusAction={() => button.focus()}
+                        control={({ focus }) => focusStatus = focus}
+                        focusAction={focusAction}
                       >
                         <button
                           ref={(element) => button = element}
@@ -253,8 +262,7 @@ export default function CommandMenu(props: {
                           ].filter(Boolean).join(" ")}
                           onClick={() =>
                             !action().unavailable && void run(action(), () =>
-                              status?.focus(), () =>
-                              button.focus())}
+                              focusStatus?.(), focusAction)}
                         >
                           <span
                             class="otk-control-label"

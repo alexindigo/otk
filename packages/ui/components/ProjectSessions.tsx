@@ -53,8 +53,10 @@ import { PlusIcon, SearchIcon, SessionsIcon } from "./ChromeIcons.tsx";
 import {
   ownedAction,
   ownedCommand,
+  selectionFocus,
   useCommandPorts,
 } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import { contextTarget } from "./context-target.ts";
 import { sessionState } from "./selection.ts";
 import { digestLabel, digestProgress } from "@otk/client";
@@ -122,7 +124,9 @@ export default function ProjectSessions(props: {
     enabled: () =>
       !!props.project && search?.isConnected &&
       !!search.getClientRects().length,
-    run: () => search.focus(),
+    run: () => {
+      focusControl(search);
+    },
   });
   const open = ownedAction("project.session.open", props.onOpen, {
     arguments: {
@@ -256,6 +260,8 @@ export default function ProjectSessions(props: {
         sessionID: key,
       }, "row");
     const editing = () => renaming() && props.rename!.editing;
+    let control: HTMLButtonElement | undefined;
+    const bindFocus = selectionFocus("session", selected, () => control);
     const feedbackID = createUniqueId();
     const openRow = () => {
       const session = entry();
@@ -304,7 +310,10 @@ export default function ProjectSessions(props: {
                 class: `otk-session-row ${
                   entry() ? sessionState(entry()!) : ""
                 }${editing() ? " is-editing" : ""}`,
-                ref,
+                ref: (element) => {
+                  ref(element);
+                  bindFocus(element);
+                },
                 attributes: {
                   "data-session": entry() ? key : undefined,
                   "data-status": entry()
@@ -315,6 +324,7 @@ export default function ProjectSessions(props: {
                   onDblClick: pinRow,
                 },
               }}
+              mainRef={(element) => control = element}
               lamp={
                 <TreeIcon>
                   <Show when={entry()} fallback={<SessionsIcon />}>

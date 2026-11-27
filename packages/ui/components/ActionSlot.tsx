@@ -2,6 +2,7 @@
 import type { Feedback } from "@otk/client";
 import { createEffect, type Element, onSettled } from "solid-js";
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import "./ActionSlot.css" with { type: "text" };
 
 /** One normal-flow cell preserves the action's geometry while status owns it. */
@@ -34,9 +35,7 @@ export default function ActionSlot(props: {
           status = element;
           props.control?.({
             focus: () => {
-              if (
-                element.isConnected && element.getClientRects().length
-              ) element.focus();
+              focusControl(element, { focusVisible: false });
             },
           });
         }}

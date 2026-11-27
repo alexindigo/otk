@@ -4,6 +4,7 @@ import { createUniqueId, type Element, onSettled, Show } from "solid-js";
 import type { InlineRenameField } from "@otk/client";
 import { errorFeedback } from "@otk/client";
 import FieldFeedback from "./FieldFeedback.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 
 type TitleOwner = InlineRenameField<{ title: string; origin?: string }>;
 
@@ -52,7 +53,7 @@ export default function TitleEditor(
   const errorID = props.feedbackID ?? createUniqueId();
   let input!: HTMLInputElement;
   onSettled(() => {
-    input.focus();
+    focusControl(input);
     input.select();
   });
   return (
