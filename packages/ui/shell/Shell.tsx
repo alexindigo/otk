@@ -705,6 +705,7 @@ export default function Shell(
         <ShellProvider
           reload={reload}
           ports={{
+            now,
             theme: props.theme,
             toggles,
             usage: session.usage,

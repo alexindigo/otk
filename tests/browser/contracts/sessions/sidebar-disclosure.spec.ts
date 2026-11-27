@@ -201,6 +201,13 @@ test.describe("sidebar row-level presentation", () => {
         ),
       ).toHaveText(name);
     }
+    // D79: use a grey worktree as the ChromeMeta reference, not the working parent.
+    const reference = page.locator(
+      `.otk-project-row[data-project=${
+        JSON.stringify(root + "/worktrees/feature-two")
+      }]`,
+    );
+    await expect(reference).toHaveAttribute("data-rollup", "none");
     for (
       const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
         "otk-light-stone",
@@ -212,23 +219,24 @@ test.describe("sidebar row-level presentation", () => {
         "data-otk-theme",
         theme,
       );
+      const visit = await reference.locator(".otk-project-visit")
+        .evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { font: style.fontSize, color: style.color };
+        });
       const values = await page.locator(
         ".otk-archived-toggle, .otk-inactive-toggle, .otk-discovered-toggle",
       ).evaluateAll((headers) =>
         headers.map((header) => {
           const meta = header.querySelector(".otk-chrome-meta")!;
-          const visit = document.querySelector(".otk-project-visit")!;
           const label = header.querySelector(".otk-control-label")!;
           const m = meta.getBoundingClientRect(),
             l = label.getBoundingClientRect();
-          const style = getComputedStyle(meta),
-            reference = getComputedStyle(visit);
+          const style = getComputedStyle(meta);
           return {
             text: meta.textContent,
             font: style.fontSize,
             color: style.color,
-            referenceFont: reference.fontSize,
-            referenceColor: reference.color,
             centerDelta: Math.abs(m.y + m.height / 2 - l.y - l.height / 2),
           };
         })
@@ -236,8 +244,8 @@ test.describe("sidebar row-level presentation", () => {
       expect(values.length).toBeGreaterThanOrEqual(2);
       for (const value of values) {
         expect(value.text).toMatch(/^\d+$/);
-        expect(value.font).toBe(value.referenceFont);
-        expect(value.color).toBe(value.referenceColor);
+        expect(value.font).toBe(visit.font);
+        expect(value.color).toBe(visit.color);
         expect(value.centerDelta).toBeLessThanOrEqual(1);
       }
       await page.screenshot({

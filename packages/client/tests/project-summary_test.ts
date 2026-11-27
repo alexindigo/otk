@@ -9,8 +9,99 @@ import {
   type ProjectSummary,
 } from "@otk/protocol";
 import { createEntityStateStore, presentedEntity } from "../entity-state.ts";
+import { age } from "../format.ts";
+import { sidebarTimer } from "../sidebar-timer.ts";
 import type { MergedMetadata } from "../index.ts";
 import { shellEntry } from "./shell-fixture.ts";
+
+Deno.test("D79: run and attention timers format the same duration identically", () => {
+  const start = 1234;
+  const project = {
+    directory: "/p",
+    added: true,
+    inactive: false,
+    lastVisit: start,
+  };
+  for (
+    const [ms, text] of [
+      [30_800, "now"],
+      [2 * 60_000, "2m"],
+      [3_600_000 + 30_800, "1h"],
+      [3_600_000 + 2 * 60_000 + 30_800, "1h 2m"],
+    ] as const
+  ) {
+    const run = sidebarTimer("working", start, start + ms)!;
+    const attention = sidebarTimer("finished", undefined, start + ms, project)!;
+    assertEquals([run.kind, attention.kind], ["run", "attention"]);
+    assertEquals(run.time.text, attention.time.text);
+    assertEquals(run.time.parts, attention.time.parts);
+    assertEquals(run.time.text, text);
+  }
+});
+
+Deno.test("D79: project timer selects the clock and tone from the rollup", () => {
+  for (
+    const [status, kind, tone] of [
+      ["working", "run", "muted"],
+      ["blocked", "attention", "default"],
+      ["finished", "attention", "default"],
+      ["none", "visit", "default"],
+      ["dependencies", "visit", "default"],
+    ] as const
+  ) {
+    const directory = "/p";
+    const inbox: InboxSnapshot = {
+      projects: [{ directory, added: true, inactive: false, lastVisit: 0 }],
+      tasks: [],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+      discovered: [directory],
+      entities: {
+        [entityKey("project", directory)]: {
+          ...presentedEntity("project", directory, status),
+          ...{ runStartedAt: 90_000 },
+        },
+      },
+    };
+    const store = createEntityStateStore({ read: () => inbox.entities });
+    const projection = createProjectProjection({
+      entry: () => undefined,
+      entities: () => store,
+    });
+    const check = (now: number, expected: unknown) => {
+      const row = projection.row(directory, now)!;
+      assertEquals(row.status, status);
+      assertEquals(Reflect.get(row, "timer"), expected, status);
+      assertEquals(
+        Reflect.get(inboxProjects([], inbox, now)[0], "timer"),
+        expected,
+        status,
+      );
+    };
+    if (status === "none") {
+      // Inactive grey rows freeze the age at deactivation, not at render time.
+      inbox.projects[0].inactive = true;
+      inbox.projects[0].inactiveAt = 60_000;
+      projection.inbox(inbox);
+      check(120_000, { kind, tone, time: age(0, 60_000, "inactive") });
+      inbox.projects[0] = { ...inbox.projects[0], inactive: false };
+    }
+    projection.inbox(inbox);
+    for (const now of [120_000, 150_000]) {
+      check(now, {
+        kind,
+        tone,
+        time: status === "working" ? age(90_000, now, "run") : age(0, now),
+      });
+    }
+    if (status === "none") {
+      const now = 3_720_000;
+      check(now, { kind, tone, time: age(0, now) });
+      assertEquals(projection.row(directory, now)?.timer?.time.text, "1h");
+    }
+  }
+});
 
 Deno.test("archive is independent of inactive policy; only live attention escapes it", () => {
   for (const inactive of [false, true]) {

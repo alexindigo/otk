@@ -51,7 +51,7 @@ Deno.test("catalog merges tracked, indexed and template directories once, retain
     ["/zebra", "template", "none"],
     ["/alpha", "template", "none"],
   ]);
-  assertEquals(rows.find((p) => p.directory === "/alpha")?.visit, undefined);
+  assertEquals(rows.find((p) => p.directory === "/alpha")?.timer, undefined);
   assertEquals(rows.map((p) => [p.directory, p.group]), [
     ["/tracked", "discovered"],
     ["/old", "active"],
