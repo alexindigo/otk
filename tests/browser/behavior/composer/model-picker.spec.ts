@@ -40,7 +40,7 @@ test("composer.catalog-demand-warms-the-selected-native-working-folder", {
       frame.params?.directory === directory && frame.params?.intent === "warm"
     ),
   ).toBe(true);
-  const picker = page.locator(".otk-model-picker");
+  const picker = page.locator(".otk-model-picker:not([inert] *)");
   await picker.locator(":scope > button").click();
   await expect(picker.locator("[role=option]").first()).toBeVisible();
 });
@@ -122,7 +122,7 @@ test(
     expect(completeKinds()).not.toContain("resourceTemplates");
     await prompt(page).fill("");
     const before = demands().length;
-    const picker = page.locator(".otk-model-picker");
+    const picker = page.locator(".otk-model-picker:not([inert] *)");
     await picker.locator(":scope > button").click();
     await expect(picker.locator("[role=option]").first()).toBeVisible();
     expect(demands()).toHaveLength(before);
@@ -174,7 +174,8 @@ test("composer.model-picker-warm-before-open-and-independent-candidate", {
       frame.t === "request" &&
       /^(catalogs\.|models\.list)/.test(String(frame.method))
     ).length;
-  const before = requestCount(), picker = page.locator(".otk-model-picker");
+  const before = requestCount(),
+    picker = page.locator(".otk-model-picker:not([inert] *)");
   await picker.locator(":scope > button").click();
   const rows = picker.locator("[role=option]");
   await expect(rows.first()).toBeVisible();

@@ -26,6 +26,11 @@ test("composer.prompt-toolbar-keeps-controls-in-separate-tracks", {
     `.otk-model-picker [data-picker-key='["fake2","scripted"]'] .otk-picker-option`,
   ).click();
   const toolbar = page.locator(".otk-prompt-actions");
+  await expect(
+    page.locator(".otk-prompt-corner").getByRole("button", {
+      name: "Edit prompt",
+    }),
+  ).toBeVisible();
   await expect(toolbar.getByRole("button", { name: "Variant:", exact: false }))
     .toBeVisible();
   for (const [width, scale] of [[900, "125"], [1280, "100"]] as const) {
@@ -49,7 +54,7 @@ test("composer.prompt-toolbar-keeps-controls-in-separate-tracks", {
         const names = controls.map((b) => b.getAttribute("aria-label") ?? "");
         const rects = controls.map((button) => button.getBoundingClientRect());
         const errors: string[] = [];
-        for (const action of ["Attach files", "Open terminal", "Edit prompt"]) {
+        for (const action of ["Attach files", "Open terminal"]) {
           if (!names.includes(action)) errors.push(`Missing ${action}`);
         }
         const send = row.querySelector("[data-primary-action]");
@@ -82,7 +87,7 @@ test("composer.prompt-toolbar-keeps-controls-in-separate-tracks", {
         }
         const contentRight = bounds.right - parseFloat(style.paddingRight) -
           parseFloat(style.borderRightWidth);
-        const trailing = row.querySelector(".otk-prompt-action-group");
+        const trailing = row.querySelector(".otk-prompt-send-slot");
         if (
           !trailing ||
           Math.abs(trailing.getBoundingClientRect().right - contentRight) > 0.5

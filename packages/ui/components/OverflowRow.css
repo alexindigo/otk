@@ -9,7 +9,7 @@
   overflow: clip;
   min-block-size: var(--row-compact);
 }
-.otk-overflow-row.has-overflow:not(.is-progressive) {
+.otk-overflow-row.has-overflow {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 .otk-overflow-row.has-overflow:not(.is-progressive):not(:has(.otk-overflow-item:not([hidden]))) {
@@ -126,6 +126,10 @@
 .otk-overflow-row.is-progressive.is-compact .otk-overflow-items > .otk-overflow-item {
   flex: none;
   max-inline-size: none;
+}
+.otk-overflow-item[data-grow=true],
+.otk-overflow-row.is-progressive.is-compact .otk-overflow-items > .otk-overflow-item[data-grow=true] {
+  flex-grow: 1;
 }
 .otk-overflow-row.is-paged > .otk-overflow-lane {
   grid-template-rows: auto var(--space-2);

@@ -49,9 +49,10 @@ test.describe("native picker choices", () => {
     });
     const frames = await wire(page);
     await openSession(state, page, session.id);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "scripted",
-    );
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "scripted",
+      );
     await pick(page, "model", JSON.stringify(["fake2", "scripted"]));
     await openPicker(page, "variant");
     const first = page.locator(
@@ -100,7 +101,9 @@ test.describe("native picker choices", () => {
     await expect(page.locator(".otk-prompt-context .otk-picker-groups"))
       .toHaveCount(0);
     await pick(page, "agent", "reviewer");
-    await expect(page.locator(".otk-composer-agent")).toHaveText("Reviewer");
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      "Reviewer",
+    );
     await page.keyboard.press("Control+'");
     const search = page.locator(".otk-model-picker input[type=search]");
     await expect(search).toBeFocused();
@@ -185,14 +188,17 @@ test.describe("native picker choices", () => {
       (await state.product("prefs.get", {}))["models.recent"][0]
     ).toEqual(selected.model);
     await page.reload();
-    await expect(page.locator(".otk-composer-agent")).toHaveText("Reviewer");
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      "Reviewer",
+    );
     await expect(page.locator(".otk-variant-picker > button > span"))
       .toHaveText("High");
     await openSession(state, page, other.id);
     await openSession(state, page, session.id);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "Scripted with variants",
-    );
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "Scripted with variants",
+      );
     await openPicker(page, "model");
     await expect(
       page.locator(".otk-model-picker h3").first(),
@@ -258,7 +264,8 @@ test.describe("native picker choices", () => {
     } else await expect(prompt(page)).toHaveValue("");
     await prompt(page).press("!");
     await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
-    await expect(page.locator(".otk-variant-picker")).toHaveCount(0);
+    await expect(page.locator(".otk-variant-picker:not([inert] *)"))
+      .toHaveCount(0);
     expect(
       await page.locator(".otk-prompt-context > .otk-popover > button")
         .evaluateAll((elements) =>
@@ -300,10 +307,12 @@ test.describe("native picker choices", () => {
     await expect(page.locator(".otk-model-picker .otk-picker-option"))
       .toHaveCount(1);
     await search.press("Enter");
-    await expect(page.locator(".otk-variant-picker")).toHaveCount(0);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "Plain model",
-    );
+    await expect(page.locator(".otk-variant-picker:not([inert] *)"))
+      .toHaveCount(0);
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "Plain model",
+      );
     await page.keyboard.press("Control+'");
     await search.pressSequentially("Scripted with variants");
     await expect(page.locator(".otk-model-picker .otk-picker-option"))
@@ -479,9 +488,10 @@ test.describe("history choices", () => {
         await pick(page, "variant", variant ?? "");
         await prompt(page).press("ArrowUp");
         await expect(prompt(page)).toHaveValue("recalled history content");
-        await expect(page.locator(".otk-composer-model-name")).toHaveText(
-          "Chosen model",
-        );
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toHaveText(
+            "Chosen model",
+          );
         await expect(page.locator(".otk-variant-picker > button > span"))
           .toHaveText(variant ? "High" : "Default");
         await page.getByRole("button", { name: "Edit prompt", exact: true })

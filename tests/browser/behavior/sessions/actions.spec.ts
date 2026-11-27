@@ -223,7 +223,7 @@ test("sessions.compact-native-http-failure-one-owned-feedback", {
     title: "Compact error",
   });
   await openSession(state, page, s.id);
-  await expect(page.locator(".otk-model-picker")).toBeVisible();
+  await expect(page.locator(".otk-model-picker:not([inert] *)")).toBeVisible();
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "freeze",

@@ -165,12 +165,22 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     ),
   ).toEqual(["20", "40", "10", "4", "2"]);
   await page.keyboard.press("Escape");
-  await expect(page.locator(".otk-prompt-context > span").first()).toHaveText(
+  await expect(
+    page.locator(".otk-prompt-context:not([inert] *) > span").first(),
+  ).toHaveText(
     "Build",
   );
-  await expect(page.locator(".otk-prompt-context .otk-composer-provider"))
+  await expect(
+    page.locator(
+      ".otk-prompt-context:not([inert] *) .otk-composer-provider:not([inert] *)",
+    ),
+  )
     .toHaveText("test");
-  await expect(page.locator(".otk-prompt-context .otk-composer-model-name"))
+  await expect(
+    page.locator(
+      ".otk-prompt-context:not([inert] *) .otk-composer-model-name:not([inert] *)",
+    ),
+  )
     .toHaveText("reported-model");
   await expect(page.getByRole("button", { name: "Attach files", exact: true }))
     .toBeAttached();

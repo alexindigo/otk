@@ -31,6 +31,7 @@ import {
   LIGHT_STATES,
   type LightState,
   Message,
+  ownedCommand,
   paintVisualPreferences,
   Prompt,
   registerGenericTool,
@@ -440,34 +441,50 @@ function Consumer(): Element {
   });
   ui.prompt.register({
     id: "external-transform",
-    create: (ctx) => ({
-      actions: () => (
-        <button
-          type="button"
-          data-inject
-          onClick={() =>
-            ctx.change((draft) => ({
-              ...draft,
-              input: "Injected draft",
-              agent: "external-agent",
-            }))}
-        >
-          Inject draft
-        </button>
-      ),
-      async submit(_draft, parts, selection, capture) {
-        await ctx.props.onSubmit(
-          [...parts, {
-            kind: "text",
-            text: "external transform",
-          }],
-          "normal",
-          selection,
-          capture,
-        );
-        return true;
-      },
-    }),
+    create: (ctx) => {
+      const command = "consumer.inject-draft";
+      ownedCommand(ctx, {
+        id: command,
+        title: "Inject draft",
+        category: "Prompt",
+        run: () => {
+          ctx.change((draft) => ({
+            ...draft,
+            input: "Injected draft",
+            agent: "external-agent",
+          }));
+        },
+      });
+      return {
+        action: () => ({
+          key: "inject",
+          label: () => "Inject draft",
+          icon: () => (
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M5 12h14M12 5v14" stroke="currentColor" />
+            </svg>
+          ),
+          control: ctx.commands.control(command, undefined, {
+            target: { label: "Draft" },
+            shown: () => true,
+            unshown: "The draft was not injected.",
+            recovery: "Try injecting the draft again",
+          }),
+        }),
+        async submit(_draft, parts, selection, capture) {
+          await ctx.props.onSubmit(
+            [...parts, {
+              kind: "text",
+              text: "external transform",
+            }],
+            "normal",
+            selection,
+            capture,
+          );
+          return true;
+        },
+      };
+    },
   });
   const [summary, setSummary] = createSignal("Initial result"),
     [opened, setOpened] = createSignal(""),

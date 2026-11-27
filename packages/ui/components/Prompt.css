@@ -2,7 +2,7 @@
 .otk-prompt {
   --prompt-input-min-height: calc(48 * var(--otk-unit));
   --prompt-input-max-height: calc(240 * var(--otk-unit));
-  padding-block: var(--space-3) var(--space-2);
+  padding-block: var(--composer-content-inset, var(--space-4)) var(--space-2);
   padding-inline: var(--composer-content-inset, var(--space-4));
 }
 .otk-prompt > label {
@@ -11,6 +11,7 @@
   overflow: hidden;
 }
 textarea.otk-prompt-input {
+  inline-size: 100%;
   min-height: var(--prompt-input-min-height);
   max-height: var(--prompt-input-max-height);
   line-height: var(--line-prose);
@@ -26,31 +27,17 @@ textarea.otk-prompt-input:focus-visible {
 }
 .otk-prompt-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: [lead] minmax(0, 1fr) [send] auto;
   align-items: center;
   gap: var(--space-1);
   padding-top: var(--space-1);
 }
-.otk-prompt-action-group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
 .otk-prompt-interrupt {
   grid-column: 1 / -1;
-}
-.otk-prompt-context-measure {
-  /* Fold the settings together before the inline labels become bare icons. */
-  font-size: var(--text-meta);
-  inline-size: 26ch;
-}
-.otk-prompt-context-icon {
-  inline-size: var(--control-size);
 }
 .otk-prompt-context {
   display: flex;
   align-items: center;
-  inline-size: 100%;
   min-inline-size: 0;
   gap: var(--space-1);
   color: var(--otk-fg-2);
@@ -59,8 +46,15 @@ textarea.otk-prompt-input:focus-visible {
 .otk-prompt-context > * {
   min-inline-size: var(--control-size);
 }
+.otk-prompt-context:not(.is-in-popover) {
+  inline-size: max-content;
+}
+.otk-prompt-context:not(.is-in-popover) > * {
+  flex: none;
+}
 .otk-prompt-context.is-in-popover {
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
 }
 .otk-prompt-send-slot {
   display: grid;
@@ -68,4 +62,22 @@ textarea.otk-prompt-input:focus-visible {
   flex: none;
   inline-size: var(--send-button-size);
   min-block-size: var(--send-button-size);
+}
+.otk-prompt-field {
+  display: grid;
+  grid-template-columns: [text] minmax(0, 1fr);
+  align-items: start;
+}
+.otk-prompt-field.has-corner {
+  grid-template-columns: [text] minmax(0, 1fr) [corner] var(--control-size);
+  column-gap: var(--space-2);
+}
+.otk-prompt-body {
+  grid-column: text;
+  min-inline-size: 0;
+}
+.otk-prompt-corner {
+  grid-column: corner;
+  grid-row: 1;
+  display: grid;
 }

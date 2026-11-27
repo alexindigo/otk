@@ -23,7 +23,11 @@ test("messages.composer-meter-share-held-catalog", {
     lease: state.lease.lease,
     action: "release",
   });
-  await expect(page.locator(".otk-model-picker .otk-composer-model-name"))
+  await expect(
+    page.locator(
+      ".otk-model-picker:not([inert] *) .otk-composer-model-name:not([inert] *)",
+    ),
+  )
     .toHaveText("Beam Free");
   await expect(page.locator(".otk-context-bar")).toHaveAttribute(
     "aria-valuenow",
@@ -33,7 +37,11 @@ test("messages.composer-meter-share-held-catalog", {
     "tstv1-core",
   ]);
   await page.reload();
-  await expect(page.locator(".otk-model-picker .otk-composer-model-name"))
+  await expect(
+    page.locator(
+      ".otk-model-picker:not([inert] *) .otk-composer-model-name:not([inert] *)",
+    ),
+  )
     .toHaveText("Beam Free");
   await expect(page.locator(".otk-context-bar")).toHaveAttribute(
     "aria-valuenow",

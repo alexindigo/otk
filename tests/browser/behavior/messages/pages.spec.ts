@@ -69,10 +69,13 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
   expect(newest.prompt!.model).toEqual({ provider: "fake", model: "scripted" });
   expect(newest.prompt!.agent).toBe("build");
   expect(newest.older).toBeTruthy();
-  await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
-  await expect(page.locator(".otk-composer-model-name")).toContainText(
-    "scripted",
+  await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+    "Build",
   );
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toContainText(
+      "scripted",
+    );
   const requests = capture.sent.filter(({ frame }) =>
     frame.method === "session.messages"
   );

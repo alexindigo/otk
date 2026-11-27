@@ -37,6 +37,21 @@ export interface PointAnchor {
 
 export const POPOVER_BOUNDS = "otk-popover-bounds";
 
+const rootClass = (extra?: string) => `otk-popover ${extra ?? ""}`;
+const triggerClass = (extra?: string) =>
+  ["otk-popover-trigger", extra].filter(Boolean).join(" ");
+
+/** Inert sizing uses the same boxes without creating an anchored surface. */
+export function PopoverFace(
+  props: { class?: string; triggerClass?: string; children: Element },
+): Element {
+  return (
+    <span class={rootClass(props.class)}>
+      <span class={triggerClass(props.triggerClass)}>{props.children}</span>
+    </span>
+  );
+}
+
 /** Native top-layer dismissal and anchoring belong here, never to content. */
 export default function Popover(props: {
   label: string;
@@ -296,7 +311,7 @@ export default function Popover(props: {
   }
   return (
     <span
-      class={`otk-popover ${props.class ?? ""}`}
+      class={rootClass(props.class)}
       ref={setRoot}
       data-copy-source={props.copySource}
       data-open={String(open())}
@@ -311,8 +326,7 @@ export default function Popover(props: {
             kind: "candidate",
             selected: false,
             applied: !!props.applied,
-            class: ["otk-popover-trigger", props.triggerClass].filter(Boolean)
-              .join(" "),
+            class: triggerClass(props.triggerClass),
           })}
           aria-label={triggerLabel()}
           aria-busy={props.busy ? "true" : "false"}

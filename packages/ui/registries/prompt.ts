@@ -56,6 +56,14 @@ export interface PromptContext extends SessionPorts {
   acceptFiles(files: File[]): Promise<void>;
   fail(error: unknown): void;
 }
+export interface PromptAction {
+  key: string;
+  label(): string;
+  icon(): Element;
+  expanded?(): boolean;
+  control: import("@otk/client").ActionControl;
+}
+
 /** Feature instances are per mounted prompt and retain their own async lifetime. */
 export interface PromptFeature {
   ready?(): Promise<void>;
@@ -80,11 +88,15 @@ export interface PromptFeature {
   ): void | Promise<void>;
   selection?(draft: Draft): PromptSelection;
   settings?(): Element;
+  /** Inert, intrinsic-width rendering of settings, with no live controls. */
+  settingsFace?(): Element;
   enabled?(): boolean | undefined;
   label?(): string;
   placeholder?(): string;
   beforeInput?(): Element;
-  actions?(): Element;
+  action?(): PromptAction;
+  /** A control in the input's top-right corner slot. */
+  corner?(): Element;
   overlay?(): Element;
 }
 export interface PromptDefinition {

@@ -30,7 +30,8 @@ for (const count of [3, 120] as const) {
         await expect(page.locator(trigger)).toHaveText(
           new RegExp(`^${count} model calls`),
         );
-        await expect(page.locator(".otk-composer-model-name")).toBeAttached();
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toBeAttached();
         await expect(
           page.getByRole("region", { name: "Transcript", exact: true }),
         ).toHaveAttribute("aria-busy", "false");

@@ -239,7 +239,9 @@ test.describe("composer", () => {
             "destination session stays fully readable",
           ).toBeLessThanOrEqual(1);
         }
-        const footerLines = await page.locator(".otk-prompt-context").evaluate(
+        const footerLines = await page.locator(
+          ".otk-prompt-context:not([inert] *)",
+        ).evaluate(
           (root) => {
             const walker = document.createTreeWalker(
                 root,
