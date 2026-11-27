@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { openLatestWork } from "../../pages/transcript.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { revealAcquired } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  openWork,
+  revealAcquired,
+} from "../../pages/transcript.ts";
 test.describe("V1 records", () => {
   test.use({ profile: "contract-messages-v1-notices" });
   test("messages.running-record-progress-survives-queued-prompt", {
@@ -82,13 +85,15 @@ test.describe("V1 records", () => {
     await expect(reply.getByRole("alert")).toHaveCount(2);
     for (
       const name of [
-        "Delegate failed: Subagent failed: The usage limit has been reached.",
+        "Inspect retained records failed: Subagent failed: The usage limit has been reached",
         "Running session failed: The usage limit has been reached.",
       ]
     ) {
       await expect(
         reply.getByRole("alert", { name, exact: true })
-          .locator(".otk-failure-main-reason .otk-failure-reason"),
+          .locator(
+            ".otk-failure-summary-reason, .otk-failure-main-reason .otk-failure-reason",
+          ),
       ).toContainText("The usage limit has been reached");
     }
     await revealAcquired(page, '[data-message="summary"]');
@@ -347,8 +352,14 @@ test.describe("V2 records", () => {
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toContainText("Question cancelled");
-      await openLatestWork(page);
-      const task = page.locator('[data-tool="task"]');
+      const result = page.locator('.otk-messages [data-role="assistant"]')
+        .filter({
+          has: page.getByRole("button", {
+            name: /Work log:.*Foreground result/,
+          }),
+        });
+      const work = await openWork(result);
+      const task = work.locator('[data-tool="task"]');
       await task.locator(".otk-tool-toggle").first().click();
       await expect(task.locator("strong.otk-prose-strong")).toHaveText(
         "Result",
@@ -357,12 +368,15 @@ test.describe("V2 records", () => {
       await expect(task.locator(".otk-tool-body")).not.toContainText(
         "<subagent",
       );
-      const execute = page.locator('[data-tool="external"]').filter({
+      const execute = work.locator('[data-tool="external"]').filter({
         hasText: "execute",
       });
       await expect(execute).toHaveClass(/is-error/);
       await expect(execute).toContainText("No such file: missing");
-      await execute.locator(".otk-tool-toggle").first().click();
+      const toggle = execute.locator(".otk-tool-toggle").first();
+      if (await toggle.getAttribute("aria-expanded") === "false") {
+        await toggle.click();
+      }
       await expect(execute.locator('[data-tool="external"]')).toContainText(
         "read",
       );
