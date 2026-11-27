@@ -10,6 +10,7 @@ export function registerFetchTool(tools: ToolRegistry): void {
     (call) => ({
       icon: FetchIcon,
       verb: "Fetch",
+      runs: { noun: "page", plural: "pages" },
       target: call.url,
       summary: call.format,
     }),

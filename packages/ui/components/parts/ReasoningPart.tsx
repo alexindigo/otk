@@ -11,6 +11,10 @@ export function registerReasoningPart(parts: PartRegistry): void {
         conceal={props.prefs.conceal}
       />
     ),
-    (part) => ({ work: part.time, timing: part.time }),
+    (part) => ({
+      work: part.time,
+      timing: part.time,
+      run: { lane: "thinking", label: "Thought" },
+    }),
   );
 }
