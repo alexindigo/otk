@@ -37,7 +37,7 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
   }]);
   await expect(
     page.locator("[data-session=tstv1-nested]").locator(
-      "xpath=ancestor::*[@data-depth][1]",
+      "xpath=ancestor::*[@data-parent and @data-depth][1]",
     ),
   ).toHaveAttribute("data-depth", "2");
   for (

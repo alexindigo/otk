@@ -40,8 +40,8 @@
   height: var(--form-control-size);
 }
 .otk-project-avatar.is-compact-size {
-  width: calc(14 * var(--otk-unit));
-  height: calc(14 * var(--otk-unit));
+  width: var(--avatar-compact);
+  height: var(--avatar-compact);
 }
 .otk-project-avatar img {
   width: 100%;

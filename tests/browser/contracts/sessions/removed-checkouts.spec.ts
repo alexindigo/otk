@@ -29,7 +29,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await expect(row(two)).toHaveCount(0);
   await archive.click();
   const repositoryTree = row(canonical).locator(
-    "xpath=ancestor::section[contains(@class, 'otk-project-tree')][1]",
+    "xpath=ancestor::section[@data-tree-node][1]",
   );
   const repositoryToggle = repositoryTree.locator(
     ":scope > .otk-tree-heading .otk-tree-toggle",
@@ -54,7 +54,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       "data-group",
       live ? "active" : "archived",
     );
-    await expect(page.locator(".otk-archived-projects").locator(row(directory)))
+    await expect(page.locator(".otk-project-archive").locator(row(directory)))
       .toHaveCount(live ? 0 : 1);
     await expect(row(directory)).toHaveAttribute(
       "data-project-availability",
@@ -63,7 +63,9 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
     await expect(
       row(directory).locator(".otk-sidebar-meta .otk-project-availability"),
     )
-      .toHaveText(/^removed \u00b7 .+$/);
+      .toHaveText("removed");
+    await expect(row(directory).locator(".otk-project-visit time")).not
+      .toBeEmpty();
     await expect(row(directory).locator(".otk-project-open"))
       .toHaveAccessibleName(/, removed$/);
     await expect(row(directory).locator(".otk-project-open"))
@@ -119,7 +121,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
             .toBeVisible();
         }
         const geometry = await project.evaluate((element) => {
-          const name = element.querySelector(".otk-project-name")!
+          const name = element.querySelector(".otk-sidebar-title-text")!
             .getBoundingClientRect();
           const meta = element.querySelector(".otk-sidebar-meta")!
             .getBoundingClientRect();

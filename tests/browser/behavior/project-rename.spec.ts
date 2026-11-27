@@ -43,7 +43,9 @@ async function begin(state: TestState, page: Page) {
 async function save(state: TestState, page: Page, name: string) {
   await editor(page).fill(name);
   await editor(page).press("Enter");
-  await expect(row(state, page).locator(".otk-project-name")).toHaveText(name);
+  await expect(row(state, page).locator(".otk-sidebar-title-text")).toHaveText(
+    name,
+  );
   await expect(row(state, page).locator(".otk-rename-pending")).toHaveCount(0);
 }
 
@@ -111,7 +113,7 @@ test(
     );
     const quiet = async () => {
       await expect.soft(old.locator(":focus-visible")).toHaveCount(0);
-      await expect.soft(old.locator(".otk-project-menu")).toHaveCSS(
+      await expect.soft(old.locator(".otk-sidebar-control")).toHaveCSS(
         "opacity",
         "0",
       );
@@ -126,7 +128,9 @@ test(
     await quiet();
     await expect(
       page.locator(
-        `[data-project=${JSON.stringify(other.directory)}] .otk-project-menu`,
+        `[data-project=${
+          JSON.stringify(other.directory)
+        }] .otk-sidebar-control`,
       ),
     )
       .toHaveCSS("opacity", "0");
@@ -139,7 +143,7 @@ test(
   async ({ isolatedState: state, page }) => {
     const transport = await wire(page);
     await page.reload();
-    const label = row(state, page).locator(".otk-project-name");
+    const label = row(state, page).locator(".otk-sidebar-title-text");
     const folder = basename(state.directory);
     await expect(label).toHaveText(folder);
     await openMenu(state, page);
@@ -155,7 +159,9 @@ test(
     ).toBe(folder);
     const frames = await watchSubmit(
       page,
-      `[data-project=${JSON.stringify(state.directory)}] .otk-project-name`,
+      `[data-project=${
+        JSON.stringify(state.directory)
+      }] .otk-sidebar-title-text`,
     );
     transport.hold((frame, request) =>
       (frame.t === "request.result" && request?.method === "project.update") ||
@@ -204,7 +210,7 @@ test(
     const transport = await wire(page);
     await page.reload();
     const row = ".otk-project-sessions .otk-session-row[data-session]";
-    const selector = `${row} .otk-session-title`;
+    const selector = `${row} .otk-sidebar-title-text`;
     const label = page.locator(selector);
     await expect(label).toHaveText("Release checklist");
     await sessionContext(page, row, "session.rename");
@@ -256,9 +262,7 @@ for (const kind of ["project", "session"] as const) {
       const item = kind === "project"
         ? `[data-project=${JSON.stringify(state.directory)}]`
         : sessionRow;
-      const selector = `${item} .otk-${
-        kind === "project" ? "project-name" : "session-title"
-      }`;
+      const selector = `${item} .otk-sidebar-title-text`;
       const label = page.locator(selector);
       const confirmed = kind === "project"
         ? basename(state.directory)
@@ -300,7 +304,7 @@ test(
     try {
       const other = await context.newPage();
       await other.goto(page.url());
-      const otherLabel = row(state, other).locator(".otk-project-name");
+      const otherLabel = row(state, other).locator(".otk-sidebar-title-text");
       await expect(otherLabel).toHaveText(basename(state.directory));
       await begin(state, page);
       await save(state, page, "Fixture app");
@@ -308,9 +312,10 @@ test(
       await restart(state);
       await page.reload();
       await other.reload();
-      await expect(row(state, page).locator(".otk-project-name")).toHaveText(
-        "Fixture app",
-      );
+      await expect(row(state, page).locator(".otk-sidebar-title-text"))
+        .toHaveText(
+          "Fixture app",
+        );
       await expect(otherLabel).toHaveText("Fixture app");
     } finally {
       await context.close();
@@ -325,9 +330,10 @@ test(
     await begin(state, page);
     await editor(page).fill("Canceled");
     await editor(page).press("Escape");
-    await expect(row(state, page).locator(".otk-project-name")).toHaveText(
-      basename(state.directory),
-    );
+    await expect(row(state, page).locator(".otk-sidebar-title-text"))
+      .toHaveText(
+        basename(state.directory),
+      );
     await expect(row(state, page).locator(".otk-project-open")).toBeFocused();
     expect((await settings(state)).values.name).toBe("");
     await begin(state, page);
@@ -356,9 +362,10 @@ test(
     await expect.poll(async () => (await settings(state)).values.name, {
       message: "Blur commits to native",
     }).toBe("Fixture app");
-    await expect(row(state, page).locator(".otk-project-name")).toHaveText(
-      "Fixture app",
-    );
+    await expect(row(state, page).locator(".otk-sidebar-title-text"))
+      .toHaveText(
+        "Fixture app",
+      );
     await row(state, page).locator(".otk-project-open").click({
       button: "right",
     });
@@ -366,9 +373,10 @@ test(
     await expect.poll(async () => (await settings(state)).values.name, {
       message: "Reset name applies to the native project",
     }).toBe("");
-    await expect(row(state, page).locator(".otk-project-name")).toHaveText(
-      basename(state.directory),
-    );
+    await expect(row(state, page).locator(".otk-sidebar-title-text"))
+      .toHaveText(
+        basename(state.directory),
+      );
     await openMenu(state, page);
     await expect(reset(page)).toHaveCount(0);
   },
@@ -492,7 +500,7 @@ test(
       await capture("renamed");
       await openMenu(state, page);
       await reset(page).click();
-      await expect(project.locator(".otk-project-name")).toHaveText(
+      await expect(project.locator(".otk-sidebar-title-text")).toHaveText(
         basename(state.directory),
       );
     }

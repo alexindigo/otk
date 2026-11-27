@@ -19,7 +19,7 @@ const IconStemContext = createContext<() => boolean>(() => false);
 
 /** A header supplies its kind artwork; the tree owns its slot and child stem. */
 export function TreeIcon(
-  props: { children: Element; class?: string },
+  props: { children: Element; class?: string; extend?: boolean },
 ): Element {
   const stem = useContext(IconStemContext);
   const outgoing = useContext(DirectionContext);
@@ -28,12 +28,16 @@ export function TreeIcon(
       class={["otk-tree-icon", props.class, {
         "has-stem": stem(),
         "is-outgoing": outgoing,
+        "has-extension": props.extend,
       }]}
     >
-      <span class="otk-tree-icon-stem" aria-hidden="true" />
-      <span class="otk-tree-icon-art">
-        {props.children}
+      <span class="otk-tree-icon-line">
+        <span class="otk-tree-icon-stem" aria-hidden="true" />
+        <span class="otk-tree-icon-art">{props.children}</span>
       </span>
+      <Show when={props.extend}>
+        <span class="otk-tree-icon-extension" aria-hidden="true" />
+      </Show>
     </span>
   );
 }
@@ -169,6 +173,7 @@ export function TreeNode(props: {
         "has-selection": props.selected,
       }]}
       data-tree-node=""
+      data-depth={props.path?.length}
     >
       <div
         {...heading.attributes}

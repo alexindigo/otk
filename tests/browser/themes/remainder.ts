@@ -363,7 +363,7 @@ export async function remainder(
       await paint(theme);
       const selectors = [
         "html",
-        ".otk-project-name",
+        ".otk-sidebar-title-text",
         replyMessage + " .otk-text p",
         replyMessage + " .otk-code pre",
         ".otk-prompt textarea",

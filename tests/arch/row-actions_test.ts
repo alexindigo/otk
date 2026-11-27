@@ -73,14 +73,14 @@ Deno.test("tab chrome has no menus and project row actions share an in-flow trai
     new URL("components/ProjectInbox.tsx", ui),
   );
   assert(
-    /metaClass="otk-project-trailing"[\s\S]*?meta=\{[\s\S]*?<MetaItem\b[\s\S]*?class="otk-project-visit"[\s\S]*?<TimeText\b[\s\S]*?metaControl=\{[\s\S]*?<CommandMenu\b/
+    /meta=\{[\s\S]*?<MetaItem\b[\s\S]*?class="otk-project-visit"[\s\S]*?<TimeText\b[\s\S]*?control=\{[\s\S]*?<CommandMenu\b/
       .test(row),
   );
   const sidebar = await Deno.readTextFile(
     new URL("components/SidebarRow.tsx", ui),
   );
   assert(
-    /"otk-sidebar-slot otk-sidebar-meta", props.metaClass[\s\S]*?<MetaRow whole intrinsic class="otk-sidebar-meta-track">\s*\{props.meta\}\s*<\/MetaRow>\s*\{props.metaControl\}/
+    /class="otk-sidebar-slot otk-sidebar-meta"[\s\S]*?<MetaRow whole intrinsic class="otk-sidebar-meta-track">\s*\{props.meta\}\s*<\/MetaRow>\s*<Show when=\{props.control\}>\s*<span class="otk-sidebar-control">\{props.control\}<\/span>/
       .test(sidebar),
   );
   assertEquals(

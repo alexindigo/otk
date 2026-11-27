@@ -27,7 +27,7 @@ test.describe("inbox ownership", () => {
     )!;
     // S4 (decision 62): visit age never tints the name; only the neutral
     // visit clock moves.
-    const plain = await row.locator(".otk-project-name").evaluate((e) =>
+    const plain = await row.locator(".otk-sidebar-title-text").evaluate((e) =>
       getComputedStyle(e).color
     );
     for (
@@ -37,14 +37,17 @@ test.describe("inbox ownership", () => {
         `inboxNow=${project.lastVisit + Number(hours) * 3600000};inboxTick()`,
       );
       await expect(row.locator("time")).toHaveText(String(text));
-      await expect(row.locator(".otk-project-name")).toHaveCSS("color", plain);
+      await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
+        "color",
+        plain,
+      );
     }
     await state.product("prefs.set", { key: "reducedColors", value: true });
     await expect(page.locator("html")).toHaveAttribute(
       "data-otk-reduced-colors",
       "",
     );
-    await expect(row.locator(".otk-project-name")).toHaveCSS(
+    await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
       "text-decoration-line",
       "none",
     );
@@ -230,7 +233,9 @@ test.describe("server merge", () => {
       await expect(page.locator(".otk-project-row")).toHaveCount(8);
       await page.locator(".otk-settings .otk-view-header button").click();
       await expect(page.locator(".otk-settings")).toHaveCount(0);
-      expect(await page.locator(".otk-project-machine").allTextContents())
+      expect(
+        await page.locator(".otk-sidebar-title-qualifier").allTextContents(),
+      )
         .toEqual([
           ...Array(4).fill("This server"),
           ...Array(4).fill("Build machine"),

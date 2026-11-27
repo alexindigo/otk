@@ -142,7 +142,7 @@ test("transport.incremental-markdown", {
       .textContent()
   ).toBe(
     // Style7 shared ListRow label slot (style7fix note; decision 3).
-    await page.locator(`[data-session="${id}"] .otk-session-title`)
+    await page.locator(`[data-session="${id}"] .otk-sidebar-title-text`)
       .textContent(),
   );
 });

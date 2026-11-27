@@ -8,8 +8,10 @@ import type { Page } from "@playwright/test";
 const viewport = ".otk-project-session-tree";
 async function scroll(page: Page, top: number | "end") {
   const pane = page.locator(viewport);
-  // Aim at the list surface, not the context menu anchored over its rows.
-  await pane.hover({ position: { x: 2, y: 2 } });
+  // Aim at the list surface above its row controls, between the resize
+  // handle on the leading edge and the scrollbar on the trailing edge.
+  const x = await pane.evaluate((el) => el.clientWidth / 2);
+  await pane.hover({ position: { x, y: 2 } });
   // Acquiring another page can extend the physical end. Keep requesting the
   // original target through real wheel input instead of assuming full catalog
   // geometry was present before the first gesture. Each gesture at the end
@@ -340,7 +342,7 @@ test.describe("measured Sessions", () => {
         .toHaveCount(0);
       await expect(failure).toContainText("OTK has no further details");
       await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
-      await expect(rejected.locator(".otk-session-title")).toHaveText(
+      await expect(rejected.locator(".otk-sidebar-title-text")).toHaveText(
         "Window session 050",
       );
       await expect.poll(() =>
@@ -358,7 +360,7 @@ test.describe("measured Sessions", () => {
       expect(
         await rejected.evaluate((row) => {
           const selectors = [
-            ".otk-session-title",
+            ".otk-sidebar-title-text",
             ".otk-status-light",
             ".otk-sidebar-meta",
           ];
@@ -417,17 +419,18 @@ test.describe("measured Sessions", () => {
               const a = e.querySelector(".otk-status-light")!
                   .getBoundingClientRect(),
                 // Style7 shared ListRow label slot (style7fix note; decision 3).
-                b = e.querySelector(".otk-session-title")!
+                b = e.querySelector(".otk-sidebar-title-text")!
                   .getBoundingClientRect();
               return Math.abs(a.y + a.height / 2 - b.y - b.height / 2) <= 1;
             })
           ),
         ).toBe(true);
         expect(
-          await page.locator(".otk-session-row .otk-session-title").evaluateAll(
-            (es) =>
-              es.every((e) => getComputedStyle(e).whiteSpace === "nowrap"),
-          ),
+          await page.locator(".otk-session-row .otk-sidebar-title-text")
+            .evaluateAll(
+              (es) =>
+                es.every((e) => getComputedStyle(e).whiteSpace === "nowrap"),
+            ),
         ).toBe(true);
         const gaps = await page.locator(".otk-panel-new-session").evaluate(
           (e) => {

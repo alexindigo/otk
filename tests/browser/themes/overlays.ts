@@ -253,7 +253,7 @@ export async function usage(
                 c = cost.getClientRects().length
                   ? cost.getBoundingClientRect()
                   : null,
-                t = row.querySelector(".otk-session-title")!
+                t = row.querySelector(".otk-sidebar-title-text")!
                   .getBoundingClientRect(),
                 l = row.querySelector(".otk-status-light")!
                   .getBoundingClientRect(),

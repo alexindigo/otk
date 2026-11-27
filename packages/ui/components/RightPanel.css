@@ -28,17 +28,32 @@
 .otk-panel-view-icon {
   display: flex;
 }
-.otk-panel-body,
-.otk-panel-content {
+.otk-panel-body {
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.otk-panel-body {
-  padding-inline: var(--panel-inset);
   --empty-inline-inset: 0px;
+}
+.otk-panel-body > :not(.otk-panel-content) {
+  padding-inline: var(--panel-inset);
+}
+.otk-panel-content {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: grid;
+  grid-template-columns: [full-start] var(--panel-inset) [content-start]
+    minmax(0, 1fr) [content-end] var(--panel-inset) [full-end];
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.otk-panel-content > * {
+  grid-column: content;
+}
+.otk-panel-content > [data-panel-span=full] {
+  grid-column: full;
+  grid-template-columns: subgrid;
 }
 .otk-panel-content > h2 {
   margin: 0 0 var(--space-2);

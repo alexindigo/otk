@@ -265,7 +265,7 @@ test(
           await test.step("deleted/" + theme.id, async () => {
             await paint(theme);
             const contrast = await page.locator(
-              `[data-session="${facts.native.sessionID}"] .otk-session-title`,
+              `[data-session="${facts.native.sessionID}"] .otk-sidebar-title-text`,
             ).evaluate((title) => {
               const css = getComputedStyle(document.documentElement),
                 canvas = document.createElement("canvas");
@@ -540,7 +540,9 @@ test(
                     ).toBe(true);
                   }
                   if (!left) {
-                    const labels = await page.locator(".otk-project-name-line")
+                    const labels = await page.locator(
+                      ".otk-project-row .otk-sidebar-label",
+                    )
                       .evaluateAll((els) =>
                         els.map((el) => el.getBoundingClientRect().left)
                       );
@@ -836,7 +838,7 @@ test(
         const hover = page.locator('[data-project$="/projects/atmosphera"]');
         await hover.hover();
         await expect.poll(() =>
-          hover.locator(".otk-project-menu").evaluate((el) =>
+          hover.locator(".otk-sidebar-control").evaluate((el) =>
             getComputedStyle(el).opacity
           )
         ).toBe("1");
@@ -888,7 +890,7 @@ test(
               page,
               ".otk-session-row",
               ".otk-status-light",
-              ".otk-session-title",
+              ".otk-sidebar-title-text",
             );
             for (const width of [280, 480]) {
               await state.product("layout.patch", { rightWidth: width });
@@ -910,7 +912,7 @@ test(
                 ".otk-sidebar-meta",
               );
               expect(
-                await page.locator(".otk-session-row .otk-session-title")
+                await page.locator(".otk-session-row .otk-sidebar-title-text")
                   .evaluateAll((els) =>
                     els.every((el) =>
                       getComputedStyle(el).whiteSpace === "nowrap"
@@ -996,7 +998,7 @@ test(
               page,
               ".otk-project-row:has(time)",
               ".otk-status-light",
-              ".otk-project-name-line",
+              ".otk-sidebar-label",
             );
             await centers(
               page,
@@ -1005,10 +1007,10 @@ test(
               "time",
             );
             const row = page.locator('[data-project$="/projects/otk"]'),
-              menu = row.locator(".otk-project-menu");
+              menu = row.locator(".otk-sidebar-control");
             const geometry = () =>
               row.evaluate((row) => {
-                const cell = row.querySelector(".otk-project-trailing")!,
+                const cell = row.querySelector(".otk-sidebar-meta")!,
                   time = cell.querySelector("time")!,
                   trigger = cell.querySelector(".otk-popover-trigger")!,
                   r = cell.getBoundingClientRect(),
@@ -1049,7 +1051,7 @@ test(
               menu.evaluate((el) => getComputedStyle(el).opacity)
             ).toBe("1");
             await expect.poll(() =>
-              row.locator(".otk-project-visit").evaluate((el) =>
+              row.locator(".otk-sidebar-meta-track").evaluate((el) =>
                 getComputedStyle(el).opacity
               )
             ).toBe("0");
