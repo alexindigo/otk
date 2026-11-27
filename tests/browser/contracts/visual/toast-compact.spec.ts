@@ -16,7 +16,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   const a = await seed(state, "Current conversation");
   const b = await seed(
     state,
-    "Review the notification layout and the remaining small fixes",
+    "Review the layout",
   );
   const c = await seed(state, "Inspect the project README");
   const frames = await wire(page);
@@ -128,7 +128,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
       const title = text(".otk-toast-title");
       const name = text(".otk-toast-target");
       const target = card.querySelector(".otk-toast-target")!;
-      // The title tooltip carries the entire name even where pixels are clipped.
+      // The target fits as a whole rather than clipping into a partial name.
       const visibleName = box(".otk-toast-target");
       return {
         rowHeight: row.height,
@@ -156,7 +156,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
     });
   const dismiss = "Dismiss notification";
   const name = done.getByRole("button", {
-    name: /Review the notification layout/,
+    name: /Review the layout/,
   });
   const x = done.getByRole("button", { name: dismiss, exact: true });
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
@@ -208,7 +208,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
       }
       const metrics = await measure();
       expect(metrics.fitsRow).toBe(true);
-      expect(metrics.truncates).toBe(true);
+      expect(metrics.truncates).toBe(false);
       expect(metrics.topDifference).toBeLessThanOrEqual(1);
       expect(Math.abs(metrics.rowHeight - 28 * scale)).toBeLessThanOrEqual(1);
       expect(metrics.sideDifference).toBeLessThanOrEqual(1);

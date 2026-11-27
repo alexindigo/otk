@@ -13,7 +13,9 @@ import {
   type EntityStateStore,
   lamp,
   type Note,
+  notificationBody,
   notificationFailure,
+  notificationSessionLabel,
   type Selection,
 } from "@otk/client";
 import { entityKey } from "@otk/protocol";
@@ -26,6 +28,8 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 import ActionButton from "./ActionButton.tsx";
 import { sessionTargetOpenControl } from "./session-open.ts";
 import StatusLight from "./StatusLight.tsx";
+import { MetaItem, MetaRow } from "./MetaRow.tsx";
+import { ProjectAvatar } from "./ProjectChip.tsx";
 export default function Toasts(
   props: {
     model: ToastsModel;
@@ -124,6 +128,71 @@ export default function Toasts(
             </span>
           );
           const detail = createMemo(() => props.detail?.(note()));
+          const location = () => note().location;
+          const locationLine = (heading: string, href?: string) => (
+            <Show when={location()}>
+              {(loc) => {
+                const project = () =>
+                  loc().project;
+                const sessionLabel = () => notificationSessionLabel(loc());
+                const targetLabel = (label: string) => (
+                  <Show when={sessionOpen()} fallback={<span>{label}</span>}>
+                    {(action) => (
+                      <ActionButton
+                        class="otk-toast-target"
+                        href={href}
+                        action={openControl(action().args, label)}
+                        title={`Open ${label}`}
+                        unoffered={<span>{label}</span>}
+                      >
+                        {label}
+                      </ActionButton>
+                    )}
+                  </Show>
+                );
+                return (
+                  <MetaRow whole class="otk-toast-location">
+                    <MetaItem rank={2}>
+                      <strong class="otk-toast-title" title={heading}>
+                        {heading}
+                      </strong>
+                    </MetaItem>
+                    <MetaItem
+                      rank={0}
+                      required
+                      title={project().name}
+                      compactInPlace
+                    >
+                      <span class="otk-toast-project">
+                        <ProjectAvatar {...project()} size="compact" />
+                        <span class="otk-toast-project-name">
+                          {project().name}
+                        </span>
+                      </span>
+                    </MetaItem>
+                    <MetaItem
+                      rank={1}
+                      class="otk-toast-task"
+                      title={loc().task}
+                    >
+                      {sessionLabel() ? loc().task : targetLabel(loc().task)}
+                    </MetaItem>
+                    <Show when={sessionLabel()}>
+                      {(label) => (
+                        <MetaItem
+                          rank={3}
+                          class="otk-toast-session"
+                          title={label()}
+                        >
+                          {targetLabel(label())}
+                        </MetaItem>
+                      )}
+                    </Show>
+                  </MetaRow>
+                );
+              }}
+            </Show>
+          );
           const feedback = () => {
             const semantics = feedbackState({
               feedback: {
@@ -135,7 +204,9 @@ export default function Toasts(
             return {
               role: semantics.role,
               "aria-atomic": semantics["aria-atomic"],
-              "aria-label": note().title,
+              "aria-label": location()
+                ? `${note().title}: ${notificationBody(note())}`
+                : note().title,
             };
           };
           return (
@@ -166,29 +237,44 @@ export default function Toasts(
                       class="otk-toast-line"
                       role={feedback().role}
                       aria-atomic={feedback()["aria-atomic"]}
-                      aria-label={note().title}
+                      aria-label={feedback()["aria-label"]}
                     >
-                      <strong
-                        class="otk-toast-title otk-control-label"
-                        title={note().title}
+                      <Show
+                        when={location()}
+                        fallback={
+                          <>
+                            <strong
+                              class="otk-toast-title otk-control-label"
+                              title={note().title}
+                            >
+                              {note().title}
+                            </strong>
+                            <Show when={name()}>
+                              {(body) => (
+                                <Show
+                                  when={sessionOpen()}
+                                  fallback={nameText()}
+                                >
+                                  {(action) => (
+                                    <ActionButton
+                                      class="otk-toast-target otk-control-label"
+                                      action={openControl(
+                                        action().args,
+                                        body(),
+                                      )}
+                                      title={`Open ${body()}`}
+                                      unoffered={nameText()}
+                                    >
+                                      {body()}
+                                    </ActionButton>
+                                  )}
+                                </Show>
+                              )}
+                            </Show>
+                          </>
+                        }
                       >
-                        {note().title}
-                      </strong>
-                      <Show when={name()}>
-                        {(body) => (
-                          <Show when={sessionOpen()} fallback={nameText()}>
-                            {(action) => (
-                              <ActionButton
-                                class="otk-toast-target otk-control-label"
-                                action={openControl(action().args, body())}
-                                title={`Open ${body()}`}
-                                unoffered={nameText()}
-                              >
-                                {body()}
-                              </ActionButton>
-                            )}
-                          </Show>
-                        )}
+                        {locationLine(note().title)}
                       </Show>
                     </div>
                   }
@@ -206,8 +292,10 @@ export default function Toasts(
                         })}
                       signal={false}
                       failure={value()}
+                      heading={location() &&
+                        locationLine(value().heading, value().target.href)}
                       announcement={feedback()}
-                      controls={sessionOpen() && (
+                      controls={!location() && sessionOpen() && (
                         <Show when={sessionOpen()}>
                           {(action) => (
                             <div class="otk-toast-failure-action">

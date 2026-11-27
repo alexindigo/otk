@@ -41,12 +41,22 @@ test(
     const a = await seed(state, "Open A"),
       b = await seed(state, "Background B"),
       c = await seed(state, "Background C");
+    await state.product("tasks.create", {
+      directory: state.directory,
+      name: "User-facing notifications",
+      sessions: [b.id],
+    });
     await instrumentNotifications(page);
     await page.context().grantPermissions(["notifications"], {
       origin: state.url,
     });
     await openSession(state, page, a.id);
     await focusNotifications(page);
+    const projectName = await page.locator(
+      `[data-project=${
+        JSON.stringify(state.directory)
+      }] .otk-sidebar-title-text`,
+    ).textContent();
     await settings(page);
     await page.locator('input[name="notify.os"]').click();
     await expect(page.locator('input[name="notify.os"]')).toBeChecked();
@@ -56,6 +66,9 @@ test(
     const restore = await hideNotifications(page);
     await finish(state, b.id);
     await expect.poll(() => notes(page, "notes.length")).toBe(1);
+    expect(await notes(page, "notes[0].options.body")).toBe(
+      `${projectName} · User-facing notifications · Background B`,
+    );
     await badge(page, 1);
     await finish(state, b.id, "Replacement completed");
     await expect.poll(() => notes(page, "notes.length===2&&notes[0].closed"))

@@ -275,6 +275,7 @@ export default function Shell(
     connection: (id) => sidecars.connection(id),
     entry,
     entities: resources.entities,
+    locate: resources.notificationLocation,
     observeEntries: resources.observeEntries,
   });
   createEffect(

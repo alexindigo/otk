@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-toasts {
-  --toast-width: calc(400 * var(--otk-unit));
+  --toast-width: calc(480 * var(--otk-unit));
   position: fixed;
   inset: var(--overlay-gutter);
   margin-inline-start: auto;
@@ -103,4 +103,26 @@
     inline-size: min(var(--toast-width), 50vi);
     max-inline-size: none;
   }
+}
+.otk-toast-location {
+  --meta-row-gap: var(--space-2);
+  grid-column: 1 / -1;
+  flex: auto;
+  font: inherit;
+  color: inherit;
+  /* The open control's focus paint stays inside its padded box. */
+  min-block-size: var(--control-size);
+}
+.otk-toast-project {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 500;
+}
+.otk-toast-project-name {
+  display: var(--meta-label-full, inline);
+}
+.otk-toast-location .otk-toast-target {
+  display: inline-block;
+  color: inherit;
 }

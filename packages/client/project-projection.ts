@@ -213,6 +213,16 @@ export function createProjectProjection(o: {
     }
     return p.activity;
   };
+  const projectIdentity = (directory: string, repoID?: string) => {
+    const leaf = resolve(directory, repoID), summary = facts(leaf);
+    const root = summary?.topology?.canonicalRoot;
+    const canonical = root && root !== leaf ? facts(root) : undefined;
+    const color = (canonical ?? summary)?.presentation?.color;
+    return {
+      name: canonical ? label(root!) : projectLabel(leaf, summary),
+      ...(color && { color }),
+    };
+  };
   return {
     update,
     resolve,
@@ -221,12 +231,9 @@ export function createProjectProjection(o: {
       return label(resolve(directory));
     },
     projectLabel(directory: string) {
-      const leaf = resolve(directory), summary = facts(leaf);
-      const root = summary?.topology?.canonicalRoot;
-      return root && root !== leaf && facts(root)
-        ? label(root)
-        : projectLabel(leaf, summary);
+      return projectIdentity(directory).name;
     },
+    projectIdentity,
     entry(id: string) {
       void entryClock.state.keys[id];
       return sessions.get(id)?.entry;
