@@ -104,7 +104,9 @@ for (const surface of ["work", "interval"] as const) {
       }
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    for (const count of await counts.all()) {
+    const buttons = counts.and(header.getByRole("button"));
+    await expect(buttons).toHaveCount(surface === "work" ? 1 : 2);
+    for (const count of await buttons.all()) {
       await expect.soft(count.locator(".otk-disclosure-icon")).toBeVisible();
       await expect(count).toHaveAttribute("aria-expanded", "false");
       const closed = await count.locator("path").count();

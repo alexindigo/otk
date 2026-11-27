@@ -152,15 +152,9 @@ test("messages.highlight-2000-lines-passive-latency", {
       ),
     { timeout: 30_000 },
   ).toBe(true);
-  const workLog = page.locator(measuredReply).getByRole("button", {
-    name: "Work log",
-    exact: true,
-  });
-  // WP6 puts completion inside the reply's one Work log. Leave it closed
-  // during the paint measurement and verify the native result afterwards.
-  if (state.controller.info!.version.startsWith("2.")) {
-    await expect(workLog).toHaveAttribute("aria-expanded", "false");
-  }
+  // A text-only reply has no Work log for step or completion bookkeeping.
+  await expect(page.locator(measuredReply).locator(".otk-work-log"))
+    .toHaveCount(0);
   await expect.poll(() =>
     page.locator(".otk-messages").evaluate((root) => {
       const codes = Array.from(root.querySelectorAll(".otk-code code"))
@@ -262,15 +256,6 @@ test("messages.highlight-2000-lines-passive-latency", {
   ).toBe(true);
   assertHighlightBudget(evidence.blocks.slice(1), 20);
   assertHighlightBudget(evidence.revisions, 200);
-  if (state.controller.info!.version.startsWith("2.")) {
-    await workLog.click();
-    await expect(
-      page.locator(measuredReply).getByText("Execution succeeded", {
-        exact: true,
-      }),
-    )
-      .toBeVisible();
-  }
   console.info(
     "Highlight measurements",
     JSON.stringify({

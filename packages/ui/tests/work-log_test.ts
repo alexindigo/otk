@@ -7,6 +7,68 @@ import { partFrames, partGroups } from "../components/work-log.ts";
 import { relativeTarget } from "../components/tools/paths.ts";
 import { blocksText } from "../components/parts/text.ts";
 
+Deno.test("reply Work log projects actions and failures, not step or success bookkeeping", () => {
+  const marker: Part = {
+    id: "native-marker",
+    kind: "external",
+    name: "step-finish",
+    activity: {
+      category: "stepMarkers",
+      fold: true,
+      kindLabel: "Step",
+      layout: "row",
+      title: "Step finished",
+      tone: "normal",
+    },
+  };
+  const success: Part = {
+    ...marker,
+    id: "success",
+    activity: {
+      ...marker.activity!,
+      category: "record",
+      completion: { placement: "footer" },
+      title: "Execution succeeded",
+    },
+  };
+  const failedStep: Part = {
+    ...marker,
+    id: "failed-step",
+    activity: { ...marker.activity!, title: "Step failed", tone: "error" },
+  };
+  const failedExecution: Part = {
+    ...success,
+    id: "failed-execution",
+    activity: {
+      ...success.activity!,
+      title: "Execution failed",
+      tone: "error",
+    },
+  };
+  const snapshot: Part = {
+    ...marker,
+    id: "snapshot",
+    activity: { ...marker.activity!, category: "snapshots" },
+  };
+  const input: Part[] = [
+    { id: "step-start", kind: "step", phase: "start" },
+    marker,
+    snapshot,
+    { id: "step-end", kind: "step", phase: "finish" },
+    failedStep,
+    failedExecution,
+    success,
+  ];
+  const present = () => ({ work: {} });
+  assertEquals(partGroups(input, present)[0].parts, [
+    snapshot,
+    failedStep,
+    failedExecution,
+  ]);
+  assertEquals(partGroups([marker, success], present), []);
+  assertEquals(input.length, 7);
+});
+
 for (const hidden of [false, true]) {
   Deno.test(`segment busy evidence includes separate hidden=${hidden} reply wait witnesses`, () => {
     const part = (id: string): Part => ({ kind: "meta", id });

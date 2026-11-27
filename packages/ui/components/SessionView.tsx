@@ -550,7 +550,13 @@ export default function SessionView(props: {
       const interval = recordGroups().groups[recordOwner];
       const completionOf = interval?.silent ? interval.completionOf : undefined;
       if (completionOf) {
-        interaction.workDisclosure(completionOf).set(true);
+        const replyID = projection().repliesByID[completionOf]?.message.id;
+        await window?.reveal(completionOf, {
+          align: "center",
+          intent: "user",
+          focus: replyID ? () => controls.get(replyID)?.reveal() : undefined,
+        });
+        return;
       }
       if (recordOwner && part?.kind === "external" && part.activity?.fold) {
         recordKindDisclosure(interaction, recordOwner, part.activity.category)
@@ -568,15 +574,11 @@ export default function SessionView(props: {
         }
         control.reveal();
       };
-      await window?.reveal(completionOf ?? recordOwner ?? key, {
+      await window?.reveal(recordOwner ?? key, {
         align: "center",
         intent: "user",
         focus: ancestors.length ? undefined : focus,
       });
-      if (completionOf) {
-        const replyID = projection().repliesByID[completionOf]?.message.id;
-        if (replyID) await controls.get(replyID)?.revealWork();
-      }
       for (let n = 0; n < ancestors.length; n++) {
         const control = recordWindows.get(ancestors[n]);
         if (!control) {
@@ -918,7 +920,7 @@ export default function SessionView(props: {
                                         ? key
                                         : `${key}:${
                                           recordGroups().revisions[key] ?? 0
-                                        }:${logCompletion(key)?.revision ?? 0}`}
+                                        }`}
                                     label="Transcript messages"
                                     viewport={() => list}
                                     samples={[{
@@ -1033,20 +1035,6 @@ export default function SessionView(props: {
                                                       }}
                                                       lastID={reply().lastID}
                                                       pending={reply().pending}
-                                                      completion={logCompletion(
-                                                          key,
-                                                        )
-                                                        ? {
-                                                          body: () =>
-                                                            renderRecords(
-                                                              () =>
-                                                                logCompletion(
-                                                                  key,
-                                                                )!,
-                                                              renderReply,
-                                                            ),
-                                                        }
-                                                        : undefined}
                                                       recovery={props.transcript
                                                         ?.state
                                                         .content
