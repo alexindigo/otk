@@ -119,12 +119,13 @@ test(
     const remote = await (await state.newContext(browser)).newPage();
     await openSession(state, remote, source.id);
     const input = remote.locator("textarea[name=prompt]");
-    await input.fill("Keep this other client's exact draft");
+    const draft = "Keep the exact draft from this other client";
+    await input.fill(draft);
     await input.press("Enter");
     const record = page.locator('[data-native-record$="/request-failure"]');
     await expect(record).toHaveCount(1);
     await expect(record).toContainText("opencode.config.ts");
-    await expect(input).toHaveValue("Keep this other client's exact draft");
+    await expect(input).toHaveValue(draft);
     const pointer = page.locator(".otk-operation-feedback");
     await expect(pointer).toHaveCount(1);
     await expect(pointer.locator(".otk-record-row-label")).toHaveText(

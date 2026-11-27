@@ -91,7 +91,7 @@ export function composerLabel(mode: ComposerMode): string {
   return mode === "stop" ? "Stop" : "Send";
 }
 /** Draft facts, not element existence, determine ordinary Send readiness. */
-export type ComposerSource = "enter" | "button" | "interrupt";
+export type ComposerSource = "enter" | "shortcut" | "button" | "interrupt";
 export interface ComposerFacts extends SessionActivity {
   active: boolean;
   suspended: boolean;
@@ -130,7 +130,9 @@ export function composerAction(
     ? "Answer the pending request first"
     : undefined;
   if (source === "interrupt" || mode === "stop") {
-    if (source === "enter") return verdict("none", "Type a message to send");
+    if (source === "enter" || source === "shortcut") {
+      return verdict("none", "Type a message to send");
+    }
     return verdict(
       "stop",
       blocked ??
@@ -171,8 +173,18 @@ export interface ComposerActionOwner {
   readonly state: PrimaryActionState<ComposerMode> & { sending: boolean };
   verdict(source: ComposerSource): ComposerVerdict;
   subscribe(listener: () => void): () => void;
+  input(inserted: string | null): void;
+  cancelEnter(): void;
   activate(source: ComposerSource): Promise<void>;
 }
+
+const APOSTROPHE_GUARD_MS = 750;
+const ENTER_DELAY_MS = 250;
+type ComposerClock = {
+  now(): number;
+  set(run: () => void, delay: number): unknown;
+  clear(timer: unknown): void;
+};
 
 export function createComposerAction<T>(options: {
   facts(draft: T): Omit<ComposerFacts, "sending" | "local">;
@@ -187,7 +199,28 @@ export function createComposerAction<T>(options: {
     recheckAs: ComposerSource,
   ): void;
   begin(): void;
+  clock?: ComposerClock;
 }): ComposerActionOwner {
+  const clock: ComposerClock = options.clock ?? {
+    now: () => performance.now(),
+    set: (run, delay) => setTimeout(run, delay),
+    clear: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+  };
+  let lastApostrophe = -Infinity;
+  let pendingEnter: (() => void) | undefined;
+  const cancelEnter = () => pendingEnter?.();
+  const waitForEnter = () =>
+    new Promise<boolean>((resolve) => {
+      const timer = clock.set(() => {
+        pendingEnter = undefined;
+        resolve(true);
+      }, ENTER_DELAY_MS);
+      pendingEnter = () => {
+        clock.clear(timer);
+        pendingEnter = undefined;
+        resolve(false);
+      };
+    });
   let sending = false;
   const listeners = new Set<() => void>();
   const publish = () => {
@@ -227,14 +260,29 @@ export function createComposerAction<T>(options: {
         listeners.delete(listener);
       };
     },
+    input(inserted) {
+      if (inserted?.includes("'")) lastApostrophe = clock.now();
+      cancelEnter();
+    },
+    cancelEnter,
     async activate(source: ComposerSource): Promise<void> {
+      if (
+        source === "enter" &&
+        (pendingEnter || clock.now() - lastApostrophe < APOSTROPHE_GUARD_MS)
+      ) return;
+      if (source !== "enter") cancelEnter();
+      let initial = project(source, options.draft());
+      // Keep existing refusals immediate; only an available send can wait.
+      if (source === "enter" && initial.verdict.available) {
+        if (!await waitForEnter()) return;
+        initial = project(source, options.draft());
+      }
       const activation = randomID();
       sendDiagnostic("activation", { activation, state: source });
       const refuse = (reason: string, recheckAs = source) => {
         sendDiagnostic("refused", { activation, state: reason });
         options.refuse(reason, source, recheckAs);
       };
-      const initial = project(source, options.draft());
       if (initial.verdict.reason) return refuse(initial.verdict.reason);
       if (initial.verdict.kind === "stop") {
         options.begin();

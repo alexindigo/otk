@@ -21,8 +21,9 @@ export function createKeyboard(
   fail: (error: unknown) => void,
   mac = false,
 ): Keyboard {
-  const invoke = (id: string, args?: unknown) => {
-    void commands.run(id, args).catch(fail);
+  const invoke = (id: string, args?: unknown, shortcut?: string) => {
+    const context = shortcut ? { ...commands.context(), shortcut } : undefined;
+    void commands.run(id, args, context).catch(fail);
   };
   const keymap = makeKeymap({
     describe: (id) => commands.metadata(id)?.title ?? id,
@@ -30,7 +31,7 @@ export function createKeyboard(
       if (!commands.enabled(binding.command, undefined, binding.args)) {
         return false;
       }
-      invoke(binding.command, binding.args);
+      invoke(binding.command, binding.args, binding.key);
       return true;
     },
   }, mac);
