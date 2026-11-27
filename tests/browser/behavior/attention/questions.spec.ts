@@ -128,6 +128,14 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await expect(page.locator(".otk-prompt-actions")).not.toContainText(
     "esc again",
   );
+  // A rejected tool can interrupt V2 without advancing its durable idle clock.
+  // Join the actual native execution roster before checking its OTK projection.
+  await expect.poll(async () => {
+    const active = await state.native<Record<string, { type: string }>>(
+      "/session/status",
+    );
+    return active[session.nativeID]?.type ?? "idle";
+  }).toBe("idle");
   await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
     "data-status",
     "idle",

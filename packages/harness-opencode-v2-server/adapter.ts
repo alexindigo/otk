@@ -42,7 +42,7 @@ import { PendingAttentionIndex } from "./attention.ts";
 import { commands } from "./commands.ts";
 import { type PendingRoute, V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
-import { V2Shells } from "./shells.ts";
+import { parkedShellResult, V2Shells } from "./shells.ts";
 import { requestFailureRecord } from "./request-failure.ts";
 import { EventRefresh } from "./event-refresh.ts";
 
@@ -1037,7 +1037,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       const pending = [
         ...jobs.map(({ id }) => `result:${id}`),
         ...(inbox.state === "available"
-          ? inbox.items.map(({ id, delivery }) => `queued:${delivery}:${id}`)
+          ? inbox.items.filter((item) => !parkedShellResult(item))
+            .map(({ id, delivery }) => `queued:${delivery}:${id}`)
           : []),
         ...(active[sid] || millis(native.time.busy) > terminal
           ? ["native-start"]
@@ -1523,11 +1524,22 @@ export class OpencodeV2ServerAdapter implements Harness {
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    const parked = event.type === "session.inbox.enqueued" &&
+      parkedShellResult(event.data.item);
     if (
-      changedID && generation === this.#generation &&
+      changedID && generation === this.#generation && !parked &&
       /^session\.(inbox\.|execution\.started$|compaction\.started$|retry\.scheduled$)/
         .test(event.type)
     ) {
+      const candidate = this.#completionCandidates.get(changedID);
+      if (
+        event.type === "session.execution.started" && candidate !== undefined &&
+        (event.created === undefined || event.created >= candidate)
+      ) {
+        // A successor owns settlement from its start, including when its
+        // interruption leaves the previous durable idle clock in place.
+        this.#completionCandidates.delete(changedID);
+      }
       this.#completionInput(
         changedID,
         event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
@@ -1666,7 +1678,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     if (typeof sid !== "string" || sid === "global") return;
-    if (/^session\.inbox\./.test(event.type)) {
+    if (!parked && /^session\.inbox\./.test(event.type)) {
       this.#confirmCompletion(ids.encode(sid), client, signal);
     }
     if (
@@ -1867,7 +1879,9 @@ export class OpencodeV2ServerAdapter implements Harness {
         terminalOrigin: "live",
         ...(executionFailure ? { terminalFailure: executionFailure } : {}),
       };
-      if (entry.activity.outcome === "succeeded") {
+      if (
+        entry.activity.outcome === "succeeded" && millis(raw.time.busy) <= ended
+      ) {
         this.#completionCandidates.set(entry.id, ended);
       }
     }
