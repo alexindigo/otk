@@ -231,11 +231,11 @@ toolTest("visual.text-size-native-tool-control-geometry", {
     description: "Measured failing tool",
   });
   await prompt(page, "Run the measured tool");
-  const row = page.locator("[data-tool=bash]");
   await expect(page.locator(".otk-message-flow")).toContainText(
     "Tool finished.",
   );
-  await openLatestWork(page);
+  const work = await openLatestWork(page);
+  const row = work.locator("[data-tool=bash]");
   await revealAcquired(page, "[data-tool=bash] .otk-tool-toggle");
   const { page: settings, errors } = await independentPage(state, browser);
   await settings.goto(state.url);
@@ -252,7 +252,7 @@ toolTest("visual.text-size-native-tool-control-geometry", {
     const tool = (await row.locator(".otk-tool-toggle").boundingBox())!;
     expect(tool.height).toBeGreaterThanOrEqual(26 * size / 100 - 1);
     const icon = (await row.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot > svg",
+      ":scope > .otk-tree-node > .otk-tree-heading > .otk-tool-toggle > .otk-disclosure-lead > svg",
     ).boundingBox())!;
     expect(icon.width).toBeCloseTo(13 * size / 100, 1);
     expect(icon.height).toBeCloseTo(13 * size / 100, 1);
