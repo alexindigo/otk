@@ -153,10 +153,9 @@ for (
       await expect(page.getByRole("button", { name, exact: true }))
         .toBeVisible();
     }
-    const hasComposer = view === "parent" || view === "publication";
-    await expect(page.locator(".otk-draft-kept")).toHaveCount(
-      hasComposer ? 1 : 0,
-    );
+    // D17: the takeover suspends the composer even in a child session.
+    await expect(page.locator(".otk-permission-dock .otk-draft-kept"))
+      .toHaveText("Your draft is kept");
     if (view === "direct") {
       // Permission age must not depend on unfinished session indexing.
       await expect.poll(() => {
@@ -241,15 +240,18 @@ for (
       await expect(page.locator("[data-tool=bash]")).toContainText(
         "Awaiting permission",
       );
-      await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+      await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
     // Replies go through the visible existing dock, to the asking helper.
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
     if (pendingTool === "bash") {
-      // The read-only header may still own Subagents after the request closes.
-      await expect(page.locator(".otk-composer:visible")).toHaveCount(0);
-      await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+      // Answering a permission does not join the child's conversation.
+      await expect(page.getByRole("button", {
+        name: "Join the conversation",
+        exact: true,
+      })).toBeVisible();
+      await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
     await expect(parentRow).not.toContainText("P 1");
     await expect(childRow).not.toContainText("P 1");

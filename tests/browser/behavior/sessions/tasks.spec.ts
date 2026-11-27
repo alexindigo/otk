@@ -101,9 +101,15 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   const current = trail.locator('[aria-current="page"]');
   const parent = trail.getByRole("link", { name: "Subagents", exact: true });
   const siblings = page.getByRole("navigation", { name: "Subagent siblings" });
+  const join = page.getByRole("button", {
+    name: "Join the conversation",
+    exact: true,
+  });
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}/${first.id}$`));
   await expect(current).toContainText("First inspection");
-  await expect(page.locator(".otk-prompt")).toHaveCount(0);
+  // D17: opening or revisiting a child does not reveal its input or parent's draft.
+  await expect(join).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   await siblings.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${second.id}$`));
   await expect(current).toContainText("Second inspection");
@@ -117,7 +123,8 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await page.evaluate(() => history.back());
   await expect(page).toHaveURL(new RegExp(`${first.id}$`));
   await expect(current).toContainText("First inspection");
-  await expect(page.locator(".otk-prompt")).toHaveCount(0);
+  await expect(join).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   await page.evaluate(() => history.forward());
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}$`));
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
