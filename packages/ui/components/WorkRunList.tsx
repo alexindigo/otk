@@ -190,13 +190,14 @@ export default function WorkRunList(props: {
           text: command ??
             tools.map((tool) => tool.target).filter(Boolean).join(", "),
           mono: !!command,
+          summary: tools.length === 1 ? tools[0].summary : undefined,
         };
       }
       const facts = records().flatMap((part) => {
         const activity = parts.presentation(part, props.prefs).activity;
         return [activity?.state?.label, activity?.detail].filter(Boolean);
       });
-      return { text: metaList(facts), mono: false };
+      return { text: metaList(facts), mono: false, summary: undefined };
     });
     const duration = () => {
       const end = input.run.live ? now() : input.run.end;
@@ -247,6 +248,17 @@ export default function WorkRunList(props: {
           >
             {preview().text}
           </ChromeMeta>
+          <Show when={preview().summary}>
+            {(summary) => (
+              <ChromeMeta
+                class="otk-work-tool-summary"
+                truncate
+                title={summary()}
+              >
+                {summary()}
+              </ChromeMeta>
+            )}
+          </Show>
           <Show when={input.run.child}>
             {(child) => (
               <ActionButton

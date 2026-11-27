@@ -36,7 +36,7 @@ export function registerToolPart(
         </Show>
       );
     },
-    ({ call }, prefs) => {
+    ({ call }, prefs, context) => {
       const failureReason = toolFailure(call);
       const required = !!failureReason;
       const work = prefs.toolDetails || call.status !== "completed" || required
@@ -48,7 +48,7 @@ export function registerToolPart(
         work,
         // Work grouping does not need to prepare tool headers until it reads run facts.
         get run(): PartPresentation["run"] {
-          const p = tools.presentation(call);
+          const p = tools.presentation(call, context);
           const description = "description" in call
             ? call.description
             : undefined;
