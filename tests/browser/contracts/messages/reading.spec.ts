@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { cssLength } from "../../pages/css-length.ts";
 import { revealAcquired, scrollTranscript } from "../../pages/transcript.ts";
 test.use({ profile: "contract-messages-reading" });
 
@@ -240,15 +241,12 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       gap: kind.left - icon.right,
       expected: (rail.width - icon.width) / 2,
       labelGap: label.left - kind.right,
-      expectedLabelGap: parseFloat(
-        getComputedStyle(row.querySelector(".otk-record-row-label")!)
-          .marginInlineStart,
-      ),
     };
   });
   expect(Math.abs(disclosure.center)).toBeLessThan(.5);
   expect(Math.abs(disclosure.gap - disclosure.expected)).toBeLessThan(.5);
-  expect(disclosure.labelGap).toBe(disclosure.expectedLabelGap);
+  // 2.105 WP3 specifies the visible gap, not the slot that supplies it.
+  expect(disclosure.labelGap).toBe(await cssLength(fold, "--space-2"));
   for (const width of [1280, 1600, 2000]) {
     await page.setViewportSize({ width, height: 1100 });
     await expect.poll(() =>
