@@ -146,6 +146,8 @@ export interface ViewportPosition {
   layout(): void;
   /** One revision includes prefix changes, DOM materialization and compensation. */
   transaction(change: () => void): void;
+  /** Commit sibling window measurements together before publishing position. */
+  measure(change: () => void): () => void;
   /** A descendant must record its actual size before releasing this barrier. */
   hold(): () => void;
   register(geometry: ViewportGeometry): () => void;
@@ -197,6 +199,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const geometries = new Map<string, ViewportGeometry>(),
     listeners = new Set<() => void>();
   const flows = new Map<HTMLElement, number>();
+  let measurements = new Set<() => void>();
+  let measurementFrame: number | undefined;
   let mode: "following" | "free-scrolled" | "user-pinned" = "free-scrolled",
     disposed = false,
     dragging = false,
@@ -657,7 +661,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   document.addEventListener("pointercancel", up);
   document.addEventListener("touchend", up);
   document.addEventListener("touchcancel", up);
-  return {
+  const owner: ViewportPosition = {
     following: () => mode === "following",
     input(top) {
       away();
@@ -785,6 +789,20 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
         }
       }
     },
+    measure(change) {
+      const pending = measurements;
+      pending.add(change);
+      measurementFrame ??= requestAnimationFrame(() => {
+        measurementFrame = undefined;
+        const batch = measurements;
+        measurements = new Set();
+        if (disposed || !batch.size) return;
+        owner.transaction(() => {
+          for (const measure of batch) measure();
+        });
+      });
+      return () => pending.delete(change);
+    },
     hold() {
       leases++;
       geometryPending = true;
@@ -880,6 +898,10 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       cancelNavigation("Viewport retired");
       cancelLatest("Viewport retired");
       if (frame !== undefined) cancelAnimationFrame(frame);
+      if (measurementFrame !== undefined) {
+        cancelAnimationFrame(measurementFrame);
+      }
+      measurements.clear();
       observer.disconnect();
       mutations.disconnect();
       geometries.clear();
@@ -903,6 +925,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       document.removeEventListener("touchcancel", up);
     },
   };
+  return owner;
 }
 
 /** Transcript compatibility facade: intent requests to the same root owner used

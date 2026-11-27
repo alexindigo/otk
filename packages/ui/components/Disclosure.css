@@ -114,6 +114,7 @@
   --disclosure-gutter: var(--icon-compact);
   font-size: var(--text-meta);
   color: var(--otk-fg-3);
+  padding-inline: 0;
 }
 .otk-disclosure-button.is-compact {
   inline-size: var(--control-size);

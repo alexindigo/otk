@@ -259,10 +259,14 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
     "aria-label",
     "No known activity",
   );
-  await expect(page.locator("#registered .otk-tool-toggle")).toHaveCount(2);
+  // 2.114/dx-2 gives inert unknown-part leaves the same lane styling as tools.
+  const registeredTools = page.locator("#registered button.otk-tool-toggle");
+  await expect(registeredTools).toHaveCount(2);
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(0);
-  await page.locator("#registered > .otk-tool-line .otk-tool-toggle").click();
-  await page.locator("#registered .otk-message .otk-tool-toggle").click();
+  await registeredTools.and(page.locator("#registered > .otk-tool-line button"))
+    .click();
+  await registeredTools.and(page.locator("#registered .otk-message button"))
+    .click();
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(2);
   await expect(page.locator("[data-library-code] .otk-token").first())
     .toBeAttached();
@@ -296,7 +300,9 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#isolated .otk-tool-brief")).toHaveText(
     "Initial result",
   );
-  await page.locator("#isolated .otk-tool-toggle").click();
+  const isolatedTool = page.locator("#isolated button.otk-tool-toggle");
+  await expect(isolatedTool).toHaveAttribute("aria-expanded", "false");
+  await isolatedTool.click();
   await expect(page.locator("#isolated .otk-tool-body")).toBeVisible();
   await expect(page.locator("#isolated .otk-tool-output")).toHaveText(
     "Reusable output",
@@ -304,10 +310,8 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#isolated .otk-tool-body .otk-tool-summary"))
     .toHaveCount(0);
   await page.locator("[data-update]").click();
-  await expect(page.locator("#registered .otk-tool-toggle").first())
-    .toContainText("Inspect");
-  await expect(page.locator("#registered .otk-tool-toggle").first())
-    .toContainText("external target");
+  await expect(registeredTools.first()).toContainText("Inspect");
+  await expect(registeredTools.first()).toContainText("external target");
   await expect(page.locator("#registered .otk-tool-body").first())
     .toBeVisible();
   await expect.poll(() =>
