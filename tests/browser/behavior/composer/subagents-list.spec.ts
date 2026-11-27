@@ -432,6 +432,7 @@ test(
     await expect(page.locator("html")).toHaveCSS("--otk-scale", "1.25");
     const trigger = page.locator(".otk-subagents-trigger");
     const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+    const main = page.locator(".otk-main");
     const facts = [];
     for (const width of [1440, 1280, 1100, 960, 800]) {
       await page.setViewportSize({ width, height: 900 });
@@ -440,6 +441,16 @@ test(
           .toBeVisible();
         await expect(page.getByRole("tabpanel", { name: "Sessions" }))
           .toBeVisible();
+      }
+      if (width <= 960) {
+        // wl-3-sheet (work log plan 1.3): the open sidebar now covers the
+        // conversation at these widths. Return to the conversation before
+        // measuring the same live menu against its column.
+        await state.product("layout.patch", { rightCollapsed: false });
+        await expect(main).toHaveAttribute("inert", "");
+        await page.getByRole("button", { name: "Back to conversation" })
+          .click();
+        await expect(main).not.toHaveAttribute("inert", "");
       }
       await trigger.click();
       await expect(menu).toBeVisible();
@@ -469,9 +480,7 @@ test(
       await page.keyboard.press("Escape");
       await expect(menu).toBeHidden();
     }
-    // Retain the 800px two-sidebar geometry check above. Use the compact shell
-    // for the three narrow screenshots, so there is room to read the agent.
-    await state.product("layout.patch", { rightCollapsed: true });
+    // The Back action leaves the panel collapsed for the three narrow captures.
     await expect(page.getByRole("tabpanel", { name: "Sessions" })).toBeHidden();
     await trigger.click();
     await expect(menu).toBeVisible();

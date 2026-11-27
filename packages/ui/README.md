@@ -1423,30 +1423,30 @@ Menu owns role/menuitem semantics, roving focus with arrows/Home/End, type-ahead
 and Enter/Space activation for all consumers. Tab reaches an optional title
 action after the active item; Shift+Tab returns from the title action to that
 item. Leaving these stops closes and restores origin focus; Popover alone owns
-Escape and its focus return. `CommandMenu` shares hub
-projection, registration-change subscription, invocation-time reprojection and
-owner-bound execution between pointer and visible-trigger menus. Failed actions
-use a sibling alert described by the corresponding item, outside `role=menu`,
-with an optional injected error callback for row feedback. The supplied
-`feedbackID` associates that row-owned error with its action. Pointer opening
-focuses the programmatic-only menu container, without a ring; the first arrow
-moves focus to an item. Keyboard opening focuses the first item with the shared
-focus paint. Popover carries that opening reason for both native triggers and
-its control port, including modal re-hosting. All Menu callers share one compact
-token set: 28px rows, 8px inline/4px block inset and no inter-row gap. Menu
-passes that density through Popover to Surface; command errors mount only while
-present, below the menu rather than reserving empty feedback space. Point
-anchors prefer their bottom/right quadrant at the captured pointer, flipping
-only for overflow. Popover owns point placement, viewport flipping and focus
-return through its `open(anchor, reason)` control port. A rect anchor supplies
-x/y, optional width/height (zero for a point), origin and a focus callback. One
-Popover-owned anchor box uses the same CSS position-area and native flip
-fallbacks as triggered popovers; it needs no resize listener/ResizeObserver.
-Content never measures or positions its parent. Selection Copy outside fields
-writes its captured text through the browser clipboard API. App fallback actions
-use the existing session, palette and registered display-settings command
-owners. DisplayPreferences shares one control body between the anchored Display
-menu and the registered app-level dialog.
+Escape and its focus return. `CommandMenu` shares hub projection,
+registration-change subscription, invocation-time reprojection and owner-bound
+execution between pointer and visible-trigger menus. Failed actions use a
+sibling alert described by the corresponding item, outside `role=menu`, with an
+optional injected error callback for row feedback. The supplied `feedbackID`
+associates that row-owned error with its action. Pointer opening focuses the
+programmatic-only menu container, without a ring; the first arrow moves focus to
+an item. Keyboard opening focuses the first item with the shared focus paint.
+Popover carries that opening reason for both native triggers and its control
+port, including modal re-hosting. All Menu callers share one compact token set:
+28px rows, 8px inline/4px block inset and no inter-row gap. Menu passes that
+density through Popover to Surface; command errors mount only while present,
+below the menu rather than reserving empty feedback space. Point anchors prefer
+their bottom/right quadrant at the captured pointer, flipping only for overflow.
+Popover owns point placement, viewport flipping and focus return through its
+`open(anchor, reason)` control port. A rect anchor supplies x/y, optional
+width/height (zero for a point), origin and a focus callback. One Popover-owned
+anchor box uses the same CSS position-area and native flip fallbacks as
+triggered popovers; it needs no resize listener/ResizeObserver. Content never
+measures or positions its parent. Selection Copy outside fields writes its
+captured text through the browser clipboard API. App fallback actions use the
+existing session, palette and registered display-settings command owners.
+DisplayPreferences shares one control body between the anchored Display menu and
+the registered app-level dialog.
 
 Display, Appearance and Notifications delegate native fields to
 PreferenceControls. Each accepts the consumer's selected preference registry;
