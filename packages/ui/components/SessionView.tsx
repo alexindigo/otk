@@ -534,6 +534,26 @@ export default function SessionView(props: {
     const target = workTarget(turn);
     if (target) return commands.run("work.show", { ...target, run });
   };
+  const workAction = (
+    target: NonNullable<ReturnType<typeof workTarget>>,
+    run?: string,
+  ) => {
+    const control = commands.control("work.show", { ...target, run }, {
+      target,
+      shown: () => props.work?.shows(target, target.turn) ?? false,
+      unshown: "The Work log did not open.",
+      recovery: "Try opening the Work log again.",
+    });
+    return {
+      ...control,
+      run: () => {
+        // Inspecting reply work is a reading intent. Keep this anchor instead
+        // of following new tail content behind the pane.
+        if (control.availability().available) following?.pause();
+        return control.run();
+      },
+    };
+  };
   const controls = new Map<string, MessageControl>();
   const reveal = ownedCommand(useCommandPorts(), {
     id: "transcript.reveal",
@@ -1064,22 +1084,7 @@ export default function SessionView(props: {
                                                         key,
                                                       ) ?? false,
                                                       action: (run?: string) =>
-                                                        commands.control(
-                                                          "work.show",
-                                                          { ...target, run },
-                                                          {
-                                                            target,
-                                                            shown: () =>
-                                                              props.work?.shows(
-                                                                target,
-                                                                key,
-                                                              ) ?? false,
-                                                            unshown:
-                                                              "The Work log did not open.",
-                                                            recovery:
-                                                              "Try opening the Work log again.",
-                                                          },
-                                                        ),
+                                                        workAction(target, run),
                                                       onFeedback: (
                                                         outcome: {
                                                           feedback:
