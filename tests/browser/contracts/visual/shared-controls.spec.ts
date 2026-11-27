@@ -219,13 +219,23 @@ test(
       });
       expect(g.inside && g.feedbackVisible).toBe(true);
     }
+    const crumb = page.locator('[data-crumb="tstv1-independent-4"]');
     await page.keyboard.press("Enter");
-    await expect(input).toHaveAttribute("readonly", "");
+    // Issue 2.122: the same slot switches to the submitted pending title,
+    // then restores the confirmed title with a separate failure notice.
+    await expect(input).toHaveCount(0);
+    await expect(crumb.locator(".otk-rename-pending")).toHaveText(text);
     await page.locator("[data-reject-chip]").evaluate((el) =>
       (el as HTMLElement).click()
     );
     await expect(page.getByRole("alert")).toBeVisible();
-    await expect(input).toHaveValue(text);
+    await expect(crumb.locator(".otk-rename-pending")).toHaveCount(0);
+    await expect(crumb).toHaveAccessibleName(
+      "Independent session 4 with a long title",
+    );
+    await expect(page.getByRole("alert")).toContainText(
+      "Renaming session failed",
+    );
     expect(
       await page.getByRole("alert").evaluate((el) => {
         const r = el.getBoundingClientRect();
