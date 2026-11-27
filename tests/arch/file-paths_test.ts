@@ -9,6 +9,8 @@ const server = "core/files/local-files.ts";
 const reader = "packages/client/file-facts.ts";
 const commands = "packages/ui/features/file-paths.tsx";
 const blocks = "packages/ui/components/Blocks.tsx";
+const inlineImage = "packages/ui/components/InlineImage.tsx";
+const imageSource = "packages/client/inline-images.ts";
 const link = "packages/ui/components/PathLink.tsx";
 const css = "packages/ui/components/PathLink.css";
 const preview = "packages/ui/components/FilePreview.tsx";
@@ -20,7 +22,15 @@ const recognizerSymbols = new Set([
   "folderCommand",
   "pathTooltip",
 ]);
-const consumers = new Set([recognizer, blocks, link, commands, preview]);
+const consumers = new Set([
+  recognizer,
+  blocks,
+  link,
+  commands,
+  preview,
+  imageSource,
+]);
+const presenterMounts = new Set([blocks, inlineImage]);
 const limits = new Set([
   "MAX_STAT_PATHS",
   "MAX_PATH_CHARS",
@@ -65,7 +75,7 @@ function problems(path: string, text: string): string[] {
       if (node.id?.type === "Identifier") checkDefinition(node.id.name);
     }
     if (
-      node.type === "JSXOpeningElement" && path !== blocks &&
+      node.type === "JSXOpeningElement" && !presenterMounts.has(path) &&
       (property(node.name) === "PathLink" ||
         (node.name.type === "JSXIdentifier" &&
           source.binding(node.name.name, node)?.module?.endsWith(
@@ -142,4 +152,6 @@ Deno.test("file path policy catches misplaced owners and admits their consumers"
     problems("core/config/loader.ts", `Deno.readTextFile(path);`),
     [],
   );
+  assertEquals(problems(inlineImage, "<PathLink mention={mention} />;"), []);
+  assertEquals(problems(imageSource, "hrefPath(source);"), []);
 });

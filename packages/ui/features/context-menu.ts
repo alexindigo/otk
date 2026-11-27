@@ -50,19 +50,32 @@ export function browserContextTargets(
   if (selectedText) {
     targets.push({ kind: "selection", data: { text: selectedText } });
   }
+  const images: { index: number; target: ContextTarget }[] = [];
   for (const node of nodes) {
     if (node instanceof HTMLAnchorElement && node.href) {
       targets.push({ kind: "link", data: { text: node.href } });
     }
     if (node instanceof HTMLImageElement && (node.currentSrc || node.src)) {
-      targets.push({
-        kind: "image",
-        data: { text: node.currentSrc || node.src, name: node.alt || "Image" },
+      images.push({
+        index: targets.length,
+        target: {
+          kind: "image",
+          data: {
+            text: node.currentSrc || node.src,
+            name: node.alt || "Image",
+          },
+        },
       });
     }
     targets.push(
       ...declared(node, { selection: selectedText, inner: targets.slice() }),
     );
+  }
+  // A declared file target owns its image in the ancestor path.
+  if (!targets.some((target) => target.kind === "file")) {
+    for (const { index, target } of images.reverse()) {
+      targets.splice(index, 0, target);
+    }
   }
   return targets;
 }

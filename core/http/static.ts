@@ -11,6 +11,44 @@ const types: Record<string, string> = {
   ".woff": "font/woff",
   ".json": "application/json",
 };
+const ASSET_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".bmp",
+  ".ico",
+  ".svg",
+  ".js",
+  ".mjs",
+  ".css",
+  ".map",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".otf",
+  ".json",
+  ".wasm",
+  ".txt",
+]);
+const NAVIGATION_DESTINATIONS = new Set([
+  "document",
+  "iframe",
+  "frame",
+  "empty",
+]);
+function notFound() {
+  return new Response("Not found", {
+    status: 404,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    },
+  });
+}
 export async function staticFile(
   path: string,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
@@ -31,6 +69,7 @@ export async function staticResponse(
     cfg?: Pick<ServiceConfig, "requests" | "connection">;
     build?: string;
   },
+  request?: { dest?: string | null },
 ): Promise<Response> {
   if (path === "/api" || path.startsWith("/api/")) {
     return Response.json({ code: "not_found" }, { status: 404 });
@@ -40,11 +79,11 @@ export async function staticResponse(
   try {
     relative = decodeURIComponent(path.slice(1)) || "index.html";
   } catch {
-    return new Response("Not found", { status: 404 });
+    return notFound();
   }
   const safe = normalize(relative);
   if (safe.startsWith("../") || safe === ".." || safe.startsWith("/")) {
-    return new Response("Not found", { status: 404 });
+    return notFound();
   }
   const html = (bytes: Uint8Array): Response => {
     // Relative assets are rooted at the sidecar's mount, not at a fallback
@@ -83,6 +122,10 @@ export async function staticResponse(
       },
     });
   }
+  if (
+    (request?.dest && !NAVIGATION_DESTINATIONS.has(request.dest)) ||
+    ASSET_EXTENSIONS.has(extname(safe).toLowerCase())
+  ) return notFound();
   const index = await staticFile(join(root, "index.html"));
   if (index !== null) return html(index);
   const fallback = await Deno.readFile(

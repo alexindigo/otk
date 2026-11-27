@@ -3,5 +3,7 @@ import type { Handler } from "@pathfinder/pathfinder";
 import "../../app.ts";
 import { staticResponse } from "../../static.ts";
 const handler: Handler = (request, context) =>
-  staticResponse(request.path, context.app);
+  staticResponse(request.path, context.app, {
+    dest: request._raw.headers.get("sec-fetch-dest"),
+  });
 export default handler;

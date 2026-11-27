@@ -73,6 +73,8 @@ import type { SectionObserver } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
 import { TerminalHost } from "./core/terminals/host.ts";
 import { TerminalMux } from "./core/terminals/mux.ts";
+import { InlineImages } from "./core/files/inline-images.ts";
+import { ImageRoots } from "./core/files/image-roots.ts";
 import { terminalDataDirectory } from "./core/terminals/env.ts";
 import { registerTerminals } from "./core/features/terminals.ts";
 
@@ -250,18 +252,29 @@ export async function startApplication(
       publishRows: cfg.digest.publishrows,
     });
     registerTerminals(rpc, terminals);
-    registerLocalFiles(
-      rpc,
-      new LocalFiles({
-        home: environment.HOME ?? "",
-        deny: [
-          cfg.state.path,
-          operatorConfigDirectory(environment),
-          environment.OTK_CONFIG,
-        ]
-          .filter((path): path is string => !!path),
+    const home = environment.HOME ?? "";
+    const files = new LocalFiles({
+      home,
+      deny: [
+        cfg.state.path,
+        operatorConfigDirectory(environment),
+        environment.OTK_CONFIG,
+      ]
+        .filter((path): path is string => !!path),
+    });
+    const inlineImages = new InlineImages({
+      files,
+      roots: new ImageRoots({
+        templates: cfg.images.roots,
+        home,
+        identity: inbox.summaries.identity,
       }),
-    );
+      limits: cfg.images,
+      concurrency: cfg.images.concurrency,
+      directory: async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    });
+    registerLocalFiles(rpc, files, inlineImages);
     inbox.terminalDependencies(terminals.tracking);
     terminalSockets = new TerminalMux(
       terminals,
@@ -285,6 +298,7 @@ export async function startApplication(
       signal: options.signal,
       requested: options.requested,
       terminals: terminalSockets,
+      inlineImages,
     });
     const principal = () => cfg.auth.username.toLowerCase() || "local";
     inbox.operationAttention(

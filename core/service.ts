@@ -22,6 +22,7 @@ import { clientRequestPolicy } from "./config/schema.ts";
 import { StorageFeature } from "./features/storage.ts";
 import { StorageRequests } from "./requests/storage.ts";
 import type { TerminalSockets } from "./terminals/mux.ts";
+import type { InlineImages } from "./files/inline-images.ts";
 
 export interface CoreOptions {
   cfg: ServiceConfig;
@@ -38,6 +39,7 @@ export interface CoreOptions {
   signal?: AbortSignal;
   requested?: () => void;
   terminals?: TerminalSockets;
+  inlineImages?: InlineImages;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -211,6 +213,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       staticRoot,
       ...identity,
       terminals: options.terminals,
+      inlineImages: options.inlineImages,
     });
     check();
     return {

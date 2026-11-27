@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type FileFact, MAX_STAT_PATHS } from "@otk/protocol";
+import {
+  type FileFact,
+  type InlineImageFact,
+  MAX_STAT_PATHS,
+} from "@otk/protocol";
 import { RequestFailure } from "./failures.ts";
+import type { ClientImageFailure } from "./inline-images.ts";
 import { createState, type StateFactory } from "./state.ts";
 
-type RpcPort = {
+type RpcPort<M extends string, Fact> = {
   call(
-    method: "file.stat",
+    method: M,
     params: { sessionID: string; paths: string[] },
     signal?: AbortSignal,
-  ): Promise<FileFact[]>;
+  ): Promise<Fact[]>;
 };
 type Clock = { now(): number; schedule(run: () => void): () => void };
 const clockDefault: Clock = {
@@ -20,59 +25,117 @@ const clockDefault: Clock = {
 };
 const MAX_ENTRIES = 1024;
 type Accessor<T> = () => T;
-type FactLease = Accessor<FileFact | undefined> & { release(): void };
+type FactLease<T> = Accessor<T | undefined> & { release(): void };
+export type ImageFactLease = FactLease<InlineImageFact | ClientImageFailure>;
 export interface FileFacts {
-  fact(sessionID: string, path: string): FactLease;
+  fact(sessionID: string, path: string): FactLease<FileFact>;
   invalidate(sessionID: string, path: string): void;
+  image(sessionID: string, path: string): ImageFactLease;
+  imageFailed(sessionID: string, path: string): void;
   readonly supported: Accessor<boolean>;
   stop(): void;
 }
 
 const keyFor = (sessionID: string, path: string) => `${sessionID}\0${path}`;
-type Demand = { key: string; sessionID: string; path: string };
+type Demand = {
+  key: string;
+  sessionID: string;
+  path: string;
+  afterFailure: boolean;
+};
+type Settings = {
+  factory?: StateFactory;
+  diagnostic?: (error: unknown) => void;
+};
+const unsupported: ClientImageFailure = {
+  status: "unavailable",
+  reason: "unsupported",
+};
+const loadFailed: ClientImageFailure = {
+  status: "unavailable",
+  reason: "load-failed",
+};
 
 /** One sidecar's cache. Mounted cells outlive cache eviction, not their consumers. */
 export function createFileFacts(
-  rpc: RpcPort,
+  rpc: RpcPort<"file.stat", FileFact>,
   clock = clockDefault,
-  options: { factory?: StateFactory; diagnostic?: (error: unknown) => void } =
-    {},
+  options: Settings & { images?: RpcPort<"file.images", InlineImageFact> } = {},
 ): FileFacts {
+  const stat = batchCache("file.stat", rpc, clock, options, {
+    ttl: (fact) => fact.status === "absent" ? 10_000 : 60_000,
+  });
+  const images = batchCache("file.images", options.images, clock, options, {
+    ttl: (fact) => fact.status === "unavailable" ? 10_000 : 60_000,
+    unsupported,
+    recover: (fact) => fact?.status === "unavailable" ? fact : loadFailed,
+    retryable: (fact) => fact.status === "image",
+  });
+  return {
+    supported: stat.supported,
+    fact: stat.fact,
+    invalidate: stat.invalidate,
+    image: images.fact,
+    imageFailed: images.failed,
+    stop() {
+      stat.stop();
+      images.stop();
+    },
+  };
+}
+
+function batchCache<
+  M extends string,
+  Fact extends { path: string; status: string },
+  Failure = never,
+>(
+  method: M,
+  rpc: RpcPort<M, Fact> | undefined,
+  clock: Clock,
+  options: Settings,
+  policy: {
+    ttl(fact: Fact | Failure): number;
+    unsupported?: Failure;
+    recover?(fact?: Fact): Fact | Failure;
+    retryable?(fact: Fact | Failure): boolean;
+  },
+) {
   const factory = options.factory ?? createState;
-  const lifetime = factory({ supported: true, stopped: false });
-  const state = () => factory<{ fact?: FileFact }>({});
+  const lifetime = factory({ supported: !!rpc, stopped: false });
+  const state = () => factory<{ fact?: Fact | Failure }>({});
   const cells = new Map<
     string,
     { users: number; value: ReturnType<typeof state> }
   >();
-  const cache = new Map<string, { fact: FileFact; expires: number }>();
+  const cache = new Map<string, { fact: Fact | Failure; expires: number }>();
   const pending = new Map<string, Demand>(),
     inFlight = new Map<string, Demand>();
   const active = new AbortController();
   let unschedule: (() => void) | undefined;
   const supported = () => lifetime.state.supported && !lifetime.state.stopped;
-  const publish = (key: string, fact: FileFact | undefined) => {
+  const publish = (key: string, fact: Fact | Failure | undefined) => {
     cells.get(key)?.value.update((draft) => {
       draft.fact = fact;
     });
   };
-  const remember = (key: string, fact: FileFact) => {
+  const remember = (key: string, fact: Fact | Failure) => {
     cache.delete(key);
     cache.set(key, {
       fact,
-      expires: clock.now() + (fact.status === "absent" ? 10_000 : 60_000),
+      expires: clock.now() + policy.ttl(fact),
     });
     if (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value!);
   };
-  const settle = (demand: Demand, fact?: FileFact) => {
+  const settle = (demand: Demand, fact?: Fact) => {
     if (inFlight.get(demand.key) !== demand) return;
     inFlight.delete(demand.key);
     if (!supported()) return;
     if (fact?.path !== demand.path || fact.status === "unknown") {
       fact = undefined;
     }
-    if (fact) remember(demand.key, fact);
-    publish(demand.key, fact);
+    const settled = demand.afterFailure ? policy.recover?.(fact) : fact;
+    if (settled) remember(demand.key, settled);
+    publish(demand.key, settled);
   };
   const retire = () => {
     unschedule?.();
@@ -84,7 +147,7 @@ export function createFileFacts(
   };
   const send = async (sessionID: string, group: Demand[]) => {
     try {
-      const facts = await rpc.call("file.stat", {
+      const facts = await rpc!.call(method, {
         sessionID,
         paths: group.map((demand) => demand.path),
       }, active.signal);
@@ -122,14 +185,19 @@ export function createFileFacts(
       }
     }
   };
-  const demand = (key: string, sessionID: string, path: string) => {
+  const demand = (
+    key: string,
+    sessionID: string,
+    path: string,
+    afterFailure = false,
+  ) => {
     if (!supported() || pending.has(key) || inFlight.has(key)) return;
-    pending.set(key, { key, sessionID, path });
+    pending.set(key, { key, sessionID, path, afterFailure });
     unschedule ??= clock.schedule(flush);
   };
   return {
     supported,
-    fact(sessionID, path) {
+    fact(sessionID: string, path: string): FactLease<Fact | Failure> {
       const key = keyFor(sessionID, path);
       let cell = cells.get(key);
       if (!cell) cells.set(key, cell = { users: 0, value: state() });
@@ -145,7 +213,12 @@ export function createFileFacts(
       const owned = cell;
       let released = false;
       return Object.assign(
-        () => supported() ? owned.value.state.fact : undefined,
+        () =>
+          lifetime.state.stopped
+            ? undefined
+            : supported()
+            ? owned.value.state.fact
+            : policy.unsupported,
         {
           release() {
             if (released) return;
@@ -155,12 +228,21 @@ export function createFileFacts(
         },
       );
     },
-    invalidate(sessionID, path) {
+    invalidate(sessionID: string, path: string) {
       const key = keyFor(sessionID, path);
       cache.delete(key);
       inFlight.delete(key);
       publish(key, undefined);
       if (cells.has(key)) demand(key, sessionID, path);
+    },
+    failed(sessionID: string, path: string) {
+      const key = keyFor(sessionID, path);
+      if (!cells.has(key) || pending.has(key) || inFlight.has(key)) return;
+      const current = cells.get(key)?.value.state.fact;
+      if (!current || !policy.retryable?.(current)) return;
+      cache.delete(key);
+      publish(key, undefined);
+      demand(key, sessionID, path, true);
     },
     stop() {
       lifetime.update((draft) => {
