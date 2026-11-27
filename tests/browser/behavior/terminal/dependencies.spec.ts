@@ -4,6 +4,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages } from "../../pages/composer.ts";
 import { send } from "../../pages/primary-action.ts";
 import { nativeIdle } from "../../pages/transcript.ts";
+import { sessionContext } from "../../pages/sessions.ts";
 import type { Page } from "@playwright/test";
 
 const viewport = (page: Page) =>
@@ -347,6 +348,12 @@ for (const theme of ["otk-dark", "otk-light"]) {
           "Running in terminal (1)",
         );
         await page.locator(`[data-tab="${task.id}"]`).click();
+        // D76: stopping retires dependency attention, not the explicit open.
+        await expect(phantom().locator(".otk-status-light")).toHaveAttribute(
+          "data-state",
+          "none",
+        );
+        await sessionContext(page, `[data-tab="${b.id}"]`, "session.close");
         await expect(phantom()).toHaveCount(0);
         await expect(taskLamp()).toHaveAttribute("data-state", "dependencies");
         for (const terminal of shared) {
