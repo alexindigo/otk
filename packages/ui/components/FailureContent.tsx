@@ -23,6 +23,7 @@ export default function FailureContent(
       action?: Feedback["action"];
       onReveal?(messageID: string): void;
       compact?: boolean;
+      summaryOnly?: boolean;
       fullReason?: boolean;
       occurrence?: string;
       focusHome?(): void;
@@ -180,6 +181,7 @@ export default function FailureContent(
         "otk-disclosure-layout",
         compact() ? "is-compact" : "",
         props.fullReason ? "shows-full-reason" : "",
+        props.summaryOnly ? "is-summary-only" : "",
         props.failure.reference ? "is-reference" : "",
         props.placement === "record" ? "is-record" : "",
         props.subgrid ? "uses-subgrid" : "",
@@ -198,11 +200,16 @@ export default function FailureContent(
                     <>
                       <strong
                         class="otk-control-label"
-                        title={props.failure.heading}
+                        title={props.summaryOnly &&
+                            props.failure.reason !== props.failure.heading
+                          ? `${props.failure.heading}: ${props.failure.reason}`
+                          : props.failure.heading}
                       >
                         {props.failure.heading}
                       </strong>
-                      <Show when={props.failure.target.label}>
+                      <Show
+                        when={!props.summaryOnly && props.failure.target.label}
+                      >
                         <Show
                           when={props.failure.target.href}
                           fallback={
@@ -228,6 +235,17 @@ export default function FailureContent(
                 >
                   {props.heading}
                 </Show>
+                <Show
+                  when={props.summaryOnly &&
+                    props.failure.reason !== props.failure.heading}
+                >
+                  <span
+                    class="otk-failure-summary-reason otk-control-label"
+                    title={props.failure.reason}
+                  >
+                    {props.failure.reason}
+                  </span>
+                </Show>
                 <Show when={props.time !== undefined}>
                   <Clock
                     at={props.time!}
@@ -236,7 +254,9 @@ export default function FailureContent(
                 </Show>
               </div>
             </Show>
-            <div class="otk-failure-main-reason">{reason()}</div>
+            <Show when={!props.summaryOnly}>
+              <div class="otk-failure-main-reason">{reason()}</div>
+            </Show>
             <Show when={props.failure.count > 1}>
               <span class="otk-failure-count">
                 {props.failure.count} identical{" "}
@@ -255,7 +275,7 @@ export default function FailureContent(
                   </button>
                 )}
               </Show>
-              {details()}
+              <Show when={!props.summaryOnly}>{details()}</Show>
               {props.controls}
             </div>
           </>

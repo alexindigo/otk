@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import {
+  openWork,
   prompt,
   revealAcquired,
   scrollTranscript,
@@ -260,25 +261,23 @@ test(
       .toBe(markers.join("\n\n"));
     await expect(page.locator("[data-role=assistant] .otk-message-footer"))
       .toHaveCount(1);
-    // 102 text segments plus one Work log for the actions, not bookkeeping.
+    // D74 keeps the 102 prose segments separate from the bounded Work strip.
     const assistant = page.locator("[data-message][data-role=assistant]");
     await expect(assistant.getByRole("list", {
       name: "Reply segments",
       exact: true,
-    })).toHaveAttribute("data-acquired-count", String(markers.length + 1));
-    await expect(assistant.locator(".otk-work-log")).toHaveCount(1);
+    })).toHaveAttribute("data-acquired-count", String(markers.length));
+    await expect(assistant.locator(".otk-work-strip")).toHaveCount(1);
     if (state.controller.info!.version.startsWith("2.")) {
-      const work = assistant.locator(".otk-work-log");
-      const disclosure = work.getByRole("button", {
-        name: "Work log",
-        exact: true,
-      });
-      await disclosure.click();
+      const work = await openWork(assistant);
       await expect(work.locator('[data-tool="bash"]')).not.toHaveCount(0);
       await expect(work.getByText("Execution succeeded", { exact: true }))
         .toHaveCount(0);
-      await disclosure.press("Enter");
-      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+      await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+      await expect(assistant.locator(".otk-work-strip")).not.toHaveAttribute(
+        "aria-current",
+        "true",
+      );
     }
     expect(
       capture.sent.filter(({ frame }) => frame.method === "session.messages")

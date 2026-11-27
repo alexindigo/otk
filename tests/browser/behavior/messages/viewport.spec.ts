@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  openWork,
+  prompt,
+  sessionStatus,
+  settledNativeReply,
+} from "../../pages/transcript.ts";
 
 test(
   "messages.programmatic-reveal-real-click",
   { tag: ["@messages"] },
   async ({ state, page }) => {
-    await state.product("prefs.set", { key: "expandWork", value: true });
     await state.product("prefs.set", { key: "expandDelegation", value: true });
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Reveal without follow feedback",
@@ -25,8 +30,9 @@ test(
       await state.queue([name + " child done."]);
       await state.queue([name + " parent done."]);
       await prompt(page, name);
-      await expect(page.locator(`[data-session="${session.id}"]`))
-        .toHaveAttribute("data-status", "idle");
+      await settledNativeReply(state, session.id, name + " parent done.");
+      await sessionStatus(page, session.id, "idle");
+      await openLatestWork(page);
       await expect(
         page.locator("[data-tool=task][data-tool-status=completed]").filter({
           hasText: name,
@@ -43,12 +49,17 @@ test(
     await page.locator("[data-panel-view=timeline]").click();
     await page.locator('.otk-timeline-reveal[title="First reveal"]').click();
     await expect(page.locator(".otk-user-bubble:focus")).toHaveCount(1);
-    const action = page.locator("[data-tool=task]").filter({
-      has: page.locator(".otk-tool-brief", { hasText: /^First reveal$/ }),
+    const work = await openWork(
+      page.locator('.otk-messages [data-role="assistant"]').filter({
+        hasText: "First reveal parent done.",
+      }),
+    );
+    const action = work.locator("[data-tool=task]").filter({
+      has: page.locator(".otk-disclosure-label", { hasText: /^First reveal$/ }),
     }).locator(".otk-task-card");
     await expect(action).toBeAttached();
     const point = await action.evaluate(async (element) => {
-      const pane = document.querySelector(".otk-messages")!,
+      const pane = element.closest(".otk-work-list")!,
         before = pane.scrollTop;
       await new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve))

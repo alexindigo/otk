@@ -152,8 +152,8 @@ test("messages.highlight-2000-lines-passive-latency", {
       ),
     { timeout: 30_000 },
   ).toBe(true);
-  // A text-only reply has no Work log for step or completion bookkeeping.
-  await expect(page.locator(measuredReply).locator(".otk-work-log"))
+  // A text-only reply has no Work strip for step or completion bookkeeping.
+  await expect(page.locator(measuredReply).locator(".otk-work-strip"))
     .toHaveCount(0);
   await expect.poll(() =>
     page.locator(".otk-messages").evaluate((root) => {

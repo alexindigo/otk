@@ -111,11 +111,14 @@ export async function menusScenario(profile: Profile) {
     : await inboxBrowserFixture(
       root,
       [],
-      profile === "contract-menus-content"
+      profile === "contract-menus-content" ||
+        profile === "contract-menus-work-reveal"
         ? { "tstv1-otk": menusMessages }
         : {},
       profile === "contract-menus-context"
         ? await consumerAssets("context")
+        : profile === "contract-menus-work-reveal"
+        ? await consumerAssets("panel")
         : undefined,
     );
   if (capabilities.permissions) {

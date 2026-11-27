@@ -4,9 +4,10 @@ import { openSession } from "../../fixtures/wire.ts";
 import {
   expandTool,
   highlightedRange,
-  openWorkLogs,
+  openWork,
   revealAcquired,
   runNativeTool,
+  workPanel,
 } from "../../pages/transcript.ts";
 import { readFile } from "node:fs/promises";
 import type { Json } from "../../../support/fixture-control.ts";
@@ -30,7 +31,8 @@ test(
     const cases: {
       name: string;
       input: Record<string, Json>;
-      selector: string;
+      tool: "read" | "search";
+      mode?: "list" | "glob" | "grep";
       content: string;
       expected: string;
     }[] = [
@@ -41,7 +43,7 @@ test(
           offset: 2,
           limit: 2,
         },
-        selector: "[data-tool=read]",
+        tool: "read",
         content: ".otk-code code",
         expected:
           "export const otk_result_marker = 1;\nexport const third = 2;",
@@ -49,27 +51,75 @@ test(
       {
         name: "read",
         input: { filePath: state.directory + "/src", limit: 1 },
-        selector: '[data-tool=search]:has(.otk-tool-verb[title="List"])',
+        tool: "search",
+        mode: "list",
         content: ".otk-tool-output",
         expected: v2 ? "src/sub/" : "src/probe.ts",
       },
       {
         name: "glob",
         input: { pattern: "*.ts", path: state.directory + "/src" },
-        selector:
-          '[data-tool=search]:has(.otk-tool-brief[title="*.ts · 1 match"])',
+        tool: "search",
+        mode: "glob",
         content: ".otk-tool-output",
         expected: "src/probe.ts",
       },
       {
         name: "grep",
         input: { pattern: "otk_result_marker", path: state.directory + "/src" },
-        selector:
-          '[data-tool=search]:has(.otk-tool-brief[title="otk_result_marker · 1 match"])',
+        tool: "search",
+        mode: "grep",
         content: ".otk-tool-output",
         expected: "src/probe.ts:2: export const otk_result_marker = 1;",
       },
     ];
+    const sourceIDs: string[] = [];
+    async function details(item: typeof cases[number], messageID: string) {
+      const message = `[data-message=${JSON.stringify(messageID)}]`;
+      await revealAcquired(page, `${message} .otk-work-strip`);
+      const work = await openWork(page.locator(message));
+      const selector = `[data-tool=${item.tool}]`;
+      await expandTool(page, selector);
+      const row = work.locator(selector);
+      await expect(row.locator(item.content))
+        .toHaveJSProperty("textContent", item.expected);
+      if (item.tool === "read") {
+        await highlightedRange(
+          page,
+          `${selector} .otk-code[data-language=ts] code`,
+          "otk_result_marker",
+        );
+        await expect(row.locator(".otk-code-numbers"))
+          .toHaveJSProperty("textContent", "2\n3");
+        await expect(row.locator("[data-tool-result-meta]")).toHaveText(
+          v2 ? "2-3 · More available" : "2-3 of 4 lines · More available",
+        );
+      } else {
+        const summary = row.locator(".otk-work-tool-summary");
+        await expect(row.locator(`[data-search-mode=${item.mode}]`))
+          .toHaveCount(1);
+        if (item.mode === "list") {
+          await expect(row.locator(".otk-tool-toggle")).toHaveText(/^List\b/);
+          await expect(row.locator("[data-tool-result-meta]")).toHaveText(
+            v2 ? "More available" : "1–1 of 2 entries · More available",
+          );
+          if (v2) await expect(summary).toHaveCount(0);
+          else await expect(summary).toContainText("2 entries");
+        } else {
+          await expect(summary).toHaveText(`${item.input.pattern} · 1 match`);
+        }
+      }
+      if (v2) {
+        // V2 persists model-facing content and truncation, not historical totals.
+        for (const meta of await row.locator("[data-tool-result-meta]").all()) {
+          await expect(meta).not.toContainText(/\bof\b|\btotal\b|unavailable/i);
+        }
+      }
+      await expect(row.locator(".otk-tool-body")).not.toContainText(
+        state.directory,
+      );
+      await expect(row.locator(".otk-tool-summary")).toHaveCount(0);
+    }
     for (const item of cases) {
       const raw = await runNativeTool(
         state,
@@ -78,6 +128,7 @@ test(
         item.name,
         item.input,
       );
+      sourceIDs.push(raw.messageID);
       expect(raw.state.output).toBeTruthy();
       if (item.content === ".otk-code code") {
         if (v2) {
@@ -91,69 +142,7 @@ test(
           "  Line 2: export const otk_result_marker = 1;",
         );
       }
-      await revealAcquired(page, item.selector + " .otk-tool-toggle");
-      await expandTool(page, item.selector);
-      await expect(page.locator(item.selector + " " + item.content))
-        .toHaveJSProperty("textContent", item.expected);
-      if (item.content === ".otk-code code") {
-        await highlightedRange(
-          page,
-          item.selector + " .otk-code[data-language=ts] code",
-          "otk_result_marker",
-        );
-      }
-      await expect(page.locator(item.selector + " .otk-tool-body")).not
-        .toContainText(state.directory);
-      await expect(page.locator(item.selector + " .otk-tool-summary"))
-        .toHaveCount(0);
-    }
-    await revealAcquired(page, "[data-tool=read] .otk-code");
-    await highlightedRange(
-      page,
-      "[data-tool=read] .otk-code[data-language=ts] code",
-      "otk_result_marker",
-    );
-    await expect(page.locator("[data-tool=read] .otk-code-numbers"))
-      .toHaveJSProperty("textContent", "2\n3");
-    await expect(page.locator("[data-tool=read] [data-tool-result-meta]"))
-      .toHaveText(
-        v2 ? "2-3 · More available" : "2-3 of 4 lines · More available",
-      );
-    await revealAcquired(page, "[data-search-mode=list]");
-    await expect(
-      page.locator("[data-search-mode=list] [data-tool-result-meta]"),
-    ).toHaveText(v2 ? "More available" : "1–1 of 2 entries · More available");
-    if (v2) {
-      // V1-only totals: V2 persists model-facing content and truncation, not historical totals.
-      await expect(page.locator("[data-tool-result-meta]")).not.toContainText(
-        /\bof\b|\btotal\b|unavailable/i,
-      );
-    }
-    for (
-      const [mode, label] of [["list", "2 entries"], ["glob", "1 match"], [
-        "grep",
-        "1 match",
-      ]]
-    ) {
-      await revealAcquired(page, `[data-search-mode=${mode}]`);
-      if (v2 && mode === "list") {
-        await expect(
-          page.locator(
-            ".otk-tool-line:has([data-search-mode=list]) .otk-tool-verb",
-          ),
-        ).toHaveText("List");
-        await expect(
-          page.locator(
-            ".otk-tool-line:has([data-search-mode=list]) .otk-tool-brief",
-          ),
-        ).toHaveCount(0);
-        continue;
-      }
-      await expect(
-        page.locator(
-          `.otk-tool-line:has([data-search-mode=${mode}]) .otk-tool-brief`,
-        ),
-      ).toContainText(label);
+      await details(item, raw.messageID);
     }
     const history = await state.native<unknown[]>(
       `/session/${session.id}/message`,
@@ -162,35 +151,16 @@ test(
     const nativeCount = await nativeHistoryCount(state, session.id);
     if (v2) expect(nativeCount).toBeGreaterThan(history.length);
     // Reacquired offscreen work groups use the saved reader default too.
-    await state.product("prefs.set", { key: "expandWork", value: true });
     await page.reload();
     await openSession(state, page, session.id);
-    await openWorkLogs(page);
+    await expect(workPanel(page)).toHaveCount(0);
     await expect(page.locator(".otk-message-flow")).toHaveAttribute(
       "data-message-count",
       String(nativeCount),
     );
-    for (const item of cases) {
-      await revealAcquired(page, item.selector + " .otk-tool-toggle");
-      await expandTool(page, item.selector);
-      await expect(page.locator(item.selector + " " + item.content))
-        .toHaveJSProperty("textContent", item.expected);
-      if (item.content === ".otk-code code") {
-        await highlightedRange(
-          page,
-          item.selector + " .otk-code[data-language=ts] code",
-          "otk_result_marker",
-        );
-      }
+    for (const [index, item] of cases.entries()) {
+      await details(item, sourceIDs[index]);
     }
-    await revealAcquired(page, "[data-tool=read] .otk-code");
-    await highlightedRange(
-      page,
-      "[data-tool=read] .otk-code[data-language=ts] code",
-      "otk_result_marker",
-    );
-    await expect(page.locator("[data-tool=read] .otk-code-numbers"))
-      .toHaveJSProperty("textContent", "2\n3");
   },
 );
 

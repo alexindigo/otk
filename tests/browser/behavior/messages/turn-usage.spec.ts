@@ -169,12 +169,9 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect(page.locator(".otk-turn-time")).toHaveText(
     `Worked for ${turnTime}`,
   );
-  await expect(page.locator(".otk-work-fold .otk-work-label").first())
-    .toHaveText(
-      "Work log",
-    );
-  // Every work fold is named; only the footer presents the turn's working time.
-  await expect(page.locator(".otk-work-fold").last()).toHaveText("Work log");
+  const strip = page.locator(".otk-work-strip");
+  await expect(strip).toContainText("Work log");
+  await expect(strip).not.toContainText(/Worked for|counting/);
   expect(
     await page.locator(".otk-turn-usage").evaluate((u) => {
       const a = u.getBoundingClientRect(),

@@ -593,11 +593,11 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "siblings");
-    await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-    await page.locator(".otk-work-fold").click();
+    const strip = page.getByRole("button", {
+      name: "Work log: 1 action. Check output",
+    });
+    await expect(strip).toBeVisible();
+    await expect(strip.locator("[data-run]")).toHaveCount(1);
     const disclosure = page.locator(
       ".otk-revert-group .otk-record-group-toggle",
     );
@@ -635,10 +635,10 @@ test(
       });
     }
     expect(
-      await page.locator(".otk-work-fold").evaluate((el) =>
+      await page.locator(".otk-work-strip").evaluate((el) =>
         getComputedStyle(el).display
       ),
-    ).toBe("flex");
+    ).toBe("inline-grid");
     expect(
       await page.locator(".otk-view-header").evaluate((el) =>
         getComputedStyle(el).display
@@ -649,10 +649,10 @@ test(
         getComputedStyle(el).padding
       ),
     ).toBe("12px");
-    await page.locator(".otk-work-fold").click();
-    await expect(page.locator(".otk-work-body")).toHaveCount(0);
-    await page.locator(".otk-work-fold").click();
-    await expect(page.locator(".otk-work-body")).toBeVisible();
+    await expect(strip.locator("[data-run]")).toHaveAttribute(
+      "title",
+      /Check output/,
+    );
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await expect(file).toHaveCount(0);

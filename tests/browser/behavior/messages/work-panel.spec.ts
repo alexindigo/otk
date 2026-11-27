@@ -27,6 +27,7 @@ const previous = (page: Page) =>
 const next = (page: Page) =>
   panel(page).getByRole("button", { name: "Next reply" });
 const rows = (page: Page) => panel(page).locator("[data-work-run]");
+const strips = (page: Page) => page.locator(".otk-work-strip");
 
 async function start(state: TestState, page: Page) {
   const session = await state.native<{ id: string }>("/session", "POST", {
@@ -59,6 +60,114 @@ async function twoReplies(state: TestState, page: Page) {
   await expect(identity(page)).toContainText(latestPrompt);
   return session;
 }
+
+test(
+  "messages.work-panel.strip-opens-panel",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const session = await start(state, page);
+    await command(state, page, session, latestPrompt, latestAction);
+    await state.product("layout.patch", { rightCollapsed: true });
+    await expect(panel(page)).toHaveCount(0);
+    const strip = strips(page).last();
+    await expect(strip).toBeVisible();
+    await strip.locator("[data-run]").last().click();
+    await expect(rows(page).filter({ hasText: latestAction })).toHaveClass(
+      /\bis-selected\b/,
+    );
+    await expect(strip).toHaveAttribute("aria-current", "true");
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+    await expect(strip).not.toHaveAttribute("aria-current", "true");
+    await strip.click({ position: { x: 4, y: 4 } });
+    await expect(identity(page)).toContainText(latestPrompt);
+  },
+);
+
+test(
+  "messages.work-panel.strip-keyboard",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const session = await start(state, page);
+    await command(state, page, session, latestPrompt, latestAction);
+    await state.product("layout.patch", { rightCollapsed: true });
+    await expect(panel(page)).toHaveCount(0);
+    const strip = strips(page).last();
+    await expect(strip).toHaveAccessibleName(
+      `Work log: 1 action. ${latestAction}`,
+    );
+    // Tab from the preceding prompt control rather than focusing the strip directly.
+    await page.locator(".otk-user-meta button").last().focus();
+    await page.keyboard.press("Tab");
+    await expect(strip).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(identity(page)).toContainText(latestPrompt);
+    await expect(strip).toBeFocused();
+  },
+);
+
+test(
+  "messages.work-panel.strip-failure",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const session = await start(state, page);
+    await command(
+      state,
+      page,
+      session,
+      latestPrompt,
+      "Expected failure",
+      "exit 7",
+    );
+    const strip = strips(page).last();
+    await expect(strip).toContainText("1 failed");
+    const reply = page.locator(".otk-messages [data-role=assistant]");
+    const failure = reply.getByRole("alert").filter({
+      hasText: "Expected failure failed",
+    });
+    await expect(reply.getByRole("alert")).toHaveCount(1);
+    await failure.getByRole("button", { name: "Show in Work log" }).click();
+    await expect(rows(page).first()).toHaveClass(/\bis-selected\b/);
+    await expect(rows(page).first().locator(".otk-tool-toggle"))
+      .toHaveAttribute("aria-expanded", "true");
+  },
+);
+
+test(
+  "messages.work-panel.no-transcript-log",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const session = await start(state, page);
+    await command(state, page, session, latestPrompt, latestAction);
+    await expect(strips(page)).toHaveCount(1);
+    await expect(
+      page.locator(
+        ".otk-messages .otk-work-log, .otk-messages .otk-work-fold, .otk-messages [data-tool]",
+      ),
+    ).toHaveCount(0);
+  },
+);
+
+test(
+  "messages.work-panel.narrow",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const session = await start(state, page);
+    await command(state, page, session, latestPrompt, latestAction);
+    await state.product("layout.patch", { rightCollapsed: true });
+    await expect(panel(page)).toHaveCount(0);
+    const strip = strips(page).last();
+    const transcript = page.locator(".otk-messages");
+    await expect(strip).toBeInViewport();
+    await page.setViewportSize({ width: 720, height: 800 });
+    const position = await transcript.evaluate((port) => port.scrollTop);
+    await strip.click();
+    const back = page.getByRole("button", { name: "Back to conversation" });
+    await expect(back).toBeFocused();
+    await back.click();
+    await expect(strip).toBeFocused();
+    expect(await transcript.evaluate((port) => port.scrollTop)).toBe(position);
+  },
+);
 
 test(
   "messages.work-panel.view",
@@ -131,6 +240,9 @@ test(
     });
     const held = await state.queue(["The active directory is ready."], "held");
     await prompt(page, "Check the active directory.");
+    await expect(strips(page).last()).toContainText(
+      /Inspect the active directory.*\d.*s/,
+    );
     await expect(rows(page).first()).toContainText(/running.*\d.*s/i);
     await expect(rows(page).first().locator(".otk-activity-indicator"))
       .toBeVisible();

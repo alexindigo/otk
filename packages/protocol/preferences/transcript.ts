@@ -106,9 +106,15 @@ export function registerTranscriptPreferences(
       control: { kind: "toggle", onValue: "show", offValue: "hide" },
     },
   });
+  // Retained for stored/API compatibility; D74 removed the transcript Work log.
+  registry.register({
+    key: "expandWork",
+    default: false,
+    validate: booleanPreference,
+    label: "Expand work logs by default",
+  });
   for (
     const [key, label, order] of [
-      ["expandWork", "Expand work logs by default", 1],
       ["expandToolOutput", "Expand tool output by default", 2],
       ["expandSystem", "Expand System rows by default", 5],
       ["expandDelegation", "Expand subagent results by default", 6],

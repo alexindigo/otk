@@ -5,109 +5,51 @@ import {
   createMessageLayout,
   messageFrames,
   messageLayoutRole,
+  workRuns,
 } from "../components/work-log.ts";
 
-Deno.test("hidden wait replacement invalidates dependent segment timing without remounting unrelated groups", () => {
+Deno.test("work revisions do not remount the prose segment", () => {
   const owner = createMessageLayout();
-  const busy: Part = {
-    kind: "reasoning",
-    id: "work",
-    blocks: [],
-    time: { start: 1000, end: 2200 },
-  };
-  const earlier: Part = {
-    kind: "reasoning",
-    id: "earlier",
-    blocks: [],
-    time: { start: 0, end: 700 },
-  };
   const text: Part = { kind: "meta", id: "text" };
-  const wait = (end?: number): Part => ({
-    kind: "reasoning",
-    id: "question",
-    blocks: [],
-    time: { start: 1200, end },
-  });
   const present = (part: Part) =>
-    part.id === "question" && part.kind === "reasoning"
-      ? { hidden: true, timing: { ...part.time, waitsForUser: true } }
-      : part.kind === "reasoning"
-      ? { work: part.time, timing: part.time }
+    part.kind === "reasoning"
+      ? {
+        work: part.time,
+        run: { label: "Thought", lane: "thinking" as const },
+      }
       : {};
-  const update = (question?: Part) =>
-    owner.update(
-      "reply",
-      "assistant",
-      [{
-        messageID: "source",
-        parts: [earlier, text, busy, ...(question ? [question] : [])],
-      }],
-      "prefs",
-      present,
-    );
-  const first = update(wait(1500)), stable = first.frames[0].groups[0];
-  assertEquals(first.frames[0].groups.map((group) => group.workingMs), [
-    undefined,
-    1600,
-  ]);
-  const next = update(wait(1600));
-  assertEquals(next.frames[0].groups.map((group) => group.workingMs), [
-    undefined,
-    1500,
-  ]);
-  assertStrictEquals(next.frames[0].groups[0], stable);
-  assertEquals(next.frames[0].groups[1].id, first.frames[0].groups[1].id);
-  assertEquals(
-    update(wait()).frames[0].groups.map((group) => group.workingMs),
-    [undefined, undefined],
-    "incomplete waits are not known zero",
-  );
-  assertEquals(update().frames[0].groups.map((group) => group.workingMs), [
-    undefined,
-    1900,
-  ]);
-});
-
-Deno.test("segment timing follows cached part evidence across clock updates and unknown endpoints", () => {
-  const owner = createMessageLayout();
-  let presented = 0;
-  const part = (id: string, end?: number): Part => ({
+  const parts = (end?: number): Part[] => [text, {
     kind: "reasoning",
-    id,
+    id: "thought",
     blocks: [],
     time: { start: 100, end },
-  });
-  const first = part("first", 500), text: Part = { kind: "meta", id: "text" };
-  const present = (p: Part) => {
-    presented++;
-    return p.kind === "reasoning" ? { work: p.time, timing: p.time } : {};
-  };
-  const update = (last: Part) =>
+  }];
+  const update = (source: Part[]) =>
     owner.update(
       "reply",
       "assistant",
-      [{
-        messageID: "source",
-        parts: [first, text, last],
-      }],
+      [{ messageID: "source", parts: source }],
       "prefs",
       present,
     );
-  assertEquals(
-    update(part("last", 1000)).frames[0].groups.map((g) => g.workingMs),
-    [undefined, 900],
-  );
-  assertEquals(presented, 3);
-  assertEquals(
-    update(part("last", 1300)).frames[0].groups.map((g) => g.workingMs),
-    [undefined, 1200],
-  );
-  assertEquals(presented, 4);
-  assertEquals(update(part("last")).frames[0].groups.map((g) => g.workingMs), [
-    undefined,
-    undefined,
-  ]);
-  assertEquals(presented, 5);
+  const before = update(parts(700)).frames[0].groups[0];
+  for (
+    const [end, weight] of [[700, 600], [1600, 1500], [undefined, 0]] as const
+  ) {
+    const source = parts(end);
+    const next = update(source).frames[0].groups;
+    assertEquals(next.map(({ id }) => id), ["text"]);
+    assertStrictEquals(next[0], before);
+    assertEquals(
+      workRuns({
+        parts: source,
+        presentation: present,
+        terminal: true,
+        now: 2000,
+      }).segments[0].weightMs,
+      weight,
+    );
+  }
 });
 
 Deno.test("provider context never shares user bubbles or actionable prompt identity", () => {
@@ -168,87 +110,38 @@ Deno.test("provider context never shares user bubbles or actionable prompt ident
   }
 });
 
-Deno.test("live failure presentation rebuilds the enclosing work group's required contract", () => {
+Deno.test("failed work stays in the work projection rather than the prose frames", () => {
   const owner = createMessageLayout();
-  const part = (failed: boolean): Part => ({
-    id: "result",
-    kind: "external",
-    name: "fixture/result",
-    data: failed ? "failed" : "completed",
-  });
-  const present = (value: Part) => ({
-    work: { start: 1, end: 2 },
-    required: value.kind === "external" && value.data === "failed",
-  });
+  const answer: Part = { id: "answer", kind: "meta" };
+  const present = (part: Part) =>
+    part.id === "answer" ? {} : {
+      work: { start: 1, end: 2 },
+      required: part.kind === "external" && part.data === "failed",
+    };
   for (const failed of [false, true, false]) {
+    const result: Part = {
+      id: "result",
+      kind: "external",
+      name: "fixture/result",
+      data: failed ? "failed" : "completed",
+    };
+    const parts = [answer, result];
     const layout = owner.update(
       "reply",
       "assistant",
-      [{
-        messageID: "source",
-        parts: [part(failed)],
-      }],
+      [{ messageID: "source", parts }],
       "prefs",
       present,
     );
-    assertEquals(layout.frames[0].groups[0].required ?? false, failed);
-    assertEquals(layout.frames[0].groups[0].parts.length, 1);
+    assertEquals(layout.frames[0].groups.flatMap((group) => group.parts), [
+      answer,
+    ]);
+    assertEquals(
+      workRuns({ parts, terminal: true, now: 3, presentation: present }).failed
+        .length,
+      Number(failed),
+    );
   }
-});
-
-Deno.test("bookkeeping after reply text joins the existing fold across reload and required changes", () => {
-  const make = (required: boolean) =>
-    [
-      { id: "start", kind: "meta" },
-      { id: "reasoning", kind: "meta" },
-      { id: "answer", kind: "meta" },
-      {
-        id: "finish",
-        kind: "external",
-        name: "fixture/end",
-        data: String(required),
-      },
-    ] as Part[];
-  const present = (part: Part) => ({
-    work: part.id === "answer" ? undefined : {},
-    required: part.kind === "external" && part.data === "true",
-  });
-  const shape = (
-    owner: ReturnType<typeof createMessageLayout>,
-    required: boolean,
-  ) =>
-    owner.update(
-      "reply",
-      "assistant",
-      [{ messageID: "source", parts: make(required) }],
-      "prefs",
-      present,
-    )
-      .frames[0].groups.map((group) => ({
-        id: group.id,
-        parts: group.parts.map((part) => part.id),
-        work: group.work,
-        required: !!group.required,
-      }));
-  const owner = createMessageLayout();
-  const initial = shape(owner, false);
-  assertEquals(initial, [
-    { id: "answer", parts: ["answer"], work: false, required: false },
-    {
-      id: "start",
-      parts: ["start", "reasoning", "finish"],
-      work: true,
-      required: false,
-    },
-  ]);
-  const failed = shape(owner, true);
-  assertEquals(
-    failed.map(({ required: _required, ...group }) => group),
-    initial.map(({ required: _required, ...group }) => group),
-  );
-  assertEquals(failed.map((group) => group.required), [false, true]);
-  assertEquals(shape(owner, false), initial);
-  assertEquals(shape(createMessageLayout(), false), initial);
 });
 
 Deno.test("render layout reprojects only changed source parts and keeps historical groups stable", () => {
@@ -280,7 +173,7 @@ Deno.test("render layout reprojects only changed source parts and keeps historic
   const after = owner.update("reply", "assistant", next, "prefs", present);
   assertEquals(visits, 1);
   assertStrictEquals(after.frames[0].groups[0], historical);
-  assertEquals(after.frames[0].groups.length, 103);
+  assertEquals(after.frames[0].groups.length, 102);
   const extended = owner.update(
     "reply",
     "assistant",
@@ -288,10 +181,36 @@ Deno.test("render layout reprojects only changed source parts and keeps historic
     "prefs",
     present,
   );
-  assertEquals(extended.frames[0].groups.length, 103);
+  assertEquals(extended.frames[0].groups.length, 102);
   assertEquals(extended.frames[0].groups[0].id, historical.id);
   assertEquals(
-    extended.frames[0].groups[102].id,
-    after.frames[0].groups[102].id,
+    extended.frames[0].groups[101].id,
+    after.frames[0].groups[101].id,
+  );
+});
+
+Deno.test("reply metadata carries one fact per agent, including tool-only calls", () => {
+  const owner = createMessageLayout();
+  const calls = [...Array<string>(20).fill("build"), "plan", "build"].map(
+    (agent, i) => ({
+      messageID: `call-${i}`,
+      agent,
+      time: { created: i },
+      parts: [{ kind: "meta" as const, id: `part-${i}` }],
+    }),
+  );
+  const facts = owner.update(
+    "reply",
+    "assistant",
+    calls,
+    "prefs",
+    (part) => part.id === "part-0" ? { prose: true } : { work: {} },
+  );
+  assertEquals(
+    facts.replyAgents.map(({ agent, messageID }) => [agent, messageID]),
+    [
+      ["build", "call-0"],
+      ["plan", "call-20"],
+    ],
   );
 });

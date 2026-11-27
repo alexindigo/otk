@@ -35,11 +35,15 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
         </>
       )}
       nested={props.call.children?.length
-        ? () => (
-          <For each={props.call.children} keyed={(call) => call.callID}>
+        ? (after) => (
+          <For
+            each={props.call.children}
+            keyed={(call) => call.callID}
+          >
             {(call) => (
               <TreeItem
-                last={call().callID === props.call.children?.at(-1)?.callID}
+                last={!after &&
+                  call().callID === props.call.children?.at(-1)?.callID}
               >
                 <ToolLine
                   {...props}

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import { expect, type Locator } from "@playwright/test";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -186,7 +187,8 @@ test.describe("work tree", () => {
   }, async ({ isolatedState: state, page }, info) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
-    const root = page.locator(".otk-work-log > .otk-tree-node");
+    const work = await openLatestWork(page);
+    const root = work.locator("[data-tool] > .otk-tree-node");
     await expect(
       root.locator(":scope > .otk-tree-heading .otk-disclosure-lead svg"),
     )
@@ -206,14 +208,14 @@ test.describe("work tree", () => {
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    const tool = page.locator(".otk-tool-toggle");
+    const tool = work.locator(".otk-tool-toggle");
     await expect(
       page.locator(
         "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
       ),
     )
       .toHaveCount(1);
-    await tool.click();
+    await expect(tool).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator(".otk-code")).toContainText("foldedSecret");
     await tool.evaluate((element) => (element as HTMLElement).blur());
     for (

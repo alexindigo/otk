@@ -25,7 +25,7 @@ async function replyWithWork(state: TestState, page: Page, sessionID: string) {
   await settledNativeReply(state, sessionID, prose);
 }
 
-test("messages.reply-has-one-work-log-after-prose", {
+test("messages.reply-has-one-work-strip-after-prose", {
   tag: "@messages",
 }, async ({ state, page }) => {
   const session = await state.native<{ id: string }>("/session", "POST", {
@@ -38,8 +38,11 @@ test("messages.reply-has-one-work-log-after-prose", {
   await expect(text).toBeVisible();
   await expect(page.locator(`[data-session="${session.id}"]`))
     .toHaveAttribute("data-status", "idle");
-  const log = reply.locator(".otk-work-log");
+  const log = reply.locator(".otk-work-strip");
   await expect(log).toHaveCount(1);
+  expect((await log.boundingBox())!.y).toBeLessThan(
+    (await reply.locator(".otk-message-footer").boundingBox())!.y,
+  );
   expect((await log.boundingBox())!.y).toBeGreaterThan(
     (await text.boundingBox())!.y,
   );
@@ -70,11 +73,11 @@ test("messages.reply-footer-aligns-and-yields-whole-items", {
     )
   ).toBe(1.25);
   const footer = reply.locator(".otk-message-footer");
-  await expect(reply.locator(".otk-work-label")).toBeVisible();
+  await expect(reply.locator(".otk-work-strip")).toBeVisible();
   await expect(footer).toBeVisible();
   await expect(footer.locator(".otk-record-completion")).toHaveCount(0);
   const widthAndAlignment = await footer.evaluate((el) => {
-    const work = el.closest("article")!.querySelector(".otk-work-label")!;
+    const work = el.closest("article")!.querySelector(".otk-work-strip")!;
     const details = el.querySelector(".otk-message-details")!;
     const walker = document.createTreeWalker(details, NodeFilter.SHOW_TEXT);
     const limit = details.getBoundingClientRect();
@@ -95,7 +98,9 @@ test("messages.reply-footer-aligns-and-yields-whole-items", {
       }
     }
     return {
-      difference: Math.abs(work.getBoundingClientRect().left - limit.left),
+      difference: Math.abs(
+        work.getBoundingClientRect().left - el.getBoundingClientRect().left,
+      ),
       clipped,
     };
   });

@@ -50,8 +50,8 @@ test("public transcript consumer pages native source, resnapshots a lost baselin
     ),
   );
   const choice = transcript.interaction.disclosure(
-    "work",
-    "work",
+    "activity",
+    "run",
     "generation-1",
   );
   choice.set(true);

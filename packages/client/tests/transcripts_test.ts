@@ -178,7 +178,11 @@ Deno.test("work-log intent outlives step removal but not deletion of the reply",
     apply({ op: "message.upsert", message: { ...step, id: "last" } });
     const transcript = f.owner.get(target("a"))!;
     const key = transcript.projection.entry(step.id)!.key;
-    const disclosure = transcript.interaction.workDisclosure(key);
+    const disclosure = transcript.interaction.disclosure(
+      "activity",
+      key,
+      transcript.interaction.generation(key),
+    );
     disclosure.set(true);
     apply({ op: "message.remove", messageID: step.id });
     assertEquals(disclosure.value(), true);
@@ -186,7 +190,14 @@ Deno.test("work-log intent outlives step removal but not deletion of the reply",
     assertEquals(disclosure.value(), undefined);
     apply({ op: "message.upsert", message: step });
     disclosure.set(true);
-    assertEquals(transcript.interaction.workDisclosure(key).value(), undefined);
+    assertEquals(
+      transcript.interaction.disclosure(
+        "activity",
+        key,
+        transcript.interaction.generation(key),
+      ).value(),
+      undefined,
+    );
   } finally {
     f.stop();
   }

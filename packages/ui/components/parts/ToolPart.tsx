@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
-import { permissionTool, toolFailure } from "@otk/client";
+import {
+  permissionTool,
+  toolFailure,
+  toolWaitingForPermission,
+} from "@otk/client";
 import type {
   PartPresentation,
   PartRegistry,
@@ -27,16 +31,14 @@ export function registerToolPart(
             onOpenChild={props.onOpenChild}
             genericOutput={props.prefs.genericToolOutput}
             directory={props.directory}
-            waiting={props.permissions.some((request) =>
-              request.toolCall === call().callID ||
-              request.sessionID === call().childSessionID
-            )}
+            waiting={toolWaitingForPermission(call(), props.permissions)}
           />
         </Show>
       );
     },
-    ({ call }, prefs) => {
-      const required = !!toolFailure(call);
+    ({ call }, prefs, context) => {
+      const failureReason = toolFailure(call);
+      const required = !!failureReason;
       const work = prefs.toolDetails || call.status !== "completed" || required
         ? call.time
         : undefined;
@@ -46,13 +48,15 @@ export function registerToolPart(
         work,
         // Work grouping does not need to prepare tool headers until it reads run facts.
         get run(): PartPresentation["run"] {
-          const p = tools.presentation(call);
+          const p = tools.presentation(call, context);
           const description = "description" in call
             ? call.description
             : undefined;
           const toolName = call.tool === "external" ? call.name : call.tool;
           return {
             lane: p.category === "delegation" ? "delegation" : undefined,
+            agent: p.entity?.label,
+            failureReason,
             label: description || [p.verb, p.target].filter(Boolean).join(" "),
             merge: p.runs
               ? { key: `tool:${toolName}`, verb: p.verb, ...p.runs }

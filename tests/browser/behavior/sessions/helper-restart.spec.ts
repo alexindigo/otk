@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { openLatestWork, prompt } from "../../pages/transcript.ts";
 
 test.use({ profile: "sessions-tasks" });
 
@@ -22,7 +22,6 @@ test("sessions.running-helper-recovers-after-sidecar-restart", {
       if (frame.t === "welcome") welcomes.push(frame.sidecar);
     });
   });
-  await state.product("prefs.set", { key: "expandWork", value: true });
   await state.product("prefs.set", { key: "expandDelegation", value: true });
   const parent = await state.native<{ id: string }>("/session", "POST", {
     title: "Helper restart parent",
@@ -43,6 +42,7 @@ test("sessions.running-helper-recovers-after-sidecar-restart", {
   const held = await state.queue(["The helper is still here"], "stepped");
   await state.queue(["The parent received the reply"]);
   await prompt(page, "Start a helper");
+  await openLatestWork(page);
   const running = page.locator("[data-tool=task][data-tool-status=running]");
   const task = running.locator(".otk-task-card");
   await expect(task).toContainText("Open task");

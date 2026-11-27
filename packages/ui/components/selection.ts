@@ -12,14 +12,16 @@ export function toggle(input: { on: boolean; class?: string }): {
 }
 
 /** Current place in a path, not a choice within a collection. */
-export function location(input: { current: boolean; class?: string }): {
+export function location(
+  input: { current: boolean; value?: "page" | "true"; class?: string },
+): {
   class: string;
-  "aria-current"?: "page";
+  "aria-current"?: "page" | "true";
 } {
   return {
     class: [input.class, input.current ? "is-current" : ""].filter(Boolean)
       .join(" "),
-    "aria-current": input.current ? "page" : undefined,
+    "aria-current": input.current ? input.value ?? "page" : undefined,
   };
 }
 

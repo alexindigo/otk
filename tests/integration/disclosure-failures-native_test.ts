@@ -42,7 +42,7 @@ Deno.test("native nonzero tool results keep a required failure independently of 
     assertEquals(toolFailure(part.call), "Exited with code 7");
     const owner = createTranscriptInteraction();
     assertEquals(
-      owner.disclosure("work", "work", "one").expanded(
+      owner.disclosure("activity", "work", "one").expanded(
         "work",
         {},
         !!toolFailure(part.call),

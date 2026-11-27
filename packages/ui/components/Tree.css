@@ -227,6 +227,7 @@
 
 .otk-tree-node:not(.is-flat) > .otk-tree-row .otk-tree-label {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: minmax(var(--tree-line, var(--tree-default-row-height)),
     auto);
   align-content: start;

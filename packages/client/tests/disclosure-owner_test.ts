@@ -49,7 +49,7 @@ Deno.test("disclosure defaults cover every neutral category and preserve saved m
     preferences.settings("transcript").filter((row) =>
       row.key.startsWith("expand")
     ).length,
-    10,
+    9,
   );
   for (
     const row of preferences.settings("transcript").filter((row) =>
@@ -70,11 +70,11 @@ Deno.test("explicit true and false win; defaults remain live only for unset choi
   const unset = owner.disclosure("record", "unset", "one");
   open.set(true);
   closed.set(false);
-  for (const expandWork of [false, true, false]) {
-    const prefs = { expandWork };
-    assertEquals(open.expanded("work", prefs), true);
-    assertEquals(closed.expanded("work", prefs), false);
-    assertEquals(unset.expanded("work", prefs), expandWork);
+  for (const expandSystem of [false, true, false]) {
+    const prefs = { expandSystem };
+    assertEquals(open.expanded("system", prefs), true);
+    assertEquals(closed.expanded("system", prefs), false);
+    assertEquals(unset.expanded("system", prefs), expandSystem);
     assertEquals(unset.value(), undefined);
   }
 });
@@ -83,7 +83,6 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
   const owner = createTranscriptInteraction();
   const rows = preferences.settings("transcript");
   const categories = [
-    ["work", "expandWork"],
     ["toolOutput", "expandToolOutput"],
     ["fileChanges", "collapseFileChanges"],
     ["reasoning", "thinking"],
@@ -130,7 +129,7 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
 
 Deno.test("nested choices survive parent closing, virtual remount and preference changes", () => {
   const owner = createTranscriptInteraction();
-  const parent = owner.disclosure("work", "reply:1/work", "one");
+  const parent = owner.disclosure("activity", "reply:1/work", "one");
   const child = owner.disclosure("tool", "reply:1/part:2/tool", "two");
   child.set(true);
   parent.set(false);
@@ -167,10 +166,10 @@ Deno.test("retired generations cannot transfer choices or mutate replacements", 
 
 Deno.test("required rows override only category defaults, not explicit reader choices", () => {
   const owner = createTranscriptInteraction();
-  const group = owner.disclosure("work", "work:failure", "one");
-  assertEquals(group.expanded("work", { expandWork: false }, true), true);
+  const group = owner.disclosure("activity", "work:failure", "one");
+  assertEquals(group.expanded("system", { expandSystem: false }, true), true);
   group.set(false);
-  assertEquals(group.expanded("work", { expandWork: true }, true), false);
+  assertEquals(group.expanded("system", { expandSystem: true }, true), false);
   const compaction = owner.disclosure("record", "compaction", "one");
   assertEquals(
     compaction.expanded("compaction", { expandCompaction: true }),

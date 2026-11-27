@@ -12,7 +12,11 @@ import {
   expectRuleThree,
   send,
 } from "../pages/primary-action.ts";
-import { revealAcquired as reveal } from "../pages/transcript.ts";
+import {
+  openLatestWork,
+  revealAcquired as reveal,
+  workPanel,
+} from "../pages/transcript.ts";
 
 interface Theme {
   id: string;
@@ -881,7 +885,7 @@ export async function collections456(input: Inputs) {
   const select = async (name: string) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     // These renderer sweeps explicitly choose open work/helper bodies.
-    await state.product("prefs.set", { key: "expandWork", value: true });
+    await openLatestWork(page);
     await state.product("prefs.set", { key: "expandDelegation", value: true });
     // Each fixed source owns its disclosure input. The files scene expands
     // changes; later scenes retain the legacy default instead of inheriting it.
@@ -1743,46 +1747,17 @@ export async function collections456(input: Inputs) {
               await shot(`reading-${theme.id}-${width}`);
             }
             await page.setViewportSize({ width: 1280, height: 900 });
-            const fold = page.locator(".otk-work-fold").first();
-            await expect(fold).toBeAttached();
-            await expect(fold.locator(".otk-work-label.otk-chrome-meta"))
-              .toHaveCSS(
-                "font",
-                await fold.evaluate((el) => getComputedStyle(el).font),
-              );
-            const row = page.locator(".otk-work-log").filter({ has: fold });
-            const stem = row.locator(
-              ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-stem-paint",
-            );
-            const rule = await stem.evaluate(
-              (el) => {
-                const s = getComputedStyle(el);
-                return {
-                  width: s.width,
-                  image: s.backgroundImage,
-                  size: s.backgroundSize,
-                  color: getComputedStyle(el.parentElement!).color,
-                  labelColor: getComputedStyle(
-                    el.closest(".otk-tree-heading")!.querySelector(
-                      ".otk-work-fold",
-                    )!,
-                  ).color,
-                };
-              },
-            );
-            expect([rule.width, rule.size]).toEqual(["1px", "1px 2px"]);
-            expect(rule.image).toContain("repeating-linear-gradient");
-            expect(rule.image).toContain(rule.color);
-            expect(rule.color).toBe(rule.labelColor);
-            const wasOpen = await fold.getAttribute("aria-expanded");
-            await fold.click();
-            await expect(fold).toHaveAttribute(
-              "aria-expanded",
-              wasOpen === "true" ? "false" : "true",
-            );
-            await shot(`work-fold-${theme.id}-1280`);
-            await fold.click();
-            await expect(fold).toHaveAttribute("aria-expanded", wasOpen!);
+            const strip = page.locator(".otk-work-strip").first();
+            await expect(strip.getByText("Work log", { exact: true }))
+              .toBeVisible();
+            await expect(strip.locator("[data-run]").first()).toBeVisible();
+            await openLatestWork(page);
+            await expect(strip).toHaveAttribute("aria-current", "true");
+            await shot(`work-strip-${theme.id}-1280`);
+            await page.getByRole("tab", { name: "Sessions", exact: true })
+              .click();
+            await expect(workPanel(page)).toHaveCount(0);
+
             await shot(`work-expanded-${theme.id}-1280`);
             await expect(page.locator("[data-tool=task] .otk-tool-target"))
               .toHaveText("Unknown agent");
@@ -2131,15 +2106,13 @@ export async function collections456(input: Inputs) {
           expect(values[1]).toEqual(values[0]);
         }
         if (scene === "siblings") {
-          const initial = theme.id === themes[0].id;
-          await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-            "aria-expanded",
-            initial ? "false" : "true",
-          );
-          if (initial) await page.locator(".otk-work-fold").click();
-          await expect(page.locator(".otk-work-fold")).toHaveCSS(
-            "display",
-            "flex",
+          const strip = page.getByRole("button", {
+            name: "Work log: 1 action. Check output",
+          });
+          await expect(strip).toHaveCSS("display", "inline-grid");
+          await expect(strip.locator("[data-run]")).toHaveAttribute(
+            "title",
+            /Check output/,
           );
           await expect(page.locator(".otk-view-header")).toHaveCSS(
             "display",
@@ -2167,10 +2140,6 @@ export async function collections456(input: Inputs) {
           );
           expect(colors[1]).not.toBe(colors[0]);
           expect(colors[2]).not.toBe(colors[0]);
-          await page.locator(".otk-work-fold").click();
-          await expect(page.locator(".otk-work-body")).toHaveCount(0);
-          await page.locator(".otk-work-fold").click();
-          await expect(page.locator(".otk-work-body")).toBeVisible();
           await disclosure.click();
           await expect(file).toHaveCount(0);
         }

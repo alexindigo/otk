@@ -57,6 +57,10 @@ const artWidths: Record<string, Record<string, string>> = {
     ".otk-work-axis: inline-size: calc(56*var(--otk-unit))":
       "SVG duration glyph with a fixed presentation scale.",
   },
+  "packages/ui/components/WorkStrip.css": {
+    ".otk-work-strip-segment: min-inline-size: min(var(--work-strip-min),calc((100% + var(--otk-unit))/var(--work-segments,1) - var(--otk-unit)))":
+      "Minimum visible timeline mark, capped by the chart's equal share.",
+  },
   "packages/ui/features/project-settings.css": {
     ".otk-project-color-swatch: width: calc(18*var(--otk-unit))":
       "Swatch artwork within the shared form hit target.",
@@ -97,6 +101,10 @@ const widthPorts: Record<string, Record<string, string>> = {
     width: "The reported context fraction paints an in-flow chart.",
     "--usage-metrics":
       "Only the number of reported columns is emitted; CSS sizes each track from its cells.",
+  },
+  "WorkStrip.tsx": {
+    "--work-segments":
+      "The chart's unitless item count shares one bounded track; it never measures or sets a text width.",
   },
   "surface/Popover.tsx": {
     width: "The shared Popover reifies a caller-supplied rect anchor.",

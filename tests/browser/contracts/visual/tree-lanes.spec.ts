@@ -5,7 +5,11 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { seed } from "../../pages/attention.ts";
-import { revealAcquired, scrollTranscript } from "../../pages/transcript.ts";
+import {
+  openWork,
+  revealAcquired,
+  scrollTranscript,
+} from "../../pages/transcript.ts";
 import { treeLaneFindings } from "../tree-lanes-contract.ts";
 
 /** Add representative work to the running-layout scene's published reply. */
@@ -222,14 +226,16 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
                 );
                 await expect.poll(() => treeLaneFindings(span)).toEqual([]);
 
-                const work = page.locator(".otk-work-log");
-                await revealAcquired(page, ".otk-work-log .otk-work-fold");
-                const workToggle = work.locator(".otk-work-fold");
-                if (
-                  await workToggle.getAttribute("aria-expanded") === "false"
-                ) await workToggle.click();
+                // D74 / wl-5: use the seeded reply's measured strip even
+                // when a later interval fills the transcript at 200%.
+                const reply = '[data-message="answer"]';
+                await revealAcquired(page, `${reply} .otk-work-strip`);
+                const work = await openWork(page.locator(reply));
                 const tool = work.locator('[data-tool="external"]');
-                await tool.locator(".otk-tool-toggle").first().click();
+                const trigger = tool.locator(".otk-tool-toggle").first();
+                if (await trigger.getAttribute("aria-expanded") === "false") {
+                  await trigger.click();
+                }
                 await expect(tool.locator(".otk-tool-body")).toContainText(
                   "Partial tool output",
                 );
