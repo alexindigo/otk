@@ -96,10 +96,6 @@ for (
       const count = () =>
         page.locator(".otk-message-flow").getAttribute("data-message-count")
           .then(Number);
-      const older = page.getByRole("button", {
-        name: "Load older messages",
-        exact: true,
-      });
       const historyPublished = () =>
         page.evaluate((promptID) => {
           const messages = (globalThis as typeof globalThis & {
@@ -112,18 +108,14 @@ for (
             )
           );
         }, historical);
-      // Native bookkeeping counts towards the page size, so a row count is
-      // not evidence that the historical tool has reached the browser.
-      while (!await historyPublished()) {
+      // The viewport already drives older-page admission. Keep reaching its
+      // moving start until the exact tool arrives, without racing a button
+      // that paging removes. Bookkeeping also counts towards page size.
+      await expect.poll(async () => {
+        if (await historyPublished()) return true;
         await scrollTranscript(page, false);
-        if (await older.isVisible()) {
-          const previous = await count();
-          await older.click();
-          await expect.poll(count).toBeGreaterThan(previous);
-        } else {
-          await expect.poll(historyPublished).toBe(true);
-        }
-      }
+        return await historyPublished();
+      }, { timeout: 30_000 }).toBe(true);
       await revealAcquired(page, selector);
       await wheelTranscript(page, -1, button);
       await expect(button).toHaveAttribute("aria-expanded", "false");
