@@ -12,6 +12,7 @@ import {
   sessionStatus,
   settledNativeReply,
   toolScript,
+  workPanel,
 } from "../../pages/transcript.ts";
 test.describe("actual tool forms", () => {
   test.use({ profile: "messages-forms" });
@@ -91,9 +92,12 @@ test.describe("actual tool forms", () => {
       );
     }
     const body = work.locator(".otk-work-run");
-    await expect(body).not.toContainText(
-      /Step started|Step finished|Execution succeeded/,
-    );
+    await expect(body).toHaveCount(2);
+    for (const row of await body.all()) {
+      await expect(row).not.toContainText(
+        /Step started|Step finished|Execution succeeded/,
+      );
+    }
     await expect(
       body.locator(
         '[data-native-record=step], [data-native-record^="opencode-v1/step-"]',
@@ -225,14 +229,12 @@ test.describe("actual tool forms", () => {
     await runNativeTool(state, page, s.id, "read", {
       filePath: state.directory + "/src",
     });
-    await expandTool(
-      page,
-      '[data-tool=search]:has(.otk-tool-verb[title="List"])',
-    );
+    await expandTool(page, "[data-tool=search]");
+    const list = workPanel(page).locator("[data-tool=search]");
+    await expect(list.locator(".otk-tool-toggle")).toHaveText(/^List\b/);
     await expect(
-      page.locator(
-        ".otk-tool-line:has([data-search-mode=list]) .otk-tool-brief",
-      ),
+      list.filter({ has: page.locator("[data-search-mode=list]") })
+        .locator(".otk-work-tool-summary"),
     ).toContainText("2 entries");
     for (const name of ["glob", "grep"]) {
       const raw = await runNativeTool(
@@ -248,10 +250,12 @@ test.describe("actual tool forms", () => {
             include: "*.txt",
           },
       );
-      const selector = `[data-message="${raw.messageID}"] [data-tool]`;
+      const selector = `[data-work-source=${
+        JSON.stringify(raw.messageID)
+      }] [data-tool=search]`;
       await expandTool(page, selector);
-      const brief = page.locator(
-        `.otk-tool-line:has([data-search-mode=${name}]) .otk-tool-brief`,
+      const brief = workPanel(page).locator(
+        `${selector}:has([data-search-mode=${name}]) .otk-work-tool-summary`,
       );
       await expect(brief).toContainText("1 match");
       await expect(brief).not.toContainText("1 matches");

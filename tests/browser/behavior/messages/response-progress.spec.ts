@@ -2,7 +2,12 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openLatestWork, prompt } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  openWork,
+  prompt,
+  sessionStatus,
+} from "../../pages/transcript.ts";
 
 test.use({ profile: "messages-tools" });
 test("messages.response-progress-motion-completion-interruption", {
@@ -131,22 +136,27 @@ test("messages.response-progress-motion-completion-interruption", {
   await page.keyboard.press("Control+k");
   await page.locator("input[name=command-search]").fill("Jump to latest");
   await page.locator('[data-command="transcript.latest"]').click();
-  await openLatestWork(page);
+  const activeReply = page.locator('.otk-messages [data-role="assistant"]')
+    .filter({ hasText: "The next step is still streaming." });
+  const work = await openWork(activeReply);
+  await expect(work.locator("[data-tool=bash]")).toHaveCount(1);
   await expect(page.locator(".otk-response-progress")).toHaveCount(1);
   expect(
-    await page.locator("[data-role=assistant]").last().evaluate((article) =>
-      !!article.querySelector("[data-tool=bash]") &&
+    await activeReply.evaluate((article) =>
+      !!article.querySelector('.otk-work-strip[aria-current="true"]') &&
       !!article.querySelector(".otk-message-content")!.lastElementChild
         ?.matches(".otk-response-progress")
     ),
   ).toBe(true);
+  // Park the pointer off the transcript so a usage preview cannot claim Escape.
+  await work.getByRole("heading", { name: "Work log", exact: true }).hover();
+  await expect(page.locator(":popover-open, dialog[open]")).toHaveCount(0);
   await page.keyboard.press("Escape");
+  await expect(page.locator("[data-interrupt-confirmation][role=status]"))
+    .toHaveText("Esc again to interrupt");
   await page.keyboard.press("Escape");
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   await expect(page.locator("[data-role=assistant] footer").last())
     .toContainText("interrupted");
   await state.release(continued.gate);

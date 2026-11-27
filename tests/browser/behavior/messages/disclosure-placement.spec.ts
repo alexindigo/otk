@@ -38,7 +38,7 @@ test("messages.work-panel-fold-intent-stays-on-its-surface", {
     name: "Transcript",
     exact: true,
   });
-  const log = transcript.locator(".otk-work-fold");
+  const strip = transcript.locator(".otk-work-strip");
   const panelTool = panel.getByRole("button", {
     name: "Print the retained marker",
     exact: true,
@@ -46,16 +46,19 @@ test("messages.work-panel-fold-intent-stays-on-its-surface", {
   const transcriptTool = transcript.locator(
     "[data-tool=bash] .otk-tool-toggle",
   );
-  await expect(log).toHaveAttribute("aria-expanded", "false");
+  await expect(strip).toHaveAttribute("aria-current", "true");
+  await expect(strip).not.toHaveAttribute("aria-expanded", /.+/);
+  // D74 removes the duplicate tool surface entirely; the Work fold is the
+  // only instance. Changing it must not mount another fold in conversation.
+  await expect(transcript.locator(".otk-work-fold")).toHaveCount(0);
+  await expect(transcriptTool).toHaveCount(0);
   await expect(panelTool).toHaveAttribute("aria-expanded", "false");
   await panelTool.press("ArrowRight");
   await expect(panelTool).toHaveAttribute("aria-expanded", "true");
-  await expect(log).toHaveAttribute("aria-expanded", "false");
-  await log.press("ArrowRight");
-  await expect(transcriptTool).toHaveAttribute("aria-expanded", "false");
-
+  await expect(panel).toContainText("retained-marker");
+  await expect(transcriptTool).toHaveCount(0);
   await panelTool.press("ArrowLeft");
-  await transcriptTool.press("ArrowRight");
-  await expect(transcriptTool).toHaveAttribute("aria-expanded", "true");
   await expect(panelTool).toHaveAttribute("aria-expanded", "false");
+  await expect(transcriptTool).toHaveCount(0);
+  await expect(strip).toHaveAttribute("aria-current", "true");
 });
