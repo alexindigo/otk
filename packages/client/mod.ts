@@ -11,6 +11,7 @@ export * from "./record-folds.ts";
 export * from "./disclosure.ts";
 export * from "./project-placement.ts";
 export { ActivityPresence } from "./activity-presence.ts";
+export { type WorkChoice, WorkPanel, type WorkShown } from "./work-panel.ts";
 export {
   type EntityFact,
   type EntityFacts,

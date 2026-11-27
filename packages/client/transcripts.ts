@@ -106,6 +106,7 @@ interface Job {
 /** One body per identity; scope demand, queue admission and cooling are independent of views. */
 export function createTranscripts(o: {
   disclosures?: import("./disclosure.ts").Disclosures;
+  retireScope?(scope: string): void;
   connection(id: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
   factory?: StateFactory;
@@ -216,6 +217,7 @@ export function createTranscripts(o: {
           () => policy(target.sidecarId),
           o.entities?.(target.sidecarId),
           o.disclosures,
+          o.retireScope,
         ),
       };
       resources.set(key(target), value);
