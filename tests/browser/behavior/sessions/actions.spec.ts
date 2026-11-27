@@ -32,8 +32,8 @@ async function deletedDetails(page: Page, id: string, title: string) {
   // Issue 2.96: SidebarRow's action owns the accessible name, not its frame.
   const action = row.getByRole("button");
   await expect(action).toHaveAccessibleName(/^Deleted session, /);
-  await expect(row.locator(".otk-session-title")).toHaveText(title);
-  await expect(row.locator(".otk-session-title")).toHaveCSS(
+  await expect(row.locator(".otk-sidebar-title-text")).toHaveText(title);
+  await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
     "text-decoration-line",
     /line-through/,
   );
@@ -437,15 +437,20 @@ test(
       // For a phantom tab, settlement also includes durable task promotion.
       await expect(page.locator(selector).locator(".otk-rename-pending"))
         .toHaveCount(0);
-      await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
-        .toHaveText(`Renamed from ${origin}`);
+      const label = page.locator(
+        `[data-session="${s.id}"] .otk-sidebar-title-text`,
+      );
+      await expect(label).toHaveText(`Renamed from ${origin}`);
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
         .toBe(`Renamed from ${origin}`);
       if (origin === "tab") {
-        const task =
+        const taskForSession = async () =>
           (await state.product("tasks.list", { directory: state.directory }))
-            .find((task) => task.sessions.includes(s.id))!;
-        expect(task.name).toBe("Renamed from tab");
+            .find((task) => task.sessions.includes(s.id));
+        // Native title publication precedes durable task promotion.
+        await expect.poll(async () => (await taskForSession())?.name)
+          .toBe("Renamed from tab");
+        const task = (await taskForSession())!;
         await state.release(finishing.gate);
         await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
           "data-status",
@@ -476,7 +481,7 @@ test(
     await page.locator("textarea[name=prompt]").click();
     await expect(page.locator(".otk-title-editor")).toHaveCount(0);
     const rowTitle = page.locator(
-      `[data-session="${s.id}"] .otk-session-title`,
+      `[data-session="${s.id}"] .otk-sidebar-title-text`,
     );
     await expect(rowTitle.locator(".otk-rename-pending")).toHaveCount(0);
     await expect(rowTitle).toHaveText("Committed on blur");

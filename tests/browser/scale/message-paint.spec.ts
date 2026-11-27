@@ -31,10 +31,10 @@ for (let repetition = 0; repetition < 5; repetition++) {
         landing = initial.manifest.sessions[251],
         openMain = `[data-project=${
           JSON.stringify(selected.directory)
-        }] .otk-project-attention`,
+        }] .otk-sidebar-lamp-action`,
         openLanding = `[data-project=${
           JSON.stringify(landing.directory)
-        }] .otk-project-attention`;
+        }] .otk-sidebar-lamp-action`;
       await page.setViewportSize({ width: 1280, height: 900 });
       await measureMessagePaint(
         { send: (_method, { source }) => page.addInitScript(source) },

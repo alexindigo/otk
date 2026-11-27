@@ -54,11 +54,10 @@ including an explicit empty body. Tabs is an item collection without chrome
 slots. The terminal frame uses Surface's `panel` density, independent of the
 shells its tab strip and panels render.
 
-Project inbox rows and section headers borrow `SidebarRow`: scaled lamp/artwork
-tracks, a shrinkable single-line label and intrinsic metadata. Empty metadata
-consumes no track. Narrow rows reflow the metadata as a whole beneath the label;
-availability stays with visit metadata, not inside the shrinking name. Missing
-artwork retains its slot. `Tree` alone owns disclosure, nesting and compact
+Projects, Sessions and their section headers borrow `SidebarRow`: scaled
+lamp/artwork tracks, a shrinkable single-line title and ranked whole metadata.
+Availability and visit facts yield independently, in the same line as the title.
+Missing artwork retains its slot. `Tree` owns the junction and compact
 flattening; its selected heading paints the mark outside the row highlight in
 both column and rail. The real-app geometry contract uses the removed/sidebar/
 catalog profiles at 200/298px and 100/125% text in all three themes. It measures
@@ -859,9 +858,9 @@ bubble, while the viewport suspends tail following for that explicit navigation.
 No panel reads another component's DOM or maintains a second transcript store.
 
 Projects, Sessions, and Timeline use `SidebarRow` for the row track, highlight,
-and inner gutters. `TreeNode` owns the selection pointer and the indentation of
-nested rows; Timeline prompts are flat. Consumers inject content and callbacks.
-Timeline's meta slot borrows the same persistent MessageFooter as the
+and inner gutters. `TreeNode` owns the selection pointer and indentation;
+Projects and Sessions both supply flat tree paths. Consumers inject content and
+callbacks. Timeline's meta slot borrows the same persistent MessageFooter as the
 transcript, with no clock/action hover swap. Action hit targets do not move, and
 the label has no independent inset hover highlight.
 
@@ -1187,7 +1186,7 @@ rule after them. ChromeMeta owns the visit clock's exact `--text-meta` size,
 `--otk-fg-3` colour and weight 400, including inside buttons. Reply clocks,
 record summaries/counts, running-work elapsed time and project annotations use
 that same owner. Project metadata borrows SidebarRow's intrinsic metadata slot
-and reflows below the label under pressure. Counts and annotations have no
+and yields as whole facts under pressure. Counts and annotations have no
 parentheses. The hierarchy projection supplies artwork eligibility, never
 section-local depth.
 

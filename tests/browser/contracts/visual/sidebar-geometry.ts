@@ -68,7 +68,7 @@ export async function sidebarGeometry(page: Page, compact = false) {
         const heading = row.closest(".otk-tree-heading") ??
           row.closest(".otk-project-row")!;
         const name = row.querySelector(
-          ".otk-project-name, .otk-section-row-label .otk-control-label",
+          ".otk-sidebar-title-text, .otk-section-row-label .otk-control-label",
         );
         const label = row.querySelector(".otk-sidebar-label")!;
         const style = getComputedStyle(label);
@@ -146,6 +146,10 @@ export async function sidebarGeometry(page: Page, compact = false) {
         return {
           text: row.textContent,
           heading: box(heading),
+          depth: Number(
+            heading.closest("[data-tree-node]")?.getAttribute("data-depth") ??
+              0,
+          ),
           painted,
           label: box(label),
           lampSlot: box(row.querySelector(".otk-sidebar-lamp")!),
@@ -164,7 +168,7 @@ export async function sidebarGeometry(page: Page, compact = false) {
             : null,
           meta: box(row.querySelector(".otk-sidebar-meta")!),
           hasMeta: !!row.querySelector(
-            ".otk-sidebar-meta .otk-meta-item, .otk-project-menu",
+            ".otk-sidebar-meta .otk-meta-item, .otk-sidebar-control",
           ),
           facts: Array.from(
             row.querySelectorAll(".otk-sidebar-meta .otk-meta-item"),
@@ -202,7 +206,7 @@ export async function sidebarGeometry(page: Page, compact = false) {
     bottom = row.heading.bottom;
     if (!compact) {
       const current = [row.lampSlot.x, row.iconSlot.x],
-        previous = edges.get(row.heading.x);
+        previous = edges.get(row.depth);
       if (previous) {
         current.forEach((edge, i) =>
           check(
@@ -211,16 +215,14 @@ export async function sidebarGeometry(page: Page, compact = false) {
             { row: row.text, edge, previous: previous[i] },
           )
         );
-      } else edges.set(row.heading.x, current);
-      // WP10 releases the empty artwork track in narrow rows. Compare label
-      // axes for the same depth *and* track presence, not against occupied art.
-      const labelKey = `${row.heading.x}/${row.iconSlot.w > .5}`;
+      } else edges.set(row.depth, current);
+      const labelKey = `${row.depth}`;
       const labelEdge = labelEdges.get(labelKey);
       if (labelEdge === undefined) labelEdges.set(labelKey, row.label.x);
       else {
         check(
           Math.abs(row.label.x - labelEdge) <= .5,
-          "same-depth label axis for the same artwork tracks",
+          "same-depth label axis regardless of artwork",
           { row: row.text, x: row.label.x, labelEdge },
         );
       }
@@ -300,14 +302,14 @@ export async function sidebarGeometry(page: Page, compact = false) {
     }
     const disclosure = row.painted.find((p) => p.kind === "disclosure");
     if (!compact && disclosure) {
-      const previous = disclosures.get(row.heading.x);
+      const previous = disclosures.get(row.depth);
       if (previous !== undefined) {
         check(
           Math.abs(disclosure.x - previous) <= .5,
           "repository and section disclosures share the same painted axis",
           { row: row.text, x: disclosure.x, previous },
         );
-      } else disclosures.set(row.heading.x, disclosure.x);
+      } else disclosures.set(row.depth, disclosure.x);
     }
     if (disclosure && row.highlight) {
       check(

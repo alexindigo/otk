@@ -76,7 +76,7 @@ test.describe("inactive supervision", () => {
       const unread = page.locator(
         `[data-project=${
           JSON.stringify(entries[2].directory)
-        }] .otk-project-name`,
+        }] .otk-sidebar-title-text`,
       );
       await expect(unread).toHaveAttribute("data-unread", "true");
       await openSession(state, page, "tstv1-other-finished");
@@ -156,7 +156,7 @@ test.describe("filtered and unmounted supervision", () => {
       await visibleOnScreen(
         page.locator(`${project} .otk-status-light[data-state=blocked]`),
       );
-      await page.locator(`${project} .otk-project-attention`).click();
+      await page.locator(`${project} .otk-sidebar-lamp-action`).click();
       // Decision 7: blocked attention outranks the remembered working session.
       await expect(page).toHaveURL(/tstv1-background-blocked$/);
       for (

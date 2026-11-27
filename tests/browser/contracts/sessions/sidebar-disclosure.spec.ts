@@ -182,7 +182,7 @@ test.describe("sidebar row-level presentation", () => {
       `.otk-project-row[data-project=${JSON.stringify(entries[0].directory)}]`,
     );
     await expect(parent.locator(".otk-project-avatar")).toHaveCount(1);
-    await expect(parent.locator(".otk-project-name")).toHaveText(
+    await expect(parent.locator(".otk-sidebar-title-text")).toHaveText(
       "Fixture project",
     );
     for (const name of ["feature-one", "feature-two", "archived-tree"]) {
@@ -197,7 +197,7 @@ test.describe("sidebar row-level presentation", () => {
         page.locator(
           `.otk-project-row[data-project=${
             JSON.stringify(root + "/worktrees/" + name)
-          }] .otk-project-name`,
+          }] .otk-sidebar-title-text`,
         ),
       ).toHaveText(name);
     }

@@ -66,17 +66,16 @@ import {
 import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
-import { TreeIcon, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import ChromeMeta, {
   MetaItem,
   metaList,
-  MetaText,
   SectionHeader,
 } from "./ChromeMeta.tsx";
 import TimeText from "./TimeText.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { connectionFeedback } from "./connection-light.ts";
-import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -766,11 +765,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           "data-rollup": status(),
           "data-unseen-count": unseenCount(),
         }}
-        leading={() => (
-          <TreeIcon>
-            <StatusLight state={status()} />
-          </TreeIcon>
-        )}
+        leading={() => <StatusLight state={status()} />}
       />
     );
   }
@@ -872,31 +867,21 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           if (row.reorderKey) focusButtons.set(row.reorderKey, element);
         }}
         compact={collapsed()}
-        detailedMeta={!!project().annotation ||
-          (project().visit?.parts.length ?? 0) > 1}
         lamp={
-          <TreeIcon class="otk-project-marker">
-            <button
-              type="button"
-              class="otk-project-attention"
-              aria-label={status() === "none"
-                ? `Open project ${name()}`
-                : `${lampLabel()}: open session in ${name()}`}
-              title={status() === "none"
-                ? `Open project ${project().directory}`
-                : `${lampLabel()}: open session in ${project().directory}`}
-              onClick={() =>
-                void (status() === "none"
-                  ? open(project())
-                  : openAttention(project()))}
-            >
-              <StatusLight
-                state={status()}
-                dependencies={project().dependencies}
-              />
-            </button>
-          </TreeIcon>
+          <StatusLight state={status()} dependencies={project().dependencies} />
         }
+        lampAction={{
+          "aria-label": status() === "none"
+            ? `Open project ${name()}`
+            : `${lampLabel()}: open session in ${name()}`,
+          title: status() === "none"
+            ? `Open project ${project().directory}`
+            : `${lampLabel()}: open session in ${project().directory}`,
+          onClick: () =>
+            void (status() === "none"
+              ? open(project())
+              : openAttention(project())),
+        }}
         action={{
           class: "otk-project-open",
           "aria-label": `Open project ${name()}${
@@ -914,79 +899,64 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
               project().summary?.presentation?.color)
           ? { name: name(), color: project().summary?.presentation?.color }
           : undefined}
-        label={
-          <Show
-            when={editing()}
-            fallback={
-              <span class="otk-project-name-line">
-                <span
-                  class="otk-project-name"
-                  data-unread={project().unread ? "true" : "false"}
-                >
-                  <TitleLabel
-                    pending={renaming()
-                      ? props.projectRename!.state.pendingTitle
-                      : undefined}
-                  >
-                    {name()}
-                  </TitleLabel>
-                </span>
-                <Show when={project().inactive && project().parentLabel}>
-                  <ChromeMeta
-                    class="otk-project-parent otk-control-label otk-control-grow"
-                    title={project().topology?.canonicalRoot}
-                  >
-                    {project().parentLabel}
-                  </ChromeMeta>
-                </Show>
-                <Show when={duplicate()}>
-                  <ChromeMeta
-                    class="otk-project-machine otk-control-label otk-control-grow"
-                    title={project().label}
-                  >
-                    {project().label}
-                  </ChromeMeta>
-                </Show>
-              </span>
-            }
-          >
+        title={{
+          text: name(),
+          pending: renaming()
+            ? props.projectRename!.state.pendingTitle
+            : undefined,
+          emphasis: !!project().unread,
+          qualifiers: [
+            ...(project().inactive && project().parentLabel
+              ? [{
+                text: project().parentLabel!,
+                title: project().topology?.canonicalRoot,
+              }]
+              : []),
+            ...(duplicate()
+              ? [{ text: project().label, title: project().label }]
+              : []),
+          ],
+        }}
+        editor={editing()
+          ? (
             <TitleEditor
               owner={props.projectRename!}
               label="Rename project"
               feedbackID={rowErrorID}
             />
-          </Show>
-        }
-        metaClass="otk-project-trailing"
+          )
+          : undefined}
         meta={
-          <Show when={!collapsed() && !editing()}>
-            <Show when={(project().source ?? "tracked") === "tracked"}>
+          <Show
+            when={!collapsed() && !editing() &&
+              (project().source ?? "tracked") === "tracked"}
+          >
+            <Show when={project().annotation}>
               <MetaItem rank={1}>
                 <ChromeMeta
-                  class="otk-project-visit"
-                  title="Availability and time since last visit"
+                  class="otk-project-availability"
+                  title="Availability"
                 >
-                  <Show
-                    when={project().annotation}
-                    fallback={
-                      <Show when={project().visit}>
-                        {(visit) => <TimeText time={visit()} />}
-                      </Show>
-                    }
-                  >
-                    <span class="otk-project-availability">
-                      <MetaText
-                        items={[project().annotation, project().visit]}
-                      />
-                    </span>
-                  </Show>
+                  {project().annotation}
                 </ChromeMeta>
               </MetaItem>
             </Show>
+            <Show when={project().visit}>
+              {(visit) => (
+                <MetaItem rank={2}>
+                  <ChromeMeta
+                    class="otk-project-visit"
+                    title="Time since last visit"
+                  >
+                    <TimeText time={visit()} />
+                  </ChromeMeta>
+                </MetaItem>
+              )}
+            </Show>
           </Show>
         }
-        metaControl={
-          <Show when={!collapsed() && !editing()}>
+        control={!collapsed() && !editing()
+          ? (
             <CommandMenu
               class="otk-project-menu"
               triggerClass="otk-project-menu-trigger"
@@ -997,8 +967,8 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
               onError={setRowError}
               feedbackID={rowErrorID}
             />
-          </Show>
-        }
+          )
+          : undefined}
         feedback={
           <>
             <Show
@@ -1051,7 +1021,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       side="left"
       collapsed={collapsed()}
       width={width()}
-      bodyClass="otk-inbox-scroll"
+      bodyClass="otk-inbox-scroll otk-sidebar-list"
       viewport={(element) => {
         scrollLease?.release();
         scroller = element;

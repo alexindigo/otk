@@ -97,7 +97,8 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
           label = r.querySelector<HTMLElement>("[data-row-title]")!,
           labelRect = label.getBoundingClientRect(),
           floor = document.createElement("span"),
-          t = r.querySelector(".otk-session-title")!.getBoundingClientRect(),
+          t = r.querySelector(".otk-sidebar-title-text")!
+            .getBoundingClientRect(),
           l = r.querySelector(".otk-status-light")!.getBoundingClientRect(),
           b = r.getBoundingClientRect();
         Object.assign(floor.style, {

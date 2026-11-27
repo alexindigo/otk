@@ -92,7 +92,7 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/PreferenceControls.tsx": 1,
   "packages/ui/components/PrimaryAction.tsx": 1,
   "packages/ui/components/ProjectChip.tsx": 2,
-  "packages/ui/components/ProjectInbox.tsx": 5,
+  "packages/ui/components/ProjectInbox.tsx": 4,
   "packages/ui/components/ProjectSessions.tsx": 1,
   "packages/ui/components/ProjectTabs.tsx": 3,
   "packages/ui/components/QuestionDock.tsx": 2,
@@ -104,7 +104,7 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/SessionView.tsx": 1,
   "packages/ui/components/Settings.tsx": 2,
   "packages/ui/components/Sidebar.tsx": 4,
-  "packages/ui/components/SidebarRow.tsx": 1,
+  "packages/ui/components/SidebarRow.tsx": 2, // Includes the existing project lamp action.
   "packages/ui/components/SubagentBar.tsx": 2,
   "packages/ui/components/Tabs.tsx": 1,
   "packages/ui/components/TakeoverHeader.tsx": 1,

@@ -39,7 +39,7 @@ test.describe("task tabs", () => {
       const project = page.locator(
         `.otk-project-row[data-project=${JSON.stringify(state.directory)}]`,
       );
-      await project.locator(".otk-project-attention").click();
+      await project.locator(".otk-sidebar-lamp-action").click();
       await expect(page).toHaveURL(new RegExp(`${helper}$`));
       await assertTask();
       await openSession(state, page, "tstv1-atmosphera");

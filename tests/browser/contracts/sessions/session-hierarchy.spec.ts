@@ -134,7 +134,7 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   await page.locator(
     `.otk-project-row[data-project=${
       JSON.stringify(directory)
-    }] .otk-project-attention`,
+    }] .otk-sidebar-lamp-action`,
   ).click();
   await expect(page).toHaveURL(new RegExp(`${child}$`));
   await page.goto(`${state.url}/#/local/${root}/${child}`);

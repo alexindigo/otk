@@ -412,11 +412,14 @@ test(
     await expect(page.locator(".otk-project-order-status")).toContainText(
       `moved to position 2 of ${initial.length} in Active`,
     );
-    await row.locator(".otk-project-menu > button").click();
+    await row.getByRole("button", { name: /^Project menu for / }).click();
     await page.getByRole("menuitem", { name: "Move down", exact: true })
       .click();
     await expect.poll(() => activeOrder(page)).toEqual(initial);
-    await active(page).first().locator(".otk-project-menu > button").click();
+    await active(page).first().getByRole("button", {
+      name: /^Project menu for /,
+    })
+      .click();
     await expect(page.getByRole("menuitem", { name: "Move up", exact: true }))
       .toBeDisabled();
     await page.reload();
@@ -449,14 +452,14 @@ test(
     );
     await page.mouse.move(650, 420);
     await expect.soft(old.locator(":focus-visible")).toHaveCount(0);
-    await expect.soft(old.locator(".otk-project-menu")).toHaveCSS(
+    await expect.soft(old.locator(".otk-sidebar-control")).toHaveCSS(
       "opacity",
       "0",
     );
     await active(page).first().locator(".otk-project-open").click();
     await page.mouse.move(650, 420);
     await expect(old.locator(":focus-visible")).toHaveCount(0);
-    await expect(old.locator(".otk-project-menu")).toHaveCSS("opacity", "0");
+    await expect(old.locator(".otk-sidebar-control")).toHaveCSS("opacity", "0");
     await page.reload();
     await expect.poll(() => activeOrder(page)).toEqual(moved);
     const other = await browser.newContext();

@@ -1,26 +1,35 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type Element, Show } from "solid-js";
+import { type Element, For, Show } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
 import { ProjectAvatar } from "./ProjectChip.tsx";
 import { selection } from "./selection.ts";
 import { MetaRow } from "./MetaRow.tsx";
+import { TreeIcon } from "./Tree.tsx";
+import { TitleLabel } from "./TitleEditor.tsx";
 import "./SidebarRow.css" with { type: "text" };
 
 /** Tree owns disclosure/depth. A row can reserve lamp and artwork tracks or
  * render as a flat label and metadata pair. */
 export default function SidebarRow(props: {
   lamp?: Element;
+  lampAction?: Omit<ComponentProps<"button">, "children">;
   avatar?: { name: string; color?: string };
+  title?: {
+    text: string;
+    pending?: string;
+    qualifiers?: readonly { text: string; title?: string }[];
+    emphasis?: boolean;
+    struck?: boolean;
+  };
+  editor?: Element;
   label?: Element;
   meta?: Element;
-  metaClass?: string;
-  metaControl?: Element;
+  control?: Element;
   feedback?: Element;
   compact?: boolean;
   flat?: boolean;
   editing?: boolean;
-  detailedMeta?: boolean;
   mainRef?(element: HTMLButtonElement): void;
   action?: Omit<ComponentProps<"button">, "children">;
   frame?: {
@@ -31,6 +40,7 @@ export default function SidebarRow(props: {
   };
 }): Element {
   const native = nativeAttributes(() => props.action ?? {});
+  const lampNative = nativeAttributes(() => props.lampAction ?? {}, ["class"]);
   const frameNative = nativeAttributes(() => props.frame?.attributes ?? {});
   function Main() {
     return (
@@ -46,8 +56,35 @@ export default function SidebarRow(props: {
             )}
           </Show>
         </span>
-        <span class="otk-sidebar-slot otk-sidebar-label" data-row-title>
-          {props.label}
+        <span
+          class="otk-sidebar-slot otk-sidebar-label"
+          data-row-title
+        >
+          <Show
+            when={props.title && !props.editor}
+            fallback={props.editor ?? props.label}
+          >
+            <span
+              class={["otk-sidebar-title-text", {
+                "is-emphasis": !!props.title?.emphasis,
+                "is-struck": !!props.title?.struck,
+              }]}
+              data-unread={props.title?.emphasis === undefined
+                ? undefined
+                : String(props.title.emphasis)}
+            >
+              <TitleLabel pending={props.title?.pending}>
+                {props.title?.text}
+              </TitleLabel>
+            </span>
+            <For each={props.title?.qualifiers ?? []}>
+              {(item) => (
+                <span class="otk-sidebar-title-qualifier" title={item.title}>
+                  {item.text}
+                </span>
+              )}
+            </For>
+          </Show>
         </span>
       </>
     );
@@ -57,11 +94,23 @@ export default function SidebarRow(props: {
       class={["otk-sidebar-row", {
         "is-compact": props.compact,
         "is-flat": props.flat,
-        "has-detailed-meta": props.detailedMeta,
       }]}
     >
       <span class="otk-sidebar-row-grid">
-        <span class="otk-sidebar-slot otk-sidebar-lamp">{props.lamp}</span>
+        <span class="otk-sidebar-slot otk-sidebar-lamp">
+          <TreeIcon extend>
+            <Show when={props.lampAction} fallback={props.lamp}>
+              <button
+                ref={lampNative.ref}
+                {...lampNative.attributes}
+                type="button"
+                class="otk-sidebar-lamp-action"
+              >
+                {props.lamp}
+              </button>
+            </Show>
+          </TreeIcon>
+        </span>
         <Show
           when={props.action && !props.editing}
           fallback={
@@ -82,16 +131,18 @@ export default function SidebarRow(props: {
             <Main />
           </button>
         </Show>
-        <span class={["otk-sidebar-slot otk-sidebar-meta", props.metaClass]}>
+        <span class="otk-sidebar-slot otk-sidebar-meta">
           <MetaRow whole intrinsic class="otk-sidebar-meta-track">
             {props.meta}
           </MetaRow>
-          {props.metaControl}
+          <Show when={props.control}>
+            <span class="otk-sidebar-control">{props.control}</span>
+          </Show>
         </span>
+        <Show when={props.feedback}>
+          <span class="otk-sidebar-row-feedback">{props.feedback}</span>
+        </Show>
       </span>
-      <Show when={props.feedback}>
-        <span class="otk-sidebar-row-feedback">{props.feedback}</span>
-      </Show>
     </span>
   );
   return (

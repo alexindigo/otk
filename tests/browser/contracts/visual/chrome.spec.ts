@@ -133,7 +133,7 @@ test(
     await expect(page.locator('[data-tab="tstv1-row-action-phantom"]'))
       .toBeVisible();
     const row = page.locator('[data-project$="/projects/otk"]'),
-      menu = row.locator(".otk-project-menu"),
+      menu = row.locator(".otk-sidebar-control"),
       trigger = row.locator(".otk-popover-trigger");
     await page.mouse.move(600, 500);
     await page.locator("body").evaluate(() =>
@@ -141,23 +141,23 @@ test(
     );
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("0");
-    const before = await row.locator(".otk-project-trailing").boundingBox();
+    const before = await row.locator(".otk-sidebar-meta").boundingBox();
     await row.hover();
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
     await expect.poll(() =>
-      row.locator(".otk-project-visit").evaluate((el) =>
+      row.locator(".otk-sidebar-meta-track").evaluate((el) =>
         getComputedStyle(el).opacity
       )
     ).toBe("0");
-    expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
+    expect(await row.locator(".otk-sidebar-meta").boundingBox()).toEqual(
       before,
     );
     await page.mouse.move(600, 500);
     await row.locator(".otk-project-open").focus();
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
-    expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
+    expect(await row.locator(".otk-sidebar-meta").boundingBox()).toEqual(
       before,
     );
     await page.keyboard.press("Tab");

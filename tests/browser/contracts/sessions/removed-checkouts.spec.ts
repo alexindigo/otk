@@ -63,7 +63,9 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
     await expect(
       row(directory).locator(".otk-sidebar-meta .otk-project-availability"),
     )
-      .toHaveText(/^removed \u00b7 .+$/);
+      .toHaveText("removed");
+    await expect(row(directory).locator(".otk-project-visit time")).not
+      .toBeEmpty();
     await expect(row(directory).locator(".otk-project-open"))
       .toHaveAccessibleName(/, removed$/);
     await expect(row(directory).locator(".otk-project-open"))
@@ -119,7 +121,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
             .toBeVisible();
         }
         const geometry = await project.evaluate((element) => {
-          const name = element.querySelector(".otk-project-name")!
+          const name = element.querySelector(".otk-sidebar-title-text")!
             .getBoundingClientRect();
           const meta = element.querySelector(".otk-sidebar-meta")!
             .getBoundingClientRect();

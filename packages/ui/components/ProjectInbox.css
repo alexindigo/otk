@@ -31,51 +31,15 @@
   width: var(--icon-compact);
   height: var(--icon-compact);
 }
-.otk-inbox-scroll {
-  /* Tree headings provide a leading selection track inside the list. */
-  padding-inline: var(--space-1) var(--space-2);
-}
 .otk-project-row {
   color: var(--otk-fg-2);
 }
 .otk-project-open {
   color: inherit;
 }
-.otk-project-name-line {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-}
 .otk-project-error {
   flex-basis: 100%;
   padding-block-end: var(--space-1);
-}
-/* Names keep the plain foreground; visit age never tints them (S4). */
-.otk-project-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  color: var(--otk-fg);
-  font-size: var(--text-ui);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.otk-project-name[data-unread=true] {
-  font-weight: 600;
-}
-.otk-project-menu {
-  opacity: 0;
-}
-.otk-project-row:is(:hover, :has(:focus-visible)) .otk-project-menu {
-  opacity: 1;
-  pointer-events: auto;
-}
-.otk-project-row:is(:hover, :has(:focus-visible)) .otk-project-visit {
-  opacity: 0;
-  visibility: hidden;
 }
 .otk-project-menu-trigger {
   cursor: pointer;
@@ -170,16 +134,6 @@
   margin-inline: auto;
   justify-content: center;
   padding: 0;
-}
-.otk-project-attention {
-  display: grid;
-  place-items: center;
-  inline-size: var(--tree-indent);
-  block-size: var(--tree-indent);
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
 }
 .otk-project-order-status {
   position: absolute;
