@@ -110,6 +110,13 @@ export default function TaskTrail(props: {
   };
   return (
     <div class="otk-trail">
+      <Show when={rows().find((row) => row.id === props.selected)}>
+        {(row) => (
+          <div class="otk-trail-floor" aria-hidden="true" inert>
+            {measure(row(), true)}
+          </div>
+        )}
+      </Show>
       <OverflowRow<TrailCrumb & { key: string; first: boolean }>
         singleLine
         items={rows()}

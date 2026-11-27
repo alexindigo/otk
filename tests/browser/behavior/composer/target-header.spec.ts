@@ -31,7 +31,7 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   expect(title).toContain(taskName);
   const geometry = async (wrap = false) => {
     const box = await target.evaluate((label) => {
-      const row = label.parentElement!;
+      const row = label.closest(".otk-composer-activity-line")!;
       const work = row.querySelector(".otk-subagents-trigger")!;
       const l = label.getBoundingClientRect(), w = work.getBoundingClientRect();
       // Style7 finding 3: task and destination have separate label ownership.

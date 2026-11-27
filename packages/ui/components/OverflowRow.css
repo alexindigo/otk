@@ -74,17 +74,31 @@
   padding: 0;
 }
 .otk-overflow-row.is-intrinsic {
-  inline-size: var(--overflow-intrinsic, max-content);
+  inline-size: fit-content;
   max-inline-size: 100%;
 }
 .otk-overflow-row.is-intrinsic > .otk-overflow-measure {
+  /* Inert sizing and the live items share a row, not a measured CSS width. */
+  position: relative;
+  grid-area: 1 / 1 / 2 / -1;
+  min-inline-size: 0;
+  block-size: 0;
   gap: inherit;
 }
 .otk-overflow-row.is-intrinsic > .otk-overflow-measure > span:last-child {
   position: absolute;
 }
+.otk-overflow-row.is-intrinsic > :is(.otk-overflow-items, .otk-overflow-lane) {
+  grid-area: 1 / 1;
+}
+.otk-overflow-row.is-intrinsic > .otk-overflow-more {
+  grid-area: 1 / -2;
+}
 .otk-overflow-row.is-single-line .otk-overflow-items {
   flex-wrap: nowrap;
+}
+.otk-overflow-row.is-progressive {
+  container-type: inline-size;
 }
 .otk-overflow-lane {
   gap: inherit;

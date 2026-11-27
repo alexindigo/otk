@@ -1,7 +1,13 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-trail {
   min-inline-size: 0;
-  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.otk-trail-floor {
+  visibility: hidden;
+  block-size: 0;
+  overflow: clip;
 }
 .otk-trail-link,
 .otk-trail-measure {
@@ -52,7 +58,7 @@
   text-underline-offset: 0.2em;
 }
 .otk-session-crumb.is-current .otk-trail-title {
-  min-inline-size: min(var(--row-title-min), 100%);
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min)));
 }
 .otk-trail-title-floor {
   display: block;

@@ -49,7 +49,7 @@
   inline-size: 100%;
 }
 .otk-subagent-name .otk-control-label {
-  min-inline-size: var(--row-title-min);
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min)));
 }
 .otk-subagent-heading > * {
   display: inline-flex;

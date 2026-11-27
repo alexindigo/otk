@@ -57,10 +57,8 @@
   flex: none;
 }
 .otk-breadcrumb-row {
-  --trail-current-min: calc(var(--row-title-min) + var(--control-size));
   display: grid;
-  grid-template-columns: minmax(min(var(--trail-current-min), 100%), 1fr)
-    minmax(0, max-content);
+  grid-template-columns: minmax(min-content, 1fr) minmax(0, max-content);
   container: otk-session-header / inline-size;
   min-height: var(--row-compact);
   padding: 0 var(--lane-gutter);
@@ -104,16 +102,6 @@
   .otk-context-meter {
     display: none;
   }
-}
-.otk-open-session-title {
-  display: flex;
-  align-items: center;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 30%;
-  height: var(--control-size);
-  padding: 0 var(--chrome-inset);
-  font-weight: 600;
 }
 .otk-context-bar {
   display: flex;

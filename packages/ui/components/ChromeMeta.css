@@ -91,10 +91,17 @@
   flex-direction: var(--tree-heading-flow, row);
 }
 .otk-meta-primary {
+  --meta-primary-floor: calc-size(min-content, min(size, 6ch));
   flex: 0 1 auto;
-  min-inline-size: 6ch;
+  min-inline-size: 0;
+  min-inline-size: var(--meta-primary-floor);
   max-inline-size: 100%;
   overflow: hidden;
+}
+.otk-meta-primary.is-measuring-minimum {
+  flex: none;
+  inline-size: 0;
+  inline-size: var(--meta-primary-floor);
 }
 .otk-meta-control {
   flex: none;

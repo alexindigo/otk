@@ -68,29 +68,32 @@ export default function ComposerTakeovers(
               ref={(region) => activity = region}
             >
               <div class={`otk-composer-activity-line ${POPOVER_BOUNDS}`}>
-                <span
-                  class="otk-composer-target"
-                  title={[target().task, target().session].filter(Boolean).join(
-                    ": ",
-                  )}
-                >
-                  <Show when={target().task}>
-                    {(task) => (
-                      <>
-                        <ChromeMeta class="otk-composer-task otk-control-label">
-                          {task()}
-                        </ChromeMeta>
-                        <ChromeMeta class="otk-composer-separator">
-                          {META_SEPARATOR}
-                        </ChromeMeta>
-                      </>
-                    )}
-                  </Show>
-                  <ChromeMeta class="otk-composer-destination otk-control-label">
-                    {target().session}
-                  </ChromeMeta>
-                </span>
-                <LiveLink state={link()} />
+                <div class="otk-composer-route">
+                  <span
+                    class="otk-composer-target"
+                    title={[target().task, target().session].filter(Boolean)
+                      .join(
+                        ": ",
+                      )}
+                  >
+                    <Show when={target().task}>
+                      {(task) => (
+                        <>
+                          <ChromeMeta class="otk-composer-task otk-control-label">
+                            {task()}
+                          </ChromeMeta>
+                          <ChromeMeta class="otk-composer-separator">
+                            {META_SEPARATOR}
+                          </ChromeMeta>
+                        </>
+                      )}
+                    </Show>
+                    <ChromeMeta class="otk-composer-destination otk-control-label">
+                      {target().session}
+                    </ChromeMeta>
+                  </span>
+                  <LiveLink state={link()} />
+                </div>
                 <span class="otk-composer-live-slot">
                   <Subagents
                     task={trail()?.task}
