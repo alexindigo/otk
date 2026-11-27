@@ -144,7 +144,9 @@ test.describe("choice-only custody", () => {
     }
     expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
       .toHaveLength(1);
-    await expect(page.locator(".otk-composer-agent")).toHaveText("Reviewer");
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      "Reviewer",
+    );
     await reply(state, page, session.id, "Choice reply.");
   });
 });

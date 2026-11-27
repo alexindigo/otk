@@ -23,7 +23,8 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
     ? ["Archive"]
     : [];
   await openSession(state, page, created.id);
-  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toHaveText("scripted");
   for (
     const [area, expected] of [
       [".otk-inbox-scroll", [["Add project", "Collapse projects"], appActions]],

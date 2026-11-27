@@ -10,7 +10,8 @@ test("messages.usage-500-call-lazy-paint", {
   await expect(page.locator(".otk-turn-usage > button")).toHaveText(
     /^500 model calls/,
   );
-  await expect(page.locator(".otk-composer-model-name")).toBeAttached();
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toBeAttached();
   const samples: number[] = [];
   for (let index = 0; index < 5; index++) {
     await page.locator("textarea[name=prompt]").click();

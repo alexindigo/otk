@@ -19,9 +19,10 @@ test(
     });
     const frames = await wire(page);
     const footer = async (agent: string, variant: string) => {
-      await expect(page.locator(".otk-composer-agent")).toHaveText(
-        agent === "plan" ? "Plan" : "Build",
-      );
+      await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+        .toHaveText(
+          agent === "plan" ? "Plan" : "Build",
+        );
       await expect(page.locator(".otk-variant-picker > button > span"))
         .toHaveText(variant === "low" ? "Low" : "High");
     };
