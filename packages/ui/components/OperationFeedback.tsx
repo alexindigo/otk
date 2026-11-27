@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorFeedback, type Feedback } from "@otk/client";
 import { createMemo, type Element, Show } from "solid-js";
-import { ComposerNoticeRow } from "./ComposerNotice.tsx";
+import { ComposerNoticeRow, noticeDismiss } from "./ComposerNotice.tsx";
 import { ActivityIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
@@ -16,9 +16,11 @@ export default function OperationFeedback(
     focusHome?(): void;
     onReveal?(messageID: string): void;
     onDismiss?(): void;
+    dismissLabel?: string;
   },
 ): Element {
   const feedback = createMemo(() => errorFeedback(props.feedback)!);
+  const dismiss = () => props.onDismiss ?? props.feedback.dismiss;
   let frame: { focus(): void } | undefined;
   const row = (content: FailureFeedbackRow) => (
     <ComposerNoticeRow
@@ -32,7 +34,12 @@ export default function OperationFeedback(
         feedback: feedback(),
         class: "otk-operation-feedback",
       })}
-      actions={content.actions}
+      actions={dismiss()
+        ? [
+          ...content.actions,
+          noticeDismiss(props.dismissLabel ?? "Dismiss notice", dismiss()!),
+        ]
+        : content.actions}
     >
       {content.label}
     </ComposerNoticeRow>
@@ -59,7 +66,6 @@ export default function OperationFeedback(
           failure={failure()}
           action={feedback().action}
           onReveal={props.onReveal}
-          onDismiss={props.onDismiss}
           icon={props.icon}
           placement="feedback"
           focusHome={() => {

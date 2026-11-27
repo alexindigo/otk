@@ -52,6 +52,7 @@ export interface OperationState {
   seq: number;
   progress?: RequestProgress;
   error?: PublicFailure;
+  feedbackDismissed?: true;
 }
 export interface Operation<R> {
   readonly state: Readonly<OperationState>;
@@ -774,6 +775,16 @@ export class RequestTracker {
   subscribe(listener: () => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
+  }
+  dismissFeedback(state: Readonly<OperationState>): void {
+    const item = this.#pending.get(state.ref.key);
+    if (
+      state.phase !== "failed" || !state.error ||
+      item?.state.error !== state.error ||
+      item.state.phase !== "failed" || item.state.feedbackDismissed
+    ) return;
+    item.state = { ...item.state, feedbackDismissed: true };
+    this.#publish(item);
   }
   forgetFailures(owner: string, method: string): void {
     for (const [key, item] of this.#pending) {

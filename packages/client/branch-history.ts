@@ -95,6 +95,7 @@ export interface BranchHistory {
   choose(saved: boolean): void;
   delete(id: string): void;
   fail(cause: unknown): void;
+  dismissError(diagnosticID: string): void;
   subscribe(listener: () => void): () => void;
 }
 type StoredDraft = { label: string; value: Draft; defaultVariant: boolean };
@@ -1225,6 +1226,14 @@ export function createBranchHistory(options: {
           target: selected &&
             { sidecarId: selected.sidecarId, sessionID: selected.sessionID },
         });
+      });
+    },
+    dismissError(diagnosticID) {
+      const error = store.state.error;
+      if (!selected || !error || error.diagnosticID !== diagnosticID) return;
+      clearFailure(selected);
+      store.update((s) => {
+        s.error = undefined;
       });
     },
     choose(saved) {

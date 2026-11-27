@@ -5,7 +5,12 @@ import { dynamic } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
 import RecordRow from "./RecordRow.tsx";
 import type { FittedAction } from "./FittedActions.tsx";
-import { ActivityIcon } from "./ChromeIcons.tsx";
+import { ActivityIcon, CloseIcon } from "./ChromeIcons.tsx";
+
+export function noticeDismiss(label: string, run: () => void): FittedAction {
+  return { key: "dismiss", label, title: label, icon: CloseIcon, run };
+}
+
 /** Shared joined notice frame; content and actions belong to its consumer. */
 export default function ComposerNotice(props: { children: Element }): Element {
   return <div class="otk-composer-notice">{props.children}</div>;
