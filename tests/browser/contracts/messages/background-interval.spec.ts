@@ -141,21 +141,27 @@ test("messages.success-only-interval-borrows-footer-and-direct-reveal", {
   await openSession(state, page, session);
   await action(state, "succeed");
   await expect(page.locator("[data-background-interval]")).toHaveCount(0);
-  const log = page.locator(
-    "[data-role=assistant] .otk-work-fold",
+  const details = page.locator("[data-role=assistant] footer").getByRole(
+    "button",
+    { name: "Completion details", exact: true },
   );
-  await expect(log).toBeVisible();
-  await expect(page.locator('[data-message="background-1"]')).toHaveCount(0);
-  await log.click();
-  await expect(page.locator('[data-message="background-1"]')).toBeVisible();
-  await log.click();
-  await expect(page.locator('[data-message="background-1"]')).toHaveCount(0);
+  const record = page.locator('[data-message="background-1"]');
+  await expect(details).toBeVisible();
+  await expect(details).toHaveAttribute("aria-expanded", "false");
+  await expect(record).toHaveCount(0);
+  await details.click();
+  await expect(record).toBeVisible();
+  await expect(record).toContainText("Run succeeded");
+  await expect(page.locator(".otk-work-log").locator(record)).toHaveCount(0);
+  await details.click();
+  await expect(record).toHaveCount(0);
   await action(state, "fail");
   await page.locator(".otk-composer-notice").getByRole("button", {
     name: "Show error",
     exact: true,
   }).click();
-  await expect(page.locator('[data-message="background-1"]')).toBeFocused();
+  await expect(record).toBeFocused();
+  await expect(details).toHaveAttribute("aria-expanded", "true");
 });
 
 test("messages.pending-breakout-reveal-and-settlement-retain-the-frame", {

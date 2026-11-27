@@ -30,7 +30,7 @@ import {
   messageLayoutRole,
   type ReplyStart as ReplyStartData,
 } from "./work-log.ts";
-import MessageFooter from "./MessageFooter.tsx";
+import MessageFooter, { type FooterCompletion } from "./MessageFooter.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
   Message as OtkMessage,
@@ -126,6 +126,7 @@ function PartsView(
 export interface MessageControl {
   reveal(): void;
   revealWork(): Promise<void>;
+  revealFooter(): Promise<void>;
 }
 function ReplyStart(props: {
   source: ReplyStartData;
@@ -170,6 +171,7 @@ export default function Message(
     usage?: Usage;
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
+    completion?: FooterCompletion;
     usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
@@ -255,6 +257,9 @@ export default function Message(
     directory: props.directory,
   });
   let footerControl: VirtualListControl | undefined;
+  const revealFooter = async () => {
+    await footerControl?.reveal("footer", { align: "nearest", intent: "user" });
+  };
   let usageControl: { open(): void } | undefined;
   const replySources = createMemo(() =>
     frames().flatMap((frame) =>
@@ -277,10 +282,7 @@ export default function Message(
     get usage() {
       return props.openUsage
         ? async () => {
-          await footerControl?.reveal("footer", {
-            align: "nearest",
-            intent: "user",
-          });
+          await revealFooter();
           usageControl?.open();
         }
         : undefined;
@@ -297,6 +299,7 @@ export default function Message(
       reveal() {
         (prompt() && bubble ? bubble : article).focus({ preventScroll: true });
       },
+      revealFooter,
       async revealWork() {
         const frame = frames().at(-1), group = frame?.groups.at(-1);
         if (frame && group?.work) {
@@ -554,6 +557,7 @@ export default function Message(
                 render={() => (
                   <MessageFooter
                     whole
+                    completion={props.completion}
                     leading={
                       <Show when={replySources()[0]}>
                         {replySource}
