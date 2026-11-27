@@ -125,13 +125,18 @@ Deno.test("record reveal opens retained ancestry through the interaction owner",
   const ancestry = p.state.records.parents.r2;
   interaction.reveal(ancestry);
   for (const key of ancestry) {
-    const choice = interaction.disclosure(key, interaction.generation(key));
+    const choice = interaction.disclosure(
+      "activity",
+      key,
+      interaction.generation(key),
+    );
     assertEquals(choice.expanded("record"), true);
     choice.set(false);
     assertEquals(
-      interaction.disclosure(key, interaction.generation(key)).expanded(
-        "record",
-      ),
+      interaction.disclosure("activity", key, interaction.generation(key))
+        .expanded(
+          "record",
+        ),
       false,
     );
   }

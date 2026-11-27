@@ -31,11 +31,14 @@ export default function ActivityGroup(props: {
   meta?(primary: () => Element): Element;
   icon?(): Element;
   collapsible?: boolean;
+  disclosureKind?: "revert";
   failed?: boolean;
 }): Element {
   const session = useOptionalSessionPorts();
   const [open, setOpen] = retainedDisclosure(
-    "records",
+    // Silent completion and normal activity can share one interval identity.
+    // Keep its intent through that presentation change until WP2 migrates it.
+    props.disclosureKind ?? "activity",
     () => props.group.category ?? "record",
     () =>
       props.group.silent

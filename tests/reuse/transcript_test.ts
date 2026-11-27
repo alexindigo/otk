@@ -49,7 +49,11 @@ test("public transcript consumer pages native source, resnapshots a lost baselin
       "Reusable source 0",
     ),
   );
-  const choice = transcript.interaction.disclosure("work", "generation-1");
+  const choice = transcript.interaction.disclosure(
+    "work",
+    "work",
+    "generation-1",
+  );
   choice.set(true);
   const clock = transcript.state.clock!;
   consumer.owner.receive("consumer", {

@@ -36,10 +36,7 @@ export function registerSessionsPanel(
             return (
               <ProjectSessions
                 project={project}
-                disclosure={shell.tree}
-                treeCollapsed={shell.toggles.state.prefs.shellLayout
-                  .treeCollapsed}
-                onTreeCollapse={shell.treeCollapse}
+                disclosure={shell.disclosures}
                 holdOrder={() => shell.holdTaskOrder?.(project) ?? (() => {})}
                 ready={shell.inbox(sidecarId).state.ready &&
                   shell.sessionRowsReady(project)}

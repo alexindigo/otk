@@ -58,7 +58,7 @@ Deno.test("sidebar CSS does not own tree tracks or row geometry", async () => {
   }
 });
 
-Deno.test("the only live tree disclosure instance is owned by shell state", async () => {
+Deno.test("the only live disclosure instance is owned by shell state", async () => {
   const owners: string[] = [];
   async function walk(dir: string) {
     for await (const entry of Deno.readDir(dir)) {
@@ -73,13 +73,23 @@ Deno.test("the only live tree disclosure instance is owned by shell state", asyn
           !/\bcreate(?:Project|SessionGroup)Disclosure\b/.test(text),
           path,
         );
-        if (text.includes("createTreeDisclosure")) {
+        if (text.includes("createDisclosures")) {
           const source = new Source(text);
           for (const node of source.all) {
             if (
               node.type === "CallExpression" &&
-              source.name(node.callee) === "createTreeDisclosure"
-            ) owners.push(path);
+              source.name(node.callee) === "createDisclosures"
+            ) {
+              // Only the injected constructor's default serves standalone callers.
+              const parent = source.parent.get(node);
+              if (
+                path === "packages/client/transcript-interaction.ts" &&
+                parent?.type === "AssignmentPattern" &&
+                parent.right === node &&
+                source.name(parent.left) === "disclosures"
+              ) continue;
+              owners.push(path);
+            }
           }
         }
       }
