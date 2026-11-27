@@ -218,3 +218,4 @@ export { treePaths } from "./tree-paths.ts";
 export * from "./terminals.ts";
 export * from "./file-paths.ts";
 export * from "./file-facts.ts";
+export * from "./inline-images.ts";

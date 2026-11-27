@@ -237,6 +237,7 @@ export function createServerResources(o: {
     let owner = fileFactOwners.get(id);
     if (!owner) {
       owner = createFileFacts(sidecars.connection(id).rpc, undefined, {
+        images: sidecars.connection(id).rpc,
         factory,
         diagnostic: (cause) => reportDiagnostic(console.debug, cause),
       });
