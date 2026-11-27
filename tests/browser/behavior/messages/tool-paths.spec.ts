@@ -65,7 +65,7 @@ test("messages.project-and-outside-tool-paths-reload", {
         : "src";
       await expect(
         page.locator(
-          `[data-work-source="${part.messageID}"] .otk-work-run-preview`,
+          `[data-work-source="${part.messageID}"] .otk-work-run-preview > .otk-chrome-meta:first-child`,
         ),
       )
         .toHaveText(expected);
@@ -157,7 +157,7 @@ test("messages.project-and-outside-tool-paths-reload", {
     );
     await expect(
       page.locator(
-        `[data-work-source="${check.messageID}"] .otk-work-run-preview`,
+        `[data-work-source="${check.messageID}"] .otk-work-run-preview > .otk-chrome-meta:first-child`,
       ),
     )
       .toHaveText(check.expected);
