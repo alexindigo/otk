@@ -13,7 +13,7 @@ import {
   textPreview,
 } from "../../pages/file-paths.ts";
 import { cleanup, observe, tabs } from "../../pages/terminal.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { prompt, settledNativeReply } from "../../pages/transcript.ts";
 
 test(
   "messages.file-path-linked-forms",
@@ -108,7 +108,11 @@ test(
   { tag: "@messages" },
   async ({ state, page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await replyPaths(state, page, "File: `data/blob.bin`");
+    const source = "File: `data/blob.bin`";
+    const id = await replyPaths(state, page, source);
+    // Streaming replies deliberately do not start local file checks.
+    await settledNativeReply(state, id, source);
+    await expect(status(page, id)).toHaveAttribute("data-status", "idle");
     const link = page.getByRole("button", {
       name: "data/blob.bin",
       exact: true,
