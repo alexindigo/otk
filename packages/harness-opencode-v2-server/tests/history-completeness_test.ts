@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { createTranscriptProjection } from "@otk/client";
 import type { MessagePolicy } from "@otk/protocol";
@@ -596,6 +601,31 @@ Deno.test("gap repair crosses bounded pages and includes unknown native messages
     await x.transcript.stop();
   }
 });
+Deno.test("textless instruction sync leaves acquired reply identity and publication clock intact", async () => {
+  const x = fixture();
+  try {
+    x.projection.replace((await x.transcript.page(sessionID)).items);
+    await x.transcript.check(sessionID);
+    const { messageIDs, repliesByID } = x.projection.state;
+    const historical = repliesByID.before;
+    assert(historical);
+    const clock = x.transcript.replay.clock(sessionID);
+    const reads = x.reads.length;
+    await x.transcript.event({
+      type: "session.instructions.updated",
+      id: "evt_initial_instructions",
+      metadata: { instructions: { initial: true } },
+      data: { sessionID: "ses_history", delta: { codemode: "hash" } },
+    });
+    assertEquals(x.transcript.replay.clock(sessionID), clock);
+    assertEquals(x.reads.length, reads);
+    assertStrictEquals(x.projection.state.messageIDs, messageIDs);
+    assertStrictEquals(x.projection.state.repliesByID.before, historical);
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
 Deno.test("unmapped native content replacement repairs the same identity without a new head", async () => {
   const x = fixture();
   try {
