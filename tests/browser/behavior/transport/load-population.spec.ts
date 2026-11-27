@@ -27,6 +27,8 @@ interface IndexFrame {
   ops?: { op: string; entry?: { id: string }; id?: string }[];
   inbox?: { summaries?: Record<string, unknown> };
   summaries?: { directory: string }[];
+  ref?: { key: string };
+  outcome?: { ok: boolean; result?: unknown };
   method?: string;
   params?: {
     sessionID?: string;
@@ -34,6 +36,7 @@ interface IndexFrame {
     sessions?: string[];
     sessionIDs?: string[];
     terminal?: number;
+    runID?: string;
   };
 }
 function counts(values: string[]) {
@@ -80,7 +83,12 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
         const sessionReads: { at: number; value: string }[] = [],
           directories: { at: number; value: string }[] = [],
           errors: string[] = [];
-        const seen: { sessionID: string; terminal: number }[] = [];
+        const seen: {
+          key: string;
+          sessionID: string;
+          terminal: number;
+          runID?: string;
+        }[] = [];
         const finishes: number[] = [];
         page.on("pageerror", (error) => errors.push(String(error)));
         page.on(
@@ -100,8 +108,10 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
             rpc.push({ at: Date.now(), value: frame.method! });
             if (frame.method === "sessions.seen") {
               seen.push({
+                key: frame.ref!.key,
                 sessionID: frame.params!.sessionID!,
                 terminal: frame.params!.terminal!,
+                runID: frame.params!.runID,
               });
             }
             const targets = [
@@ -188,8 +198,28 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
         const tokens = seen.map((s) => s.terminal).sort((a, b) => a - b);
         expect(seen.every((s) => s.sessionID === initial.selected)).toBe(true);
         expect([[finishes[0]], [0, finishes[0]]]).toContainEqual(tokens);
+        const exact = seen.find((s) => s.terminal === finishes[0])!;
+        await expect.poll(() =>
+          incoming.find(({ frame }) =>
+            frame.t === "request.result" && frame.ref?.key === exact.key
+          )?.frame.outcome
+        ).toMatchObject({ ok: true, result: exact.terminal });
         const acknowledged = await state.product("inbox.get", {});
-        expect(acknowledged.inbox.seen[initial.selected]).toBe(finishes[0]);
+        // D81 stores run acknowledgements separately from legacy timestamps.
+        // Observe the same canonical state that drives the selected session.
+        const entity = Object.values(acknowledged.inbox.entities ?? {}).find(
+          (value) => value.kind === "session" && value.id === initial.selected,
+        );
+        expect(entity).toMatchObject({
+          terminal: exact.terminal,
+          counts: { unseen: 0 },
+        });
+        expect(entity?.runID).toBe(exact.runID);
+        if (!exact.runID) {
+          expect(acknowledged.inbox.seen[initial.selected]).toBe(
+            exact.terminal,
+          );
+        }
         const received = incoming.filter((row) =>
           row.at >= start && row.at <= until
         );
