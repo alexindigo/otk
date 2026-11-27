@@ -96,6 +96,7 @@ export const profiles = {
   "messages-tools": "v1",
   "messages-cooling": "v1",
   "messages-files": "v1",
+  "messages-private-home": "v1",
   "messages-context": "v1",
   "messages-temperature": "v1",
   "messages-helper-pages": "v1",
@@ -204,6 +205,7 @@ export interface Commands {
       | "history-sibling";
   };
   writeProjectFiles: { lease: string; files: Record<string, string> };
+  writeHomeFiles: { lease: string; files: Record<string, string> };
   restart: { lease: string; target: "native" | "sidecar" };
   scenario: {
     lease: string;
@@ -304,6 +306,7 @@ export function request(value: unknown): ControlRequest {
     productRpc: ["lease", "method", "params"],
     auxiliary: ["lease", "kind"],
     writeProjectFiles: ["lease", "files"],
+    writeHomeFiles: ["lease", "files"],
     restart: ["lease", "target"],
     scenario: ["lease", "action", "sessionID", "target"],
     stop: [],
@@ -424,8 +427,9 @@ export function request(value: unknown): ControlRequest {
       ) throw new Error("Unknown auxiliary composition");
       break;
     case "writeProjectFiles":
+    case "writeHomeFiles":
       if (!Object.values(object(p.files)).every((s) => typeof s === "string")) {
-        throw new Error("Invalid project files");
+        throw new Error("Invalid fixture files");
       }
       break;
     case "restart":

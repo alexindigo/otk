@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./fixture-diagnostics.ts";
+import { decodeBase64 } from "@std/encoding/base64";
 import { fromFileUrl, join, relative, resolve } from "@std/path";
 import { nativeFixture } from "./native-fixture.ts";
 import { submitFailureScenario } from "./request-failure-fixture.ts";
@@ -55,6 +56,43 @@ async function bind<T>(start: () => Promise<T>): Promise<T> {
   }
 }
 
+async function writeFixtureFiles(
+  root: string,
+  files: Record<string, string>,
+  write: (target: string, data: string) => Promise<void>,
+): Promise<void> {
+  for (const [name, data] of Object.entries(files)) {
+    const target = resolve(root, name);
+    const path = relative(root, target);
+    if (
+      !path || path === ".." || path.startsWith("../") || path.startsWith("/")
+    ) {
+      throw new Error("File outside fixture root");
+    }
+    // Check every existing path segment before proceeding to the next one.
+    let parent = root;
+    for (const part of path.split("/").slice(0, -1)) {
+      parent = join(parent, part);
+      try {
+        if ((await Deno.lstat(parent)).isSymlink) {
+          throw new Error("Symlink parent");
+        }
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+        await Deno.mkdir(parent);
+      }
+    }
+    try {
+      if ((await Deno.lstat(target)).isSymlink) {
+        throw new Error("Symlink target");
+      }
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+    }
+    await write(target, data);
+  }
+}
+
 let stopID: string | undefined;
 let shutdownFailure: unknown;
 try {
@@ -64,6 +102,7 @@ try {
     let client: WsClient | undefined;
     let baseline: Record<string, Json> = {};
     let lease: TestLease | undefined;
+    let privateHome: string | undefined;
     let profile = "ordinary" as Profile;
     let composer: ReturnType<typeof composerProfile> | undefined;
     let poisoned = false;
@@ -598,6 +637,9 @@ try {
           ) {
             transport = await nativeMessageScenario(fixture.oc, profile);
           }
+          if (profile === "messages-private-home") {
+            privateHome = join(fixture.oc.root, `home-${crypto.randomUUID()}`);
+          }
           const server = await bind(() =>
             fixture!.sidecar(
               transport
@@ -628,7 +670,7 @@ try {
                 : ["messages-cooling", "messages-temperature"].includes(profile)
                 ? { messages: { coolms: 2500, preloadms: 1500 } }
                 : {},
-              { stableOrigin: profile !== "ordinary" },
+              { stableOrigin: profile !== "ordinary", home: privateHome },
             )
           );
           if (record) {
@@ -990,31 +1032,22 @@ try {
           return { url: server.url, session };
         }
         case "writeProjectFiles":
-          for (const [name, text] of Object.entries(frame.params.files)) {
-            const target = resolve(lease!.directory, name);
-            const path = relative(lease!.directory, target);
-            if (!path || path.startsWith("..") || path.startsWith("/")) {
-              throw new Error("File outside project root");
-            }
-            // Refuse symlink parents; never follow fixture-created links out of root.
-            let parent = lease!.directory;
-            for (const part of path.split("/").slice(0, -1)) {
-              parent = join(parent, part);
-              await Deno.mkdir(parent, { recursive: true });
-              if ((await Deno.lstat(parent)).isSymlink) {
-                throw new Error("Symlink parent");
-              }
-            }
-            try {
-              if ((await Deno.lstat(target)).isSymlink) {
-                throw new Error("Symlink target");
-              }
-            } catch (error) {
-              if (!(error instanceof Deno.errors.NotFound)) throw error;
-            }
-            await Deno.writeTextFile(target, text);
-          }
+          await writeFixtureFiles(
+            lease!.directory,
+            frame.params.files,
+            Deno.writeTextFile,
+          );
           return null;
+        case "writeHomeFiles":
+          if (!privateHome || !lease) {
+            throw new Error("Fixture has no private HOME");
+          }
+          await writeFixtureFiles(
+            privateHome,
+            frame.params.files,
+            (target, data) => Deno.writeFile(target, decodeBase64(data)),
+          );
+          return { home: privateHome };
         case "restart":
           if (profile === "ordinary") {
             throw new Error("Restart requires isolated profile");
