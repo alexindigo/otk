@@ -82,9 +82,9 @@ for (const motion of ["on", "system", "preference"] as const) {
           page.locator(`[data-tab="${session.id}"] .otk-status-light`),
           page.locator(`[data-crumb="${session.id}"] .otk-status-light`),
           page.locator(
-            `[data-server="local"][data-project=${
+            `.otk-project-row[data-server="local"][data-project=${
               JSON.stringify(metadata.directory)
-            }] .otk-project-marker .otk-status-light`,
+            }] .otk-sidebar-lamp-action .otk-status-light`,
           ),
         ];
         for (const lamp of lamps) {
