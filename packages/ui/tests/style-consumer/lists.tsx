@@ -160,6 +160,8 @@ export default function Scene() {
         <Subagents
           focusHome={() => home.focus()}
           entities={tabs.entities()}
+          // 2.152 distinguishes unknown task evidence from an empty roster.
+          task={tabs.trail().task}
           helpers={(() => {
             void tabs.state.revision;
             const store = tabs.entities(), key = tabs.trail().task;
