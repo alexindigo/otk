@@ -60,6 +60,23 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
   const operation = solidState<SessionRevertState>({
     pending: "undo",
     phase: "staging",
+    // Exercise the retained disclosure alongside 2.145's feedback. The
+    // shared 2.114 fold only renders a control when there is a body to open.
+    messages: [{
+      id: "prompt",
+      sessionID: "tstv1-notice",
+      role: "user",
+      time: { created: 1 },
+      parts: [{
+        id: "prompt-text",
+        kind: "text",
+        synthetic: false,
+        blocks: [{
+          b: "paragraph",
+          inline: [{ i: "text", text: "Captured prompt" }],
+        }],
+      }],
+    }],
     record: {
       boundaryID: "prompt",
       messageIDs: ["prompt"],
