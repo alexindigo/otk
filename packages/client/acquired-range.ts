@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   compareMessages,
-  compareTranscriptVersion,
-  type ContentClock,
   type Message,
   type MessageCursor,
   type MessagePage,
-  type TranscriptVersion,
 } from "@otk/protocol";
 
 // Keep only the fields used by the canonical message comparator, never bodies.
@@ -30,6 +27,7 @@ interface Range {
   links: Map<MessageCursor | undefined, PageLink>;
   next: Frontier;
   ids: Map<string, Position>;
+  observed: Set<string>;
 }
 
 export interface CoverageGap {
@@ -71,6 +69,7 @@ function newest(messages: readonly Message[]): Range {
     key: `range:${messages.at(-1)?.id ?? ""}`,
     links: new Map(),
     ids: new Map(),
+    observed: new Set(),
     next: undefined,
   };
 }
@@ -95,6 +94,7 @@ function absorb(
     if (!range.ids.has(id)) range.ids.set(id, value);
   }
   if (!same) return;
+  for (const id of prior.observed) range.observed.add(id);
 
   const links = [...acquired(prior)];
   const end = links.at(-1)?.[1].lower;
@@ -162,6 +162,7 @@ export function createAcquiredRange() {
         }
       }
       if (!removed.size) continue;
+      for (const id of removed) range.observed.delete(id);
       for (const link of range.links.values()) {
         link.groups = link.groups.map((ids) =>
           ids.filter((id) => !removed.has(id))
@@ -184,30 +185,13 @@ export function createAcquiredRange() {
         : [];
     });
 
-  // The existing owner still uses the positional paging API until WP3.
-  function extend(
-    before: MessageCursor,
-    older: MessageCursor | null,
-    items: readonly Message[],
-  ): void;
   function extend(
     key: string,
     before: MessageCursor,
     older: MessageCursor | null,
-    items: readonly Message[],
-  ): { joined: boolean; deleted: string[] };
-  function extend(
-    ...args:
-      | [MessageCursor, MessageCursor | null, readonly Message[]]
-      | [string, MessageCursor, MessageCursor | null, readonly Message[]]
+    messages: readonly Message[],
   ) {
-    const legacy = args.length === 3;
-    const before = legacy ? args[0] : args[1];
-    const older = legacy ? args[1] : args[2];
-    const messages = legacy ? args[2] : args[3];
-    const index = legacy
-      ? ranges.length === 1 ? 0 : -1
-      : ranges.findIndex((range) => range.key === args[0]);
+    const index = ranges.findIndex((range) => range.key === key);
     const range = ranges[index];
     if (!range || before !== range.next) {
       throw new Error("Unacquired message boundary");
@@ -222,7 +206,7 @@ export function createAcquiredRange() {
     // `before` is opaque. Its preceding acquired page witnesses an exclusive
     // upper bound; without that witness, absence does not establish deletion.
     const upper = proof.at(-1)?.[1].lower;
-    const deleted = !legacy && upper
+    const deleted = upper
       ? absent(
         ranges.slice(index).flatMap((r) => [...r.ids.values()]),
         messages,
@@ -231,16 +215,7 @@ export function createAcquiredRange() {
       )
       : [];
     range.links = new Map(proof);
-    if (legacy) {
-      // The previous paging API forgets parked links when their boundary is
-      // read again. Its replacement path never keeps stale range membership.
-      const retained = new Set(proof.flatMap(([, link]) => link.groups.flat()));
-      for (const id of range.ids.keys()) {
-        if (!retained.has(id)) range.ids.delete(id);
-      }
-    }
     install(range, before, older, messages);
-    if (legacy) return;
     const loaded = new Set(messages.map((message) => message.id));
     let count = 0;
     for (const prior of ranges.slice(index + 1)) {
@@ -278,6 +253,7 @@ export function createAcquiredRange() {
       if (!same) {
         for (const range of retained) {
           range.links.clear();
+          range.observed.clear();
           if (range.next !== null) range.next = undefined;
         }
       }
@@ -297,8 +273,21 @@ export function createAcquiredRange() {
       }));
     },
     known: (id: string) => ranges.some((range) => range.ids.has(id)),
+    observe(message: Message) {
+      // Only the first accepted live upsert proves a newly acquired body.
+      // A header on its own does not revalidate any previously acquired row.
+      const head = ranges[0];
+      if (head && !ranges.some((range) => range.ids.has(message.id))) {
+        head.ids.set(message.id, position(message));
+        head.observed.add(message.id);
+      }
+    },
+    remove(id: string) {
+      if (ranges[0]) prune([id], [], ranges[0]);
+    },
     current: (id: string) =>
       ranges.some((range) =>
+        range.observed.has(id) ||
         [...acquired(range)].some(([, link]) => has(link, (key) => key === id))
       ),
     visit(visible: ReadonlySet<string>, visited: Set<string>) {
@@ -311,46 +300,6 @@ export function createAcquiredRange() {
           }
         }
       }
-    },
-    // Legacy replacement semantics, retired when TranscriptOwner uses head().
-    replace(
-      page: MessagePage,
-      previous: readonly Message[],
-      version: TranscriptVersion | undefined,
-      clock: ContentClock | undefined,
-    ) {
-      const first = page.items[0];
-      const exact = !!version && !!clock &&
-        compareTranscriptVersion(version, page.version) === 0 &&
-        page.from.epoch === clock.epoch && page.from.seq === clock.seq &&
-        page.clock.epoch === clock.epoch && page.clock.seq === clock.seq;
-      const held = new Set(previous.map((m) => m.id));
-      const prior = ranges[0];
-      const adjacent = prior && page.older !== null &&
-        [...acquired(prior)].some(([before]) => before === page.older);
-      const overlap = page.items.some((m) => held.has(m.id));
-      const prefix = exact && first && page.older !== null &&
-          (adjacent || overlap)
-        ? previous.filter((m) => compareMessages(m, first) < 0)
-        : [];
-      const older = prefix.length && prior?.next !== undefined
-        ? prior.next
-        : page.older;
-      const groups = [page.items.map((m) => m.id)];
-      if (prefix.length) {
-        const remaining = new Set(prefix.map((m) => m.id));
-        for (const { groups: existing } of prior?.links.values() ?? []) {
-          for (const ids of existing) {
-            const retained = ids.filter((id) => remaining.delete(id));
-            if (retained.length) groups.push(retained);
-          }
-        }
-        if (remaining.size) groups.push([...remaining]);
-      }
-      const head = newest(page.items);
-      install(head, undefined, older, [...prefix, ...page.items], groups);
-      ranges = [head];
-      return { prefix, exact };
     },
     evict(ordered: readonly string[], removed: ReadonlySet<string>) {
       const park: string[] = [];
@@ -368,6 +317,7 @@ export function createAcquiredRange() {
         );
         const evicted = [...removed].filter(belongs);
         if (!evicted.length) continue;
+        for (const id of evicted) range.observed.delete(id);
         const covered = new Set(
           [...range.links.values()].flatMap((link) => link.groups.flat()),
         );

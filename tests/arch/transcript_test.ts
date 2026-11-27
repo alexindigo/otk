@@ -4,6 +4,7 @@ import { productionSources, Source } from "./analysis.ts";
 
 function violations(path: string, text: string): string[] {
   const source = new Source(text, path), result: string[] = [];
+  const owner = path === "packages/client/transcript.ts";
   for (const node of source.all) {
     if (
       node.type === "JSXElement" &&
@@ -23,8 +24,74 @@ function violations(path: string, text: string): string[] {
       path === "packages/harness-opencode-v1/tasks.ts" &&
       node.type === "AwaitExpression"
     ) result.push("awaited helper shaping");
-    if (node.type !== "CallExpression") continue;
+    if (
+      node.type !== "CallExpression" && node.type !== "OptionalCallExpression"
+    ) continue;
     const callee = source.name(node.callee) ?? "";
+    if (/^packages\/(client|ui)\//.test(path)) {
+      const projected =
+        /(?:^projection|^createTranscriptProjection|(?:^|\.)(?:transcript|resource)\.projection)\.(reconcile|merge|apply|park|retain|reset|replace|gaps|boundaries)$/
+          .exec(callee)?.[1];
+      // A local array or promise may also be named `acquired` (viewport code).
+      // Follow the factory binding; guard the owner API for member receivers.
+      const coverage = /^createAcquiredRange\.(.+)$/.exec(callee)?.[1] ??
+        /(?:^|\.)acquired\.(head|extend|ranges|gaps|known|observe|remove|current|visit|evict|clear|replace)$/
+          .exec(callee)?.[1];
+      const disclosure = /^(?:interaction|createTranscriptInteraction)\.clear$/
+        .test(callee);
+      const parents = [];
+      for (
+        let child = node as typeof source.all[number],
+          parent = source.parent.get(child);
+        parent;
+        child = parent, parent = source.parent.get(child)
+      ) {
+        if (
+          parent.type === "VariableDeclarator" &&
+          ["ArrowFunctionExpression", "FunctionExpression"].includes(child.type)
+        ) {
+          parents.push(parent.id.type === "Identifier" ? parent.id.name : "");
+        }
+        if (parent.type === "FunctionDeclaration") {
+          parents.push(parent.id?.name);
+        }
+        if (
+          parent.type === "ObjectMethod" && parent.key.type === "Identifier"
+        ) parents.push(parent.key.name);
+        if (
+          parent.type === "IfStatement" && child === parent.consequent &&
+          (parent.test.type === "MemberExpression" ||
+            parent.test.type === "OptionalMemberExpression") &&
+          parent.test.object.type === "Identifier" &&
+          parent.test.object.name === "known" &&
+          parent.test.property.type === "Identifier" &&
+          parent.test.property.name === "deleted"
+        ) parents.push("deleted-session");
+      }
+      const detached = callee === "createTranscriptProjection.reset" &&
+          path === "packages/ui/components/SessionView.tsx" &&
+          parents.includes("SessionView") ||
+        path === "packages/client/transcript-projection.ts" &&
+          (callee === "createTranscriptProjection.reset" &&
+              parents.includes("projectReplies") ||
+            (callee === "createTranscriptProjection.reset" ||
+                callee === "createTranscriptProjection.boundaries") &&
+              parents.includes("projectTranscript"));
+      if (
+        projected === "replace" || coverage === "replace" ||
+        !owner && !detached && (projected || coverage)
+      ) {
+        result.push("transcript write bypass");
+      } else if (
+        owner &&
+        (projected === "reset" || coverage === "clear" || disclosure) &&
+        !parents.some((name) =>
+          name === "open" || name === "stop" || name === "deleted-session"
+        )
+      ) {
+        result.push("transcript refresh reset");
+      }
+    }
     if (
       path.startsWith("packages/ui/") && callee === "createWindow" &&
       path !== "packages/ui/components/VirtualList.tsx"
@@ -171,6 +238,54 @@ Deno.test("body acquisition negatives reject selected-facade and UI page caches"
   );
   assertEquals(
     violations("packages/client/transcripts.ts", "createTranscript(target);"),
+    [],
+  );
+});
+
+Deno.test("transcript writes belong to the owner, and recovery cannot reset the lifetime", () => {
+  assertEquals(
+    violations(
+      "packages/ui/components/VirtualList.tsx",
+      "acquired.some(visible); acquired.at(-1); acquired.then(settle);",
+    ),
+    [],
+  );
+  assertEquals(
+    violations(
+      "packages/client/session.ts",
+      "const range = createAcquiredRange(); const { head: install } = range; install(page); transcript.projection?.reconcile(messages);",
+    ),
+    ["transcript write bypass", "transcript write bypass"],
+  );
+  assertEquals(
+    violations(
+      "packages/ui/components/SessionView.tsx",
+      "projection.reset(items); projection.merge(items); acquired.head(page);",
+    ),
+    [
+      "transcript write bypass",
+      "transcript write bypass",
+      "transcript write bypass",
+    ],
+  );
+  assertEquals(
+    violations(
+      "packages/client/transcript.ts",
+      "function reacquireNewest() { projection.reset([]); acquired.clear(); interaction.clear(); acquired.replace(page); projection.replace(items); }",
+    ),
+    [
+      "transcript refresh reset",
+      "transcript refresh reset",
+      "transcript refresh reset",
+      "transcript write bypass",
+      "transcript write bypass",
+    ],
+  );
+  assertEquals(
+    violations(
+      "packages/client/transcript.ts",
+      "const open = () => { projection.reset([]); acquired.clear(); }; const owner = { stop() { interaction.clear(); } }; if (known?.deleted) interaction.clear();",
+    ),
     [],
   );
 });

@@ -898,13 +898,13 @@ export function createTranscriptProjection(): TranscriptProjection {
         if (reply) {
           const knownLast = value.lastID && read(value.lastID),
             last = lastHeaders.get(key);
-          state.repliesByID[key] = {
-            ...reply,
-            firstID: value.firstID ?? reply.firstID,
-            lastID: knownLast && last && compare(last, knownLast) > 0
-              ? last.id
-              : value.lastID ?? reply.lastID,
-          };
+          const firstID = value.firstID ?? reply.firstID;
+          const lastID = knownLast && last && compare(last, knownLast) > 0
+            ? last.id
+            : value.lastID ?? reply.lastID;
+          if (firstID !== reply.firstID || lastID !== reply.lastID) {
+            state.repliesByID[key] = { ...reply, firstID, lastID };
+          }
         }
       }
     },
@@ -1002,6 +1002,18 @@ export function createTranscriptProjection(): TranscriptProjection {
     },
   };
   return owner;
+}
+
+/** Static presentation for an explicitly detached window, never live writes. */
+export function projectTranscript(
+  messages: readonly Message[],
+  options: { busy?: boolean; boundaries?: readonly ReplyBoundary[] } = {},
+): TranscriptProjectionState {
+  const owner = createTranscriptProjection();
+  owner.reset(messages);
+  if (options.busy) owner.busy(true);
+  if (options.boundaries) owner.boundaries(options.boundaries);
+  return owner.state;
 }
 /** Detached multi-session compatibility input stays partitioned by session identity. */
 export function projectReplies(

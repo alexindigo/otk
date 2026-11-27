@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import type {
   ClientFrame,
   ContentOp,
@@ -273,7 +278,12 @@ for (
           event: { op: "message.remove", messageID: visible.id },
         }, true);
         assertEquals(transcript.state.messagesByID[visible.id], undefined);
-      } else assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else if (replacement === "complete") {
+        assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else {
+        assert(publications.length > 0 && publications.every(Boolean));
+        assertStrictEquals(transcript.state.messagesByID[visible.id], visible);
+      }
     } finally {
       f.stop();
     }
@@ -327,7 +337,8 @@ Deno.test("refetch reacquires older source after a same-version clock gap", asyn
     await f.reply();
     await f.reply();
     const a = f.owner.get(target("a"))!;
-    assert(a.state.messagesByID["a-060"]);
+    const visible = a.state.messagesByID["a-060"];
+    assert(visible);
     const messages = f.messages("a");
     messages[60].parts = [{
       id: "edited",
@@ -343,13 +354,14 @@ Deno.test("refetch reacquires older source after a same-version clock gap", asyn
     const refetch = a.refetch();
     replyRequest(f.connection.rpc, f.requests.shift()!, page());
     await refetch;
-    assertEquals(a.state.messagesByID["a-060"], undefined, "stale body");
+    assertStrictEquals(a.state.messagesByID["a-060"], visible);
 
     const source = a.source("a-060", (part) => part.id);
     const older = f.requests.shift()!;
     assertEquals((older.params as { before?: string }).before, "fixture:70");
     replyRequest(f.connection.rpc, older, page("fixture:70"));
     assertEquals(await source, "edited");
+    assertEquals(a.state.messagesByID["a-060"].parts[0].id, "edited");
   } finally {
     f.stop();
   }
@@ -364,25 +376,28 @@ Deno.test("refetch reads every missing page before joining a disjoint range", as
       selected: target("a"),
     });
     await f.reply();
-    await f.reply();
     const a = f.owner.get(target("a"))!;
+    while (f.requests.length) await f.reply();
     assert(a.state.messagesByID["a-060"]);
+    const seen: string[][] = [];
+    const release = a.subscribe((state) => seen.push([...state.messageIDs]));
     const refetch = a.refetch();
     await f.reply(0, 110);
     await refetch;
     const ids = f.messages("a", 110).map((m) => m.id);
-    assertEquals(a.state.messageIDs, ids.slice(100), "unproven join");
-
-    const history = a.ensure("a-060");
-    for (let start = 90; start >= 60; start -= 10) {
+    assertEquals(seen.find((rows) => rows.includes("a-109")), [
+      ...ids.slice(60, 80),
+      ...ids.slice(100),
+    ]);
+    for (const before of [100, 90, 80]) {
       assertEquals(
         (f.requests[0]?.params as { before?: string })?.before,
-        `fixture:${start + 10}`,
+        `fixture:${before}`,
       );
       await f.reply(0, 110);
-      assertEquals(a.state.messageIDs, ids.slice(start));
     }
-    await history;
+    release();
+    assertEquals(a.state.messageIDs, ids.slice(60));
   } finally {
     f.stop();
   }
@@ -717,6 +732,11 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     await f.reply();
     await f.reply();
     const a = f.owner.get(target("a"))!;
+    const before = [...a.state.messageIDs];
+    const publications: string[][] = [];
+    const release = a.subscribe((state) =>
+      publications.push([...state.messageIDs])
+    );
     f.owner.receive(
       "server",
       { t: "welcome", messages: policy } as never,
@@ -737,6 +757,9 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     await f.reply();
     await shared;
     while (f.requests.length) await f.reply();
+    release();
+    assert(publications.length > 0);
+    assert(publications.every((ids) => before.every((id) => ids.includes(id))));
     assertEquals(
       a.state.messageIDs.length,
       20,
