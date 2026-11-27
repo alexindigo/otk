@@ -1154,13 +1154,12 @@ the first line without moving its junction. Disclosure choices and callbacks
 stay in the existing interaction owner. Factories borrow ContentSlot so record
 updates retain mounted content.
 
-DisclosureToggle owns that SVG artwork, keyboard expansion and one button.
-TreeNode's toggleHeader associates its decorative junction label with the
-header's single native button. The button keeps its text and focus target;
-clicking the box activates that same control, without a hit-area overlay or a
-second tab stop. Sibling entity/navigation controls remain independent. Feedback
-resets branch and direction context. Standalone failure disclosures borrow only
-DisclosureToggle, never the tree's topology or connectors.
+`Disclosure` binds transcript and failure folds to the client disclosure owner
+by kind and identity (2.114). One native button owns the glyph, keyboard, focus
+and always-mounted ARIA region. For transcript labels, TreeNode places the
+button's box, artwork and caption on its lane subgrid; sibling actions and facts
+remain independent. Standalone folds use Disclosure's own layout, not the tree
+lanes.
 
 Project branches come from the client's server-scoped topology projection. Their
 boxes precede lamps and names. Per-project collapse intents persist in

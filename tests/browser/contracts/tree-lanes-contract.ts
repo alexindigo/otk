@@ -64,7 +64,8 @@ export async function treeLaneFindings(
         junction: own(".otk-tree-junction"),
         line: own(".otk-tree-junction > .otk-tree-junction-line"),
         node: own(".otk-tree-frame > .otk-tree-node-lane"),
-        trigger: own(".otk-tree-trigger-slot") ?? own(".otk-tree-trigger"),
+        trigger: own(".otk-tree-trigger-slot") ??
+          own("button.otk-tree-trigger"),
         starts: paint.filter((p) => near(p.top, rect.top)).map(x),
         ends: paint.filter((p) => near(p.bottom, rect.bottom)).map(x),
       };

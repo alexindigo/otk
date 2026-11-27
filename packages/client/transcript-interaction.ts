@@ -23,6 +23,10 @@ interface Disclosure {
 /** Source-free choices survive virtual unmount and body cooling, not deletion. */
 export interface TranscriptInteraction {
   readonly disclosures: Disclosures;
+  identify(
+    id: string,
+    generation?: string,
+  ): import("./disclosure.ts").DisclosureIdentity;
   defaultFor(
     category: DisclosureCategory,
     prefs?: Partial<Preferences>,
@@ -83,6 +87,7 @@ export function createTranscriptInteraction(
   };
   return {
     disclosures,
+    identify,
     defaultFor: (category, prefs = {}) =>
       disclosures.defaultFor("recordKinds", { category, prefs: () => prefs }),
     disclosure,
@@ -91,6 +96,7 @@ export function createTranscriptInteraction(
     },
     reveal(ancestors) {
       disclosures.reveal("activity", ancestors.map((key) => identify(key)));
+      disclosures.reveal("silent", ancestors.map((key) => identify(key)));
     },
     subscribeWork(key, listener) {
       return disclosures.subscribe(listener, "work", identify(key));

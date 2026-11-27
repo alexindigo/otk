@@ -506,6 +506,7 @@ export default function SessionView(props: {
   }), () => publishHistory());
   let followIntent = true;
   let window: VirtualListControl | undefined;
+  let focusHome: HTMLElement | undefined;
   let source: ReturnType<typeof sourceViewport> | undefined;
   createEffect(() => ({
     boundary: revertFlowBoundary(rollbackState()),
@@ -721,12 +722,15 @@ export default function SessionView(props: {
         interaction={interaction}
         nativeSource={props.transcript?.nativeSource}
         visibility={attachSource}
+        focusHome={() => focusHome?.focus({ preventScroll: true })}
       >
         <PathProvider
           paths={sessionPorts?.directoryCatalog?.state.catalog?.paths}
         >
           <section
             class="otk-session-view"
+            tabindex={-1}
+            ref={(element) => focusHome = element}
             aria-label="Session"
             aria-busy={transcriptBusy() ? "true" : "false"}
           >

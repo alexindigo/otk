@@ -82,6 +82,18 @@ export async function toolScript(
   await state.queue([reply]);
 }
 
+/** Open a reply's work and return the scope for its records (D74 seam). */
+export async function openWork(reply: Locator): Promise<Locator> {
+  const log = reply.locator(".otk-work-log");
+  const trigger = log.locator(".otk-work-fold");
+  await expect(trigger).toBeAttached();
+  if (await trigger.getAttribute("aria-expanded") === "false") {
+    await trigger.click();
+  }
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  return log;
+}
+
 /** Explicitly open mounted activity/work groups before addressing lazy children. */
 export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
   await expect(

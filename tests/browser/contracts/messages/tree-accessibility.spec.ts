@@ -8,7 +8,7 @@ test("messages.tree-header-name-and-single-disclosure-control", {
 }, async ({ isolatedState: state, page }) => {
   await page.goto(state.url + "/?source-ownership");
   const record = page.locator('[data-native-record="record"]');
-  const header = record.locator(".otk-tool-state > .otk-tool-toggle").first();
+  const header = record.getByRole("button", { name: "Source fixture" });
   await expect(header).toHaveAccessibleName("Source fixture");
   await header.click();
   const source = record.locator(".otk-native-source");
@@ -21,7 +21,7 @@ test("messages.tree-header-name-and-single-disclosure-control", {
   await expect(source.locator("pre")).toContainText("value 0");
   await page.keyboard.press("ArrowLeft");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await source.locator("label.otk-tree-toggle").click();
+  await toggle.locator(".otk-disclosure-icon svg").click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(toggle).toBeFocused();
 });

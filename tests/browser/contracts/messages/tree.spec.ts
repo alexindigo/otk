@@ -10,7 +10,7 @@ async function geometry(nodes: Locator) {
       const row = node.querySelector(":scope > .otk-tree-heading")!;
       const rail = row.querySelector(":scope > .otk-tree-junction")!;
       const box = row.querySelector(
-        ":scope > .otk-tree-trigger-slot .otk-tree-toggle",
+        ":scope > .otk-tree-trigger-slot .otk-tree-toggle, :scope > button.otk-tree-trigger .otk-disclosure-icon svg",
       );
       const connector = rail.querySelector(".otk-tree-connector")!;
       const upper = rail.querySelector(".otk-tree-upper")!;
@@ -23,7 +23,7 @@ async function geometry(nodes: Locator) {
       const c = connector.getBoundingClientRect(),
         u = upper.getBoundingClientRect();
       const label = row.querySelector(
-        ":scope > .otk-tree-frame > .otk-tree-label",
+        ":scope > .otk-tree-frame > .otk-tree-label, :scope > .otk-tree-trigger > .otk-disclosure-caption",
       )!;
       const content = (label.firstElementChild ?? label)
         .getBoundingClientRect();
@@ -43,9 +43,10 @@ async function geometry(nodes: Locator) {
       const parentStem = parent?.querySelector(
         ":scope > .otk-tree-heading .otk-tree-node-lane.is-stem",
       )?.getBoundingClientRect();
-      const icon = row.querySelector(".otk-tree-node-slot") ??
-        parent?.querySelector(":scope > .otk-tree-heading .otk-tree-node-slot");
-      const svg = box?.querySelector("svg");
+      const art = ".otk-tree-node-slot, .otk-disclosure-lead";
+      const icon = row.querySelector(art) ??
+        parent?.querySelector(":scope > .otk-tree-heading")?.querySelector(art);
+      const svg = box?.matches("svg") ? box : box?.querySelector("svg");
       const parentHeading = parent?.querySelector(":scope > .otk-tree-heading")
         ?.getBoundingClientRect();
       const firstChild = parent?.querySelector(
@@ -187,13 +188,17 @@ test.describe("work tree", () => {
     await openSession(state, page, "tstv1-otk");
     const root = page.locator(".otk-work-log > .otk-tree-node");
     await expect(
-      root.locator(":scope > .otk-tree-heading .otk-tree-node-slot svg"),
+      root.locator(":scope > .otk-tree-heading .otk-disclosure-lead svg"),
     )
       .toHaveCount(1);
-    const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-control");
-    await expect(root.locator(":scope > .otk-tree-heading [aria-expanded]"))
+    const toggle = root.locator(
+      ":scope > .otk-tree-heading > button.otk-tree-trigger",
+    );
+    await expect(
+      root.locator(":scope > .otk-tree-heading > button[aria-expanded]"),
+    )
       .toHaveCount(1);
-    await root.locator(":scope > .otk-tree-heading label.otk-tree-toggle")
+    await toggle.locator(".otk-disclosure-icon svg")
       .click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await toggle.press("ArrowLeft");
@@ -204,7 +209,7 @@ test.describe("work tree", () => {
     const tool = page.locator(".otk-tool-toggle");
     await expect(
       page.locator(
-        "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot svg",
+        "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
       ),
     )
       .toHaveCount(1);
@@ -359,7 +364,7 @@ test.describe("activity tree", () => {
     const span = page.locator(".otk-record-group").first();
     await expect(
       span.locator(
-        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot svg",
+        ":scope > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
       ),
     ).toHaveCount(1);
     await expect(span).toHaveAttribute("data-count", "3");
@@ -367,7 +372,7 @@ test.describe("activity tree", () => {
     const run = span.locator(".otk-record-group");
     await expect(run).toHaveCount(1);
     const toggle = run.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-control",
+      ":scope > .otk-tree-node > .otk-tree-heading > button.otk-tree-trigger",
     );
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
@@ -414,7 +419,8 @@ test.describe("outgoing tree", () => {
     await revealAcquired(page, selector);
     const outgoing = page.locator(selector);
     await expect(outgoing.first()).toHaveClass(/is-outgoing/);
-    await outgoing.first().locator(".otk-tree-toggle").first().click();
+    await outgoing.first().locator(".otk-tree-trigger .otk-disclosure-icon svg")
+      .first().click();
     await geometry(outgoing);
   });
 });

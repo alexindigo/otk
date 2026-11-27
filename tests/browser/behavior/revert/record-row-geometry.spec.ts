@@ -23,7 +23,7 @@ async function geometry(row: Locator) {
     const height = token("--tree-line"), gap = token("--space-2");
     ruler.remove();
     const heading = node.getBoundingClientRect();
-    const label = rect(".otk-record-row-label, .otk-record-group-toggle")!;
+    const label = rect(".otk-disclosure-caption, .otk-record-row-label")!;
     const icon = tree.querySelector(".otk-tree-node-lane")!
       .getBoundingClientRect();
     const actions = rect(".otk-record-row-actions, .otk-fitted-actions")!;

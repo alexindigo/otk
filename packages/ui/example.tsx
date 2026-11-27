@@ -3,6 +3,7 @@ import {
   createUiRegistries,
   registerGenericTool,
   ToolLine,
+  TranscriptContext,
   UiProvider,
 } from "./mod.ts";
 import type { ExternalCall, Preferences } from "@otk/protocol";
@@ -15,14 +16,16 @@ export function ToolExample(
   registerGenericTool(ui.tools);
   return (
     <UiProvider registries={ui}>
-      <ToolLine
-        call={props.call}
-        prefs={props.prefs}
-        paneWidth={800}
-        waiting={false}
-        genericOutput
-        onOpenChild={props.onOpen}
-      />
+      <TranscriptContext>
+        <ToolLine
+          call={props.call}
+          prefs={props.prefs}
+          paneWidth={800}
+          waiting={false}
+          genericOutput
+          onOpenChild={props.onOpen}
+        />
+      </TranscriptContext>
     </UiProvider>
   );
 }

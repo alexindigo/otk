@@ -90,6 +90,11 @@ export default function RevertGroup(props: {
         disclosureKind="revert"
         prefs={{ ...props.prefs, expandRecords: false }}
         collapsible={!props.state.dismissed}
+        hasContent={() =>
+          !!(
+            props.group.members.length || props.state.record?.files.length ||
+            props.failure || props.warning
+          )}
         failed={props.failure?.tone === "error" && !props.state.dismissed}
         icon={RevertIcon}
         label={() => (

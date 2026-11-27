@@ -13,17 +13,18 @@ import {
 } from "solid-js";
 import ContentSlot from "./ContentSlot.tsx";
 import DisclosureToggle, { DisclosureLabel } from "./DisclosureToggle.tsx";
+import { TreeTriggerContext } from "./Disclosure.tsx";
+
+export { treeTriggerClass } from "./Disclosure.tsx";
 
 type LaneTopology = { path: readonly boolean[]; outgoing: boolean };
 const TreeLanesContext = createContext<LaneTopology | null>(null);
-const TreeTriggerContext = createContext<string>();
-
-/** A spanning disclosure uses the tree's tracks, not its own lead geometry. */
-export function treeTriggerClass(): string | undefined {
-  return useContext(TreeTriggerContext);
-}
-
-type Trigger = { variant: "cell" | "span"; element: () => Element };
+type Trigger = {
+  variant: "cell" | "span";
+  element: () => Element;
+  /** A static label can borrow the same tracks without cutting the rail. */
+  hasBox?: () => boolean;
+};
 
 type Frame = (
   slots: { class: string; toggleID: string; children: Element },
@@ -139,6 +140,7 @@ export function TreeItem(props: {
 export function TreeNode(props: {
   label?: string;
   class?: string;
+  ref?(element: HTMLElement): void;
   open?: boolean;
   hasChildren?: boolean;
   showEmptyToggle?: boolean;
@@ -168,6 +170,8 @@ export function TreeNode(props: {
   feedbackGutter?: boolean;
   regionRole?: "group";
   body?(): Element;
+  /** A stateful child can keep its own ARIA region mounted while closed. */
+  region?(): Element;
 }): Element {
   const topology = useContext(TreeLanesContext);
   const headerID = createUniqueId();
@@ -178,7 +182,7 @@ export function TreeNode(props: {
       (topology?.outgoing === outgoing() ? topology.path : []);
   const connected = () => path().length > 0;
   const visible = () =>
-    props.path === undefined && !!props.body &&
+    props.path === undefined && !!(props.body || props.region) &&
     (props.bodyVisible ?? props.open ?? true);
   const region = {
     get path() {
@@ -272,6 +276,7 @@ export function TreeNode(props: {
   ]);
   return (
     <section
+      ref={(element) => props.ref?.(element)}
       class={["otk-tree-node", props.class, {
         "is-flat": props.path !== undefined,
         "is-connected": connected(),
@@ -296,8 +301,8 @@ export function TreeNode(props: {
             );
           }
         }}
-        class={["otk-tree-heading otk-tree-row", {
-          "has-node": !!props.node,
+        class={["otk-tree-heading otk-tree-row", props.heading?.class, {
+          "has-node": !!props.node || spanning(),
           "is-outgoing": outgoing(),
           "is-compact": props.compact,
           "align-label": props.alignLabel,
@@ -319,7 +324,9 @@ export function TreeNode(props: {
         {trigger()}
         <TreeLanes
           states={lanes()}
-          trigger={!!props.trigger || hasToggle()}
+          trigger={props.trigger
+            ? (props.trigger.hasBox?.() ?? true)
+            : hasToggle()}
           node={props.node}
           frame={props.frame}
           toggleID={toggleID}
@@ -337,10 +344,10 @@ export function TreeNode(props: {
           </Show>
         </TreeLanes>
       </div>
-      <Show when={visible()}>
+      <Show when={props.path === undefined && (props.region || visible())}>
         <div class="otk-tree-region" role={props.regionRole}>
           <TreeLanesContext value={region}>
-            <ContentSlot content={props.body} />
+            <ContentSlot content={props.region ?? props.body} />
           </TreeLanesContext>
         </div>
       </Show>

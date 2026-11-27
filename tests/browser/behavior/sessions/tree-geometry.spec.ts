@@ -14,12 +14,15 @@ test.describe("tall heading", () => {
     // Append a second heading line without changing the junction's styles.
     const geometry = await heading.evaluate((node) => {
       const label = node.querySelector(".otk-work-label")!;
-      const headingContent = node.querySelector(".otk-tree-label")!;
+      const headingContent = node.querySelector(".otk-tree-frame")!;
       const secondLine = document.createElement("div");
       secondLine.textContent = "Second line";
       secondLine.style.blockSize = "2em";
+      secondLine.style.gridArea = "extension / label";
       headingContent.append(secondLine);
-      const box = node.querySelector(".otk-tree-toggle")!
+      const box = node.querySelector(
+        ".otk-tree-trigger .otk-disclosure-icon svg",
+      )!
         .getBoundingClientRect();
       const line = label.getClientRects()[0];
       const row = node.getBoundingClientRect();
@@ -41,7 +44,8 @@ test.describe("work log", () => {
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
     const root = page.locator(".otk-work-log > .otk-tree-node").first();
-    await root.locator(":scope > .otk-tree-heading .otk-tree-toggle").click();
+    await root.locator(":scope > .otk-tree-heading .otk-disclosure-icon svg")
+      .click();
     await expect(root.locator(":scope > .otk-tree-region")).toBeVisible();
     const axes = await root.evaluate((node) => {
       const center = (el: Element) => {
@@ -49,13 +53,13 @@ test.describe("work log", () => {
         return x + width / 2;
       };
       const icon = node.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-node-slot",
+        ":scope > .otk-tree-heading .otk-disclosure-lead",
       )!;
       const stem = node.querySelector(
         ":scope > .otk-tree-heading .otk-tree-stem-paint",
       )!;
       const child = node.querySelector(
-        ":scope > .otk-tree-region .otk-tree-toggle",
+        ":scope > .otk-tree-region button.otk-tree-trigger .otk-disclosure-icon svg",
       )!;
       return {
         art: icon.childElementCount,
