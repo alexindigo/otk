@@ -94,4 +94,5 @@ test("public transcript consumer pages native source, resnapshots a lost baselin
   consumer.owner.setDemand(demand);
   await waitFor(() => transcript.state.messageIDs.length, (n) => n >= 20);
   assertEquals(transcript.state.continuity, "ready");
+  assertEquals(choice.value(), true);
 });

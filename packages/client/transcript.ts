@@ -1019,7 +1019,8 @@ export function createTranscript(
     authority = minimum = undefined;
     retriedVersion = undefined;
     acquired.clear();
-    interaction.clear();
+    // Body acquisition can reset without retiring the tab's interaction scope.
+    // Deletion and stop own retirement of disclosure choices and anchors.
     inFlight = repairingHead = undefined;
     bridging = undefined;
     missing = false;
