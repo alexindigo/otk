@@ -47,6 +47,7 @@ export const profiles = {
   "contract-attention-remote": "v1",
   "revert-native": "v1",
   "sessions-tasks": "v1",
+  "attention-failed-helper": "v1",
   "sessions-discovery": "v1",
   "contract-sessions-inbox": "neutral",
   "contract-sessions-panel": "neutral",
@@ -172,6 +173,7 @@ export interface Commands {
   queueScript: {
     lease: string;
     chunks: string[];
+    failHelper?: true;
     reasoning?: string[];
     gate?: "held" | "stepped";
     delay?: number;
@@ -293,6 +295,7 @@ export function request(value: unknown): ControlRequest {
     queueScript: [
       "lease",
       "chunks",
+      "failHelper",
       "reasoning",
       "gate",
       "delay",
@@ -351,6 +354,11 @@ export function request(value: unknown): ControlRequest {
       text(p.identity);
       break;
     case "queueScript":
+      if (
+        p.failHelper !== undefined && (p.failHelper !== true || p.tool ||
+          p.gate !== "held" || p.target || !Array.isArray(p.chunks) ||
+          p.chunks.length)
+      ) throw new Error("Invalid failed-helper provider script");
       if (
         p.reasoning !== undefined &&
         (!Array.isArray(p.reasoning) ||

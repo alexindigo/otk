@@ -329,6 +329,13 @@ try {
             composer = composerProfile(profile);
           }
           let contextOptions: Parameters<typeof nativeFixture>[1];
+          if (
+            profile === "attention-failed-helper" && nativeVersion === "1.19.3"
+          ) {
+            contextOptions = {
+              env: { OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: "true" },
+            };
+          }
           if (profile === "menus-default") {
             contextOptions = { config: { default_agent: "plan" } };
           }
@@ -420,7 +427,8 @@ try {
                 ? { "*": "allow" }
                 : profile === "revert-native"
                 ? { edit: "allow", read: "allow", bash: "allow" }
-                : profile === "sessions-tasks"
+                : profile === "sessions-tasks" ||
+                    profile === "attention-failed-helper"
                 ? { bash: "ask", task: "allow" }
                 : profile === "composer-pickers"
                 ? { bash: "allow" }
@@ -449,7 +457,12 @@ try {
                 ? composer.options
                 : profile === "sessions-discovery"
                 ? { env: { OPENCODE_PRINT_LOGS: "1" } }
-                : ["messages-context", "messages-priced", "menus-default"]
+                : [
+                    "messages-context",
+                    "messages-priced",
+                    "menus-default",
+                    "attention-failed-helper",
+                  ]
                     .includes(profile)
                 ? contextOptions
                 : profile === "messages-tool-states"
@@ -823,6 +836,13 @@ try {
           return null;
         case "queueScript": {
           if (
+            frame.params.failHelper && profile !== "attention-failed-helper"
+          ) {
+            throw new Error(
+              "Provider rejection requires the failed-helper profile",
+            );
+          }
+          if (
             (frame.params.delay ?? 0) > 2000 &&
             !["composer-long-command", "revert-native"].includes(profile)
           ) {
@@ -839,6 +859,12 @@ try {
           const id = crypto.randomUUID();
           const script = {
             chunks: frame.params.chunks,
+            ...(frame.params.failHelper
+              ? {
+                forPrompt: "Run the provider error fixture",
+                failure: { status: 403, message: "Scripted helper refused" },
+              }
+              : {}),
             ...(frame.params.reasoning
               ? { reasoning: frame.params.reasoning }
               : {}),
