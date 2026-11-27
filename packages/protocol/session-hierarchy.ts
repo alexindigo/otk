@@ -11,6 +11,8 @@ export interface SessionHierarchyNode {
   projectDirectory: string;
   taskID?: string;
   taskDirectory?: string;
+  /** Name of the owning task, even when the task's checkout is not leased. */
+  taskTitle?: string;
   mandatory: boolean;
   followParent: boolean;
 }
@@ -157,7 +159,13 @@ export function projectSessionHierarchy(
       ...families.get(entry.id)!,
       anchorID: anchors.get(entry.id)!,
       projectDirectory: projects.get(entry.id)!,
-      ...(owner ? { taskID: owner.id, taskDirectory: owner.directory } : {}),
+      ...(owner
+        ? {
+          taskID: owner.id,
+          taskDirectory: owner.directory,
+          taskTitle: owner.name,
+        }
+        : {}),
       mandatory: options.mandatory?.(entry.id) ?? false,
       followParent: options.followParent ?? false,
     }];

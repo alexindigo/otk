@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createState, type NotificationHub } from "@otk/client";
+import {
+  createState,
+  notificationBody,
+  type NotificationHub,
+} from "@otk/client";
 export type BrowserNotificationStatus =
   | "granted"
   | "default"
@@ -41,7 +45,7 @@ export function registerOsChannel(hub: NotificationHub): {
       retract(note.id);
       try {
         const n = new Notification(note.title, {
-          body: note.body,
+          body: notificationBody(note),
           tag: note.id,
           silent: true,
         });

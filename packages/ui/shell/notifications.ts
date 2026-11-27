@@ -18,6 +18,7 @@ import {
   requestIdle,
   type Selection,
   serverNote,
+  type ServerResources,
   type SidecarConnection,
   type SidecarState,
   storageFailureNote,
@@ -82,6 +83,7 @@ export function applicationNotifications(input: {
     listener: (changes: EntryChanges) => void,
   ): () => void;
   entities(sidecar: string): EntityStateStore;
+  locate?: ServerResources["notificationLocation"];
 }) {
   const context = () => {
     const selected = input.selection();
@@ -130,6 +132,7 @@ export function applicationNotifications(input: {
           ? target(note.sessionRef.sidecar, note.sessionRef.session)
           : undefined,
       }),
+    input.locate,
   );
   const toast = registerToastChannel(hub, input.disclosures),
     os = registerOsChannel(hub),
