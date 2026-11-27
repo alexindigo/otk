@@ -2,6 +2,7 @@
 import type { DisclosureCategory, Preferences } from "@otk/protocol";
 import {
   createDisclosures,
+  type DisclosureIdentity,
   type DisclosureKind,
   type Disclosures,
 } from "./disclosure.ts";
@@ -26,7 +27,8 @@ export interface TranscriptInteraction {
   identify(
     id: string,
     generation?: string,
-  ): import("./disclosure.ts").DisclosureIdentity;
+    placement?: DisclosureIdentity["placement"],
+  ): DisclosureIdentity;
   defaultFor(
     category: DisclosureCategory,
     prefs?: Partial<Preferences>,
@@ -57,10 +59,15 @@ export function createTranscriptInteraction(
 ): TranscriptInteraction {
   const generations = new Map<string, number>();
   const generation = (id: string) => `${id}:${generations.get(id) ?? 0}`;
-  const identify = (id: string, version = generation(id)) => ({
+  const identify: TranscriptInteraction["identify"] = (
+    id,
+    version = generation(id),
+    placement,
+  ) => ({
     scope,
     id,
     generation: version,
+    ...(placement && { placement }),
   });
   const windows = new Map<string, Map<string, number>>();
   let anchor: TranscriptAnchor | undefined;

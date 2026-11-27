@@ -75,6 +75,8 @@ export interface DisclosureIdentity {
   /** Stable item identity inside the scope, independent of content and layout. */
   id: string;
   generation?: string;
+  /** Where the item is read, without changing its retirement scope. */
+  placement?: "transcript" | "workPanel";
 }
 export interface DurableStore {
   read(identity: DisclosureIdentity): boolean | undefined;
@@ -155,8 +157,15 @@ interface Entry {
 }
 const keyOf = (
   kind: DisclosureKind,
-  { scope, id, generation }: DisclosureIdentity,
-) => JSON.stringify([kind, scope, id, generation ?? ""]);
+  { scope, id, generation, placement }: DisclosureIdentity,
+) =>
+  JSON.stringify([
+    kind,
+    scope,
+    id,
+    generation ?? "",
+    placement ?? "transcript",
+  ]);
 
 /** Local intent is immediate, and durable writes for each identity are ordered. */
 export function createDisclosures({
