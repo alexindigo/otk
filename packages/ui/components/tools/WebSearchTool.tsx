@@ -10,6 +10,7 @@ export function registerWebSearchTool(tools: ToolRegistry): void {
     (call) => ({
       icon: SearchIcon,
       verb: "Search web",
+      runs: { noun: "web search", plural: "web searches" },
       target: call.query,
       summary: call.provider,
     }),

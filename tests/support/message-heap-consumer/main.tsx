@@ -50,7 +50,7 @@ const theme = new ThemeEngine(
 const stopTheme = theme.start();
 const ui = createUiRegistries();
 registerTextPart(ui.parts);
-registerToolPart(ui.parts);
+registerToolPart(ui.parts, ui.tools);
 registerGenericTool(ui.tools);
 registerTaskTool(ui.tools);
 registerEditTool(ui.tools);

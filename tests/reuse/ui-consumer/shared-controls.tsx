@@ -776,7 +776,7 @@ export function InteractionFailures(
   registerGenericTool(ui.tools);
   registerUnknownPart(ui.parts);
   registerTextPart(ui.parts);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   const [draft, setDraft] = createSignal(emptyDraft()),
     [kind, setKind] = createSignal("async");
   const reject = (source: string) => {

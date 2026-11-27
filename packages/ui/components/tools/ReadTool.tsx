@@ -14,6 +14,7 @@ export function registerReadTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: FileIcon,
       verb: "Read",
+      runs: { noun: "file", plural: "files" },
       target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
       summary: metaList([
