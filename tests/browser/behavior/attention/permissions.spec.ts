@@ -10,7 +10,7 @@ import {
   subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork, sessionStatus, showSessions } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
@@ -44,10 +44,7 @@ test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
   await dock.getByRole("button", { name: "Reject request", exact: true })
     .click();
   await expect(dock).toHaveCount(0);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   await file(state, "README.md", "# OTK fixture\n");
   await tool(state, "read", { filePath: `${state.directory}/README.md` });
   await prompt(page, "Describe the read permission");
@@ -79,7 +76,7 @@ test("attention.permission-once-completes-native-output-and-idle", {
   expect(Math.abs(bounds.dock - bounds.surface)).toBeLessThan(.5);
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
     .toContainText("otk");
   await reply(page, session.id, "Permission completed");
@@ -303,13 +300,13 @@ test(
     await state.queue(["Covered command completed"]);
     await prompt(page, "Use the approved echo pattern");
     await reply(page, session.id, "Covered command completed");
-    await openWorkLogs(page);
+    await openLatestWork(page);
     // Expanded earlier work can move the newer reply outside the virtual range.
     // Use the public navigation owner before inspecting that reply's work.
     await page.keyboard.press("Control+k");
     await page.locator("input[name=command-search]").fill("Jump to latest");
     await page.locator('[data-command="transcript.latest"]').click();
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await expect(
       page.locator("[data-tool-status=completed]").filter({
         hasText: "echo covered",
@@ -346,6 +343,7 @@ test(
     await expect(first).toBeFocused();
     const reason = "Please use another approach";
     await rejection.fill(reason);
+    await showSessions(page);
     const cdp = await page.context().newCDPSession(page);
     const nativeDialogs: string[] = [];
     // Observe without installing a Playwright handler that blocks the page.
@@ -378,6 +376,7 @@ test(
     await page.getByRole("button", { name: "Reject request", exact: true })
       .click();
     await expect(dock).toHaveCount(0);
+    await openLatestWork(page);
     await expect(page.locator("[data-tool-status=denied]")).toBeVisible();
     await expect(page.locator("[data-tool-status=denied] .otk-tool-toggle"))
       .toHaveCSS("text-decoration-line", "line-through");

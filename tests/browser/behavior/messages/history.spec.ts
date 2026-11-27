@@ -5,7 +5,12 @@ import { randomUUID } from "node:crypto";
 import type { Json } from "../../../support/fixture-control.ts";
 import { readFile } from "node:fs/promises";
 import { wire } from "../../fixtures/wire.ts";
-import { prompt, revealTool, toolScript } from "../../pages/transcript.ts";
+import {
+  prompt,
+  revealTool,
+  sessionStatus,
+  toolScript,
+} from "../../pages/transcript.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 
 test(
@@ -133,10 +138,7 @@ test("messages.revert-files-counted-strip-reload", {
   await revealTool(page, "[data-tool=edit][data-tool-status=completed]");
   await expect(page.locator("[data-tool=edit][data-tool-status=completed]"))
     .toHaveCount(1);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "after\n",
   );

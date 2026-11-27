@@ -65,7 +65,7 @@ for (const witness of ["visible", "load", "failed"] as const) {
     await openSession(state, page, session.id);
     const pane = page.locator(".otk-messages");
     const turn = `[data-virtual-key="reply:${anchored}"]`;
-    const fold = page.locator(`${turn} .otk-work-fold`);
+    const fold = page.locator(`${turn} .otk-work-strip`);
     const fetchOlder = page.getByRole("button", {
       name: "Load older messages",
       exact: true,
@@ -81,9 +81,9 @@ for (const witness of ["visible", "load", "failed"] as const) {
       }
       return false;
     }, { timeout: 15_000 }).toBe(true);
-    await revealAcquired(page, `${turn} .otk-work-fold`);
-    await fold.click();
-    await expect(fold).toHaveAttribute("aria-expanded", "true");
+    await revealAcquired(page, `${turn} .otk-work-strip`);
+    await fold.getByText("Work log", { exact: true }).click();
+    await expect(fold).toHaveAttribute("aria-current", "true");
     await scrollTranscript(page, true);
     await wheelTranscript(page, -8, fold);
 
@@ -106,7 +106,7 @@ for (const witness of ["visible", "load", "failed"] as const) {
           .find((
             el,
           ) => el.textContent === anchorReply)?.firstChild;
-        const fold = pane.querySelector(`${turn} .otk-work-fold`);
+        const fold = pane.querySelector(`${turn} .otk-work-strip`);
         const memory = globalThis as typeof globalThis & {
           gapWitness?: { text: Node; fold: Element };
         };
@@ -117,7 +117,7 @@ for (const witness of ["visible", "load", "failed"] as const) {
           sameNodes: !!text?.isConnected && !!fold?.isConnected &&
             text === memory.gapWitness?.text &&
             fold === memory.gapWitness?.fold,
-          expanded: fold?.getAttribute("aria-expanded"),
+          expanded: fold?.getAttribute("aria-current"),
         };
       }, { turn, anchorReply, save });
     let before = await sample(true);

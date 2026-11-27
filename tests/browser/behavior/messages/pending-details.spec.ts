@@ -3,7 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, reply, seed, tool } from "../../pages/attention.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork, workPanel } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("messages.pending-preview-and-ready-question-copy", {
@@ -22,10 +22,10 @@ test("messages.pending-preview-and-ready-question-copy", {
   const dock = page.locator(".otk-permission-dock");
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(dock).toContainText("+1 / \u22121");
-  await openWorkLogs(page);
-  const edit = page.locator("[data-tool=edit]");
-  await expect(edit.locator(".otk-tool-add")).toHaveText("+1");
-  await expect(edit.locator(".otk-tool-del")).toHaveText("\u22121");
+  await openLatestWork(page);
+  const edit = workPanel(page).locator(".otk-work-run:has([data-tool=edit])");
+  await expect(edit.locator(".otk-work-add")).toHaveText("+1");
+  await expect(edit.locator(".otk-work-del")).toHaveText("\u22121");
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
@@ -34,21 +34,15 @@ test("messages.pending-preview-and-ready-question-copy", {
       contentType: "image/png",
     });
   }
-  // 2.105 WP1 removes inventory measurement from layout. Do not depend on
-  // the incidental virtual range fitting both prose and an expanded log.
-  const work = page.locator(".otk-work-log").filter({ has: edit });
-  const disclosure = work.getByRole("button", {
-    name: "Work log",
-    exact: true,
-  });
-  await disclosure.click();
+  const sessions = page.getByRole("tab", { name: "Sessions", exact: true });
+  await sessions.click();
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await reply(page, session.id, "Edit completed.");
-  // WP6 puts pending and settled steps under the same reply disclosure.
-  await openWorkLogs(page);
-  await expect(edit.locator(".otk-tool-add")).toHaveText("+1");
-  await expect(edit.locator(".otk-tool-del")).toHaveText("\u22121");
-  await disclosure.click();
+  // Pending and settled steps belong to the same reply's Work panel.
+  await openLatestWork(page);
+  await expect(edit.locator(".otk-work-add")).toHaveText("+1");
+  await expect(edit.locator(".otk-work-del")).toHaveText("\u22121");
+  await sessions.click();
   await tool(state, "question", {
     questions: [{
       header: "Next step",

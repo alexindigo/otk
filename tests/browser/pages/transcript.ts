@@ -82,27 +82,70 @@ export async function toolScript(
   await state.queue([reply]);
 }
 
-/** Open a reply's work and return the scope for its records (D74 seam). */
+export const workPanel = (page: Page) =>
+  page.locator('#otk-panel-content[aria-label="Work log"]');
+
+/** Open the Work log for this reply, not the latest reply in another view (D74). */
 export async function openWork(reply: Locator): Promise<Locator> {
-  const log = reply.locator(".otk-work-log");
-  const trigger = log.locator(".otk-work-fold");
-  await expect(trigger).toBeAttached();
-  if (await trigger.getAttribute("aria-expanded") === "false") {
-    await trigger.click();
+  const page = reply.page();
+  const strip = reply.locator(".otk-work-strip");
+  await expect(strip).toBeAttached();
+  if (await strip.getAttribute("aria-current") !== "true") {
+    const back = page.getByRole("button", {
+      name: "Back to conversation",
+      exact: true,
+    });
+    if (await back.isVisible()) await back.click();
+    // click the label, not a segment (which selects a specific run).
+    await strip.getByText("Work log", { exact: true }).click();
   }
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
-  return log;
+  const panel = workPanel(page);
+  await expect(panel).toBeVisible();
+  await expect(strip).toHaveAttribute("aria-current", "true");
+  return panel;
 }
 
-/** Explicitly open mounted activity/work groups before addressing lazy children. */
-export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
+export async function openLatestWork(page: Page): Promise<Locator> {
+  return await openWork(
+    page.locator('.otk-messages [data-role="assistant"]').filter({
+      has: page.locator(".otk-work-strip"),
+    }).last(),
+  );
+}
+
+export async function showSessions(page: Page) {
+  const tab = page.getByRole("tab", { name: "Sessions", exact: true });
+  await expect(tab).toBeVisible();
+  if (await tab.getAttribute("aria-selected") !== "true") await tab.click();
+}
+
+/** The Sessions view owns its status rows. Inspect that view, then restore Work. */
+export async function sessionStatus(
+  page: Page,
+  sessionID: string,
+  status: string,
+) {
+  const work = await workPanel(page).isVisible();
+  if (work) await showSessions(page);
+  await expect(page.locator(`[data-session=${JSON.stringify(sessionID)}]`))
+    .toHaveAttribute("data-status", status);
+  if (work) {
+    await page.getByRole("tab", { name: "Work log", exact: true }).click();
+  }
+}
+
+/** Open mounted background activity groups; they remain transcript disclosures. */
+export async function openActivityGroups(
+  page: Page,
+  scope: Page | Locator = page,
+) {
   await expect(
-    scope.locator(".otk-work-fold, .otk-record-group-toggle").first(),
+    scope.locator(".otk-record-group-toggle").first(),
   ).toBeAttached();
   // Opening a group can retire other virtual rows. Reacquire the next closed
   // group instead of retaining population indexes across geometry changes.
   const closed = scope.locator(
-    '.otk-work-fold[aria-expanded="false"], .otk-record-group-toggle[aria-expanded="false"]',
+    '.otk-record-group-toggle[aria-expanded="false"]',
   );
   while (true) {
     // Work segments are repartitioned as native work settles. Reveal the next
@@ -116,11 +159,7 @@ export async function openWorkLogs(page: Page, scope: Page | Locator = page) {
           JSON.stringify(message.getAttribute("data-message"))
         }] `
         : "") +
-        `${
-          button.matches(".otk-work-fold")
-            ? ".otk-work-fold"
-            : ".otk-record-group-toggle"
-        }[aria-expanded="false"]`;
+        '.otk-record-group-toggle[aria-expanded="false"]';
     });
     if (!selector) break;
     // This selector describes a currently closed projection, not a published
@@ -149,19 +188,16 @@ export async function expandTool(
   selector: string,
   scope?: Locator,
 ) {
-  // A new live tool can arrive after an older open fold, or outside the mounted
-  // range when a takeover shrinks the viewport. Use the same native reveal
-  // acquisition as other live tools; explicit scopes were already acquired by
-  // their caller and must not be moved to the tail.
-  if (scope) await openWorkLogs(page, scope);
-  else await revealTool(page, selector);
-  const toggle = page.locator(selector + " .otk-tool-toggle");
-  await expect(toggle).toBeAttached();
-  await openDisclosure(page, toggle, selector + " .otk-tool-toggle");
+  const row = await revealTool(page, selector, scope);
+  const toggle = row.locator(".otk-tool-toggle");
+  if (await workPanel(page).locator(selector).count()) {
+    if (await toggle.getAttribute("aria-expanded") !== "true") {
+      await toggle.click();
+    }
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  } else await openDisclosure(page, toggle, selector + " .otk-tool-toggle");
 }
 
-/** Pointer auto-scroll is not reader intent. Acquire the exact control, leave
- * tail-follow with native upward input, then retain ordinary click failures. */
 async function openDisclosure(page: Page, toggle: Locator, selector: string) {
   if (await toggle.getAttribute("aria-expanded") !== "true") {
     await revealAcquired(page, selector);
@@ -171,23 +207,30 @@ async function openDisclosure(page: Page, toggle: Locator, selector: string) {
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
-/** Retain an acquired tool, or acquire a new tail tool through native scrolling. */
-export async function revealTool(page: Page, selector: string) {
-  const row = page.locator(selector);
-  // Historical callers may already have acquired this source. Moving to the
-  // tail would retire their target before the same reveal can retain it.
+/** Work rows live in the selected reply's panel; context rows stay in flow. */
+export async function revealTool(
+  page: Page,
+  selector: string,
+  reply?: Locator,
+) {
+  const panel = reply ? await openWork(reply) : undefined;
+  let row = (panel ?? page).locator(selector);
   if (!await row.count()) {
-    const closed = page.locator(
-      '.otk-work-fold[aria-expanded="false"], .otk-record-group-toggle[aria-expanded="false"]',
-    );
-    await expect.poll(async () => {
-      await scrollTranscript(page, true);
-      if (await closed.count()) await openWorkLogs(page);
-      return await row.count();
-    }).toBeGreaterThan(0);
+    const work = panel ?? await openLatestWork(page);
+    row = work.locator(selector);
+    if (!await row.count()) {
+      for (
+        const fold of await work.locator(
+          '.otk-work-run > .otk-tree-node .otk-disclosure-button:not(.otk-tool-toggle)[aria-expanded="false"]',
+        ).all()
+      ) {
+        await fold.click();
+        if (await row.count()) break;
+      }
+    }
   }
-  await revealAcquired(page, selector);
   await expect(row).toBeVisible();
+  return row;
 }
 
 export async function showFileChanges(state: TestState, page: Page) {
@@ -215,7 +258,16 @@ export async function wheelTranscript(
   deltaY: number,
   target?: Locator,
 ) {
-  const pane = page.locator(".otk-messages");
+  await wheelViewport(page.locator(".otk-messages"), deltaY, target);
+}
+
+/** Settle the scroll owner being exercised, even when it is not the transcript. */
+export async function wheelViewport(
+  pane: Locator,
+  deltaY: number,
+  target?: Locator,
+) {
+  const page = pane.page();
   await pane.evaluate((element, delta) => {
     const globals = globalThis as typeof globalThis & {
       transcriptWheelDone: boolean;
@@ -245,8 +297,12 @@ export async function wheelTranscript(
 }
 
 export async function scrollTranscript(page: Page, bottom: boolean) {
+  await scrollViewport(page.locator(".otk-messages"), bottom);
+}
+
+export async function scrollViewport(pane: Locator, bottom: boolean) {
   const gap = () =>
-    page.locator(".otk-messages").evaluate(
+    pane.evaluate(
       (pane, end) =>
         end
           ? pane.scrollHeight - pane.clientHeight - pane.scrollTop
@@ -258,7 +314,7 @@ export async function scrollTranscript(page: Page, bottom: boolean) {
   await expect.poll(async () => {
     const remaining = await gap();
     if (remaining >= 2) {
-      await wheelTranscript(page, bottom ? remaining : -remaining);
+      await wheelViewport(pane, bottom ? remaining : -remaining);
     }
     return await gap();
   }).toBeLessThan(2);
@@ -429,9 +485,8 @@ export async function runNativeTool(
         )
       );
   }, { timeout: 60_000 }).toBe(true);
-  await expect(page.locator(`[data-session="${sessionID}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
+  await expect(page.locator(".otk-messages")).toContainText(
+    `Finished ${name}.`,
     { timeout: 60_000 },
   );
   // Native idle and the reply shell can precede publication of the tool part.
@@ -456,13 +511,18 @@ export async function runNativeTool(
   // reply's Work log. Acquire the action's disclosure, not the reply shell:
   // its prose can be mounted while the windowed work segment is still out.
   const reply = page.locator(message);
-  await revealAcquired(page, `${message} .otk-work-fold`);
-  await openWorkLogs(page, reply);
+  await revealAcquired(page, `${message} .otk-work-strip`);
+  await openWork(reply);
   return result!;
 }
 
 /** Join publication, disclose identity-owned ancestry, then measured scrolling. */
 export async function revealAcquired(page: Page, selector: string) {
+  const inWork = workPanel(page).locator(selector);
+  if (await inWork.count()) {
+    await expect(inWork).toBeVisible();
+    return;
+  }
   await revealMeasured(page, selector, true);
 }
 

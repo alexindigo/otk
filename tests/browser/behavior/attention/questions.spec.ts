@@ -2,7 +2,12 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  openLatestWork,
+  revealAcquired,
+  sessionStatus,
+} from "../../pages/transcript.ts";
 import {
   panel,
   primary,
@@ -169,7 +174,7 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
   await page.locator(primary).click();
   await expect(page.locator(".otk-question-dock")).toHaveCount(0);
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await page.locator("[data-tool=question] .otk-tool-toggle").click();
   await expect(page.locator(".otk-questions")).toContainText("Typed");
   await expect(page.locator(".otk-questions")).toContainText(
@@ -197,9 +202,8 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await page.getByRole("button", { name: "Skip question", exact: true })
     .click();
   await expect(page.locator(".otk-question-dock")).toHaveCount(0);
-  await page.locator(
-    "[data-tool=question][data-tool-status=denied] .otk-tool-toggle",
-  ).click();
+  await openLatestWork(page);
+  await expandTool(page, "[data-tool=question][data-tool-status=denied]");
   await expect(page.locator("[data-tool-status=denied] .otk-questions dd"))
     .toHaveText("Dismissed");
   await expect(page.locator(".otk-prompt-actions")).not.toContainText(
@@ -213,8 +217,5 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
     );
     return active[session.nativeID]?.type ?? "idle";
   }).toBe("idle");
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
 });

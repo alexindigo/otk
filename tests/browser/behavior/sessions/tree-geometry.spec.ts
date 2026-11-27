@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -9,11 +10,13 @@ test.describe("tall heading", () => {
     tag: ["@sessions", "@isolated"],
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
-    const heading = page.locator(".otk-work-log .otk-tree-heading").first();
-    await expect(heading.locator(".otk-work-label")).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const work = await openLatestWork(page);
+    const heading = work.locator(".otk-tree-heading").first();
+    await expect(heading.locator(".otk-disclosure-label")).toBeVisible();
     // Append a second heading line without changing the junction's styles.
     const geometry = await heading.evaluate((node) => {
-      const label = node.querySelector(".otk-work-label")!;
+      const label = node.querySelector(".otk-disclosure-label")!;
       const headingContent = node.querySelector(".otk-tree-frame")!;
       const secondLine = document.createElement("div");
       secondLine.textContent = "Second line";
@@ -43,7 +46,9 @@ test.describe("work log", () => {
     tag: ["@sessions", "@isolated"],
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
-    const root = page.locator(".otk-work-log > .otk-tree-node").first();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const work = await openLatestWork(page);
+    const root = work.locator("[data-tool] > .otk-tree-node").first();
     await root.locator(":scope > .otk-tree-heading .otk-disclosure-icon svg")
       .click();
     await expect(root.locator(":scope > .otk-tree-region")).toBeVisible();
@@ -59,7 +64,7 @@ test.describe("work log", () => {
         ":scope > .otk-tree-heading .otk-tree-stem-paint",
       )!;
       const child = node.querySelector(
-        ":scope > .otk-tree-region button.otk-tree-trigger .otk-disclosure-icon svg",
+        ":scope > .otk-tree-region .otk-tree-junction",
       )!;
       return {
         art: icon.childElementCount,

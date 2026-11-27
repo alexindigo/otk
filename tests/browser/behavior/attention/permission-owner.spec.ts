@@ -11,7 +11,7 @@ import {
   subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork, showSessions } from "../../pages/transcript.ts";
 
 test.use({ profile: "isolated", timezoneId: "America/Los_Angeles" });
 for (
@@ -247,7 +247,7 @@ for (
       ? "task"
       : "bash";
     if (pendingTool === "bash") {
-      await openWorkLogs(page);
+      await openLatestWork(page);
       await expect(page.locator("[data-tool=bash]")).toContainText(
         "Awaiting permission",
       );
@@ -264,6 +264,7 @@ for (
       })).toBeVisible();
       await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
+    await showSessions(page);
     await expect(parentRow).not.toContainText("P 1");
     await expect(childRow).not.toContainText("P 1");
     await expect.poll(async () =>
@@ -283,6 +284,7 @@ for (
         )
     ).toBe(true);
     if (pendingTool === "bash") {
+      await openLatestWork(page);
       await expect(page.locator("[data-tool=bash]")).not.toContainText(
         "Awaiting permission",
       );
