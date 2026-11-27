@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createMemo } from "solid-js";
-import { timelinePrompts } from "@otk/client";
+import { collectionState, timelinePrompts } from "@otk/client";
 import { useShellPorts } from "../shell/context.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
@@ -34,6 +34,10 @@ export function registerTimelinePanel(
         <Timeline
           session={shell.selection()}
           prompts={prompts()}
+          state={collectionState(
+            shell.transcript.answered?.() === true,
+            prompts().length,
+          )}
           exhausted={shell.transcript.exhausted()}
           paging={shell.transcript.paging()}
           preview={(prompt) =>

@@ -262,6 +262,7 @@ export function createSessionLists(
       return list;
     },
     more: (list: List) => read(list, true),
+    confirmed: (list: List) => !!list.covered && !list.dirty && !list.loading,
     progress: (list: List) =>
       progress.display(sessionListKey(list.input), "Loading sessions"),
     structures(

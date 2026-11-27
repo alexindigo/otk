@@ -10,6 +10,75 @@ import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.describe("project catalog", () => {
   test.use({ profile: "contract-sessions-catalog" });
+  test("sessions.project-switch-list-evidence", {
+    tag: ["@sessions", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    const { root } = await state.observe<{ root: string }>();
+    const empty = root + "/projects/empty";
+    const session = "tstv1-atmosphera";
+    const populated =
+      (await state.product("session.get", { sessionID: session })).directory;
+    const open = (directory: string) =>
+      page.locator(
+        `[data-project=${JSON.stringify(directory)}] .otk-project-open`,
+      ).click();
+    const frames = await wire(page);
+    const hold = (directory: string) =>
+      frames.hold((frame, request) =>
+        request?.params?.directory === directory &&
+        (request.method === "navigation.default" ||
+          request.method === "sessions.list") &&
+        (frame.t === "request.result" || frame.t === "load.chunk")
+      );
+    const hero = page.locator(".otk-welcome");
+    const loading = hero.getByRole("status");
+    const start = hero.getByText(/start a new session/i);
+    const group = page.getByRole("heading", { name: "Not in a task" });
+
+    await openSession(state, page, session);
+    // The catalog can keep indexing after the first list is already reusable.
+    await expect(page.locator(".otk-session-loading-row")).toHaveCount(0);
+    hold(empty);
+    await open(empty);
+    await expect.poll(() =>
+      frames.held.some(({ request }) => request?.method === "sessions.list")
+    ).toBe(true);
+    await expect(start).toHaveCount(0);
+    await expect(hero.getByRole("heading", { name: "empty", exact: true }))
+      .toBeVisible();
+    await expect(loading).toHaveText("Loading sessions...");
+    await expect(hero.getByRole("button")).toHaveCount(0);
+    await expect(group).toHaveCount(0);
+    const block = hero.locator(".otk-pane-state-content");
+    const heroBox = await block.boundingBox();
+    frames.release();
+    await expect(start).toBeVisible();
+    expect(await block.boundingBox()).toEqual(heroBox);
+
+    hold(populated);
+    await open(populated);
+    await expect.poll(() =>
+      frames.held.some(({ request }) =>
+        request?.method === "navigation.default"
+      )
+    ).toBe(true);
+    await expect(loading).toHaveCount(0);
+    await expect(start).toHaveCount(0);
+    frames.release();
+    await expect(page).toHaveURL(new RegExp(`${session}$`));
+
+    hold(empty);
+    await open(empty);
+    await expect.poll(() =>
+      frames.held.some(({ request }) =>
+        request?.method === "navigation.default"
+      )
+    ).toBe(true);
+    await expect(start).toBeVisible();
+    await expect(loading).toHaveCount(0);
+    frames.release();
+  });
+
   test("sessions.project-catalog-discovery-activity-creation-and-collapse", {
     tag: ["@load", "@sessions", "@contracts", "@isolated"],
   }, async ({ isolatedState: state, page }, info) => {
@@ -143,9 +212,10 @@ test.describe("project catalog", () => {
         path: info.outputPath(`q1-${name}-column.png`),
         fullPage: true,
       });
+      // Issue 2.116 moved the lamp into the shared sidebar row control.
       const markers = () =>
         positions(
-          ".otk-project-row:not([data-inactive=true]) .otk-project-marker",
+          ".otk-project-row:not([data-inactive=true]) .otk-sidebar-lamp-action",
         );
       const column = await markers();
       expect(column.length).toBeGreaterThan(0);

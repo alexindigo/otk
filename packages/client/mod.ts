@@ -229,3 +229,4 @@ export * from "./terminals.ts";
 export * from "./file-paths.ts";
 export * from "./file-facts.ts";
 export * from "./inline-images.ts";
+export * from "./collection-state.ts";

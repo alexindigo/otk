@@ -388,6 +388,9 @@ export interface InboxChanges {
 export interface InboxModel {
   stop(): void;
   state: InboxState;
+  /** Last accepted task answer for this project in the current connection. */
+  projectTasks(directory: string): TaskRecord[] | undefined;
+  invalidateProjectTasks(): void;
   /** Presentation view of the entity replica: receipt times and transitions. */
   readonly entities: EntityStateStore;
   subscribe(listener: (state: InboxState) => void): () => void;
@@ -421,6 +424,7 @@ export function createInbox(
   currentEpoch?: () => number,
   /** The connection's reactive state, for stale entity presentation (D6). */
   connected?: () => boolean,
+  currentProject?: () => string | undefined,
 ): InboxModel {
   // Accepted metadata is invocation-current, like ClientIndex. Framework state
   // publishes a dependency clock; deferred binding cannot govern reduced facts.
@@ -435,6 +439,15 @@ export function createInbox(
     },
   };
   const clock = factory({ revision: 0 });
+  const projectTasks = new Map<string, TaskRecord[]>();
+  let taskProject: string | undefined;
+  const advance = () => clock.update((draft) => draft.revision++);
+  const invalidateProjectTasks = () => {
+    taskProject = undefined;
+    if (!projectTasks.size) return;
+    projectTasks.clear();
+    advance();
+  };
   const entityStates = createEntityStateStore({
     read: () => current.inbox.entities,
     factory,
@@ -487,10 +500,12 @@ export function createInbox(
         ? { entities: { ...value.inbox.entities } }
         : {}),
     };
+    if (value.epoch !== undefined && value.epoch === currentEpoch?.()) {
+      taskProject = currentProject?.();
+      if (taskProject) projectTasks.set(taskProject, current.inbox.tasks);
+    }
     current.ready = true;
-    clock.update((draft) => {
-      draft.revision++;
-    });
+    advance();
     entityStates.observe("all", "historical");
     publish({
       baseline: true,
@@ -601,6 +616,11 @@ export function createInbox(
     }
   };
   return {
+    projectTasks(directory) {
+      void clock.state.revision;
+      return projectTasks.get(directory);
+    },
+    invalidateProjectTasks,
     stop() {
       alive = false;
       listeners.clear();
@@ -631,6 +651,9 @@ export function createInbox(
       if (!alive) return;
       if (frame.t === "welcome") {
         epoch++;
+        current.ready = false;
+        invalidateProjectTasks();
+        advance();
         recoveryController?.abort();
         recoveryController = undefined;
         generation = undefined;
@@ -713,9 +736,15 @@ export function createInbox(
         }
         revision = frame.revision;
         for (const op of frame.ops) apply(current.inbox, op);
-        clock.update((draft) => {
-          draft.revision++;
-        });
+        if (
+          taskProject && taskProject === currentProject?.() &&
+          frame.ops.some((op) =>
+            op.op === "task.upsert" || op.op === "task.remove"
+          )
+        ) {
+          projectTasks.set(taskProject, current.inbox.tasks);
+        }
+        advance();
         const projects = new Set<string>(),
           sessions = new Set<string>(),
           entities = new Set<string>();

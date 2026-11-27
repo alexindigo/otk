@@ -5,9 +5,11 @@ import {
   ActivityPresence,
   countLabel,
   elapsed,
+  sessionShellsState,
   unknownTime,
 } from "@otk/client";
 import type { RunningShells } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
 import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import EntityPill from "./EntityPill.tsx";
@@ -15,6 +17,7 @@ import ChromeMeta from "./ChromeMeta.tsx";
 import { TerminalIcon } from "./ChromeIcons.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import TerminateButton, { bindWorkTermination } from "./TerminateButton.tsx";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
@@ -32,10 +35,21 @@ export default function LiveWork(
     "shell",
   );
   const count = () => props.shells?.count ?? 0;
+  const state = () =>
+    session?.entities
+      ? sessionShellsState(
+        session.entities(),
+        entityKey("session", props.sessionID),
+      )
+      : count()
+      ? "items"
+      : "empty";
   const label = () => countLabel(count(), "shell");
   const presence = new ActivityPresence(solidState);
   let popover: PopoverControl | undefined;
-  createEffect(count, (value) => presence.publish(value));
+  createEffect(state, (value) => {
+    if (value !== "loading") presence.publish(value === "items" ? 1 : 0);
+  });
   createEffect(() => presence.retiring, (retiring) => {
     if (retiring) popover?.close(props.focusHome);
   });
@@ -49,7 +63,9 @@ export default function LiveWork(
         class="otk-live-work"
         triggerClass={`${LIVE_COUNT_TRIGGER} otk-live-work-trigger`}
         label="Running shells"
-        triggerLabel={`Running work: ${label()}`}
+        triggerLabel={state() === "loading"
+          ? "Loading running shells"
+          : `Running work: ${label()}`}
         title="Running shells"
         size="content"
         place="bounds-end"
@@ -65,14 +81,19 @@ export default function LiveWork(
           presence.closed();
         }}
         trigger={
-          <LiveCount
-            icon={TerminalIcon}
-            parts={[{
-              id: "shells",
-              count: count(),
-              lamp: props.shells,
-            }]}
-          />
+          <Show
+            when={state() !== "loading"}
+            fallback={<ProgressStatus text="Loading shells..." />}
+          >
+            <LiveCount
+              icon={TerminalIcon}
+              parts={[{
+                id: "shells",
+                count: count(),
+                lamp: props.shells,
+              }]}
+            />
+          </Show>
         }
       >
         <ScrollRegion
@@ -80,6 +101,9 @@ export default function LiveWork(
           role="list"
           aria-label="Running shells"
         >
+          <Show when={state() === "loading"}>
+            <ProgressStatus text="Loading shells..." />
+          </Show>
           <For each={props.shells?.items} keyed={(item) => item.id}>
             {(item) => {
               const name = () => item().title || item().label;

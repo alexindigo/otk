@@ -6,6 +6,7 @@ import { sessionSummary } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectSessions.css" with { type: "text" };
+import { collectionState, type ServerResources } from "@otk/client";
 import SidebarRow, { SidebarFeedback, SidebarFrame } from "./SidebarRow.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
@@ -77,9 +78,7 @@ export default function ProjectSessions(props: {
   holdOrder?(): () => void;
   project?: ProjectSelection;
   now?: number;
-  ready?: boolean;
-  loading?: boolean;
-  loadingText?: string;
+  collection?(query: string): ReturnType<ServerResources["sessionCollection"]>;
   selected?: Selection;
   rename?: SessionRename;
   showCost?: boolean;
@@ -161,11 +160,18 @@ export default function ProjectSessions(props: {
       setError(failureValue(e, { actionLabel: "Opening session" }))
     );
   const hierarchy = createSessionTree();
+  const collection = createMemo(() => props.collection?.(query()));
+  const state = () =>
+    collection()?.state ??
+      collectionState(props.entries !== undefined, allRows().length);
+  const busy = () => state() === "loading" || !!collection()?.progress.busy;
   const bind = ({ kind, sidecarId: scope, id }: SessionTreeTarget) =>
     props.disclosure.bind(SESSION_TREE_DISCLOSURES[kind], { scope, id });
   const allRows = createMemo(() => {
+    const answer = collection();
+    if (answer) return answer.rows;
     const project = props.project;
-    return project && props.ready !== false
+    return project && (props.entries || props.rows)
       ? props.rows?.(query()) ?? hierarchy.rows(
         (props.entries ?? []).filter((e) => e.sidecarId === project.sidecarId),
         props.inbox(project.sidecarId).tasks,
@@ -419,12 +425,10 @@ export default function ProjectSessions(props: {
       data-panel-span="full"
       aria-label="Project sessions"
       data-session-project={props.project?.directory}
-      aria-busy={props.ready === false || props.loading || progress().busy
-        ? "true"
-        : "false"}
+      aria-busy={busy() || progress().busy ? "true" : "false"}
     >
       <Show
-        when={props.ready !== false && !props.loading &&
+        when={!busy() &&
           progress().announcement}
       >
         <span
@@ -486,7 +490,7 @@ export default function ProjectSessions(props: {
           class="otk-project-session-disclosure"
         />
         <div class="otk-project-session-content">
-          <Show when={props.ready !== false}>
+          <Show when={state() !== "loading"}>
             <VirtualList
               class="otk-project-session-tree otk-sidebar-list"
               label="Task groups and sessions"
@@ -563,16 +567,16 @@ export default function ProjectSessions(props: {
                 return <SessionBranch item={item()} />;
               }}
             />
-            <Show when={!props.loading && !rows().length}>
+            <Show when={state() === "empty" && !!query().trim()}>
               <p class="otk-muted">No matching sessions</p>
             </Show>
           </Show>
         </div>
         <div class="otk-session-loading-slot">
-          <Show when={props.ready === false || props.loading}>
+          <Show when={busy()}>
             <ProgressStatus
               class="otk-session-loading-row"
-              text={props.loadingText || "Loading sessions..."}
+              text={collection()?.progress.text || "Loading sessions..."}
             />
           </Show>
         </div>
