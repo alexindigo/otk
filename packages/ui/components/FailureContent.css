@@ -148,3 +148,25 @@
     display: none;
   }
 }
+
+.otk-failure-content.is-summary-only {
+  grid-template-columns: var(--disclosure-gutter) minmax(0, 1fr) auto;
+}
+.otk-failure-content.is-summary-only > .otk-failure-heading {
+  color: var(--otk-danger);
+  grid-column: 2;
+  align-self: center;
+}
+.otk-failure-content.is-summary-only .otk-failure-summary-reason {
+  color: var(--otk-fg-3);
+  min-inline-size: 0;
+}
+.otk-failure-content.is-summary-only > .otk-failure-controls {
+  grid-column: 3;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+}
+.otk-failure-content.is-summary-only .otk-failure-action {
+  grid-column: 1;
+  padding-inline: var(--space-2);
+}
