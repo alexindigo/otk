@@ -36,6 +36,7 @@ export interface ShellPorts {
     exhausted(): boolean;
     paging(): boolean;
     older(): Promise<void>;
+    reveal(messageID: string): Promise<void>;
   };
   servers(): SidecarState[];
   forms?: import("@otk/client").ServerResources["forms"];

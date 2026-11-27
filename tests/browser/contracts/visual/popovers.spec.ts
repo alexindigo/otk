@@ -166,6 +166,9 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
+    // D74: measure the Display trigger in the exposed conversation.
+    await page.getByRole("button", { name: "Collapse right panel" }).click();
+    await expect(page.locator(".otk-right-rail")).toBeVisible();
     await page.evaluate(() => document.fonts.ready.then(() => true));
     for (const [width, height] of [[1280, 657], [720, 360]]) {
       await page.setViewportSize({ width, height });

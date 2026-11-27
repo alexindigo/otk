@@ -10,7 +10,7 @@ const nested = "tstv1-trail-nested";
 
 test.use({
   profile: "contract-sessions-tab-groups",
-  viewport: { width: 900, height: 800 },
+  viewport: { width: 640, height: 800 },
 });
 
 test.beforeEach(async ({ isolatedState: state }) => {
@@ -22,7 +22,8 @@ test.beforeEach(async ({ isolatedState: state }) => {
   await state.product("prefs.set", { key: "textSize", value: "125" });
   await state.product("layout.patch", {
     leftCollapsed: false,
-    rightCollapsed: false,
+    // D74: crowd the conversation without an open sheet covering its controls.
+    rightCollapsed: true,
   });
 });
 
