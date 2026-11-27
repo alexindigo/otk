@@ -415,10 +415,17 @@ test("terminal.shared-selection-is-submitted-to-the-viewer-not-the-owner", {
       "aria-label",
       /^shared-checkout\n/,
     );
-    const canvas = (await viewport(page).boundingBox())!;
-    await page.mouse.move(canvas.x + 7, canvas.y + 12);
+    // Issue 2.118: select painted cells, not a fixed 7px font advance.
+    const { box, cell } = await viewport(page).evaluate((element) => {
+      const canvas = element as HTMLCanvasElement;
+      return {
+        box: canvas.getBoundingClientRect().toJSON(),
+        cell: canvas.getContext("2d")!.measureText("M").width,
+      };
+    });
+    await page.mouse.move(box.x + 4 + 0.5 * cell, box.y + 12);
     await page.mouse.down();
-    await page.mouse.move(canvas.x + 4 + 14.5 * 7, canvas.y + 12, {
+    await page.mouse.move(box.x + 4 + 14.5 * cell, box.y + 12, {
       steps: 15,
     });
     await page.mouse.up();
