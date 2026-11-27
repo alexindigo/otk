@@ -11,7 +11,11 @@ import {
 } from "./prompt/model.ts";
 import { createCompletion } from "./prompt/Completion.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
-import type { PromptContext, PromptProps } from "../registries/prompt.ts";
+import type {
+  PromptAction,
+  PromptContext,
+  PromptProps,
+} from "../registries/prompt.ts";
 import {
   commandHints,
   ownedCommand,
@@ -19,7 +23,7 @@ import {
 } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
-import { SendIcon, SettingsIcon, StopIcon } from "./ChromeIcons.tsx";
+import { MoreIcon, SendIcon, SettingsIcon, StopIcon } from "./ChromeIcons.tsx";
 import {
   actionFeedback,
   composerLabel,
@@ -35,7 +39,9 @@ import { contextTarget } from "./context-target.ts";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
 import OverflowRow from "./OverflowRow.tsx";
-import Popover from "./surface/Popover.tsx";
+import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import Menu from "./surface/Menu.tsx";
+import PromptActionButton from "./PromptActionButton.tsx";
 
 const INTERRUPT_WINDOW_MS = 5000;
 const SETTINGS_KEY = "settings";
@@ -122,6 +128,13 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
   };
   const features = useUiRegistries().prompt.create(ctx);
+  const actions = features.flatMap((feature) =>
+    feature.action ? [feature.action()] : []
+  );
+  const toolbarItems: { key: string; action?: PromptAction }[] = [
+    { key: SETTINGS_KEY },
+    ...actions.map((action) => ({ key: action.key, action })),
+  ];
   // Invoke synchronously so feature-owned preventDefault still precedes native
   // paste, then contain either a synchronous throw or an asynchronous rejection.
   const interact = (action: () => void | Promise<void>) => {
@@ -421,79 +434,117 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             {submitTitle()}
           </span>
         </Show>
-        <OverflowRow
-          items={[{ key: SETTINGS_KEY }]}
-          required={[SETTINGS_KEY]}
-          intrinsic={false}
-          singleLine
-          measure={() => <span class="otk-prompt-context-measure" />}
-          compactMeasure={() => <span class="otk-prompt-context-icon" />}
-          more={() => null}
-        >
-          {(_item, compact) => {
-            const settings = (inPopover = false) => (
-              <div
-                class={["otk-prompt-context", { "is-in-popover": inPopover }]}
-                role="group"
-                aria-label={SETTINGS_LABEL}
-              >
-                <Show
-                  when={features.some((feature) => feature.settings)}
-                  fallback={
-                    <>
-                      <PromptSetting>
-                        {selectionLabel(
-                          ctx.nextSelection().agent.value,
-                          "Default agent",
-                        )}
-                      </PromptSetting>
-                      <PromptSetting>
-                        <ModelLabel
-                          provider={ctx.nextSelection().model.providerName}
-                          name={ctx.nextSelection().model.name}
-                        />
-                      </PromptSetting>
-                    </>
-                  }
-                >
-                  <For each={features}>{(feature) => feature.settings?.()}</For>
-                </Show>
-              </div>
-            );
-            return (
-              <Show when={compact()} fallback={settings()}>
-                <Popover
-                  label={SETTINGS_LABEL}
-                  title={SETTINGS_LABEL}
-                  trigger={<SettingsIcon />}
-                  triggerClass="otk-icon-button otk-prompt-context-icon"
-                  size="content"
-                >
-                  {settings(true)}
-                </Popover>
-              </Show>
-            );
-          }}
-        </OverflowRow>
-        <div class="otk-prompt-action-group">
-          <For each={features}>{(feature) => feature.actions?.()}</For>
-          <div class="otk-prompt-send-slot">
-            <PrimaryAction
-              state={primaryState()}
-              class="otk-primary otk-send-button"
-              title={primaryState().mode === "stop"
-                ? primaryState().label
-                : submitTitle()}
-              description={primaryState().mode === "stop"
-                ? (props.activity().unstarted
-                  ? "Stop and return the message to the composer"
-                  : "Stop the response")
-                : undefined}
-              onInvoke={() => void activate("button")}
+        {(() => {
+          const settings = (form: "bar" | "popover" | "measure") => (
+            <div
+              class={["otk-prompt-context", {
+                "is-in-popover": form === "popover",
+              }]}
+              role={form === "measure" ? undefined : "group"}
+              aria-label={form === "measure" ? undefined : SETTINGS_LABEL}
             >
-              {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
-            </PrimaryAction>
-          </div>
+              <Show
+                when={features.some((feature) => feature.settings)}
+                fallback={
+                  <>
+                    <PromptSetting>
+                      {selectionLabel(
+                        ctx.nextSelection().agent.value,
+                        "Default agent",
+                      )}
+                    </PromptSetting>
+                    <PromptSetting>
+                      <ModelLabel
+                        provider={ctx.nextSelection().model.providerName}
+                        name={ctx.nextSelection().model.name}
+                      />
+                    </PromptSetting>
+                  </>
+                }
+              >
+                <For each={features}>
+                  {(feature) =>
+                    form === "measure"
+                      ? feature.settingsFace?.()
+                      : feature.settings?.()}
+                </For>
+              </Show>
+            </div>
+          );
+          return (
+            <OverflowRow
+              items={toolbarItems}
+              required={[SETTINGS_KEY]}
+              grow={SETTINGS_KEY}
+              singleLine
+              scrollRequired={false}
+              measure={(item) =>
+                item.key === SETTINGS_KEY
+                  ? settings("measure")
+                  : <span class="otk-icon-button" />}
+              compactMeasure={() => <span class="otk-icon-button" />}
+              more={(keys) => {
+                let menu!: PopoverControl;
+                return (
+                  <Menu
+                    label="More actions"
+                    trigger={<MoreIcon />}
+                    triggerClass="otk-icon-button"
+                    control={(control) => menu = control}
+                  >
+                    <For
+                      each={actions.filter((action) =>
+                        keys().includes(action.key)
+                      )}
+                      keyed={(action) => action.key}
+                    >
+                      {(action) => (
+                        <PromptActionButton
+                          action={action()}
+                          form="menu"
+                          onShown={() => menu.close()}
+                        />
+                      )}
+                    </For>
+                  </Menu>
+                );
+              }}
+            >
+              {(item, compact) =>
+                item().action
+                  ? <PromptActionButton action={item().action!} form="bar" />
+                  : (
+                    <Show when={compact()} fallback={settings("bar")}>
+                      <Popover
+                        label={SETTINGS_LABEL}
+                        title={SETTINGS_LABEL}
+                        trigger={<SettingsIcon />}
+                        triggerClass="otk-icon-button"
+                        size="content"
+                      >
+                        {settings("popover")}
+                      </Popover>
+                    </Show>
+                  )}
+            </OverflowRow>
+          );
+        })()}
+        <div class="otk-prompt-send-slot">
+          <PrimaryAction
+            state={primaryState()}
+            class="otk-primary otk-send-button"
+            title={primaryState().mode === "stop"
+              ? primaryState().label
+              : submitTitle()}
+            description={primaryState().mode === "stop"
+              ? (props.activity().unstarted
+                ? "Stop and return the message to the composer"
+                : "Stop the response")
+              : undefined}
+            onInvoke={() => void activate("button")}
+          >
+            {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
+          </PrimaryAction>
         </div>
       </div>
       <For each={features}>{(feature) => feature.overlay?.()}</For>

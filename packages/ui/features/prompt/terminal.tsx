@@ -5,7 +5,6 @@ import { TerminalIcon } from "../../components/ChromeIcons.tsx";
 import { useShellPorts } from "../../shell/context.tsx";
 import { terminalBoxFor } from "@otk/client";
 import { solidState } from "../../state/binding.ts";
-import ActionButton from "../../components/ActionButton.tsx";
 
 export function registerTerminalPrompt(prompt: PromptRegistry): void {
   prompt.register({
@@ -36,17 +35,13 @@ export function registerTerminalPrompt(prompt: PromptRegistry): void {
         recovery: "Try toggling the terminal box again",
       });
       return {
-        actions: () => (
-          <ActionButton
-            action={action}
-            class="otk-icon-button"
-            label={label()}
-            title={label()}
-            expanded={box().mode !== "closed"}
-          >
-            <TerminalIcon />
-          </ActionButton>
-        ),
+        action: () => ({
+          key: "terminal",
+          label,
+          icon: () => <TerminalIcon />,
+          control: action,
+          expanded: () => box().mode !== "closed",
+        }),
       };
     },
   });

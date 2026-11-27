@@ -125,7 +125,6 @@ const PENDING: Record<string, number> = {
   "packages/ui/features/projects.tsx": 1,
   "packages/ui/features/prompt/agents.tsx": 1,
   "packages/ui/features/prompt/approvals.tsx": 1,
-  "packages/ui/features/prompt/attachments.tsx": 1,
   "packages/ui/features/prompt/editor.tsx": 1,
   "packages/ui/features/prompt/skills.tsx": 1,
   "packages/ui/shell/Shell.tsx": 2,

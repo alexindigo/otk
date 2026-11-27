@@ -87,7 +87,7 @@ test("composer.prompt-toolbar-keeps-controls-in-separate-tracks", {
         }
         const contentRight = bounds.right - parseFloat(style.paddingRight) -
           parseFloat(style.borderRightWidth);
-        const trailing = row.querySelector(".otk-prompt-action-group");
+        const trailing = row.querySelector(".otk-prompt-send-slot");
         if (
           !trailing ||
           Math.abs(trailing.getBoundingClientRect().right - contentRight) > 0.5

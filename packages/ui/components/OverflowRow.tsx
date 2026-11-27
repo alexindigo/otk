@@ -17,10 +17,14 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
+  /** Item that absorbs spare width without changing its intrinsic measurement. */
+  grow?: string;
   /** Size to the items' intrinsic extent, bounded by the available space. */
   intrinsic?: boolean;
   /** Compact navigation trails fold optional items; they never grow more rows. */
   singleLine?: boolean;
+  /** Allow paging required items when even the compact row cannot fit. */
+  scrollRequired?: boolean;
   /** Ordered full -> compact-all -> aggregate fitting, never a partial trail. */
   compactMeasure?(item: T): Element;
   /** Preserve editors without replacing their live keyed control. */
@@ -133,7 +137,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
         keys: items.map((item) => item.key),
         required: props.required,
         preferred: props.preferred,
-        scrollRequired: props.singleLine,
+        scrollRequired: props.scrollRequired ?? props.singleLine,
       });
     const reveal = props.reveal;
     if (reveal) {
@@ -224,7 +228,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
         axis="x"
         frameClass="otk-overflow-lane"
         class="otk-overflow-items"
-        borrowed={!props.compactMeasure || !props.singleLine}
+        borrowed={!props.compactMeasure ||
+          !(props.scrollRequired ?? props.singleLine)}
       >
         <For each={props.items} keyed={(item) => item.key}>
           {(item) => {
@@ -241,6 +246,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
                 <div
                   class="otk-overflow-item"
                   data-overflow-key={key}
+                  data-grow={props.grow === key ? "true" : undefined}
                   data-pinned={props.required.includes(key)
                     ? "true"
                     : undefined}
