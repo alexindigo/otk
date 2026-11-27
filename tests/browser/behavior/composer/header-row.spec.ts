@@ -352,7 +352,10 @@ test(
     const pill = helpers(page),
       lamp = pill.locator(".otk-status-light:visible");
     await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+    // D78: an unseen finish wins the task rollup; the root is still running.
     await expect(page.locator(`[data-tab="${task.id}"] .otk-status-light`))
+      .toHaveAttribute("data-state", "finished");
+    await expect(page.locator(`[data-crumb="${root}"] .otk-status-light`))
       .toHaveAttribute("data-state", "working");
     await expect.soft(lamp).toHaveAttribute(
       "data-state",
