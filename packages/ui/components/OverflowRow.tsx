@@ -54,6 +54,11 @@ export default function OverflowRow<T extends { key: string }>(props: {
   });
   let observer: ResizeObserver | undefined;
   const [gesture, setGesture] = createSignal<ReturnType<typeof fitSnapshot>>();
+  let releaseClick: ReturnType<typeof setTimeout> | undefined;
+  const releaseGesture = () => {
+    clearTimeout(releaseClick);
+    setGesture(undefined);
+  };
   const measure = () => {
     const widths = new Map(
       [...frames].map((
@@ -115,15 +120,22 @@ export default function OverflowRow<T extends { key: string }>(props: {
       if (
         event.type === "pointercancel" || !root.contains(event.target as Node)
       ) {
-        setGesture(undefined);
+        releaseGesture();
       }
     };
     document.addEventListener("pointerup", outside, true);
     document.addEventListener("pointercancel", outside, true);
-    const clicked = () => queueMicrotask(() => setGesture(undefined));
+    const clicked = () => {
+      if (!gesture()) return;
+      clearTimeout(releaseClick);
+      // Capture sees clicks even when an action stops propagation. A microtask
+      // here can refit before the native click reaches its target listener.
+      releaseClick = setTimeout(releaseGesture, 0);
+    };
     document.addEventListener("click", clicked, true);
     return () => {
       active = false;
+      clearTimeout(releaseClick);
       observer?.disconnect();
       document.removeEventListener("pointerup", outside, true);
       document.removeEventListener("pointercancel", outside, true);
@@ -170,8 +182,10 @@ export default function OverflowRow<T extends { key: string }>(props: {
       }]}
       data-fit-mode={snapshot().mode}
       ref={(e) => root = e}
-      onPointerDown={() => setGesture(fitted())}
-      onPointerCancel={() => setGesture(undefined)}
+      onPointerDown={() => {
+        clearTimeout(releaseClick);
+        setGesture(fitted());
+      }}
     >
       <div
         class="otk-overflow-measure"
