@@ -2,7 +2,6 @@
 import { apiBase } from "@otk/client";
 import { Shell, type ThemeEngine } from "@otk/ui";
 import { clientRequestPolicyFrom } from "@otk/protocol";
-import { markdown } from "@otk/content";
 export default function App(props: { theme: ThemeEngine }) {
   const bootstrap = document.getElementById("otk-bootstrap")?.textContent;
   const boot = bootstrap ? JSON.parse(bootstrap) : {};
@@ -13,7 +12,6 @@ export default function App(props: { theme: ThemeEngine }) {
       api={apiBase("", import.meta.url)}
       policy={policy}
       build={typeof boot.build === "string" ? boot.build : undefined}
-      promptBlocks={markdown}
     />
   );
 }
