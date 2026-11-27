@@ -30,9 +30,8 @@
   min-height: 4rem;
 }
 .otk-rejection-reason {
-  flex: 1;
-  min-width: calc(160 * var(--otk-unit));
-  width: auto;
+  flex: 1 1 auto;
+  min-inline-size: 0;
   border-radius: var(--radius-pill);
   padding: var(--space-1) var(--item-inset);
   background: transparent;
