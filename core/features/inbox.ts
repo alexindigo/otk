@@ -1414,6 +1414,9 @@ export class InboxFeature implements FrameSource {
     // against that transaction's current rows, using the same activity owner.
     const leaf = this.summaries.leaf(entry.directory, entry.projectID);
     const context = this.summaries.context(leaf);
+    // A clone's old root policy remains stored for a later split. Its activity
+    // already lifts the group's presentation via the shared entity rollup.
+    if (context && this.summaries.identity.grouped(leaf)) return;
     for (const project of tx ? s.projects.policies() : this.#policies) {
       if (
         !entry.deleted &&

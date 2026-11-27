@@ -139,13 +139,24 @@ export const HELPER_LAMP_ORDER: readonly HelperDisposition[] =
 export const UNKNOWN_REPOSITORY = "otk:unknown-repository";
 /** Connection-local repository identity; checkout roots are explicit native facts. */
 export interface ProjectTopology {
+  /** Native repository ID, independent of the sidebar group. */
   repoID: string;
-  /** The checkout's repository root, or `UNKNOWN_REPOSITORY`. */
+  /** Identity owner's group key. Legacy/injected topology can omit it. */
+  group?: string;
+  /** The project's anchor, or `UNKNOWN_REPOSITORY`. */
   canonicalRoot: string;
   leafDirectory: string;
   /** Absent for the canonical checkout's direct leaf. */
   parentDirectory?: string;
 }
+export const projectTopologyGroup = (
+  topology?: ProjectTopology,
+): string | undefined =>
+  topology && (topology.group ?? `repo:${topology.repoID}`);
+export const remoteProjectGroup = (
+  topology?: ProjectTopology,
+): string | undefined =>
+  topology?.group !== `repo:${topology?.repoID}` ? topology?.group : undefined;
 export interface ProjectSummaryFacts {
   presentation?: Pick<
     import("./catalogs/project.ts").CatalogProject,
