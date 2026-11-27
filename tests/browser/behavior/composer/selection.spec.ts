@@ -4,7 +4,11 @@ import {
   send as composerSend,
 } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
-import { revealTool, shellRun } from "../../pages/transcript.ts";
+import {
+  revealAcquired,
+  revealTool,
+  shellRun,
+} from "../../pages/transcript.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
@@ -277,10 +281,12 @@ test.describe("native picker choices", () => {
     ]);
     await prompt(page).pressSequentially("echo PICKER-SHELL");
     await prompt(page).press("Enter");
-    // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
-    await revealTool(page, shellRun(state, "completed"));
-    await expect(page.locator(shellRun(state, "completed")))
-      .toContainText("PICKER-SHELL");
+    const shellRecord = shellRun(state, "completed");
+    // D74: V2's background shell stays in the transcript; V1's bash is Work.
+    if (state.controller.info!.version.startsWith("2.")) {
+      await revealAcquired(page, shellRecord);
+    } else await revealTool(page, shellRecord);
+    await expect(page.locator(shellRecord)).toContainText("PICKER-SHELL");
     const shell = frames.sent.filter(({ frame }) =>
       frame.method === "session.shell"
     ).at(-1)!.frame.params!;

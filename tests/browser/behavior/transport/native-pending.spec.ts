@@ -6,7 +6,7 @@ import {
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
-import { revealTool } from "../../pages/transcript.ts";
+import { revealAcquired, revealTool } from "../../pages/transcript.ts";
 
 test.describe("native page", () => {
   test.use({ profile: "transport-page" });
@@ -132,11 +132,13 @@ test.describe("native shell", () => {
       (await state.observe<{ transport: { entered: boolean } }>()).transport
         .entered
     ).toBe(true);
-    // NT2: a V2 user shell is a plugin-owned shell record, not a bash tool call.
-    const shell = state.controller.info!.version.startsWith("2.")
+    // D74: V2's background shell stays in the transcript; V1's bash is Work.
+    const v2 = state.controller.info!.version.startsWith("2.");
+    const shell = v2
       ? '[data-native-record="opencode-v2/shell"]'
       : "[data-tool=bash]";
-    await revealTool(page, shell);
+    if (v2) await revealAcquired(page, shell);
+    else await revealTool(page, shell);
     await expect(page.locator(shell)).toContainText(
       "request-native-once",
     );
