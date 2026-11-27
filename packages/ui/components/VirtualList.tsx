@@ -202,7 +202,8 @@ export default function VirtualList(props: {
   let currentKeys: readonly string[] | undefined, disposed = false;
   let positionOwner: ViewportPosition | undefined;
   const measuring = new Map<string, number>();
-  let measureFrame: number | undefined;
+  let cancelMeasurement: (() => void) | undefined;
+  let metricsDirty = false;
   let releaseParentMeasurement = parent?.hold?.();
   let releaseGeometryMeasurement: (() => void) | undefined;
   let selectingAll = false;
@@ -286,11 +287,42 @@ export default function VirtualList(props: {
   };
   const refresh = () => setVersion((v) => v + 1);
   function queueMeasurement() {
-    if (disposed || measureFrame !== undefined) return;
-    measureFrame = requestAnimationFrame(() => {
-      measureFrame = undefined;
+    // Mount can invalidate measurements before the window has joined its
+    // viewport. Keep those invalidations queued in the window; onSettled
+    // submits them to the owner instead of starting a private frame.
+    if (disposed || cancelMeasurement || !positionOwner) return;
+    const measure = () => {
+      cancelMeasurement = undefined;
       if (disposed) return;
       transaction(() => {
+        if (metricsDirty) {
+          metricsDirty = false;
+          const nextMetrics = `${
+            getComputedStyle(document.documentElement).fontSize
+          }:${viewport().clientWidth}`;
+          if (nextMetrics !== metrics) {
+            // Only a lane/font change revokes previously acquired extents.
+            if (intrinsic()) {
+              renewFootprint(
+                (currentKeys ?? []).filter((key) => model.measured(key)),
+              );
+            }
+            metrics = nextMetrics;
+            for (const [role, element] of samples) {
+              estimates.set(role, element.getBoundingClientRect().height);
+            }
+            if (currentKeys) {
+              model.update(
+                currentKeys,
+                (key) =>
+                  estimates.get(props.role?.(key) ?? "row") ?? props.estimate ??
+                    1,
+              );
+              refresh();
+            }
+            changing();
+          }
+        }
         let changed = false,
           released = false,
           pending = !ready() || !currentKeys;
@@ -334,7 +366,8 @@ export default function VirtualList(props: {
         remember();
         if (pending) queueMeasurement();
       });
-    });
+    };
+    cancelMeasurement = positionOwner.measure(measure);
   }
   function holdMeasurement(key: string): () => void {
     beginMeasurement();
@@ -666,44 +699,17 @@ export default function VirtualList(props: {
       remember();
     });
     observer = new ResizeObserver((entries) => {
-      selection();
-      transaction(() => {
-        const nextMetrics = `${
-          getComputedStyle(document.documentElement).fontSize
-        }:${root.clientWidth}`;
-        if (nextMetrics !== metrics) {
-          // Materialization is not layout authority. Re-measure the previously
-          // acquired footprint when its lane/font changes, never when it scrolls.
-          if (intrinsic()) {
-            renewFootprint(
-              (currentKeys ?? []).filter((key) => model.measured(key)),
-            );
-          }
-          metrics = nextMetrics;
-          for (const [role, element] of samples) {
-            estimates.set(role, element.getBoundingClientRect().height);
-          }
-          if (currentKeys) {
-            model.update(
-              currentKeys,
-              (key) =>
-                estimates.get(props.role?.(key) ?? "row") ?? props.estimate ??
-                  1,
-            );
-            refresh();
-          }
-          changing();
+      // Observers only invalidate. Publishing inside each observer would scan
+      // every sibling window once per child when a whole range mounts.
+      metricsDirty = true;
+      beginMeasurement();
+      for (const entry of entries) {
+        const key = (entry.target as HTMLElement).dataset.virtualKey;
+        if (key && elements.get(key) === entry.target) {
+          if (!measuring.has(key)) measuring.set(key, 0);
         }
-        for (const entry of entries) {
-          const key = (entry.target as HTMLElement).dataset.virtualKey;
-          if (key && elements.get(key) === entry.target) {
-            beginMeasurement();
-            if (!measuring.has(key)) measuring.set(key, 0);
-          }
-        }
-        sync();
-        queueMeasurement();
-      });
+      }
+      queueMeasurement();
     });
     observer.observe(root);
     observer.observe(container);
@@ -830,6 +836,8 @@ export default function VirtualList(props: {
       focusedControl = undefined;
       unregister();
       releasePosition();
+      cancelMeasurement?.();
+      cancelMeasurement = undefined;
       lease.release();
       positionOwner = undefined;
       root.removeEventListener("scroll", moved);
@@ -893,7 +901,7 @@ export default function VirtualList(props: {
   }
   onCleanup(() => {
     disposed = true;
-    if (measureFrame !== undefined) cancelAnimationFrame(measureFrame);
+    cancelMeasurement?.();
     releaseParentMeasurement?.();
     releaseGeometryMeasurement?.();
     measuring.clear();

@@ -822,6 +822,33 @@ Deno.test("viewport position publications coalesce and retirement suppresses pen
   }, { tail: false });
 });
 
+Deno.test("sibling window measurements publish one viewport revision", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane);
+    try {
+      flush();
+      await Promise.resolve();
+      const measured: string[] = [];
+      const published: string[][] = [];
+      lease.owner.subscribe(() => published.push([...measured]));
+      lease.owner.measure(() => measured.push("first"));
+      const cancel = lease.owner.measure(() => measured.push("cancelled"));
+      lease.owner.measure(() => measured.push("second"));
+      cancel();
+      assertEquals(measured, []);
+      flush();
+      await Promise.resolve();
+      assertEquals(published, [["first", "second"]]);
+      lease.owner.measure(() => measured.push("retired"));
+      lease.release();
+      flush();
+      assertEquals(measured, ["first", "second"]);
+    } finally {
+      lease.release();
+    }
+  }, { tail: false });
+});
+
 Deno.test("explicit transcript position supersedes queued follow before or after its scroll notification", () => {
   for (const notify of [false, true]) {
     viewportFixture(({ pane, height, resize, flush }) => {
