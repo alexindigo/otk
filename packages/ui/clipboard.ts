@@ -1,6 +1,66 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { RequestFailure } from "@otk/client";
 import { randomID } from "@otk/protocol";
+import { nativeTextField } from "./keyboard/ownership.ts";
+
+const source = "[data-copy-source]";
+const proseBlock = /^(?:P|DIV|H[1-6]|PRE|LI|BLOCKQUOTE|TR)$/;
+
+/** Copy projected inline values as source, in both selection copy paths. */
+export function sourceSelectionText(selection: Selection): string | undefined {
+  const ranges = Array.from(
+    { length: selection.rangeCount },
+    (_, i) => selection.getRangeAt(i).cloneRange(),
+  ).filter((range) => !range.collapsed);
+  const containingElement = (node: Node) =>
+    node instanceof Element ? node : node.parentElement;
+  if (
+    !ranges.some((range) => {
+      const common = containingElement(range.commonAncestorContainer);
+      return common?.closest(source) ||
+        [...(common?.querySelectorAll(source) ?? [])]
+          .some((node) => range.intersectsNode(node));
+    })
+  ) return;
+  const fragments = ranges.map((range) => {
+    const containingSource = (node: Node) =>
+      containingElement(node)?.closest(source);
+    const start = containingSource(range.startContainer);
+    const end = containingSource(range.endContainer);
+    if (start) range.setStartBefore(start);
+    if (end) range.setEndAfter(end);
+    return range.cloneContents();
+  });
+  const text = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    if (node instanceof HTMLElement) {
+      if (node.dataset.copySource !== undefined) return node.dataset.copySource;
+      if (node.tagName === "BR") return "\n";
+      if (node.hidden || node.getAttribute("aria-hidden") === "true") return "";
+    }
+    const children = Array.from(node.childNodes, text).join("");
+    return children && node instanceof Element && proseBlock.test(node.tagName)
+      ? `${children}\n`
+      : children;
+  };
+  return fragments.map(text).join("\n").replace(/\n$/, "");
+}
+
+export function bindSourceSelectionCopy(): () => void {
+  const copy = (event: ClipboardEvent) => {
+    const selection = document.getSelection();
+    if (
+      event.defaultPrevented || !event.clipboardData || !selection ||
+      nativeTextField(event.target)
+    ) return;
+    const text = sourceSelectionText(selection);
+    if (text === undefined) return;
+    event.clipboardData.setData("text/plain", text);
+    event.preventDefault();
+  };
+  document.addEventListener("copy", copy);
+  return () => document.removeEventListener("copy", copy);
+}
 
 /** Optional shortcut read. Native paste remains available when unavailable or
  * refused, including on plain HTTP where no programmatic read API exists. */
