@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -387,6 +387,21 @@ test(
     await openSession(state, page, root);
     await expect(helpers(page)).toHaveAccessibleName("Subagents: 1 running");
     await expect(shells(page)).toHaveAccessibleName("Running work: 2 shells");
+    const iconSelector = ".otk-live-count-compact > svg:first-child";
+    const leadingIcon = (pill: Locator) => pill.locator(iconSelector);
+    for (const pill of [helpers(page), shells(page)]) {
+      const icon = leadingIcon(pill);
+      await expect(icon).toBeVisible();
+      await expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    const terminalArtwork = await page
+      .getByRole("button", { name: "Open terminal", exact: true })
+      .locator("svg").innerHTML();
+    await expect(leadingIcon(shells(page))).toHaveJSProperty(
+      "innerHTML",
+      terminalArtwork,
+    );
+    await expect(leadingIcon(helpers(page)).locator("circle")).toHaveCount(2);
     await expect(link(page)).toHaveAttribute("data-state", "running");
     const facts: unknown[] = [];
     const check = async (
@@ -396,7 +411,7 @@ test(
       stage = "full",
     ) => {
       const measured = await page.locator(".otk-composer-dock").evaluate(
-        (dock) => {
+        (dock, iconSelector) => {
           const at = (selector: string) =>
             dock.querySelector<HTMLElement>(selector)!;
           const box = (selector: string) =>
@@ -409,6 +424,7 @@ test(
             connector = box(".otk-live-link");
           const pills = [".otk-subagents-trigger", ".otk-live-work-trigger"];
           const count = (pill: string) => `${pill} .otk-live-count`;
+          const icon = (pill: string) => `${pill} ${iconSelector}`;
           const lastPill = box(pills[1]);
           const wrapped = lastPill.top >= title.bottom;
           const probe = document.createElement("span");
@@ -446,10 +462,15 @@ test(
               box(`${count(pill)} .otk-chrome-meta`).left -
               box(`${count(pill)} .otk-status-light`).right
             ),
+            iconGaps: pills.map((pill) =>
+              box(`${count(pill)} .otk-status-light`).left -
+              box(icon(pill)).right
+            ),
             centerDrifts: [
               ...(connector.width ? [".otk-live-link"] : []),
               ".otk-composer-task",
               ...pills.flatMap((pill) => [
+                icon(pill),
                 `${count(pill)} .otk-status-light`,
                 `${count(pill)} .otk-chrome-meta`,
               ]),
@@ -472,6 +493,7 @@ test(
             }),
           };
         },
+        iconSelector,
       );
       const u = scale / 100, context = `${width}/${scale}/${theme}`;
       for (
@@ -496,6 +518,9 @@ test(
           ],
           ...measured.lampGaps.map((gap, i) =>
             [`lamp ${i}`, gap - 8 * u, .5] as const
+          ),
+          ...measured.iconGaps.map((gap, i) =>
+            [`icon ${i}`, gap - measured.lampGaps[i], .5] as const
           ),
           ...measured.centerDrifts.map((drift, i) =>
             [`center ${i}`, drift, .5] as const
