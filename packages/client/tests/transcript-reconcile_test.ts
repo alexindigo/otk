@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertStrictEquals } from "@std/assert";
-import type { ClientFrame, Message, MessagePage } from "@otk/protocol";
+import type {
+  AssistantMessage,
+  ClientFrame,
+  ClockedContent,
+  Message,
+  MessagePage,
+  Part,
+} from "@otk/protocol";
 import { SidecarConnection } from "../connection.ts";
 import { createTranscripts } from "../transcripts.ts";
 import {
@@ -164,6 +171,107 @@ Deno.test("catchup removes a retained row and deduplicates an upsert in the page
         ids.includes("25") && ids.filter((id) => id === "30").length === 1
       ),
     );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("older-page header catchup preserves a retained completed Work tool at the live clock", async () => {
+  const f = fixture();
+  try {
+    await f.reply(40);
+    await f.reply(40);
+    const a = f.transcript;
+    const receive = (seq: number, event: ClockedContent["event"]) => {
+      const clock = { epoch: "fixture", seq };
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock,
+        event,
+      }, true);
+      return { clock, event };
+    };
+    const step: AssistantMessage = {
+      id: "40",
+      sessionID: "a",
+      role: "assistant",
+      replyTo: "39",
+      model: { provider: "test", model: "test" },
+      agent: "build",
+      time: { created: 40 },
+      tokens: {
+        input: 1,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      parts: [],
+    };
+    const work: Part = {
+      kind: "tool",
+      id: "work-part",
+      call: {
+        tool: "external",
+        name: "Work",
+        callID: "work-call",
+        status: "completed",
+        summary: "Check the fixture",
+        output: "Fixture checked",
+        time: { start: 41, end: 42 },
+      },
+    };
+    receive(1, { op: "message.upsert", message: step });
+    const { clock: from } = receive(2, {
+      op: "part.upsert",
+      messageID: step.id,
+      part: work,
+    });
+
+    assertEquals(a.state.messagesByID["10"], undefined);
+    const older = a.older();
+    await flush();
+    const request = f.next();
+    const before = (request.params as { before?: string }).before;
+    assertEquals(before, "fixture:20");
+    const page = fixturePage("a", messages(40), before, undefined, from);
+    assert(!page.items.some(({ id }) => id === step.id));
+
+    // Both events arrive live before the older page returns them in catchup.
+    const header = { ...step, time: { created: 40, completed: 43 } };
+    const text: Part = {
+      kind: "text",
+      id: "late-text",
+      synthetic: false,
+      blocks: [{ b: "paragraph", inline: [{ i: "text", text: "Checked." }] }],
+    };
+    const tail = {
+      ...header,
+      id: "41",
+      time: { created: 44, completed: 45 },
+      parts: [text],
+    };
+    const finished = receive(3, { op: "message.upsert", message: header });
+    const appended = receive(4, { op: "message.upsert", message: tail });
+    page.clock = appended.clock;
+    page.catchup = [finished, appended];
+    const reply = () => a.state.repliesByID["reply:39"];
+    assertEquals(a.state.clock, page.clock);
+    assertEquals(a.state.messagesByID[step.id].parts, [work]);
+    assertEquals(reply().message.parts, [work, text]);
+
+    replyRequest(f.connection.rpc, request, page);
+    await older;
+    assert(a.state.messagesByID["10"], "older history must load");
+    assertEquals(a.state.olderCursor, "fixture:10");
+    assertEquals(
+      a.state.messagesByID[step.id].parts,
+      [work],
+      "canonical source",
+    );
+    assertEquals(reply().message.parts, [work, text], "grouped reply");
   } finally {
     f.stop();
   }
