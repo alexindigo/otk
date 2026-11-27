@@ -12,6 +12,7 @@ import {
   textPreview,
   transcript,
 } from "../../pages/file-paths.ts";
+import { expectViewportEnd } from "../../pages/viewport-commit.ts";
 
 const themes = [["otk-dark", "dark"], ["otk-light", "linen"], [
   "otk-light-stone",
@@ -86,7 +87,16 @@ for (const [theme, label] of themes) {
       await awaitDisplay(page, theme, scale);
       await expect(status(page, id)).toHaveAttribute("data-status", "idle");
       await expect.poll(() => keys.size).toBeGreaterThan(0);
+      // Measure the file-stat transition after the reply and transcript end
+      // commit, not during the independent composer acknowledgement resize.
+      await expect(page.locator(".otk-turn-time")).toHaveText(
+        /^Worked for \d+(?:\.\d+)?s$/,
+      );
+      await expect(
+        page.getByText("Saving viewed conversation", { exact: true }),
+      ).toHaveCount(0);
       await page.evaluate(() => document.fonts.ready.then(() => {}));
+      await expectViewportEnd(page);
       const paragraphs = page.locator(
         '[data-role="assistant"] .otk-prose-paragraph',
       );
@@ -98,8 +108,8 @@ for (const [theme, label] of themes) {
             return [left, top, width, height];
           })
         );
-      const before = await boxes();
       await expect(paths(page)).toHaveCount(0);
+      const before = await boxes();
       release();
       await expect(paths(page)).toHaveCount(4);
       const after = await boxes();
