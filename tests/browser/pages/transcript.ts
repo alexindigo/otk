@@ -706,6 +706,7 @@ export function compactionBoundary(state: TestState) {
   return v2(state)
     ? {
       selector: '[data-native-record="opencode-v2/compaction"]',
+      records: '[data-native-record="opencode-v2/compaction"]',
       title: title("opencode-v2/compaction"),
       queued: title("opencode-v2/compaction"),
       queuedLabel: "Session compaction queued",
@@ -714,6 +715,8 @@ export function compactionBoundary(state: TestState) {
     }
     : {
       selector: '[data-native-record="opencode-v1/compaction-summary"]',
+      records:
+        '[data-native-record="opencode-v1/compaction"], [data-native-record="opencode-v1/compaction-summary"]',
       title: title("opencode-v1/compaction-summary"),
       // Before its summary exists, a queued compaction is its marker record.
       queued: title("opencode-v1/compaction"),
@@ -721,6 +724,57 @@ export function compactionBoundary(state: TestState) {
       running: "Session compaction",
       completed: "Session compacted",
     };
+}
+
+export async function expectCompactionBetween(
+  state: TestState,
+  page: Page,
+  reply: string,
+  prompt: string,
+) {
+  const compaction = compactionBoundary(state);
+  const transcript = page.getByRole("region", {
+    name: "Transcript",
+    exact: true,
+  });
+  const first = transcript.locator('[data-message][data-role="assistant"]')
+    .filter({ hasText: reply });
+  const next = transcript.locator('[data-message][data-role="user"]').filter({
+    hasText: prompt,
+  });
+  const record = transcript.locator(compaction.selector);
+  await expect(first).toBeVisible();
+  await expect(next).toBeVisible();
+  await expect(record).toBeVisible();
+  await expect(transcript.locator(compaction.records)).toHaveCount(1);
+  const [replyNode, promptNode] = await Promise.all([
+    first.elementHandle(),
+    next.elementHandle(),
+  ]);
+  expect(
+    await record.evaluate((node, { replyNode, promptNode }) => {
+      const virtual = "[data-virtual-key]";
+      // The native row's internal part windows are not transcript entries.
+      const entry = node.closest('[data-message][data-role="context"]');
+      const frame = entry?.closest(virtual);
+      const first = replyNode.closest(virtual);
+      const next = promptNode.closest(virtual);
+      const precedes = (a: Element, b: Element) =>
+        !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return {
+        interval: !!node.closest("[data-background-interval]"),
+        assistant: !!node.closest('[data-message][data-role="assistant"]'),
+        topLevel: !!frame && !frame.parentElement?.closest(virtual),
+        ordered: !!frame && !!first && !!next && precedes(first, frame) &&
+          precedes(frame, next),
+      };
+    }, { replyNode, promptNode }),
+  ).toEqual({
+    interval: false,
+    assistant: false,
+    topLevel: true,
+    ordered: true,
+  });
 }
 
 /** After rolling back every prompt, no prompt or reply remains. Native

@@ -146,6 +146,7 @@ export function deriveMessage(
         kindLabel: "compaction",
         layout: "boundary",
         category: "compaction",
+        boundary: { key: info.parentID ?? info.id },
         // The running summary is active work: it carries its own progress.
         state: {
           key: state,
