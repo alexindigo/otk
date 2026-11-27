@@ -42,14 +42,14 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await repositoryToggle.press("ArrowRight");
   await expect(repositoryToggle).toHaveAttribute("aria-expanded", "true");
   await expect(archive).toHaveAttribute("aria-expanded", "true");
-  for (const directory of [one, two]) {
+  for (const [directory, rollup] of [[one, "working"], [two, "none"]]) {
     await visibleOnScreen(row(directory));
     await expect(row(directory)).toHaveAttribute(
       "data-project-parent",
       canonical,
     );
-    const rollup = await row(directory).getAttribute("data-rollup");
-    const live = rollup === "working" || rollup === "blocked";
+    await expect(row(directory)).toHaveAttribute("data-rollup", rollup);
+    const live = rollup === "working";
     await expect(row(directory)).toHaveAttribute(
       "data-group",
       live ? "active" : "archived",
@@ -64,8 +64,9 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       row(directory).locator(".otk-sidebar-meta .otk-project-availability"),
     )
       .toHaveText("removed");
-    await expect(row(directory).locator(".otk-project-visit time")).not
-      .toBeEmpty();
+    const time = row(directory).locator(".otk-project-visit time");
+    if (live) await expect(time).toHaveCount(0);
+    else await expect(time).not.toBeEmpty();
     await expect(row(directory).locator(".otk-project-open"))
       .toHaveAccessibleName(/, removed$/);
     await expect(row(directory).locator(".otk-project-open"))
@@ -216,6 +217,7 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
   await visibleOnScreen(
     row(two).locator(".otk-status-light[data-state=finished]"),
   );
+  await expect(row(two).locator(".otk-project-visit time")).not.toBeEmpty();
   for (
     const [theme, label] of [["otk-dark", "dark"], ["otk-light", "linen"], [
       "otk-light-stone",

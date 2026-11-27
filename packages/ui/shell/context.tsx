@@ -26,6 +26,7 @@ import {
 export type { ProjectSelection } from "@otk/client";
 /** Live shell resources passed to features, never a component's internal state. */
 export interface ShellPorts {
+  now(): number;
   theme: ThemeEngine;
   toggles: Toggles;
   usage: SessionUsageOwner;

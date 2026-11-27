@@ -5,12 +5,19 @@ import "./TimeText.css" with { type: "text" };
 
 /** The only renderer of time text: structured parts, natural accessible name. */
 export default function TimeText(
-  props: { time: Value; class?: string; title?: string; suffix?: string },
+  props: {
+    time: Value;
+    class?: string;
+    title?: string;
+    suffix?: string;
+    tone?: "default" | "muted";
+  },
 ): Element {
   return (
     <time
       class={["otk-time", props.class]}
       datetime={props.time.iso}
+      data-tone={props.tone}
       aria-label={props.time.spoken}
       title={props.title}
     >

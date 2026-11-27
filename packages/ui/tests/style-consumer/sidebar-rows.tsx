@@ -8,6 +8,9 @@ import ProjectInbox, {
 } from "../../components/ProjectInbox.tsx";
 import "./sidebar-rows.css" with { type: "text" };
 
+const fixtureTimer = (
+  now: number,
+) => ({ kind: "attention", tone: "default", time: age(0, now) } as const);
 const project = (
   name: string,
   extra: Partial<ProjectRow> = {},
@@ -19,7 +22,7 @@ const project = (
   sessionCount: 0,
   status: "finished",
   unread: false,
-  visit: age(0, 3_600_000),
+  timer: fixtureTimer(3_600_000),
   ageing: 0,
   inactive: false,
   added: true,
@@ -28,7 +31,7 @@ const project = (
   ...extra,
 });
 const root = project("atmosphera", {
-  visit: age(0, 480_000),
+  timer: fixtureTimer(480_000),
   topology: {
     repoID: "atmosphera",
     canonicalRoot: "/projects/atmosphera",
@@ -117,10 +120,10 @@ export default function SidebarRows() {
             availability: "removed",
             annotation: "removed",
           }),
-          project("ndash", { visit: age(0, 15 * 3_600_000) }),
-          project("aerial-lock", { visit: age(0, 52 * 60_000) }),
-          project("airgraph", { visit: age(0, 52 * 3_600_000) }),
-          project("communico", { visit: age(0, 0) }),
+          project("ndash", { timer: fixtureTimer(15 * 3_600_000) }),
+          project("aerial-lock", { timer: fixtureTimer(52 * 60_000) }),
+          project("airgraph", { timer: fixtureTimer(52 * 3_600_000) }),
+          project("communico", { timer: fixtureTimer(0) }),
           project("inactive", { inactive: true, group: "inactive" }),
           project("discovered", { source: "template", group: "discovered" }),
         ]}

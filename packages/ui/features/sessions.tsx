@@ -36,6 +36,7 @@ export function registerSessionsPanel(
             return (
               <ProjectSessions
                 project={project}
+                now={shell.now()}
                 disclosure={shell.disclosures}
                 holdOrder={() => shell.holdTaskOrder?.(project) ?? (() => {})}
                 ready={shell.inbox(sidecarId).state.ready &&

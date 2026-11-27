@@ -55,7 +55,7 @@ const units = Object.fromEntries(
 ) as Record<TimeUnit, Intl.NumberFormat>;
 const list = new Intl.ListFormat("en-US", { style: "long", type: "unit" });
 
-type AgeReference = "now" | "inactive";
+type AgeReference = "now" | "inactive" | "attention" | "run";
 function build(
   parts: readonly TimePart[],
   age?: { at: number; reference: AgeReference },
@@ -65,7 +65,7 @@ function build(
       parts,
       word: "now",
       text: "now",
-      spoken: "just now",
+      spoken: age.reference === "run" ? "less than a minute" : "just now",
       iso: new Date(age.at).toISOString(),
     };
   }
@@ -74,9 +74,11 @@ function build(
     parts.map(({ value, unit }) => units[unit].format(Number(value))),
   );
   if (age) {
-    const suffix = age.reference === "now"
-      ? " ago"
-      : " before it became inactive";
+    const suffix = age.reference === "inactive"
+      ? " before it became inactive"
+      : age.reference === "run"
+      ? ""
+      : " ago";
     return {
       parts,
       text,
@@ -119,8 +121,11 @@ export function age(
     parts.push({ value: String(Math.floor(hours / 24)), unit: "d" });
   }
   if (hours % 24) parts.push({ value: String(hours % 24), unit: "h" });
-  if (minutes >= 1 && minutes < 60) {
-    parts.push({ value: String(minutes), unit: "m" });
+  // The two active sidebar timers share minute precision below a day.
+  // Ordinary visit/history ages retain their existing hour precision.
+  const minutePrecision = reference === "attention" || reference === "run";
+  if (minutes % 60 && (hours === 0 || minutePrecision && hours < 24)) {
+    parts.push({ value: String(minutes % 60), unit: "m" });
   }
   return build(parts, { at, reference });
 }

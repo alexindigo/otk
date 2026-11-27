@@ -23,7 +23,7 @@ import {
 import { createState, type StateFactory } from "./state.ts";
 import { checkoutLabel, projectLabel } from "./project-names.ts";
 import { projectPlacement } from "./project-placement.ts";
-import { age } from "./format.ts";
+import { sidebarTimer } from "./sidebar-timer.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
@@ -450,16 +450,12 @@ export function createProjectProjection(o: {
         inactive: !!record?.inactive,
         hasSessions,
       });
-      const time = inactive && record
-        ? record.inactiveAt ?? record.lastVisit
-        : now;
-      const visit = record
-        ? age(record.lastVisit, time, inactive ? "inactive" : "now")
-        : undefined;
+      const timer = sidebarTimer(status, entity?.runStartedAt, now, record);
       if (
-        !p.row || p.row.visit?.text !== visit?.text ||
-        p.row.visit?.iso !== visit?.iso ||
-        p.row.visit?.spoken !== visit?.spoken || p.row.status !== status ||
+        !p.row || p.row.timer?.kind !== timer?.kind ||
+        p.row.timer?.time.iso !== timer?.time.iso ||
+        p.row.timer?.time.spoken !== timer?.time.spoken ||
+        p.row.status !== status ||
         p.row.section !== placement.section ||
         p.row.unread !== unread || p.row.dependencies !== dependencies ||
         p.row.parentLabel !== parentLabel
@@ -487,7 +483,7 @@ export function createProjectProjection(o: {
           unseenCount: store && !store.isStale
             ? store.get(key)?.counts.unseen ?? 0
             : null,
-          visit,
+          timer,
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,

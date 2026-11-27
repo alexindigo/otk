@@ -1072,6 +1072,43 @@ test("a deleted member stops counting toward its project's unseen finishes", () 
   assertEquals(state("project", "/repo")?.state, "none");
   assertEquals(owner.values.get("/repo")?.unseenCount, 0);
 });
+test("D79: project and task retain the oldest current native run, not the last update", () => {
+  const o = owner();
+  const task = "task/review", project = "/p", other = "other";
+  o.states.project(project, [project]);
+  o.states.roots(new Map([[base.id, task], [other, task]]));
+  const update = (id: string, start?: number) => {
+    o.put({
+      ...base,
+      id,
+      activity: {
+        work: start === undefined ? keys() : {
+          ...keys(id),
+          items: [{
+            id,
+            kind: "execution",
+            label: "Execution",
+            title: id,
+            startedAt: start,
+          }],
+        },
+      },
+    });
+    o.states.member(id, project);
+  };
+  const starts = () => [
+    o.states.get(entityKey("task", task))?.runStartedAt,
+    o.states.get(entityKey("project", project))?.runStartedAt,
+  ];
+  update(base.id, 60_000);
+  update(other, 90_000);
+  assertEquals(starts(), [60_000, 60_000]);
+  update(base.id);
+  assertEquals(starts(), [90_000, 90_000]);
+  update(other);
+  assertEquals(starts(), [undefined, undefined]);
+});
+
 test("D69/D70: one task spans checkouts and a project counts it once", () => {
   const o = owner();
   const get = (kind: EntityState["kind"], id: string) =>

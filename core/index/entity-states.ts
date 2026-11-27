@@ -66,6 +66,7 @@ interface Tally {
   dependencies: number;
   graced: number;
   requests: Map<string, number>;
+  runStarts: Map<number, number>;
 }
 interface Listing {
   tasks: Map<string, number>;
@@ -77,6 +78,7 @@ interface Contribution {
   dependencies: number;
   graced: number;
   requests: readonly string[];
+  runStartedAt?: number;
 }
 function tally(): Tally {
   return {
@@ -84,6 +86,7 @@ function tally(): Tally {
     dependencies: 0,
     graced: 0,
     requests: new Map(),
+    runStarts: new Map(),
   };
 }
 function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
@@ -100,6 +103,16 @@ function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
     const next = (target.requests.get(id) ?? 0) + sign * count;
     if (next) target.requests.set(id, next);
     else target.requests.delete(id);
+  }
+  const starts = "runStarts" in value
+    ? value.runStarts
+    : value.runStartedAt === undefined
+    ? []
+    : [[value.runStartedAt, 1] as const];
+  for (const [at, count] of starts) {
+    const next = (target.runStarts.get(at) ?? 0) + sign * count;
+    if (next) target.runStarts.set(at, next);
+    else target.runStarts.delete(at);
   }
 }
 
@@ -544,12 +557,14 @@ export class EntityStates {
   }
   #contribution(id: string): Contribution {
     const counts = this.#own.get(id);
+    const session = this.#states.get(entityKey("session", id));
+    const run = session?.evidence?.nativeRun ? session.evidence.run : undefined;
     return {
       counts: counts ? { ...counts } : own("none", false),
-      dependencies: this.#states.get(entityKey("session", id))?.dependencies ??
-        0,
+      dependencies: session?.dependencies ?? 0,
       graced: this.#graced.has(id) ? 1 : 0,
       requests: this.#graced.get(id) ?? [],
+      runStartedAt: run?.endedAt === undefined ? run?.startedAt : undefined,
     };
   }
   /** Move the existing contribution before applying any change in its value. */
@@ -811,6 +826,10 @@ export class EntityStates {
       ? "permission"
       : undefined;
     const before = this.#states.get(entityKey(kind, id));
+    let runStartedAt = Infinity;
+    for (const at of members.runStarts.keys()) {
+      runStartedAt = Math.min(runStartedAt, at);
+    }
     return {
       kind,
       id,
@@ -824,6 +843,7 @@ export class EntityStates {
       counts: { ...counts },
       ...(dependencies ? { dependencies } : {}),
       ...(counts.working || operation === "working" ? { liveWork: true } : {}),
+      ...(Number.isFinite(runStartedAt) ? { runStartedAt } : {}),
       ...(cause === "permission"
         ? {
           requests: [...members.requests.keys()].sort().map((id) => ({ id })),
@@ -1030,10 +1050,8 @@ export class EntityStates {
         : []
     );
     const previousRun = before?.evidence?.run;
-    const startedAt = starts.length
-      ? Math.min(...starts)
-      : inputs.work && previousRun?.endedAt !== undefined
-      ? undefined
+    const startedAt = inputs.work
+      ? starts.length ? Math.min(...starts) : undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
     // Live input and work take priority over a prior unseen run. Roster

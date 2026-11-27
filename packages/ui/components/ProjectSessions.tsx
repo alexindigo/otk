@@ -43,9 +43,11 @@ import {
   type SessionTreeItem,
   sessionTreeView,
   sessionWorkStatus,
+  sidebarTimer,
   usageCost,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import SidebarTimer from "./SidebarTimer.tsx";
 import SessionStateMeta from "./SessionStateMeta.tsx";
 import { entityKey, MAX_SESSION_TITLE, taskEntityID } from "@otk/protocol";
 import UsageCost from "./UsageCost.tsx";
@@ -74,6 +76,7 @@ export default function ProjectSessions(props: {
   interaction?: ListInteraction;
   holdOrder?(): () => void;
   project?: ProjectSelection;
+  now?: number;
   ready?: boolean;
   loading?: boolean;
   loadingText?: string;
@@ -520,6 +523,18 @@ export default function ProjectSessions(props: {
                 if (initial.row.kind === "heading") {
                   const group = initial.row.group;
                   const disclosure = () => tree().bindings.get(key);
+                  const taskKey = group
+                    ? entityKey("task", taskEntityID("task", group))
+                    : undefined;
+                  const status = () => lamp(entities(), taskKey);
+                  const timer = () =>
+                    taskKey && props.now !== undefined
+                      ? sidebarTimer(
+                        status(),
+                        entities().get(taskKey)?.runStartedAt,
+                        props.now,
+                      )
+                      : undefined;
                   return (
                     <h3
                       class="otk-session-group"
@@ -537,17 +552,10 @@ export default function ProjectSessions(props: {
                         onOpen={(value) => void disclosure()?.set(value)}
                         leading={() => (
                           <Show when={group} fallback={<SessionsIcon />}>
-                            <StatusLight
-                              state={lamp(
-                                entities(),
-                                entityKey(
-                                  "task",
-                                  taskEntityID("task", group),
-                                ),
-                              )}
-                            />
+                            <StatusLight state={status()} />
                           </Show>
                         )}
+                        sidebarMeta={() => <SidebarTimer value={timer()} />}
                       />
                     </h3>
                   );
