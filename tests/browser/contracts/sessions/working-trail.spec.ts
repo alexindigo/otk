@@ -102,14 +102,22 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
   await expect(page).toHaveURL(new RegExp(`${nested}$`));
   await activity(state, helper, "release");
   await activity(state, nested, "release");
-  // D72: a viewed finish leaves the list; the other finished helper stays.
+  // D76: the explicitly opened nested finish stays without an unseen lamp.
   await visibleOnScreen(crumb(root));
   await visibleOnScreen(crumb(helper));
   await visibleOnScreen(crumb(nested));
+  await expect(crumb(nested).locator(".otk-status-light")).toHaveAttribute(
+    "data-state",
+    "none",
+  );
   await crumb(root).click();
+  await expect(inventory).toHaveAccessibleName(
+    "Subagents: 1 finished, 1 opened",
+  );
   await inventory.click();
   await visibleOnScreen(agent(helper));
-  await expect(agent(nested)).toHaveCount(0);
+  const opened = page.getByRole("group", { name: "Opened 1" });
+  await expect(opened.locator(`[data-subagent="${nested}"]`)).toBeVisible();
   for (const sessionID of [helper, nested]) {
     await state.controller.call("scenario", {
       lease: state.lease.lease,
@@ -120,6 +128,12 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
   }
   await expect(crumb(helper)).toHaveCount(0);
   await expect(crumb(nested)).toHaveCount(0);
+  // D58/D72 still retire the unopened delivered helper. D76 retains only nested.
+  await expect(inventory).toHaveAccessibleName("Subagents: 1 opened");
+  await expect(agent(helper)).toHaveCount(0);
+  await visibleOnScreen(agent(nested));
+  await page.getByRole("button", { name: "Clear finished", exact: true })
+    .click();
   await expect(inventory).toHaveCount(0);
   await page.reload();
   await visibleOnScreen(crumb(root));
