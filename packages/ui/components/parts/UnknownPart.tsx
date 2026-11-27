@@ -10,7 +10,7 @@ import {
   useContentIdentity,
 } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeItem, TreeNode } from "../Tree.tsx";
 import Icon from "../Icon.tsx";
 import {
   unknownPartFailure,
@@ -101,6 +101,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       </Show>
     </>
   );
+  const hasSource = () => !!(preview() || reference());
   return (
     <Show
       when={!activity() ? failure() : undefined}
@@ -114,15 +115,32 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
           data-activity-state={activity()?.state?.key}
         >
           <TreeNode
+            class="otk-tool-row"
+            node={() => (
+              <Show when={activity()?.icon?.name === "warning"}>
+                <span
+                  class="otk-tool-icon"
+                  role="img"
+                  aria-label={activity()?.icon?.label ?? "Warning"}
+                >
+                  <Icon>
+                    <path d="M12 3 2 21h20L12 3Z" />
+                    <path d="M12 9v5m0 3v.01" />
+                  </Icon>
+                </span>
+              </Show>
+            )}
             toggleHeader={!!details()}
             label={label()}
             outgoing={activity()?.direction === "outgoing" ? true : undefined}
             open={expanded()}
             onOpen={details() ? setExpanded : undefined}
+            feedbackGutter={activity()?.direction !== "outgoing"}
             feedback={failure()
               ? () => (
                 <FailureContent
                   placement="record"
+                  subgrid={activity()?.direction !== "outgoing"}
                   failure={failure()!}
                   time={props.failureTime}
                 />
@@ -130,20 +148,6 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
               : undefined}
             header={(_connected, toggleID) => (
               <header class="otk-tool-state otk-control-row">
-                <TreeIcon>
-                  <Show when={activity()?.icon?.name === "warning"}>
-                    <span
-                      class="otk-tool-icon"
-                      role="img"
-                      aria-label={activity()?.icon?.label ?? "Warning"}
-                    >
-                      <Icon>
-                        <path d="M12 3 2 21h20L12 3Z" />
-                        <path d="M12 9v5m0 3v.01" />
-                      </Icon>
-                    </span>
-                  </Show>
-                </TreeIcon>
                 <Show when={activity()?.entity}>
                   {(entity) => (
                     <EntityPill
@@ -173,9 +177,10 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                 <Show when={activity()?.child}>{(ref) => child(ref())}</Show>
               </header>
             )}
-            body={details()
-              ? () => (
-                <TreeItem last>
+            hasChildren={details()}
+            body={() => (
+              <>
+                <TreeItem last={!hasSource()}>
                   <TreeNode
                     header={() => (
                       <div class="otk-tool-body">
@@ -246,19 +251,21 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                             />
                           )}
                         </Show>
-                        <Show when={preview() || reference()}>
-                          <NativeSource
-                            reference={reference()}
-                            preview={preview()}
-                            prefs={props.prefs}
-                          />
-                        </Show>
                       </div>
                     )}
                   />
                 </TreeItem>
-              )
-              : undefined}
+                <Show when={hasSource()}>
+                  <TreeItem last>
+                    <NativeSource
+                      reference={reference()}
+                      preview={preview()}
+                      prefs={props.prefs}
+                    />
+                  </TreeItem>
+                </Show>
+              </>
+            )}
           />
         </section>
       }

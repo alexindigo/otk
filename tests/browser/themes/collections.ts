@@ -1752,7 +1752,7 @@ export async function collections456(input: Inputs) {
               );
             const row = page.locator(".otk-work-log").filter({ has: fold });
             const stem = row.locator(
-              ".otk-tree-heading .otk-record-row .otk-tree-icon-stem",
+              ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-stem-paint",
             );
             const rule = await stem.evaluate(
               (el) => {
@@ -1763,7 +1763,7 @@ export async function collections456(input: Inputs) {
                   size: s.backgroundSize,
                   color: getComputedStyle(el.parentElement!).color,
                   labelColor: getComputedStyle(
-                    el.closest(".otk-record-row")!.querySelector(
+                    el.closest(".otk-tree-heading")!.querySelector(
                       ".otk-work-fold",
                     )!,
                   ).color,

@@ -69,6 +69,8 @@ export interface DisclosureProps {
   focusHome?: () => void;
   children?: (open: () => boolean) => Element;
   outgoing?: boolean;
+  /** The enclosing layout already owns the icon and caption tracks. */
+  trackAligned?: boolean;
 }
 
 /** Label variant of the shared in-flow disclosure. */
@@ -142,7 +144,10 @@ export default function Disclosure(props: DisclosureProps): Element {
           type="button"
           class={[
             "otk-disclosure-button",
-            { "is-outgoing": props.outgoing },
+            {
+              "is-outgoing": props.outgoing,
+              "is-track-aligned": props.trackAligned,
+            },
           ]}
           ref={(el) => trigger = el}
           aria-expanded={visible() ? "true" : "false"}

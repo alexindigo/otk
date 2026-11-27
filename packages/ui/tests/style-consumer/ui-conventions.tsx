@@ -22,7 +22,13 @@ import ToolLine from "../../components/ToolLine.tsx";
 import Todo from "../../components/Todo.tsx";
 import Clock from "../../components/Clock.tsx";
 import ChromeMeta from "../../components/ChromeMeta.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "../../components/Tree.tsx";
+import { ActivityIcon } from "../../components/ChromeIcons.tsx";
+import { DisclosureIcon } from "../../components/Disclosure.tsx";
+import {
+  TreeItem,
+  TreeNode,
+  treeTriggerClass,
+} from "../../components/Tree.tsx";
 import StatusLight from "../../components/StatusLight.tsx";
 import Subagents from "../../components/Subagents.tsx";
 import { UnknownPart } from "../../components/parts/UnknownPart.tsx";
@@ -122,6 +128,16 @@ function SubagentTimes() {
 }
 
 /** Controlled inputs go through the same owners as app data, not copied markup. */
+function SpanTrigger(props: { label: string }) {
+  return (
+    <button type="button" class={treeTriggerClass()}>
+      <DisclosureIcon open />
+      <ActivityIcon />
+      <span class="otk-control-label">{props.label}</span>
+    </button>
+  );
+}
+
 export default function UiConventions() {
   const surface = new URL(location.href).searchParams.get("surface");
   if (surface === "subagents") return <SubagentTimes />;
@@ -137,6 +153,34 @@ export default function UiConventions() {
       registerGenericTool,
     ]
   ) register(registries.tools);
+  if (surface === "trigger-span") {
+    return (
+      <section class="error-review-run" aria-label="Tree trigger spans">
+        <For each={[false, true]} keyed={(outgoing) => String(outgoing)}>
+          {(outgoing) => (
+            <TreeNode
+              outgoing={outgoing()}
+              trigger={{
+                variant: "span",
+                element: () => <SpanTrigger label="Branch" />,
+              }}
+              trail={() => <span>Trailing fact</span>}
+              body={() => (
+                <TreeItem last>
+                  <TreeNode
+                    trigger={{
+                      variant: "span",
+                      element: () => <SpanTrigger label="Child" />,
+                    }}
+                  />
+                </TreeItem>
+              )}
+            />
+          )}
+        </For>
+      </section>
+    );
+  }
   if (surface === "record-tree") {
     return (
       <section class="error-review-run">
@@ -336,13 +380,8 @@ export default function UiConventions() {
             label="Task"
             open={open()}
             onOpen={setOpen}
-            header={() => (
-              <div class="otk-control-row">
-                <TreeIcon>
-                  <StatusLight state="working" />
-                </TreeIcon>Task
-              </div>
-            )}
+            node={() => <StatusLight state="working" />}
+            header={() => <div class="otk-control-row">Task</div>}
             body={() => (
               <For
                 each={["First session", "Last session"]}
@@ -355,14 +394,9 @@ export default function UiConventions() {
                       open={open()}
                       onOpen={setOpen}
                       hasChildren
-                      header={() => (
-                        <div class="otk-control-row">
-                          <TreeIcon>
-                            <StatusLight state="none" />
-                          </TreeIcon>
-                          {label()}
-                        </div>
-                      )}
+                      node={() => <StatusLight state="none" />}
+                      header={() => <div class="otk-control-row">{label()}
+                      </div>}
                     />
                   </TreeItem>
                 )}

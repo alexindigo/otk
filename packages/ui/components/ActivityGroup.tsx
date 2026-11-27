@@ -3,7 +3,7 @@ import "./tools/ToolFrame.css" with { type: "text" };
 import "./ActivityGroup.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import type { ActivityGroup as Group } from "@otk/client";
-import { TreeIcon, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
@@ -61,7 +61,6 @@ export default function ActivityGroup(props: {
       class="otk-record-group-heading"
       failed={props.failed}
       outgoing={props.group.direction === "outgoing"}
-      icon={() => <TreeIcon>{props.icon?.() ?? <ActivityIcon />}</TreeIcon>}
       status={props.status ? () => props.status?.(open) : undefined}
       actions={props.actions?.(open)}
     >
@@ -177,6 +176,8 @@ export default function ActivityGroup(props: {
           fallback={props.breakouts?.()}
         >
           <TreeNode
+            class="otk-activity-group"
+            node={() => props.icon?.() ?? <ActivityIcon />}
             toggleHeader={props.collapsible !== false}
             label={props.group.failureTitle ||
               (props.group.silent

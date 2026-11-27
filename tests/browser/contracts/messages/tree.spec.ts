@@ -8,70 +8,54 @@ async function geometry(nodes: Locator) {
   const facts = await nodes.evaluateAll((nodes) =>
     nodes.map((node) => {
       const row = node.querySelector(":scope > .otk-tree-heading")!;
-      const flat = row.matches(".otk-tree-row");
-      const rail = row.querySelector(
-        flat ? ":scope > .otk-tree-junction" : ":scope > .otk-tree-own",
-      )!;
-      const box = flat
-        ? row.querySelector(":scope > .otk-tree-trigger-slot .otk-tree-toggle")
-        : rail.querySelector(".otk-tree-toggle");
+      const rail = row.querySelector(":scope > .otk-tree-junction")!;
+      const box = row.querySelector(
+        ":scope > .otk-tree-trigger-slot .otk-tree-toggle",
+      );
       const connector = rail.querySelector(".otk-tree-connector")!;
       const upper = rail.querySelector(".otk-tree-upper")!;
       const lower = rail.querySelector(".otk-tree-lower")!;
       const r = rail.getBoundingClientRect(), b = box?.getBoundingClientRect();
       const heading = rail.querySelector(
-        ".otk-tree-first-line, .otk-tree-junction-line",
+        ".otk-tree-junction-line",
       )!
         .getBoundingClientRect();
       const c = connector.getBoundingClientRect(),
         u = upper.getBoundingClientRect();
       const label = row.querySelector(
-        flat
-          ? ":scope > .otk-tree-frame > .otk-tree-label"
-          : ":scope > .otk-tree-label",
+        ":scope > .otk-tree-frame > .otk-tree-label",
       )!;
       const content = (label.firstElementChild ?? label)
         .getBoundingClientRect();
       const style = getComputedStyle(lower);
       const continuation = node.querySelector(
-        ":scope > .otk-tree-body > .otk-tree-continuation",
+        ":scope > .is-gap > .otk-tree-junction > .otk-tree-through-paint",
       );
-      const incoming = flat && rail.matches(".is-tee, .is-elbow")
-        ? rail
-        : node.querySelector(
-          ":scope > .otk-tree-heading > .otk-tree-incoming",
-        );
+      const incoming = rail.matches(".is-tee, .is-elbow") ? rail : null;
       const incomingBox = incoming?.getBoundingClientRect();
       const parent = node.parentElement?.closest(".otk-tree-node");
       const parentRail = parent?.querySelector(
-        // The content gutter can be wider than the native junction cell. The
-        // child guide follows the artwork axis, not the gutter's outer box.
-        ":scope > .otk-tree-heading .otk-tree-icon-art",
+        ":scope > .otk-tree-heading .otk-tree-node-lane",
       )?.getBoundingClientRect();
       const parentJunction = parent?.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-own",
+        ":scope > .otk-tree-heading > .otk-tree-junction",
       )?.getBoundingClientRect();
       const parentStem = parent?.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-icon-stem",
+        ":scope > .otk-tree-heading .otk-tree-node-lane.is-stem",
       )?.getBoundingClientRect();
-      const icon = row.querySelector(".otk-tree-icon, .otk-tree-node-slot") ??
-        parent?.querySelector(":scope > .otk-tree-heading .otk-tree-icon");
+      const icon = row.querySelector(".otk-tree-node-slot") ??
+        parent?.querySelector(":scope > .otk-tree-heading .otk-tree-node-slot");
       const svg = box?.querySelector("svg");
       const parentHeading = parent?.querySelector(":scope > .otk-tree-heading")
         ?.getBoundingClientRect();
       const firstChild = parent?.querySelector(
-        ":scope > .otk-tree-body > .otk-tree-children .otk-tree-node",
+        ":scope > .otk-tree-region .otk-tree-node",
       );
-      // The connector ends at the content-side lane, which now holds the
-      // separate node slot on flat rows. Nested rows still start at the label.
-      const contentEdge =
-        (flat ? row.querySelector(":scope > .otk-tree-frame")! : label)
-          .getBoundingClientRect();
+      const contentEdge = row.querySelector(":scope > .otk-tree-frame")!
+        .getBoundingClientRect();
       return {
         connected: node.classList.contains("is-connected"),
-        last: flat
-          ? rail.matches(".is-elbow")
-          : node.classList.contains("is-last"),
+        last: rail.matches(".is-elbow"),
         outgoing: node.classList.contains("is-outgoing"),
         box: b ? [b.x + b.width / 2, b.y + b.height / 2] : undefined,
         boxTop: b?.top,
@@ -115,7 +99,7 @@ async function geometry(nodes: Locator) {
             .backgroundSize,
         horizontalDots: getComputedStyle(connector).backgroundSize,
         tail: continuation
-          ? getComputedStyle(continuation, "::before").backgroundImage
+          ? getComputedStyle(continuation).backgroundImage
           : "none",
       };
     })
@@ -203,7 +187,7 @@ test.describe("work tree", () => {
     await openSession(state, page, "tstv1-otk");
     const root = page.locator(".otk-work-log > .otk-tree-node");
     await expect(
-      root.locator(":scope > .otk-tree-heading .otk-tree-icon-art svg"),
+      root.locator(":scope > .otk-tree-heading .otk-tree-node-slot svg"),
     )
       .toHaveCount(1);
     const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-control");
@@ -218,7 +202,11 @@ test.describe("work tree", () => {
     await page.keyboard.press("ArrowRight");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     const tool = page.locator(".otk-tool-toggle");
-    await expect(page.locator(".otk-tool-state > .otk-tree-icon svg"))
+    await expect(
+      page.locator(
+        "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot svg",
+      ),
+    )
       .toHaveCount(1);
     await tool.click();
     await expect(page.locator(".otk-code")).toContainText("foldedSecret");
@@ -371,7 +359,7 @@ test.describe("activity tree", () => {
     const span = page.locator(".otk-record-group").first();
     await expect(
       span.locator(
-        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-icon-art svg",
+        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot svg",
       ),
     ).toHaveCount(1);
     await expect(span).toHaveAttribute("data-count", "3");

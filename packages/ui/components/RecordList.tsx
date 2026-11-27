@@ -34,9 +34,7 @@ export default function RecordList<T>(props: {
           <TreeItem
             last={props.items.length > 0 &&
               props.key(item()) === props.key(props.items.at(-1)!)}
-            outgoing={props.outgoing}
-            connected={!props.outgoingItem ||
-              props.outgoingItem(item()) === !!props.outgoing}
+            outgoing={props.outgoingItem?.(item()) ?? props.outgoing}
           >
             <ContentSlot content={() => props.render(item)} />
           </TreeItem>

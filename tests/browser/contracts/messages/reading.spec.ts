@@ -239,13 +239,13 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   );
   const disclosure = await fold.evaluate((el) => {
     const heading = el.closest(".otk-tree-heading")!;
-    const rail = heading.querySelector(".otk-tree-own")!
+    const rail = heading.querySelector(".otk-tree-junction")!
       .getBoundingClientRect();
     const icon = heading.querySelector(".otk-tree-toggle")!
         .getBoundingClientRect(),
       label = el.querySelector(".otk-work-label")!.getBoundingClientRect();
-    const row = el.closest(".otk-record-row")!;
-    const kind = row.querySelector(".otk-tree-icon")!.getBoundingClientRect();
+    const kind = heading.querySelector(".otk-tree-node-lane")!
+      .getBoundingClientRect();
     return {
       center: (icon.top + icon.bottom - label.top - label.bottom) / 2,
       gap: kind.left - icon.right,

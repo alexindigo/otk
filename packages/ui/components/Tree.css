@@ -6,44 +6,18 @@
   --tree-default-row-height: calc(var(--tree-icon-size) * 2);
   --selection-mark: calc(3 * var(--otk-unit));
 }
+/* The disclosure, artwork, content and paint share one row grid. */
 .otk-tree-node {
   min-inline-size: 0;
-  --tree-row-height: var(--tree-height, var(--tree-default-row-height));
-  --tree-heading-flow: row;
 }
-.otk-tree-heading:not(.otk-tree-row) {
-  display: grid;
-  grid-template-columns: var(--tree-indent) minmax(0, 1fr);
+:where(.otk-tree-node) {
+  --tree-row-gap: 0px;
 }
-.otk-tree-own {
-  grid-area: 1 / 1;
+.otk-tree-region {
+  display: block;
 }
-.otk-tree-body {
-  display: grid;
-  grid-template-columns: var(--tree-indent) minmax(0, 1fr);
-}
-.otk-tree-junction {
-  display: grid;
-  grid-template-rows: var(--tree-row-height, var(--tree-default-row-height))
-    1fr;
-  grid-template-columns: 1fr var(--tree-junction-size, 0px) 1fr;
-  align-self: stretch;
-}
-.otk-tree-first-line {
-  grid-area: 1 / 1 / 2 / -1;
-  display: grid;
-  grid-template-rows: 1fr var(--tree-junction-size, 0px) 1fr;
-  grid-template-columns: subgrid;
-}
-.otk-tree-junction.has-toggle {
-  --tree-junction-size: var(--tree-box-size);
-}
-.otk-tree-first-line > :is(.otk-tree-upper, .otk-tree-lower),
-.otk-tree-extension,
-.otk-tree-icon-stem,
-.otk-tree-icon-extension,
-.otk-tree-continuation::before,
 .otk-tree-lane.is-through > .otk-tree-through-paint,
+.otk-tree-junction.is-through > .otk-tree-through-paint,
 .otk-tree-junction:is(.is-tee, .is-elbow) .otk-tree-upper,
 .otk-tree-junction.is-tee :is(.otk-tree-lower, .otk-tree-lane-extension),
 .otk-tree-node-lane.is-stem :is(.otk-tree-stem-paint, .otk-tree-lane-extension) {
@@ -52,14 +26,8 @@
     transparent 1px 2px);
   background-size: 1px 2px;
 }
-.otk-tree-icon-stem,
-.otk-tree-icon-extension,
-.otk-tree-continuation::before {
-  justify-self: end;
-}
 .otk-tree-upper,
-.otk-tree-lower,
-.otk-tree-extension {
+.otk-tree-lower {
   grid-column: 2;
   justify-self: center;
 }
@@ -69,14 +37,6 @@
 .otk-tree-lower {
   grid-row: 3;
 }
-.otk-tree-extension {
-  grid-row: 2;
-}
-.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > .otk-tree-first-line > .otk-tree-upper,
-.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own :is(.otk-tree-lower, .otk-tree-extension),
-.otk-tree-node.is-last > .otk-tree-heading > .otk-tree-incoming :is(.otk-tree-lower, .otk-tree-extension) {
-  background-image: none;
-}
 .otk-tree-connector {
   grid-area: 2 / 3;
   align-self: center;
@@ -85,127 +45,8 @@
     transparent 1px 2px);
   background-size: 2px 1px;
 }
-.otk-tree-node:not(.is-connected) > .otk-tree-heading > .otk-tree-own > .otk-tree-first-line > .otk-tree-connector {
-  background-image: none;
-}
-.otk-tree-toggle-slot {
-  grid-area: 2 / 2;
-  place-self: center;
-  display: grid;
-  place-items: center;
-}
-.otk-tree-label,
-.otk-tree-children {
-  min-inline-size: 0;
-}
-.otk-tree-label {
-  grid-area: 1 / 2;
-  display: grid;
-  align-items: center;
-  min-block-size: var(--tree-row-height, var(--tree-default-row-height));
-}
-.otk-tree-label > * {
-  align-self: stretch;
-}
-.otk-tree-icon {
-  font-size: var(--tree-icon-size);
-  display: grid;
-  /* A borrowed content gutter only extends the trailing track. */
-  grid-template-columns: repeat(2, calc(var(--tree-indent) / 2)) minmax(0, 1fr);
-  inline-size: var(--tree-content-gutter, var(--tree-indent));
-  min-inline-size: var(--tree-content-gutter, var(--tree-indent));
-  flex: 0 0 var(--tree-content-gutter, var(--tree-indent));
-  align-self: stretch;
-  color: var(--otk-fg-3);
-}
-.otk-tree-icon.has-extension {
-  grid-template-rows: var(--tree-row-height, var(--tree-default-row-height))
-    1fr;
-}
-.otk-tree-icon-line {
-  grid-area: 1 / 1 / 2 / -1;
-  display: grid;
-  grid-template: 1fr auto 1fr / subgrid;
-}
-.otk-tree-icon-extension {
-  grid-area: 2 / 1;
-  visibility: hidden;
-}
-.otk-tree-icon-stem {
-  grid-area: 3 / 1;
-  visibility: hidden;
-}
-.otk-tree-icon.has-stem :is(.otk-tree-icon-stem, .otk-tree-icon-extension) {
-  visibility: visible;
-}
-.otk-tree-icon-art {
-  grid-area: 2 / 1 / 3 / 3;
-  place-self: center;
-  display: grid;
-  place-items: center;
-}
-.otk-tree-icon.is-outgoing {
-  grid-template-columns: minmax(0, 1fr) repeat(2, calc(var(--tree-indent) / 2));
-}
-.otk-tree-icon.is-outgoing .otk-tree-icon-art {
-  grid-column: 2 / 4;
-}
-.otk-tree-icon.is-outgoing :is(.otk-tree-icon-stem, .otk-tree-icon-extension) {
-  grid-column: 3;
-  justify-self: start;
-}
-.otk-tree-icon-art > svg {
-  inline-size: var(--tree-icon-size);
-  block-size: var(--tree-icon-size);
-}
-.otk-tree-continuation {
-  grid-area: 1 / 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-.otk-tree-continuation::before {
-  content: "";
-}
-.otk-tree-node:is(.is-last, :not(.is-connected)) > .otk-tree-body > .otk-tree-continuation::before {
-  background-image: none;
-}
-.otk-tree-children {
-  grid-area: 1 / 2;
-}
-.otk-tree-node.is-outgoing {
-  --tree-heading-flow: row-reverse;
-}
-.otk-tree-node.is-outgoing:not(.is-flat) > :is(.otk-tree-heading, .otk-tree-body, .otk-tree-feedback) {
-  grid-template-columns: minmax(0, 1fr) var(--tree-indent);
-}
-.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own,
-.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-continuation {
-  grid-column: 2;
-}
-.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-label,
-.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-children,
-.otk-tree-node.is-outgoing > .otk-tree-feedback > .otk-tree-feedback-content {
-  grid-column: 1;
-}
-.otk-tree-node.is-outgoing > .otk-tree-body > .otk-tree-continuation::before {
-  grid-column: 2;
-  justify-self: start;
-}
-.otk-tree-node.is-outgoing > .otk-tree-heading > .otk-tree-own > .otk-tree-first-line > .otk-tree-connector {
-  grid-column: 1;
-}
-.otk-tree-feedback {
-  display: grid;
-  grid-template-columns: var(--tree-indent) minmax(0, 1fr);
-}
-.otk-tree-feedback-content {
-  grid-column: 2;
-  min-inline-size: 0;
-}
 .otk-tree-selection {
-  grid-area: 1 / 1;
-  place-self: start;
-  block-size: var(--tree-row-height, var(--tree-default-row-height));
+  place-self: stretch start;
   display: grid;
   align-items: center;
 }
@@ -218,52 +59,6 @@
 .otk-tree-node.has-selection > .otk-tree-heading > .otk-tree-selection > .otk-tree-selection-mark {
   background: var(--otk-fg);
 }
-.otk-tree-node.is-compact:not(.is-flat) > .otk-tree-heading {
-  grid-template-columns: var(--space-2) minmax(0, 1fr) var(--space-2);
-}
-.otk-tree-node.is-compact > .otk-tree-heading > .otk-tree-own {
-  display: none;
-}
-.otk-tree-node.is-compact > .otk-tree-body {
-  grid-template-columns: minmax(0, 1fr);
-}
-.otk-tree-node.is-compact > .otk-tree-body > .otk-tree-continuation {
-  display: none;
-}
-.otk-tree-node.is-compact > .otk-tree-body > .otk-tree-children {
-  grid-column: 1;
-}
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > :is(.otk-tree-heading, .otk-tree-feedback) {
-  grid-template-columns: var(--selection-mark) var(--tree-indent) minmax(0,
-    1fr);
-}
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-heading > .otk-tree-own {
-  grid-column: 2;
-}
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-heading > .otk-tree-label,
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-feedback > .otk-tree-feedback-content {
-  grid-column: 3;
-}
-.otk-tree-node.has-selection-slot:not(.is-flat) > .otk-tree-heading > .otk-tree-selection {
-  grid-column: 1;
-}
-/* A nested sidebar row reserves its own selection track. Indent the body
-   by one junction; let the ancestor guide also span the selection track. */
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body {
-  grid-template-columns: var(--tree-indent) var(--selection-mark) minmax(0,
-    1fr);
-}
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body > .otk-tree-children {
-  grid-column: 2 / -1;
-}
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body > .otk-tree-continuation {
-  grid-column: 1 / 3;
-  grid-template-columns: var(--selection-mark) 1fr 1fr;
-  pointer-events: none;
-}
-.otk-tree-node.has-selection-slot:not(.is-compact, .is-flat) > .otk-tree-body > .otk-tree-continuation::before {
-  grid-column: 2;
-}
 
 .otk-tree-row {
   --tree-line: var(--tree-height, var(--tree-default-row-height));
@@ -273,18 +68,21 @@
     [edge-end lanes-start] auto
     [lanes-end junction-start trigger-start] var(--tree-indent)
     [junction-end node-start] var(--tree-indent)
-    [node-end label-start] minmax(0, max-content)
+    [node-end] var(--tree-caption-gap, 0px)
+    [label-start] minmax(0, max-content)
     [label-end trigger-end trail-start] minmax(0, 1fr) [trail-end];
-  grid-template-rows: [line-start] minmax(var(--tree-line), auto)
-    [line-end feedback-start] auto [feedback-end];
+  grid-template-rows: [line-start] var(--tree-line)
+    [line-end extension-start] auto [extension-end feedback-start] auto
+    [feedback-end];
 }
 .otk-tree-node.has-selection-slot > .otk-tree-row {
   --tree-edge: var(--selection-mark);
 }
 .otk-tree-row.is-outgoing {
   direction: rtl;
+  --tree-heading-flow: row-reverse;
 }
-.otk-tree-row.is-outgoing .otk-tree-slot {
+.otk-tree-row.is-outgoing :is(.otk-tree-slot, .otk-tree-trigger > :nth-child(3)) {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -308,6 +106,7 @@
   justify-self: center;
 }
 .otk-tree-row > .otk-tree-junction {
+  display: grid;
   grid-column: junction;
   grid-row: line-start / feedback-end;
   grid-template-columns: 1fr var(--tree-junction-size, 0px) 1fr;
@@ -327,7 +126,7 @@
   grid-template-columns: subgrid;
   grid-template-rows: 1fr var(--tree-junction-size, 0px) 1fr;
 }
-.otk-tree-junction.is-none > .otk-tree-junction-line > .otk-tree-connector {
+.otk-tree-junction:not(.is-tee, .is-elbow) .otk-tree-connector {
   visibility: hidden;
 }
 .otk-tree-row.is-outgoing .otk-tree-junction-line > .otk-tree-connector {
@@ -336,7 +135,7 @@
 }
 .otk-tree-junction > .otk-tree-lane-extension {
   grid-column: 2;
-  grid-row: feedback;
+  grid-row: extension-start / feedback-end;
   justify-self: center;
 }
 .otk-tree-trigger-slot {
@@ -391,21 +190,27 @@
   justify-self: center;
 }
 .otk-tree-node-lane.is-stem > .otk-tree-lane-extension {
-  grid-row: feedback;
+  grid-row: extension-start / feedback-end;
   justify-self: center;
 }
 .otk-tree-frame > .otk-tree-label {
   grid-column: label-start / trail-end;
-  grid-row: line;
-  min-block-size: 0;
+  grid-row: line-start / extension-end;
+  min-inline-size: 0;
 }
-.otk-tree-row:not(.has-node) .otk-tree-frame > .otk-tree-label {
+.otk-tree-row:not(.has-node, .align-label) .otk-tree-frame > .otk-tree-label {
   grid-column: node-start / trail-end;
 }
 .otk-tree-feedback-slot {
   grid-column: label-start / trail-end;
   grid-row: feedback;
   min-inline-size: 0;
+}
+.otk-tree-row.has-feedback-gutter > .otk-tree-frame > .otk-tree-feedback-slot {
+  grid-column: node-start / trail-end;
+  display: grid;
+  grid-template-columns: subgrid;
+  column-gap: 0;
 }
 .otk-tree-row.is-compact {
   grid-template-columns: [edge-start] var(--space-2)
@@ -416,4 +221,60 @@
 .otk-tree-row.is-compact .otk-tree-node-lane :is(.otk-tree-stem-paint, .otk-tree-lane-extension),
 .otk-tree-row.is-compact.has-node .otk-tree-label {
   display: none;
+}
+
+.otk-tree-node:not(.is-flat) > .otk-tree-row .otk-tree-label {
+  display: grid;
+  grid-auto-rows: minmax(var(--tree-line, var(--tree-default-row-height)),
+    auto);
+  align-content: start;
+}
+.otk-tree-node:not(.is-flat) > .otk-tree-row:is(.has-node, .align-label) {
+  --tree-caption-gap: var(--space-2);
+}
+.otk-tree-row.is-gap {
+  --tree-line: 0px;
+  block-size: var(--tree-row-gap, 0px);
+  grid-template-rows: [line-start] 0 [line-end extension-start] 0
+    [extension-end feedback-start] minmax(0, 1fr) [feedback-end];
+  pointer-events: none;
+}
+.otk-tree-junction > .otk-tree-through-paint {
+  grid-column: 2;
+  grid-row: line-start / feedback-end;
+  justify-self: center;
+}
+.otk-tree-row > .otk-tree-trigger {
+  grid-column: trigger;
+  grid-row: line;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  align-items: center;
+  min-inline-size: 0;
+  padding: 0;
+}
+.otk-tree-trigger > :nth-child(1) {
+  grid-column: junction;
+  place-self: center;
+  min-block-size: 0;
+}
+.otk-tree-trigger > :nth-child(2) {
+  grid-column: node;
+  justify-self: center;
+}
+.otk-tree-trigger > :nth-child(3) {
+  grid-column: label;
+  min-inline-size: 0;
+}
+.otk-tree-row.has-span-trigger .otk-tree-node-line {
+  grid-template-rows: 1fr var(--tree-icon-size) 1fr;
+}
+.otk-tree-frame > .otk-tree-trail-slot {
+  grid-column: trail;
+  grid-row: line;
+  min-inline-size: 0;
+}
+.otk-tree-frame:has(> .otk-tree-trail-slot) > .otk-tree-label {
+  grid-column-end: label-end;
 }
