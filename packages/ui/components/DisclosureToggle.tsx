@@ -3,8 +3,6 @@ import type { Element } from "solid-js";
 import { DisclosureIcon } from "./Disclosure.tsx";
 import "./DisclosureToggle.css" with { type: "text" };
 
-export { DisclosureIcon };
-
 /** Decorative junction for a header's existing button; shares the same owned
  * tree geometry as the independent disclosure button. */
 export function DisclosureLabel(

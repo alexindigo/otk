@@ -202,6 +202,9 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
                 await expect(span.locator("[data-role=context]")).toHaveCount(
                   3,
                 );
+                await expect(span.locator(
+                  "button.otk-tree-trigger.otk-record-group-toggle",
+                )).toHaveCount(2);
                 await expect.poll(() => treeLaneFindings(span)).toEqual([]);
                 const record = span.locator(
                   '[data-native-record="fixture/record"]',
@@ -258,6 +261,9 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
                 const outgoing = record.locator(
                   "xpath=ancestor::section[@data-record-members][1]",
                 );
+                await expect(record.getByRole("button", {
+                  name: "Outgoing context",
+                })).toHaveClass(/otk-tree-trigger/);
                 await expect.poll(() => treeLaneFindings(outgoing)).toEqual([]);
               }
             },

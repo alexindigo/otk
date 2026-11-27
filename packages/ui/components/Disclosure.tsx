@@ -8,7 +8,9 @@ import {
   type DisclosureState,
 } from "@otk/client";
 import {
+  type Accessor,
   createContext,
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -23,6 +25,13 @@ import "./Disclosure.css" with { type: "text" };
 
 const DisclosuresContext = createContext<Disclosures | undefined>(undefined);
 const DisclosureFocusContext = createContext<(() => boolean) | null>(null);
+export const DisclosureFocusHome = createContext<(() => void) | null>(null);
+/** Containers can supply placement for the native trigger. */
+export const TreeTriggerContext = createContext<string | null>(null);
+
+export function treeTriggerClass(): string | undefined {
+  return useContext(TreeTriggerContext) ?? undefined;
+}
 
 /** The shared mount for shell and standalone disclosure owners. */
 export function DisclosuresProvider(
@@ -47,11 +56,51 @@ function useOwner(): Disclosures {
 
 /** Read or forward intent without keeping a second copy of the open bit. */
 export function useDisclosure(
-  kind: DisclosureKind,
-  identity: DisclosureIdentity,
-  input?: DisclosureContextInput,
+  kind: DisclosureKind | Accessor<DisclosureKind>,
+  identity: DisclosureIdentity | Accessor<DisclosureIdentity>,
+  input?: DisclosureContextInput | Accessor<DisclosureContextInput | undefined>,
 ): DisclosureState {
-  return useOwner().bind(kind, identity, input);
+  const owner = useOwner();
+  const target = createMemo(() => ({
+    kind: typeof kind === "function" ? kind() : kind,
+    identity: typeof identity === "function" ? identity() : identity,
+  }));
+  const binding = createMemo(() =>
+    owner.bind(
+      target().kind,
+      target().identity,
+      typeof input === "function" ? input() : input,
+    )
+  );
+  // Standalone transcript owners can use a non-reactive client state factory.
+  const [revision, publish] = createSignal(0);
+  createEffect(target, ({ kind, identity }) => {
+    onCleanup(owner.subscribe(() => publish((n) => n + 1), kind, identity));
+  });
+  const current = () => {
+    revision();
+    return binding();
+  };
+  return {
+    open: () => current().open(),
+    chosen: () => current().chosen(),
+    pending: () => current().pending(),
+    error: () => current().error(),
+    failureOrder: () => current().failureOrder(),
+    set: (open) => binding().set(open),
+    retry: () => binding().retry(),
+  };
+}
+
+/** Subscribe once when a view derives membership over multiple identities. */
+export function useDisclosureOwner() {
+  const owner = useOwner();
+  const [revision, publish] = createSignal(0);
+  onCleanup(owner.subscribe(() => publish((n) => n + 1)));
+  return () => {
+    revision();
+    return owner;
+  };
 }
 
 // Temporary export for DisclosureToggle until its transcript/sidebar consumers
@@ -74,33 +123,46 @@ export interface DisclosureProps {
   kind: DisclosureKind;
   identity: DisclosureIdentity;
   input?: DisclosureContextInput;
-  variant: "label";
+  variant: "label" | "meta" | "compact";
   label: string;
+  accessibleLabel?: string;
+  labelContent?: () => Element;
   lead?: () => Element;
   meta?: () => Element;
   hasContent: () => boolean;
   focusHome?: () => void;
   children?: (open: () => boolean) => Element;
   outgoing?: boolean;
+  class?: string;
+  recordKind?: string;
+  /** A membership control can address its container's existing region. */
+  controls?: string;
+  regionId?: string;
+  /** Containers arrange these slots without borrowing disclosure behavior. */
+  layout?: (slots: DisclosureSlots) => Element;
   /** The enclosing layout already owns the icon and caption tracks. */
   trackAligned?: boolean;
 }
 
-/** Label variant of the shared in-flow disclosure. */
+interface DisclosureSlots {
+  trigger(): Element;
+  region(): Element;
+  open(): boolean;
+  frame(element: HTMLElement): void;
+}
+
+/** One state binding, keyboard contract and region lifetime for every fold. */
 export default function Disclosure(props: DisclosureProps): Element {
-  const owner = useOwner();
-  const [revision, publish] = createSignal(0);
-  const binding = createMemo(() =>
-    owner.bind(props.kind, props.identity, props.input)
+  const state = useDisclosure(
+    () => props.kind,
+    () => props.identity,
+    () => props.input,
   );
-  onCleanup(owner.subscribe(() => publish((n) => n + 1)));
-  const visible = () => {
-    revision();
-    return binding().open();
-  };
+  const visible = () => props.hasContent() && state.open();
   const ancestor = useContext(DisclosureFocusContext);
+  const focusHome = useContext(DisclosureFocusHome);
   const id = createUniqueId();
-  let frame: HTMLDivElement | undefined;
+  let frame: HTMLElement | undefined;
   let region: HTMLDivElement | undefined;
   let trigger: HTMLButtonElement | undefined;
   const focus = (): boolean => {
@@ -112,20 +174,30 @@ export default function Disclosure(props: DisclosureProps): Element {
   };
   const label = () => (
     <>
-      {props.lead?.()}
-      <span class="otk-disclosure-label otk-control-label" title={props.label}>
-        {props.label}
+      <span
+        class={["otk-disclosure-label otk-control-label", {
+          "has-content": !!props.labelContent,
+        }]}
+        title={props.label}
+      >
+        {props.labelContent?.() ?? props.label}
       </span>
       {props.meta?.()}
     </>
+  );
+  const caption = (slot?: string) => (
+    <Show when={slot} fallback={<>{props.lead?.()}{label()}</>}>
+      <span class="otk-disclosure-lead">{props.lead?.()}</span>
+      <span class="otk-disclosure-caption">{label()}</span>
+    </Show>
   );
   const change = (value: boolean, event: MouseEvent | KeyboardEvent) => {
     if (value === visible()) return;
     if (!value && region?.contains(document.activeElement)) focus();
     discloseInViewport(
-      frame,
+      frame ?? trigger,
       value,
-      (next) => void binding().set(next),
+      (next) => void state.set(next),
       event.isTrusted,
       trigger,
     );
@@ -136,7 +208,8 @@ export default function Disclosure(props: DisclosureProps): Element {
     });
     return props.children?.(visible);
   }
-  function Frame() {
+  function Trigger() {
+    const slot = treeTriggerClass();
     onCleanup(() => {
       if (
         !trigger?.contains(document.activeElement) &&
@@ -147,64 +220,95 @@ export default function Disclosure(props: DisclosureProps): Element {
           !document.activeElement?.isConnected ||
           document.activeElement === document.body
         ) {
-          if (!ancestor?.()) props.focusHome?.();
+          if (!ancestor?.()) (props.focusHome ?? focusHome)?.();
         }
       });
     });
     return (
-      <div class="otk-disclosure-frame" ref={(el) => frame = el}>
-        <button
-          type="button"
-          class={[
-            "otk-disclosure-button",
-            {
-              "is-outgoing": props.outgoing,
-              "is-track-aligned": props.trackAligned,
-            },
-          ]}
-          ref={(el) => trigger = el}
-          aria-expanded={visible() ? "true" : "false"}
-          aria-controls={id}
-          onClick={(event) => change(!visible(), event)}
-          onKeyDown={(event) => {
-            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-            event.preventDefault();
-            event.stopPropagation();
-            change(event.key === "ArrowRight", event);
-          }}
-        >
-          <DisclosureIcon open={visible()} />
-          {label()}
-        </button>
-        <div
-          class="otk-disclosure-region"
-          id={id}
-          role="group"
-          hidden={!visible()}
-          ref={(el) => region = el}
-        >
-          <DisclosureFocusContext value={focus}>
-            <Show when={visible()}>
-              <Body />
-            </Show>
-          </DisclosureFocusContext>
-        </div>
-      </div>
+      <button
+        type="button"
+        data-record-kind={props.recordKind}
+        data-no-reorder={slot ? "" : undefined}
+        class={["otk-disclosure-button", props.class, slot, {
+          "is-outgoing": !slot && props.outgoing,
+          "is-track-aligned": props.trackAligned,
+          "is-meta": props.variant === "meta",
+          "is-compact": props.variant === "compact",
+        }]}
+        ref={(el) => trigger = el}
+        aria-expanded={visible() ? "true" : "false"}
+        aria-controls={props.controls ?? props.regionId ?? id}
+        aria-label={props.variant === "compact"
+          ? props.label
+          : props.accessibleLabel}
+        title={props.variant === "compact" ? props.label : undefined}
+        onClick={(event) => change(!visible(), event)}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          event.stopPropagation();
+          change(event.key === "ArrowRight", event);
+        }}
+      >
+        <DisclosureIcon open={visible()} />
+        <Show when={props.variant !== "compact"}>{caption(slot)}</Show>
+      </button>
     );
   }
-  return (
+  function Leaf() {
+    const slot = treeTriggerClass();
+    return (
+      <span class={["otk-disclosure-leaf", props.class, slot]}>
+        <span />
+        {caption(slot)}
+      </span>
+    );
+  }
+  const triggerSlot = () => (
     <Show
       when={props.hasContent()}
       fallback={
         <Show when={DISCLOSURE_KINDS[props.kind].empty === "leaf"}>
-          <div class="otk-disclosure-leaf">
-            <span />
-            {label()}
-          </div>
+          <Leaf />
         </Show>
       }
     >
-      <Frame />
+      <Trigger />
+    </Show>
+  );
+  const regionSlot = () => (
+    <div
+      class="otk-disclosure-region"
+      id={props.regionId ?? id}
+      role="group"
+      hidden={!visible()}
+      ref={(el) => region = el}
+    >
+      <DisclosureFocusContext value={focus}>
+        <Show when={visible()}>
+          <Body />
+        </Show>
+      </DisclosureFocusContext>
+    </div>
+  );
+  const frameSlot = (element: HTMLElement) => frame = element;
+  if (props.layout) {
+    return props.layout({
+      trigger: triggerSlot,
+      region: regionSlot,
+      open: visible,
+      frame: frameSlot,
+    });
+  }
+  if (props.controls) return triggerSlot();
+  return (
+    <Show
+      when={props.hasContent() || DISCLOSURE_KINDS[props.kind].empty === "leaf"}
+    >
+      <div class="otk-disclosure-frame" ref={frameSlot}>
+        {triggerSlot()}
+        {regionSlot()}
+      </div>
     </Show>
   );
 }

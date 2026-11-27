@@ -230,18 +230,25 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  // TreeNode and RecordRow own adjacent disclosure, kind and label slots.
+  // Disclosure owns the hit target; TreeNode owns the adjacent tracks.
   await revealAcquired(page, ".otk-work-fold");
   const fold = page.locator(".otk-work-fold");
-  await expect(fold.locator(".otk-work-label")).toHaveCSS(
-    "font",
-    await fold.evaluate((el) => getComputedStyle(el).font),
-  );
+  for (
+    const property of ["font-size", "font-family", "font-weight", "line-height"]
+  ) {
+    await expect(fold.locator(".otk-work-label")).toHaveCSS(
+      property,
+      await fold.evaluate(
+        (el, property) => getComputedStyle(el).getPropertyValue(property),
+        property,
+      ),
+    );
+  }
   const disclosure = await fold.evaluate((el) => {
     const heading = el.closest(".otk-tree-heading")!;
     const rail = heading.querySelector(".otk-tree-junction")!
       .getBoundingClientRect();
-    const icon = heading.querySelector(".otk-tree-toggle")!
+    const icon = el.querySelector(".otk-disclosure-icon svg")!
         .getBoundingClientRect(),
       label = el.querySelector(".otk-work-label")!.getBoundingClientRect();
     const kind = heading.querySelector(".otk-tree-node-lane")!

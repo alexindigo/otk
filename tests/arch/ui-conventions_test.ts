@@ -663,8 +663,8 @@ Deno.test("UI convention: folded record counts are neutral metadata, not per-kin
   const source = await Deno.readTextFile(
     "packages/ui/components/RecordKinds.tsx",
   );
-  assert(source.includes("<ChromeMeta>{fold.label}</ChromeMeta>"));
-  assert(source.includes("<DisclosureToggle"));
+  assert(source.includes('variant="meta"'));
+  assert(source.includes("<Disclosure"));
   assert(!/step-start|step-finish|opencode-v1|display:\s*none/.test(source));
   const values = foldRecords([1, 2], () => ({
     kindLabel: "fixture",
@@ -1136,6 +1136,9 @@ export function conventionErrors(
       if (
         rule === "masks" &&
         /tree-(?:toggle|junction|icon-art)|disclosure/.test(selector) &&
+        // A whole interactive target may tint on hover; the glyph and its
+        // slot still cannot cover a line with paint.
+        selector !== ".otk-disclosure-button:hover" &&
         ["fill", "background", "background-color"].some((key) =>
           d.has(key) && !["none", "transparent"].includes(d.get(key)!)
         )
@@ -1169,8 +1172,7 @@ export function conventionErrors(
       ) fail(selector);
       if (
         rule === "disclosure" &&
-        path !== "packages/ui/components/DisclosureToggle.css" &&
-        path !== "packages/ui/components/Disclosure.css" &&
+        !/^packages\/ui\/components\/Disclosure(?:Toggle)?\.css$/.test(path) &&
         /\.otk-disclosure-[\w-]+/.test(selector)
       ) fail(selector);
       if (

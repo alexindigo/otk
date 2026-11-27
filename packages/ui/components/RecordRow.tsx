@@ -9,6 +9,8 @@ import "./RecordRow.css" with { type: "text" };
 /** Shared inline record layout; consumers supply presentation and callbacks. */
 export default function RecordRow(props: {
   class?: string;
+  /** The consumer's grid can reserve an intrinsic track for these accessories. */
+  intrinsic?: boolean;
   icon?(): Element;
   children: Element;
   status?(): Element;
@@ -22,6 +24,7 @@ export default function RecordRow(props: {
         "is-outgoing": props.outgoing,
         "has-icon": !!props.icon,
         "has-action-slot": props.actions !== undefined,
+        "is-intrinsic": props.intrinsic,
       }]}
     >
       <FailureSignal

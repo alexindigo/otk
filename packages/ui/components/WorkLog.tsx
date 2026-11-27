@@ -2,63 +2,55 @@
 import "./WorkLog.css" with { type: "text" };
 import type { Element } from "solid-js";
 import { retainedWorkDisclosure } from "../features/transcript-context.tsx";
-import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
 import { WorkLogIcon } from "./ChromeIcons.tsx";
-import RecordRow from "./RecordRow.tsx";
 import { TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
-import { discloseInViewport } from "./viewport.ts";
+import Disclosure from "./Disclosure.tsx";
+import { useRecordKindsRegion } from "./RecordKinds.tsx";
 
 export default function WorkLog(
   props: {
     owner: string;
     prefs?: Preferences;
     required?: boolean;
-    meta?(primary: () => Element): Element;
+    meta?(): Element;
     body(): Element;
   },
 ): Element {
-  const [open, setOpen] = retainedWorkDisclosure(
-    props.owner,
+  const work = retainedWorkDisclosure(
+    () => props.owner,
     () => props.prefs ?? {},
     () => !!props.required,
   );
-  let frame: HTMLElement | undefined;
-  const change = (value: boolean, event: MouseEvent | KeyboardEvent) =>
-    discloseInViewport(
-      frame,
-      value,
-      setOpen,
-      event.isTrusted && value !== open(),
-    );
-  const primary = (toggleID: string) => (
-    <RecordRow>
-      <button
-        id={toggleID}
-        type="button"
-        title="Work log"
-        class="otk-work-fold otk-tree-control"
-        aria-expanded={open() ? "true" : "false"}
-        onClick={(event) => change(!open(), event)}
-      >
-        <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
-      </button>
-    </RecordRow>
-  );
+  const regionId = useRecordKindsRegion();
   return (
-    <section ref={(element) => frame = element} class="otk-work-log">
-      <TreeNode
-        toggleHeader
-        node={() => <WorkLogIcon />}
+    <section class="otk-work-log">
+      <Disclosure
+        kind="work"
+        identity={work.identity()}
+        input={work.input}
+        variant="label"
+        class="otk-work-fold"
         label="Work log"
-        open={open()}
-        onOpen={change}
-        header={(_connected, toggleID) =>
-          props.meta
-            ? props.meta(() => primary(toggleID))
-            : <MetaRow>{primary(toggleID)}</MetaRow>}
-        body={() => <div class="otk-work-body">{props.body()}</div>}
-      />
+        labelContent={() => (
+          <ChromeMeta class="otk-work-label">Work log</ChromeMeta>
+        )}
+        lead={() => <WorkLogIcon />}
+        hasContent={() => true}
+        regionId={regionId}
+        layout={({ trigger, region, open, frame }) => (
+          <TreeNode
+            ref={frame}
+            trigger={{ variant: "span", element: trigger }}
+            bodyVisible={open()}
+            trail={props.meta}
+            region={region}
+          />
+        )}
+      >
+        {() => <div class="otk-work-body">{props.body()}</div>}
+      </Disclosure>
     </section>
   );
 }

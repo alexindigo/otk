@@ -3,7 +3,7 @@
   flex: 1;
   min-inline-size: 0;
 }
-.otk-record-row.has-action-slot {
+.otk-record-row.has-action-slot:not(.is-intrinsic) {
   container: record-row / inline-size;
 }
 .otk-record-row-grid {
@@ -54,6 +54,9 @@
 .otk-record-row-status:has(.otk-record-row-facts:not(:empty)),
 .otk-record-row-actions {
   margin-inline-start: var(--space-2);
+}
+.otk-record-row.is-intrinsic .otk-record-row-actions {
+  max-inline-size: 100%;
 }
 .otk-record-row.is-outgoing > .otk-record-row-grid {
   grid-template: "actions main" / auto minmax(0, 1fr);

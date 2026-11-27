@@ -66,7 +66,6 @@ export function actionControls(path: string, text: string): number[] {
 // M6 work packages are listed in m6-failures-feedback/plan.md and its addenda.
 // The initial inventory is frozen at adoption; counts may only shrink.
 const PENDING: Record<string, number> = {
-  "packages/ui/components/ActivityGroup.tsx": 1,
   "packages/ui/components/ChoiceFrame.tsx": 2,
   "packages/ui/components/ChromeMeta.tsx": 1,
   "packages/ui/components/CommandMenu.tsx": 1,
@@ -96,7 +95,6 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/ProjectSessions.tsx": 1,
   "packages/ui/components/ProjectTabs.tsx": 3,
   "packages/ui/components/QuestionDock.tsx": 2,
-  "packages/ui/components/Reasoning.tsx": 1,
   "packages/ui/components/RequestDismiss.tsx": 2,
   "packages/ui/components/RevertGroup.tsx": 2,
   "packages/ui/components/RightPanel.tsx": 1,
@@ -111,16 +109,12 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/ThemePicker.tsx": 3,
   "packages/ui/components/Timeline.tsx": 1,
   "packages/ui/components/Toasts.tsx": 3,
-  "packages/ui/components/WorkLog.tsx": 1,
   "packages/ui/components/parts/FilePart.tsx": 1,
-  "packages/ui/components/parts/NativeSource.tsx": 1,
-  "packages/ui/components/parts/UnknownPart.tsx": 1,
   "packages/ui/components/prompt/Autocomplete.tsx": 1,
   "packages/ui/components/prompt/Chips.tsx": 2,
   "packages/ui/components/prompt/Editor.tsx": 2,
   "packages/ui/components/surface/Dialog.tsx": 1,
   "packages/ui/components/surface/Popover.tsx": 1,
-  "packages/ui/components/tools/ToolFrame.tsx": 1,
   "packages/ui/features/project-settings.tsx": 6,
   "packages/ui/features/projects.tsx": 1,
   "packages/ui/features/prompt/agents.tsx": 1,
