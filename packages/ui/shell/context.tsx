@@ -17,6 +17,7 @@ import type { Toggles } from "../components/Toggles.ts";
 import type { IndexEntry, Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
 import { ReloadProvider } from "../state/reload.tsx";
+import { DisclosuresContext } from "../components/Disclosure.tsx";
 import {
   type FilePathPorts,
   FilePathServices,
@@ -73,7 +74,11 @@ export function ShellProvider(
   return (
     <ReloadProvider owner={props.reload}>
       <FilePathServices value={props.ports.filePaths ?? null}>
-        <Context value={props.ports}>{props.children}</Context>
+        <Context value={props.ports}>
+          <DisclosuresContext value={props.ports.disclosures}>
+            {props.children}
+          </DisclosuresContext>
+        </Context>
       </FilePathServices>
     </ReloadProvider>
   );

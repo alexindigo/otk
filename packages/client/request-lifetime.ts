@@ -54,7 +54,10 @@ export class RequestLifetimes {
     string,
     { ids: Set<string>; entry: SessionLookup }
   >();
-  constructor(readonly now: () => number = () => performance.now()) {}
+  constructor(
+    readonly now: () => number = () => performance.now(),
+    readonly retireDisclosures?: (scope: string) => void,
+  ) {}
   snapshot(): unknown {
     return [...this.#records].filter(([, row]) =>
       row.draft !== undefined || row.dismissed
@@ -373,6 +376,7 @@ export class RequestLifetimes {
     row.state = state;
     row.reason = reason;
     this.#records.set(key(kind, id), row);
+    if (row.kind === "permission") this.retireDisclosures?.(id);
     this.#changed();
   }
   dismiss(kind: RequestKind, id: string): void {
@@ -456,6 +460,7 @@ export class RequestLifetimes {
       if (row.state === "pending" && row.sessionID && deleted(row.sessionID)) {
         row.state = "retired";
         row.reason = "session deleted";
+        if (row.kind === "permission") this.retireDisclosures?.(row.id);
         changed = true;
       }
     }

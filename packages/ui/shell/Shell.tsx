@@ -196,6 +196,7 @@ export default function Shell(
   );
   const notifications = applicationNotifications({
     commands,
+    disclosures,
     prefs: () => toggles.state.prefs,
     selection: () => session.state.selection,
     viewing: () => !settings(),

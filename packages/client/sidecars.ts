@@ -230,6 +230,8 @@ export function createSidecars(
           reload: options.connection?.reload,
           afterRender: options.connection?.afterRender,
           policy: options.connection?.policy,
+          retireRequestDisclosures: options.connection
+            ?.retireRequestDisclosures,
           requests: {
             sidecarId: spec.id,
             serverLabel: spec.label,

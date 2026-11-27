@@ -41,7 +41,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       ? errorFeedback(activity()?.detail || GENERIC_FAILURE_REASON, {
         actionLabel: activity()?.title,
         target: identity,
-      })?.failure
+      }, props.part)?.failure
       : undefined;
   };
   const activity = () =>

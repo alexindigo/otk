@@ -735,7 +735,7 @@ export default function VirtualList(props: {
             Math.abs(rowBounds.height - model.size(key)) < .01,
           anchor: { id: path, key, start: base },
         };
-      }, { intent: "user" }).finally(release);
+      }, { intent: "user", align: request.align }).finally(release);
     };
     const retain = (event: Event) => {
       const key = keyFor(event.target);

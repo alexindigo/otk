@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { render } from "@solidjs/web";
-import { CommandHub, SidecarConnection } from "@otk/client";
+import { CommandHub, createDisclosures, SidecarConnection } from "@otk/client";
+import { DisclosuresContext } from "../../components/Disclosure.tsx";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import { CommandProvider } from "../../keyboard/context.tsx";
 import { createUiRegistries, UiProvider } from "../../registries/context.tsx";
@@ -90,13 +91,16 @@ const name = new URL(location.href).searchParams.get(
   "scene",
 ) as keyof typeof scenes;
 const { default: Scene } = await scenes[name]();
+const disclosures = createDisclosures({});
 render(() => (
   <CommandProvider commands={new CommandHub()}>
     <UiProvider registries={createUiRegistries()}>
-      <main class="style-scene">
-        <h1>Component style boundaries</h1>
-        <Scene />
-      </main>
+      <DisclosuresContext value={disclosures}>
+        <main class="style-scene">
+          <h1>Component style boundaries</h1>
+          <Scene />
+        </main>
+      </DisclosuresContext>
     </UiProvider>
   </CommandProvider>
 ), document.getElementById("app")!);

@@ -4,6 +4,7 @@ import { isCancellation } from "@otk/protocol";
 
 /** A user-opened disclosure asks its nearest window to measure its frame. */
 export interface ViewportRevealRequest {
+  align?: ViewportNavigation["align"];
   settled?: Promise<void>;
 }
 
@@ -13,10 +14,12 @@ export function discloseInViewport(
   open: boolean,
   setOpen: (open: boolean) => void,
   user: boolean,
+  trigger?: HTMLElement,
 ) {
-  if (user && open && element) {
-    const request: ViewportRevealRequest = {};
-    element.dispatchEvent(
+  const target = open ? element : trigger;
+  if (user && target) {
+    const request: ViewportRevealRequest = open ? {} : { align: "nearest" };
+    target.dispatchEvent(
       new CustomEvent("otk-viewport-reveal", {
         bubbles: true,
         detail: request,

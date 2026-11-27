@@ -1437,8 +1437,8 @@ export async function collections456(input: Inputs) {
               "[data-tool=read][data-tool-status=error] .otk-failure-details",
             );
             await page.locator(
-              "[data-tool=read][data-tool-status=error] .otk-failure-details",
-            ).click();
+              "[data-tool=read][data-tool-status=error]",
+            ).getByRole("button", { name: "Details", exact: true }).click();
             await expect(
               page.locator(
                 "[data-tool=read][data-tool-status=error] .otk-failure-detail-body",
@@ -2089,7 +2089,9 @@ export async function collections456(input: Inputs) {
         }
         if (scene === "journal") {
           for (
-            const toggle of await page.locator(".otk-permission-scope").all()
+            const toggle of await page.getByRole("button", {
+              name: /^Requested scope/,
+            }).all()
           ) {
             if (await toggle.getAttribute("aria-expanded") !== "true") {
               await toggle.click();

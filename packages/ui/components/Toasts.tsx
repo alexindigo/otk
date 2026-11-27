@@ -36,6 +36,7 @@ export default function Toasts(
   },
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
+  let more: HTMLButtonElement | undefined, stack: HTMLElement | undefined;
   const [revision, setRevision] = createSignal(0);
   onCleanup(props.model.subscribe(() => setRevision((n) => n + 1)));
   const visible = createMemo(() => {
@@ -71,12 +72,15 @@ export default function Toasts(
   };
   return (
     <section
+      ref={(el) => stack = el}
+      tabindex={-1}
       class={["otk-toasts", { "is-layer": props.layout === "layer" }]}
       aria-label="Notifications"
       aria-live="polite"
     >
       <Show when={remaining().length > 0}>
         <button
+          ref={(el) => more = el}
           type="button"
           class="otk-toasts-more"
           onClick={() => props.model.more()}
@@ -194,6 +198,12 @@ export default function Toasts(
                       compact
                       subgrid
                       class="otk-toast-failure"
+                      placement="toast"
+                      occurrence={note().id}
+                      focusHome={() =>
+                        (more?.isConnected ? more : stack)?.focus({
+                          preventScroll: true,
+                        })}
                       signal={false}
                       failure={value()}
                       announcement={feedback()}

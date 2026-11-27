@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { CommandHub, RequestFailure } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
-import { createSignal, onCleanup } from "solid-js";
+import { createSignal, onCleanup, useContext } from "solid-js";
 import { applicationNotifications } from "../../shell/notifications.ts";
 import Toasts from "../../components/Toasts.tsx";
+import { DisclosuresContext } from "../../components/Disclosure.tsx";
 
 /** Controlled public failures, rendered by the shipped application notification owners. */
 export default function Failures() {
   const notifications = applicationNotifications({
+    disclosures: useContext(DisclosuresContext) ?? undefined,
     commands: new CommandHub(),
     prefs: () => ({
       ...DEFAULT_PREFS,
@@ -31,6 +33,7 @@ export default function Failures() {
   );
   onCleanup(() => notifications.stop());
   let sequence = 0;
+  let burst = 0;
   const fail = (reason: string, id = `scene-${++sequence}`) =>
     notifications.error(
       new RequestFailure({
@@ -58,13 +61,14 @@ export default function Failures() {
       <button
         type="button"
         onClick={() => {
+          const run = ++burst;
           for (let n = 1; n <= 22; n++) {
             fail(
               "The native session was not found",
-              `repeated-${n}`,
+              `repeated-${run}-${n}`,
             );
           }
-          fail("The native session was not found", "repeated-22");
+          fail("The native session was not found", `repeated-${run}-22`);
         }}
       >
         Repeat failure

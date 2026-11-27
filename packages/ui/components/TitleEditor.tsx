@@ -24,13 +24,14 @@ export function TitleFeedback(
   props: {
     owner: TitleOwner;
     id: string;
+    /** Keep the whole reason in the sidebar edit frame; not disclosure intent. */
     expanded?: boolean;
   },
 ): Element {
   return (
     <FieldFeedback
       id={props.id}
-      expanded={props.expanded}
+      fullReason={props.expanded}
       validation={props.owner.state.invalid}
       feedback={props.owner.state.error
         ? errorFeedback(props.owner.state.error)

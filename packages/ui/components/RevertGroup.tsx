@@ -213,7 +213,7 @@ export default function RevertGroup(props: {
                   <FailureContent
                     failure={value()}
                     placement="record"
-                    expanded
+                    fullReason
                     signal={false}
                   />
                 )}
