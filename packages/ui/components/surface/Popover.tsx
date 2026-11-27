@@ -268,16 +268,43 @@ export default function Popover(props: {
       openedBy = "keyboard";
     },
   }));
+  function draggingSelection(): boolean {
+    const selected = document.getSelection();
+    if (
+      !selected || selected.isCollapsed || !selected.containsNode(trigger, true)
+    ) {
+      return false;
+    }
+    // A projected source is selected as a whole even on an ordinary click.
+    // Only selection extending beyond that atom can veto activation.
+    const source = props.copySource === undefined ? undefined : root();
+    if (!source) return true;
+    const bounds = document.createRange();
+    bounds.selectNode(source);
+    for (let i = 0; i < selected.rangeCount; i++) {
+      const range = selected.getRangeAt(i);
+      if (!range.intersectsNode(source)) continue;
+      // Native selection may end at offset 0 of the next text node. An
+      // endpoint outside the source does not itself select any outside text.
+      if (range.compareBoundaryPoints(Range.START_TO_START, bounds) < 0) {
+        const before = range.cloneRange();
+        before.setEnd(bounds.startContainer, bounds.startOffset);
+        if (before.toString()) return true;
+      }
+      if (range.compareBoundaryPoints(Range.END_TO_END, bounds) > 0) {
+        const after = range.cloneRange();
+        after.setStart(bounds.endContainer, bounds.endOffset);
+        if (after.toString()) return true;
+      }
+    }
+    return false;
+  }
   function activate(event: MouseEvent) {
     if (props.href) {
       if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
         return;
       }
-      const selected = document.getSelection();
-      if (
-        event.detail && pointerMoved && !selected?.isCollapsed &&
-        selected?.containsNode(trigger, true)
-      ) {
+      if (event.detail && pointerMoved && draggingSelection()) {
         event.preventDefault();
         return;
       }
