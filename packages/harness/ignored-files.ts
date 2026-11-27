@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { HarnessError } from "@otk/harness";
+import { HarnessError } from "./types.ts";
 
 /** Filter one bounded native directory listing using Git's own ignore authority.
  * No shell, index writes, population scan or locally reimplemented pattern rules.

@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { dirname, isAbsolute, relative } from "@std/path";
+import { dirname, isAbsolute, relative, resolve } from "@std/path";
 import type { CatalogFileListing } from "./catalog-reads.ts";
 import type {
   ProviderReadOptions,
   ProviderReadPort,
 } from "./provider-reads.ts";
 import type { CatalogFile } from "@otk/protocol";
+import {
+  type CatalogFileWatch,
+  excludedCatalogPath,
+} from "./catalog-file-watch.ts";
 
 /** Directory-listing tree, owned only by the volatile catalog resource. */
 export class CatalogFiles {
@@ -48,6 +52,7 @@ export class CatalogFiles {
   async read(
     signal: AbortSignal,
     priority: ProviderReadOptions["priority"] = "user",
+    watch?: CatalogFileWatch,
   ): Promise<CatalogFile[]> {
     const staged = new Map(this.#listings);
     const dirty = this.#dirty.size ? [...this.#dirty] : staged.size ? [] : [""];
@@ -69,6 +74,9 @@ export class CatalogFiles {
             )
           ) continue;
         }
+        // The native parent's ignore-aware listing admitted this directory.
+        // Watch before listing, so an edit during the read triggers reconciliation.
+        watch?.add(resolve(this.directory, path));
         const listing = await this.reads.read("catalog.files", {
           directory: this.directory,
           path,
@@ -80,11 +88,12 @@ export class CatalogFiles {
         }
         physical.add(listing.physical);
         const previous = staged.get(path);
-        staged.set(path, listing);
+        const items = listing.items.filter((item) =>
+          !excludedCatalogPath(item.path)
+        );
+        staged.set(path, { ...listing, items });
         const children = new Set(
-          listing.items.filter((item) => item.directory).map((item) =>
-            item.path
-          ),
+          items.filter((item) => item.directory).map((item) => item.path),
         );
         for (const item of previous?.items ?? []) {
           if (item.directory && !children.has(item.path)) {
@@ -103,6 +112,9 @@ export class CatalogFiles {
         }
       }
       this.#listings = staged;
+      watch?.prune(
+        [...staged.keys()].map((path) => resolve(this.directory, path)),
+      );
       const result = new Map<string, CatalogFile>();
       for (const listing of staged.values()) {
         for (const item of listing.items) {

@@ -9,6 +9,7 @@ import type {
   DirectoryCatalogKinds,
 } from "@otk/protocol";
 import { CatalogFiles } from "./catalog-files.ts";
+import { CatalogFileWatch } from "./catalog-file-watch.ts";
 
 export type CatalogContributions = {
   [K in keyof DirectoryCatalogKinds]?: (
@@ -37,12 +38,9 @@ interface Resource {
   kinds: Map<keyof DirectoryCatalogKinds, KindState>;
   listeners: Set<() => void>;
   files?: CatalogFiles;
-  watcher?: { close(): void };
-  watch?: Promise<void>;
-  watchFailure?: unknown;
+  observation?: CatalogFileWatch;
   fileRefs: number;
-  demandedFiles: boolean;
-  fileEpoch: number;
+  fileObservers: number;
   fileController: AbortController;
 }
 export interface CatalogLease {
@@ -128,6 +126,7 @@ export class DirectoryCatalogs {
         this.#resources.get(directory)!.files!.read(
           signal,
           intent === "warm" ? "background" : "user",
+          this.#resources.get(directory)!.observation,
         ),
       ...options.contributions,
     };
@@ -144,7 +143,11 @@ export class DirectoryCatalogs {
     if (!item || item.state.value === undefined) return;
     return structuredClone(item.state.value) as DirectoryCatalogKinds[K];
   }
-  acquire(directory: string, subscription = false): CatalogLease {
+  acquire(
+    directory: string,
+    subscription = false,
+    fileMode: "observe" | "read" | "retain" = subscription ? "read" : "observe",
+  ): CatalogLease {
     let resource = this.#resources.get(directory);
     if (!resource) {
       const owner = JSON.stringify([
@@ -160,8 +163,7 @@ export class DirectoryCatalogs {
         refs: 0,
         subscriptions: 0,
         fileRefs: 0,
-        demandedFiles: false,
-        fileEpoch: 0,
+        fileObservers: 0,
         fileController: new AbortController(),
         controller: new AbortController(),
         kinds: new Map(),
@@ -180,6 +182,17 @@ export class DirectoryCatalogs {
     const value = resource;
     let live = true;
     let files = false;
+    const observe = fileMode !== "read";
+    const borrowFiles = () => {
+      if (files) return;
+      files = true;
+      if (value.fileRefs++ === 0) value.fileController = new AbortController();
+      if (observe && value.fileObservers++ === 0 && value.kinds.has("files")) {
+        value.files?.invalidate();
+        value.kinds.get("files")!.dirty = true;
+      }
+    };
+    if (fileMode === "retain") borrowFiles();
     const listeners = new Set<() => void>();
     const check = () => {
       if (!live || value.controller.signal.aborted) {
@@ -191,12 +204,7 @@ export class DirectoryCatalogs {
       intent: CatalogDemandIntent = "consumer",
     ): Promise<DirectoryCatalogKinds[K]> => {
       check();
-      if (kind === "files" && !files) {
-        files = true;
-        if (value.fileRefs++ === 0) {
-          value.fileController = new AbortController();
-        }
-      }
+      if (kind === "files") borrowFiles();
       return this.#get(value, kind, intent);
     };
     return {
@@ -233,18 +241,20 @@ export class DirectoryCatalogs {
         live = false;
         for (const listener of listeners) value.listeners.delete(listener);
         listeners.clear();
-        if (files) this.#releaseFiles(value);
-        if (
-          subscription && --value.subscriptions === 0 && value.demandedFiles
-        ) {
-          value.demandedFiles = false;
-          this.#releaseFiles(value);
-        }
+        if (files) this.#releaseFiles(value, observe);
+        if (subscription) value.subscriptions--;
         if (--value.refs === 0) this.#retire(value);
       },
     };
   }
-  /** Per-kind wire intent borrows existing subscription demand, never another cache. */
+  retainFiles(directory: string, signal: AbortSignal): DirectoryCatalog {
+    signal.throwIfAborted();
+    const lease = this.acquire(directory, false, "retain");
+    signal.addEventListener("abort", lease.release, { once: true });
+    return lease.snapshot();
+  }
+
+  /** File demand never upgrades a passive directory subscription into an observer. */
   async demand(
     directory: string,
     demand: CatalogDemand,
@@ -252,26 +262,17 @@ export class DirectoryCatalogs {
   ): Promise<void> {
     signal?.throwIfAborted();
     const resource = this.#resources.get(directory);
-    if (resource?.subscriptions) {
-      // A wire consumer borrows its watch lifetime, not a one-shot file lease.
-      if (demand.kinds.includes("files") && !resource.demandedFiles) {
-        resource.demandedFiles = true;
-        if (resource.fileRefs++ === 0) {
-          resource.fileController = new AbortController();
-        }
-      }
+    const lease = this.acquire(directory, false, "read");
+    try {
       await detached(
         Promise.all(
-          demand.kinds.map((kind) => this.#get(resource, kind, demand.intent)),
+          demand.kinds.map((kind) =>
+            kind !== "files" && resource?.subscriptions
+              ? this.#get(resource, kind, demand.intent)
+              : lease.get(kind, signal, demand.intent)
+          ),
         ),
         signal,
-      );
-      return;
-    }
-    const lease = this.acquire(directory);
-    try {
-      await Promise.all(
-        demand.kinds.map((kind) => lease.get(kind, signal, demand.intent)),
       );
     } finally {
       lease.release();
@@ -283,6 +284,14 @@ export class DirectoryCatalogs {
     signal?: AbortSignal,
   ): Promise<DirectoryCatalogKinds[K]> {
     signal?.throwIfAborted();
+    if (kind === "files") {
+      const lease = this.acquire(directory, false, "read");
+      try {
+        return await lease.get(kind, signal);
+      } finally {
+        lease.release();
+      }
+    }
     let lease = this.#legacy.get(directory);
     if (!lease) this.#legacy.set(directory, lease = this.acquire(directory));
     this.#callers.set(directory, (this.#callers.get(directory) ?? 0) + 1);
@@ -308,14 +317,13 @@ export class DirectoryCatalogs {
       }
     }
   }
-  #releaseFiles(resource: Resource): void {
+  #releaseFiles(resource: Resource, observe: boolean): void {
+    if (observe && --resource.fileObservers === 0) {
+      resource.observation?.close();
+      resource.observation = undefined;
+    }
     if (--resource.fileRefs !== 0) return;
-    resource.fileEpoch++;
     resource.fileController.abort();
-    resource.watcher?.close();
-    resource.watcher = undefined;
-    resource.watch = undefined;
-    resource.watchFailure = undefined;
     resource.kinds.delete("files");
     resource.files = new CatalogFiles(
       resource.directory,
@@ -364,13 +372,16 @@ export class DirectoryCatalogs {
     const acquire = this.#contributions[kind];
     if (!acquire) return Promise.reject(new Error("Catalog kind not selected"));
     if (
-      kind === "files" && !resource.watch &&
+      kind === "files" && resource.fileObservers && !resource.observation &&
       (this.options.watch || this.options.watchFiles)
     ) {
-      const watch = this.#watch(resource).finally(() => {
-        if (resource.watch === watch) resource.watch = undefined;
-      });
-      resource.watch = watch;
+      resource.observation = new CatalogFileWatch(
+        resource.directory,
+        (paths) => this.invalidate(resource.directory, ["files"], paths),
+        (work) => this.#track(work),
+        this.options.diagnostic,
+        this.options.watch,
+      );
     }
     let item = resource.kinds.get(kind);
     if (!item) {
@@ -384,6 +395,12 @@ export class DirectoryCatalogs {
     if (intent === "consumer" && item.intent === "warm") {
       item.intent = "consumer";
       item.acquisition?.abort(promoted);
+    }
+    if (
+      kind === "files" && intent && !item.work && resource.observation?.degraded
+    ) {
+      resource.files?.invalidate();
+      item.dirty = true;
     }
     if (!item.dirty && item.state.state === "ready") {
       return Promise.resolve(item.state.value as DirectoryCatalogKinds[K]);
@@ -415,9 +432,6 @@ export class DirectoryCatalogs {
               current.intent,
             );
             attempt.throwIfAborted();
-            if (kind === "files" && resource.watchFailure) {
-              throw resource.watchFailure;
-            }
             if (!current.dirty) {
               current.state = {
                 state: "ready",
@@ -455,13 +469,16 @@ export class DirectoryCatalogs {
         if (current.work === work) current.work = undefined;
       });
       current.work = work;
-      this.#pending.add(work);
-      void work.then(
-        () => this.#pending.delete(work),
-        () => this.#pending.delete(work),
-      );
+      this.#track(work);
     }
     return current.work as Promise<DirectoryCatalogKinds[K]>;
+  }
+  #track(work: Promise<unknown>): void {
+    this.#pending.add(work);
+    void work.then(
+      () => this.#pending.delete(work),
+      () => this.#pending.delete(work),
+    );
   }
   invalidate(
     directory: string,
@@ -534,77 +551,14 @@ export class DirectoryCatalogs {
       }
     }
   }
-  async #watch(resource: Resource): Promise<void> {
-    let reconcile = false;
-    const epoch = resource.fileEpoch;
-    const retired = () =>
-      resource.controller.signal.aborted || !resource.fileRefs ||
-      resource.fileEpoch !== epoch;
-    for (;;) {
-      if (retired()) return;
-      let watcher: Deno.FsWatcher;
-      try {
-        watcher = (this.options.watch ?? ((paths) =>
-          Deno.watchFs([...paths], { recursive: true })))([resource.directory]);
-        resource.watchFailure = undefined;
-      } catch (error) {
-        resource.watchFailure = error;
-        resource.files?.invalidate();
-        const item = resource.kinds.get("files");
-        if (item) {
-          item.dirty = true;
-          item.state = {
-            ...item.state,
-            state: "unavailable",
-            failure: preserveFailure(error, {
-              code: "native.unavailable",
-              retry: "same-intent",
-              diagnosticID: crypto.randomUUID(),
-            }),
-          };
-        }
-        this.options.diagnostic?.(error);
-        this.#publish(resource);
-        return;
-      }
-      resource.watcher = watcher;
-      if (reconcile) this.invalidate(resource.directory, ["files"]);
-      try {
-        for await (const event of watcher) {
-          if (retired()) return;
-          const ignore = event.paths.some((path) =>
-            /(?:^|[/\\])(?:\.gitignore|\.ignore)$/.test(path)
-          );
-          this.invalidate(
-            resource.directory,
-            ["files"],
-            event.kind === "other" || ignore ? undefined : event.paths,
-          );
-        }
-        if (retired()) return;
-        throw new Error("File watch ended before its demand lifetime");
-      } catch (error) {
-        if (retired()) return;
-        this.options.diagnostic?.(error);
-        resource.files?.invalidate();
-        reconcile = true;
-      } finally {
-        if (resource.watcher === watcher) {
-          resource.watcher = undefined;
-          watcher.close();
-        }
-      }
-    }
-  }
   #retire(resource: Resource): void {
     if (resource.controller.signal.aborted) return;
     if (this.#resources.get(resource.directory) === resource) {
       this.#resources.delete(resource.directory);
     }
     resource.controller.abort();
-    const watcher = resource.watcher;
-    resource.watcher = undefined;
-    watcher?.close();
+    resource.observation?.close();
+    resource.observation = undefined;
     this.reads.release(resource.owner);
     resource.listeners.clear();
     resource.kinds.clear();
@@ -618,10 +572,7 @@ export class DirectoryCatalogs {
     }
   }
   async stop(): Promise<void> {
-    const tasks = [...this.#resources.values()].map((resource) =>
-      resource.watch
-    );
     this.dispose();
-    await Promise.allSettled([...tasks, ...this.#pending]);
+    await Promise.allSettled(this.#pending);
   }
 }

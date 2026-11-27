@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { basename, isAbsolute, relative, resolve } from "@std/path";
-import { ignoredFiles } from "./ignored-files.ts";
 import {
   arrayReadCodec,
   catalogFileCodec,
   catalogModelCodec,
+  ignoredFiles,
   type ProviderReadCodecs,
   type ProviderReaders,
 } from "@otk/harness";

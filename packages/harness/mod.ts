@@ -23,6 +23,7 @@ export { CapabilityRegistry, requireCapability } from "./registry.ts";
 export { SessionIndex } from "./index.ts";
 export { ContentReplay } from "./content-replay.ts";
 export * from "./directory-catalogs.ts";
+export { ignoredFiles } from "./ignored-files.ts";
 export { CatalogFiles } from "./catalog-files.ts";
 export { ProviderHistory } from "./history-client.ts";
 export { type ErrorRequest, SessionErrors } from "./session-errors.ts";

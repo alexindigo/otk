@@ -339,7 +339,7 @@ Deno.test("catalog demand: a complete kind does not wait for another kind's warm
   }
 });
 
-Deno.test("catalog demand: files leave with the last subscription even while a standalone choice borrower remains", async () => {
+Deno.test("catalog demand: only explicit file borrowers keep files behind passive subscriptions", async () => {
   let files = 0;
   const owner = new DirectoryCatalogs({
     read<K extends keyof ProviderReadKinds>(
@@ -355,19 +355,24 @@ Deno.test("catalog demand: files leave with the last subscription even while a s
     release() {},
   }, { pending: 100 });
   const standalone = owner.acquire("/p");
-  let watch = owner.acquire("/p", true);
+  const watch = owner.acquire("/p", true);
+  let filesLifetime = new AbortController();
   try {
     await standalone.get("agents");
+    owner.retainFiles("/p", filesLifetime.signal);
     await owner.demand("/p", { kinds: ["files"], intent: "consumer" });
     assertEquals(watch.snapshot().values.files?.state, "ready");
-    watch.release();
+    filesLifetime.abort();
     assertEquals(owner.size, 1);
+    assertEquals(watch.snapshot().values.files?.value, undefined);
     assertEquals(standalone.snapshot().values.files?.value, undefined);
     assertEquals(standalone.snapshot().values.agents?.state, "ready");
-    watch = owner.acquire("/p", true);
+    filesLifetime = new AbortController();
+    owner.retainFiles("/p", filesLifetime.signal);
     await owner.demand("/p", { kinds: ["files"], intent: "consumer" });
     assertEquals(files, 2);
   } finally {
+    filesLifetime.abort();
     watch.release();
     standalone.release();
     await owner.stop();

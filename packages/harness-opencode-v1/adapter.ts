@@ -751,7 +751,10 @@ export class OpencodeV1Adapter implements Harness {
     );
     registry.register("history", this.#history);
     registry.register("catalogs", {
-      watch: (directory, listener, signal) => {
+      watch: (directory, listener, signal, files) => {
+        if (files) {
+          return Promise.resolve(this.catalogs.retainFiles(directory, signal));
+        }
         signal.throwIfAborted();
         const lease = this.catalogs.acquire(directory, true);
         const stop = lease.subscribe(() => listener(lease.snapshot()));
@@ -770,7 +773,7 @@ export class OpencodeV1Adapter implements Harness {
         this.catalogs.demand(directory, demand, signal),
       refresh: async (directory, signal, kinds) => {
         signal?.throwIfAborted();
-        const lease = this.catalogs.acquire(directory);
+        const lease = this.catalogs.acquire(directory, false, "read");
         try {
           await lease.refresh(signal, kinds);
           signal?.throwIfAborted();
