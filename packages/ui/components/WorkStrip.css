@@ -6,6 +6,7 @@
 }
 .otk-work-strip {
   display: inline-grid;
+  /* The grid owns the chart bounds; its flex children only divide that space. */
   grid-template-columns: auto max-content minmax(var(--work-strip-floor),
     var(--work-strip-size)) minmax(0, max-content);
   justify-self: start;
@@ -26,7 +27,6 @@
 .otk-work-strip-track {
   display: flex;
   gap: var(--otk-unit);
-  min-inline-size: var(--work-strip-floor);
   block-size: calc(16 * var(--otk-unit));
   padding: calc(2 * var(--otk-unit));
   border: 1px solid var(--otk-border);

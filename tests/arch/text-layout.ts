@@ -57,6 +57,10 @@ const artWidths: Record<string, Record<string, string>> = {
     ".otk-work-axis: inline-size: calc(56*var(--otk-unit))":
       "SVG duration glyph with a fixed presentation scale.",
   },
+  "packages/ui/components/WorkStrip.css": {
+    ".otk-work-strip-segment: min-inline-size: min(var(--work-strip-min),calc((100% + var(--otk-unit))/var(--work-segments,1) - var(--otk-unit)))":
+      "Minimum visible timeline mark, capped by the chart's equal share.",
+  },
   "packages/ui/features/project-settings.css": {
     ".otk-project-color-swatch: width: calc(18*var(--otk-unit))":
       "Swatch artwork within the shared form hit target.",
