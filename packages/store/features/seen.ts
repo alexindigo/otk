@@ -11,6 +11,10 @@ export const seenMigrations: FeatureMigrations = {
     version: 2,
     sql:
       "ALTER TABLE session_seen ADD COLUMN terminal INTEGER NOT NULL DEFAULT 0;",
+  }, {
+    version: 3,
+    sql:
+      "ALTER TABLE session_seen ADD COLUMN opened INTEGER NOT NULL DEFAULT 0;",
   }],
 };
 export interface SeenChange {
@@ -18,6 +22,7 @@ export interface SeenChange {
   session: string;
   time: number;
   terminal?: number;
+  opened?: boolean;
 }
 export class Seen extends MetadataChanges<SeenChange> {
   protected override changeKey(value: SeenChange): string {
@@ -62,11 +67,33 @@ export class Seen extends MetadataChanges<SeenChange> {
     }
     return this.db.write((scope) => {
       const row = this.db.connection.prepare(
-        "INSERT INTO session_seen(user,session,time,terminal) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET terminal=MAX(terminal,excluded.terminal) RETURNING terminal",
+        "INSERT INTO session_seen(user,session,time,terminal) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET terminal=MAX(terminal,excluded.terminal) RETURNING terminal,opened",
       ).get(key(user), key(session), terminal)!;
       const time = Number(row.terminal);
-      this.changed({ user, session, time, terminal: time }, scope);
+      this.changed({
+        user,
+        session,
+        time,
+        terminal: time,
+        opened: !!row.opened,
+      }, scope);
       return time;
+    }, tx);
+  }
+  /** D76: explicit retention is independent of terminal acknowledgement. */
+  setOpened(
+    user: string,
+    session: string,
+    opened: boolean,
+    tx?: StoreWrite,
+  ): void {
+    this.db.write((scope) => {
+      const row = this.db.connection.prepare(
+        "INSERT INTO session_seen(user,session,time,opened) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET opened=excluded.opened WHERE opened<>excluded.opened RETURNING terminal",
+      ).get(key(user), key(session), Number(opened));
+      if (!row) return;
+      const time = Number(row.terminal);
+      this.changed({ user, session, time, terminal: time, opened }, scope);
     }, tx);
   }
   acknowledgeMany(
@@ -84,11 +111,12 @@ export class Seen extends MetadataChanges<SeenChange> {
   }
   tokens(): SeenChange[] {
     return this.db.connection.prepare(
-      "SELECT user,session,terminal FROM session_seen",
+      "SELECT user,session,terminal,opened FROM session_seen",
     ).all().map((row) => ({
       user: String(row.user),
       session: String(row.session),
       time: Number(row.terminal),
+      ...(row.opened ? { opened: true } : {}),
     }));
   }
   all(): { user: string; session: string; time: number }[] {

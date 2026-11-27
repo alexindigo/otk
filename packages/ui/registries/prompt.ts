@@ -20,6 +20,8 @@ export interface PromptProps {
   connected: boolean;
   activity(): import("@otk/client").SessionActivity;
   suspended?: boolean;
+  /** Start with settings only; the user can join this conversation. */
+  joinRequired?: boolean;
   context?: {
     agent?: string;
     model?: import("@otk/protocol").ModelRef;
@@ -46,6 +48,8 @@ export interface PromptContext extends SessionPorts {
   mount(setup: () => void | (() => void)): void;
   props: PromptProps;
   active(): boolean;
+  /** Prompt-owned presentation and admission state. */
+  collapsed(): boolean;
   change(update: DraftChange, caret?: number): Draft;
   selection(): { start: number; end: number };
   caret(): number;
@@ -58,6 +62,8 @@ export interface PromptContext extends SessionPorts {
 }
 export interface PromptAction {
   key: string;
+  /** Hidden before the user joins, including from toolbar overflow. */
+  needsInput?: boolean;
   label(): string;
   icon(): Element;
   expanded?(): boolean;

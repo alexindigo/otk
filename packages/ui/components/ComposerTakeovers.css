@@ -159,8 +159,3 @@
   padding-inline: var(--composer-content-inset);
   padding-block-end: var(--space-2);
 }
-.otk-composer-dock[data-read-only="true"] {
-  --composer-bottom-inset: 0px;
-  flex: none;
-  padding-block: 0;
-}

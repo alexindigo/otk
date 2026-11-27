@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt {
-  --prompt-input-min-height: calc(48 * var(--otk-unit));
-  --prompt-input-max-height: calc(240 * var(--otk-unit));
   padding-block: var(--composer-content-inset, var(--space-4)) var(--space-2);
   padding-inline: var(--composer-content-inset, var(--space-4));
 }
@@ -11,6 +9,8 @@
   overflow: hidden;
 }
 textarea.otk-prompt-input {
+  --prompt-input-min-height: calc(48 * var(--otk-unit));
+  --prompt-input-max-height: calc(240 * var(--otk-unit));
   inline-size: 100%;
   min-height: var(--prompt-input-min-height);
   max-height: var(--prompt-input-max-height);
@@ -80,4 +80,32 @@ textarea.otk-prompt-input:focus-visible {
   grid-column: corner;
   grid-row: 1;
   display: grid;
+}
+.otk-prompt-reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 150ms ease;
+}
+.otk-prompt-reveal > .otk-prompt-field {
+  min-block-size: 0;
+}
+.otk-prompt.is-collapsed {
+  padding-block: var(--space-2);
+}
+.otk-prompt.is-collapsed .otk-prompt-reveal {
+  grid-template-rows: 0fr;
+}
+.otk-prompt.is-collapsed .otk-prompt-field {
+  overflow: clip;
+  visibility: hidden;
+}
+.otk-prompt.is-collapsed .otk-prompt-actions {
+  padding-block-start: 0;
+}
+.otk-join-conversation {
+  white-space: nowrap;
+}
+.otk-prompt-send-slot.is-join {
+  inline-size: auto;
+  min-block-size: 0;
 }

@@ -3,7 +3,12 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
-import { activity, collapsed, visibleOnScreen } from "../../pages/sessions.ts";
+import {
+  activity,
+  collapsed,
+  sessionContext,
+  visibleOnScreen,
+} from "../../pages/sessions.ts";
 
 test.describe("task tabs", () => {
   test.use({ profile: "contract-sessions-tabs" });
@@ -158,7 +163,7 @@ test.describe("task tabs", () => {
       await openSession(state, page, "tstv1-otk");
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      // D72: both human acknowledgement and parent delivery retire a finish.
+      // D76: acknowledging a finish retires attention, not an explicit open.
       const helper = "tstv1-helper", nested = "tstv1-nested";
       const helpers = page.locator(
         `[data-session=${helper}], [data-session=${nested}]`,
@@ -180,8 +185,10 @@ test.describe("task tabs", () => {
         sessionID: helper,
         terminal: finishes[helper],
       });
-      await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
-      await expect(agent(helper)).toHaveCount(0);
+      await expect(pill).toHaveAccessibleName(
+        "Subagents: 1 finished, 1 opened",
+      );
+      await expect(agent(helper)).toBeVisible();
       await expect(agent(nested)).toBeVisible();
       await state.controller.call("scenario", {
         lease: state.lease.lease,
@@ -191,6 +198,9 @@ test.describe("task tabs", () => {
       });
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(0);
+      await expect(pill).toHaveAccessibleName("Subagents: 2 opened");
+      await expect(agent(nested)).toBeVisible();
+      await page.getByRole("button", { name: "Clear finished" }).click();
       await expect(pill).toHaveCount(0);
       await expect(menu.locator("[data-subagent]")).toHaveCount(0);
       await expect(
@@ -405,6 +415,9 @@ test.describe("phantom ownership", () => {
           0,
       });
       await page.locator(`[data-tab="${task.id}"]`).click();
+      // D76: an explicitly opened phantom stays reachable after leaving it.
+      await visibleOnScreen(page.locator("[data-tab=tstv1-otk]"));
+      await sessionContext(page, "[data-tab=tstv1-otk]", "session.close");
       await expect(page.locator("[data-tab=tstv1-otk]")).toHaveCount(0);
       expect(await state.product("session.get", { sessionID: "tstv1-otk" }))
         .toBeTruthy();

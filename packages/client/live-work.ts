@@ -74,6 +74,7 @@ const helperLabels = [
     singular: "finished",
     plural: "finished",
   },
+  { kind: "opened", title: "Opened", singular: "opened", plural: "opened" },
 ] as const;
 
 /** Display order and vocabulary shared by every form of the same counts. */
@@ -85,7 +86,7 @@ export function helperCountParts(counts?: TaskHelpers["counts"]): readonly {
 }[] {
   if (!counts) return [];
   return helperLabels.flatMap(({ kind, title, singular, plural }) => {
-    const count = counts[kind];
+    const count = counts[kind] ?? 0;
     return count > 0
       ? [{ kind, title, count, phrase: count === 1 ? singular : plural }]
       : [];
@@ -124,6 +125,7 @@ export function helperClock(
       }
       break;
     case "finished":
+    case "opened":
       if (entity?.terminal !== undefined) {
         const time = age(entity.terminal, now);
         return { time, ago: !time.word };
