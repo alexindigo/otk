@@ -31,7 +31,7 @@ export default function ToolFrame(props: {
   waiting: boolean;
   body(): Element;
   hasContent?(): boolean;
-  nested?(): Element;
+  nested?(after: boolean): Element;
   presentation?: ToolPresentation;
   prefs?: Preferences;
   onOpenChild?(id: string): void;
@@ -213,7 +213,7 @@ export default function ToolFrame(props: {
                   header={() => <div class="otk-tool-body">{props.body()}</div>}
                 />
               </TreeItem>
-              {props.nested?.()}
+              {props.nested?.(!!props.row?.extra)}
               {props.row?.extra?.()}
             </>
           )}
