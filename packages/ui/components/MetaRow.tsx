@@ -64,10 +64,9 @@ export function MetaRow(
   const fit = () => {
     if (!primary) return;
     const gap = parseFloat(getComputedStyle(root).columnGap) || 0;
-    const minimum = Math.min(
-      primary.scrollWidth,
-      parseFloat(getComputedStyle(primary).minInlineSize) || 0,
-    );
+    primary.classList.add("is-measuring-minimum");
+    const minimum = primary.getBoundingClientRect().width;
+    primary.classList.remove("is-measuring-minimum");
     let available = root.clientWidth - minimum;
     const next: string[] = [];
     for (const control of props.controls ?? []) {

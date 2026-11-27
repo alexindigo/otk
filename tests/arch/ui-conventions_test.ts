@@ -12,6 +12,7 @@ import {
 } from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { composerHeaderErrors } from "./composer-header.ts";
+import { textLayoutErrors } from "./text-layout.ts";
 import { containerChromeErrors } from "./container-chrome.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
 import { terminalRunErrors } from "./terminal-run.ts";
@@ -190,6 +191,46 @@ function arithmeticOffsetErrors(files: ReadonlyMap<string, string>): string[] {
   );
 }
 
+Deno.test("UI convention: text sizes are intrinsic and scripts do not own CSS widths", async () => {
+  const css = "packages/ui/Example.css", tsx = "packages/ui/Example.tsx";
+  assertEquals(
+    textLayoutErrors(
+      new Map([
+        [
+          css,
+          ":root{--crumb-min:12ch}.some-title{min-width:min(100%,var(--crumb-min))}.some-name{width:80px}.copy{width:var(--copy)}",
+        ],
+        [
+          tsx,
+          `const style = el.style;
+      style.setProperty("--copy", el.scrollWidth + "px");
+      el.style.inlineSize = el.clientWidth + "px";
+      el.style.cssText = "color: red; min-width: 3px";
+      <span style={{ width: measured + "px" }} />;`,
+        ],
+      ]),
+    ).length,
+    6,
+  );
+  assertEquals(
+    textLayoutErrors(
+      new Map([
+        [
+          css,
+          ".some-title{min-width:0;min-inline-size:calc-size(min-content,min(size,12ch));max-width:60ch}.some-icon{width:32px}",
+        ],
+        [
+          tsx,
+          `el.style.setProperty("--accent", color); canvas.width = pixels;
+      <span style={{ color }} />;`,
+        ],
+      ]),
+    ),
+    [],
+  );
+  assertEquals(textLayoutErrors(await productionSources()), []);
+});
+
 Deno.test("UI convention: positional offsets do not reconstruct other boxes", async () => {
   const productionCSS = new Map(
     [...await productionSources()].filter(([path]) =>
@@ -357,7 +398,7 @@ Deno.test("UI convention: breadcrumb trails use one compact overflow row", async
   assertEquals(header.get("display"), "grid");
   assertEquals(
     header.get("grid-template-columns"),
-    "minmax(min(var(--trail-current-min),100%),1fr) minmax(0,max-content)",
+    "minmax(min-content,1fr) minmax(0,max-content)",
   );
   assert(!component.includes("props.model.helpers"));
   const subagents = await Deno.readTextFile(
