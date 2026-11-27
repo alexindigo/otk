@@ -22,6 +22,7 @@ export function registerToolPart(
         >
           <ToolLine
             call={call()}
+            row={props.row}
             prefs={props.prefs}
             onOpenChild={props.onOpenChild}
             genericOutput={props.prefs.genericToolOutput}

@@ -14,6 +14,7 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
   return (
     <ToolFrame
       call={props.call}
+      row={props.row}
       waiting={props.waiting}
       prefs={props.prefs}
       onOpenChild={props.onOpenChild}
@@ -40,7 +41,12 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
               <TreeItem
                 last={call().callID === props.call.children?.at(-1)?.callID}
               >
-                <ToolLine {...props} call={call()} waiting={false} />
+                <ToolLine
+                  {...props}
+                  call={call()}
+                  row={undefined}
+                  waiting={false}
+                />
               </TreeItem>
             )}
           </For>

@@ -11,7 +11,10 @@ import EntityPill from "../EntityPill.tsx";
 import { useOptionalSessionPorts } from "../../registries/session.tsx";
 import { scopedEntityFacts } from "../../entity-facts.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
-import type { ToolPresentation } from "../../registries/renderers.ts";
+import type {
+  PartRowSlots,
+  ToolPresentation,
+} from "../../registries/renderers.ts";
 import TimeText from "../TimeText.tsx";
 import Disclosure, { useDisclosure } from "../Disclosure.tsx";
 import { contextTarget } from "../context-target.ts";
@@ -24,6 +27,7 @@ import {
 
 export default function ToolFrame(props: {
   call: ToolCall;
+  row?: PartRowSlots;
   waiting: boolean;
   body(): Element;
   hasContent?(): boolean;
@@ -41,8 +45,9 @@ export default function ToolFrame(props: {
   const input = () => ({
     category: props.presentation?.category ?? "toolOutput" as const,
     prefs: () => props.prefs ?? {},
+    required: props.row?.required,
   });
-  const hasContent = () => props.hasContent?.() ?? true;
+  const hasContent = () => !!props.row?.extra || (props.hasContent?.() ?? true);
   const state = useDisclosure("tool", disclosure, input);
   const open = () => hasContent() && state.open();
   ownedAction("tool.toggle", () => {
@@ -77,11 +82,13 @@ export default function ToolFrame(props: {
           identity={disclosure()}
           input={input()}
           variant="label"
+          tone={props.row?.tone}
           class="otk-tool-toggle"
           lead={() => props.presentation?.icon() ?? <ToolIcon />}
-          label={props.presentation?.verb ?? props.call.tool}
+          label={props.row?.label ?? props.presentation?.verb ??
+            props.call.tool}
           hasContent={hasContent}
-          labelContent={() => (
+          labelContent={props.row ? undefined : () => (
             <>
               <span
                 class="otk-tool-verb otk-control-label"
@@ -158,6 +165,7 @@ export default function ToolFrame(props: {
                 hasBox: hasContent,
               }}
               bodyVisible={open()}
+              detail={props.row?.detail}
               feedbackGutter
               feedback={failure()
                 ? () => (
@@ -175,7 +183,7 @@ export default function ToolFrame(props: {
                   />
                 )
                 : undefined}
-              trail={props.presentation?.entity
+              trail={props.row?.trail ?? (props.presentation?.entity
                 ? () => (
                   <Show when={props.presentation?.entity}>
                     {(entity) => (
@@ -190,19 +198,20 @@ export default function ToolFrame(props: {
                     )}
                   </Show>
                 )
-                : undefined}
+                : undefined)}
               region={region}
             />
           )}
         >
           {() => (
             <>
-              <TreeItem last={!props.nested}>
+              <TreeItem last={!props.nested && !props.row?.extra}>
                 <TreeNode
                   header={() => <div class="otk-tool-body">{props.body()}</div>}
                 />
               </TreeItem>
               {props.nested?.()}
+              {props.row?.extra?.()}
             </>
           )}
         </Disclosure>

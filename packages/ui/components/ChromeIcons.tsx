@@ -91,9 +91,9 @@ export const KeyboardIcon = () => (
     <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </Icon>
 );
-export const ChevronIcon = (props: { class?: string } = {}) => (
+export const ChevronIcon = (props: { class?: string; left?: boolean } = {}) => (
   <Icon class={props.class}>
-    <path d="m9 18 6-6-6-6" />
+    <path d={props.left ? "m15 6-6 6 6 6" : "m9 18 6-6-6-6"} />
   </Icon>
 );
 export const ChevronDownIcon = (props: { class?: string } = {}) => (

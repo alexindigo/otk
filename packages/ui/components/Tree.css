@@ -302,3 +302,9 @@
 .otk-tree-row.has-span-trigger :is(.otk-tree-trail-slot, .otk-tree-feedback-slot) {
   pointer-events: auto;
 }
+.otk-tree-detail-slot {
+  grid-column: label-start / trail-end;
+  grid-row: extension;
+  min-inline-size: 0;
+  pointer-events: auto;
+}

@@ -33,6 +33,12 @@ export interface ShellPorts {
   projectRename?: import("@otk/client").ProjectRename;
   transcript: {
     messages(): Message[];
+    records?():
+      | Pick<
+        import("@otk/client").TranscriptOwner,
+        "state" | "interaction" | "nativeSource"
+      >
+      | undefined;
     exhausted(): boolean;
     paging(): boolean;
     older(): Promise<void>;
@@ -44,6 +50,7 @@ export interface ShellPorts {
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;
   approvals(id: string): ApprovalModel;
+  reportFailure?(cause: unknown): void;
   openProject(project: ProjectSelection): void;
   addToPrompt(text: string, label: string): void;
   project(): ProjectSelection | undefined;

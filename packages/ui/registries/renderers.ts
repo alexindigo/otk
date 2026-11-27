@@ -4,6 +4,15 @@ export interface WorkTime {
   start?: number;
   end?: number;
 }
+/** Alternate headings can borrow the existing record body and disclosure. */
+export interface PartRowSlots {
+  label: string;
+  required?: () => boolean;
+  tone?: "danger";
+  trail?: () => Element;
+  detail?: () => Element;
+  extra?: () => Element;
+}
 /** Feature-declared facts for the Work log strip and panel (D74). */
 export interface WorkRunFacts {
   lane?: "thinking" | "delegation";
@@ -54,6 +63,7 @@ import type {
 /** Inputs passed to every tool renderer; behavior belongs to injected callbacks. */
 export interface ToolProps {
   call: ToolCall;
+  row?: PartRowSlots;
   genericOutput: boolean;
   directory?: string;
   waiting: boolean;
@@ -164,6 +174,7 @@ export class ToolRegistry {
 
 /** Inputs for a message part, independent of its consumer or session model. */
 export interface PartProps {
+  row?: PartRowSlots;
   part: Part;
   prefs: Preferences;
   streaming: boolean;
