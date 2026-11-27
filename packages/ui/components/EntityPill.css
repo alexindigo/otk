@@ -32,3 +32,15 @@
   align-items: center;
   gap: var(--space-2);
 }
+.otk-entity-reference .otk-entity-pill {
+  text-decoration: none;
+}
+.otk-entity-reference {
+  user-select: all;
+}
+.otk-entity-reference .otk-entity-pill:is(:hover, :focus-visible) {
+  color: var(--otk-action-text);
+}
+.otk-entity-lamp {
+  display: flex;
+}

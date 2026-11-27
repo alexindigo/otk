@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub, ContextTarget } from "@otk/client";
-import { copyText } from "../clipboard.ts";
+import { copyText, sourceSelectionText } from "../clipboard.ts";
 import type { ContextInvocation } from "../components/context-target.ts";
 import { nativeTextField } from "../keyboard/ownership.ts";
 
@@ -44,7 +44,9 @@ export function browserContextTargets(
         )
         : !!nodes[0] && selection.containsNode(nodes[0], true)
     );
-  const selectedText = selectedHere ? text : "";
+  const selectedText = selectedHere
+    ? sourceSelectionText(selection) ?? text
+    : "";
   if (selectedText) {
     targets.push({ kind: "selection", data: { text: selectedText } });
   }

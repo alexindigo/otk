@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { FileFactFound, Inline, PathSemantics } from "@otk/protocol";
+import {
+  type FileFactFound,
+  type Inline,
+  isSessionID,
+  type PathSemantics,
+  sessionIDQualifier,
+} from "@otk/protocol";
 import { formatBytes } from "./format.ts";
 
 export type PathMention = {
@@ -7,9 +13,23 @@ export type PathMention = {
   path: string;
   line?: { start: number; end: number };
 };
-export type PathSegment = { text: string; mention?: PathMention };
+export type SessionMention = { raw: string; sessionID: string };
+export type InlineMention = PathMention | SessionMention;
+export type PathSegment = { text: string; mention?: InlineMention };
 type Where = "prose" | "code";
 type PathStyle = PathSemantics["style"];
+
+/** Native IDs in a reply use the reply's provider namespace. */
+export function resolveSessionMention<T>(
+  id: string,
+  from: string | undefined,
+  get: (canonical: string) => T | undefined,
+): T | undefined {
+  if (isSessionID(id)) return get(id);
+  if (from && isSessionID(from)) {
+    return get(from.slice(0, from.indexOf("-") + 1) + id);
+  }
+}
 
 export function textRuns(items: readonly Inline[]): readonly Inline[] {
   const runs: Inline[] = [];
@@ -28,9 +48,12 @@ const character = String.raw`[\p{L}\p{N}\p{M}._+@%=,~/\-]`;
 const characters = new RegExp(`^${character}+$`, "u");
 const position =
   /(?::([0-9]+)(?::([0-9]+)|-([0-9]+))?|#L([0-9]+)(?:-L([0-9]+))?)$/;
+// Both native versions generate 12 lowercase hex digits and 14 base62 digits.
+const sessionID = `(?:${sessionIDQualifier})?ses_[0-9a-f]{12}[0-9A-Za-z]{14}`;
+const sessionToken = new RegExp(`^${sessionID}$`);
 const candidates = new RegExp(
   String
-    .raw`(?:^|(?<=[\s(["'<]))~?/${character}*(?::\d+(?::\d+|-\d+)?|#L\d+(?:-L\d+)?)?`,
+    .raw`(?<![\p{L}\p{N}\p{M}_/])(?<session>${sessionID})(?![\p{L}\p{N}\p{M}_/])|(?:^|(?<=[\s(["'<]))~?/${character}*(?::\d+(?::\d+|-\d+)?|#L\d+(?:-L\d+)?)?`,
   "gu",
 );
 const scheme = /^[a-z][a-z0-9+.-]*:/i;
@@ -83,8 +106,7 @@ export function pathSegments(
   where: Where,
   style: PathStyle = "posix",
 ): readonly PathSegment[] {
-  if (style !== "posix") return [{ text }];
-  const key = `${where}\0${text}`;
+  const key = `${where}\0${style}\0${text}`;
   const saved = cache.get(key);
   if (saved) {
     cache.delete(key);
@@ -93,13 +115,22 @@ export function pathSegments(
   }
   const segments: PathSegment[] = [];
   if (where === "code") {
-    const mention = recognize(text.trim(), where);
+    const raw = text.trim();
+    const mention = sessionToken.test(raw)
+      ? { raw, sessionID: raw }
+      : style === "posix"
+      ? recognize(raw, where)
+      : undefined;
     segments.push(mention ? { text, mention } : { text });
   } else {
     let cursor = 0;
-    for (const { 0: candidate, index } of text.matchAll(candidates)) {
+    for (const { 0: candidate, index, groups } of text.matchAll(candidates)) {
       const raw = candidate.replace(/[.,]+$/, "");
-      const mention = recognize(raw, where);
+      const mention = groups?.session
+        ? { raw, sessionID: raw }
+        : style === "posix"
+        ? recognize(raw, where)
+        : undefined;
       if (!mention) continue;
       if (cursor < index) segments.push({ text: text.slice(cursor, index) });
       segments.push({ text: raw, mention });
