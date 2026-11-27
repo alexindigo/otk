@@ -9,6 +9,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
 import { activity } from "../../pages/sessions.ts";
 import {
+  expandTool,
   openRecord,
   readRecordBody,
   revealTool,
@@ -99,9 +100,12 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("Home");
   await prompt(page).press("!");
   await prompt(page).press("Enter");
-  // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
-  await revealTool(page, shellRun(state, "completed"));
-  await openRecord(page, shellRun(state, "completed"));
+  const isV2 = state.controller.info!.version.startsWith("2.");
+  // D74 / wl-5: V2 background shell records stay in the transcript;
+  // only V1's tool needs Work acquisition before opening its body.
+  const completed = shellRun(state, "completed");
+  if (isV2) await openRecord(page, completed);
+  else await expandTool(page, completed);
   const output = shellOutput(state, page, "completed");
   await expect(output).toContainText("otk");
   // Negative oracle control: keep the echoed command, remove only its output.
@@ -124,7 +128,9 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("!");
   await prompt(page).pressSequentially("sleep 31; echo long-shell-finished");
   await prompt(page).press("Enter");
-  await revealTool(page, shellRun(state, "running"));
+  if (!isV2) await revealTool(page, shellRun(state, "running"));
+  // Join the exact running record, not an earlier completed shell with
+  // the same native record kind.
   await expect(page.locator(shellRun(state, "running"))).toBeVisible();
   await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-operation-feedback[role=status]"))
@@ -140,23 +146,30 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
     composerSend(page),
     "Previous message still sending",
   );
-  const completedRun = page.locator(shellRun(state, "completed")).filter({
+  const completedRun = page.locator(completed).filter({
     hasText: "long-shell-finished",
   });
   await expect(completedRun).toBeVisible({ timeout: 60_000 });
-  const completedSource = await completedRun.evaluate((element, selector) => {
-    const message = element.closest("[data-message]")!,
-      row = element.closest("[data-virtual-key]")!;
-    return `[data-message=${
-      JSON.stringify(message.getAttribute("data-message"))
-    }] ` +
-      `[data-virtual-key=${
+  if (isV2) {
+    const completedSource = await completedRun.evaluate((element, selector) => {
+      const message = element.closest("[data-message]")!,
+        row = element.closest("[data-virtual-key]")!;
+      return `[data-message=${
+        JSON.stringify(message.getAttribute("data-message"))
+      }] [data-virtual-key=${
         JSON.stringify(row.getAttribute("data-virtual-key"))
       }] ${selector}`;
-  }, shellRun(state, "completed"));
-  if (state.controller.info!.version.startsWith("2.")) {
+    }, completed);
     await readRecordBody(page, completedSource);
-  } else await openRecord(page, completedSource);
+  } else {
+    const run = await completedRun.evaluate((element) =>
+      element.closest("[data-work-run]")!.getAttribute("data-work-run")
+    );
+    await expandTool(
+      page,
+      `[data-work-run=${JSON.stringify(run)}] ${completed}`,
+    );
+  }
   await expect(
     shellOutput(state, page, "completed").filter({
       hasText: "long-shell-finished",
