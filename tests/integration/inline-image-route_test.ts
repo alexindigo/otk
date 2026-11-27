@@ -10,6 +10,7 @@ import { browserSessionID } from "../support/browser-native.ts";
 test("inline image HTTP and RPC admit only authenticated, same-policy image reads", async (t) => {
   const f = await nativeFixture();
   const server = await f.sidecar({
+    images: { maxbytes: 1024 },
     auth: {
       type: "password",
       username: "tester",
@@ -34,6 +35,9 @@ test("inline image HTTP and RPC admit only authenticated, same-policy image read
   await Deno.writeFile(join(f.oc.directory, "picture"), png);
   await Deno.writeFile(join(f.oc.directory, ".hidden.png"), png);
   await Deno.writeTextFile(join(f.oc.directory, "notes.png"), "plain notes");
+  const oversized = new Uint8Array(1025);
+  oversized.set(png);
+  await Deno.writeFile(join(f.oc.directory, "oversized.png"), oversized);
   await Deno.writeTextFile(
     join(f.oc.directory, "drawing.svg"),
     '<svg xmlns="http://www.w3.org/2000/svg"><title>Drawing</title></svg>',
@@ -138,13 +142,21 @@ test("inline image HTTP and RPC admit only authenticated, same-policy image read
     "notes.png",
     ".hidden.png",
     "invalid.svg",
+    "oversized.png",
   ];
-  const reasons = ["outside", "missing", "not-image", "denied", "not-image"];
+  const reasons = [
+    "outside",
+    "missing",
+    "not-image",
+    "denied",
+    "not-image",
+    "too-large",
+  ];
   await t.step("refusals never expose host paths or HTML", async () => {
     for (const [i, path] of paths.entries()) {
       const response = await get(path);
       const reason = reasons[i];
-      assertEquals(response.status, [403, 404, 415, 403, 415][i]);
+      assertEquals(response.status, [403, 404, 415, 403, 415, 413][i]);
       const body = await response.text();
       assert(!body.includes(f.oc.root));
       assert(!body.startsWith("<"));
@@ -156,7 +168,13 @@ test("inline image HTTP and RPC admit only authenticated, same-policy image read
           "text/plain",
         );
         assertEquals(body, "Not found");
-      } else assertEquals(JSON.parse(body), { code: `image-${reason}` });
+      } else {
+        assertStringIncludes(
+          response.headers.get("content-type") ?? "",
+          "application/json",
+        );
+        assertEquals(JSON.parse(body), { code: `image-${reason}` });
+      }
     }
     const unknown = await get(
       "picture",
