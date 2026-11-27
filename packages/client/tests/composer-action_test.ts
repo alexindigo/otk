@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import * as primary from "../primary-action.ts";
 import { createSessionDelivery } from "../session-delivery.ts";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 
 const ready = {
   active: true,
@@ -15,6 +16,96 @@ const ready = {
   running: false,
   sending: false,
 };
+
+function timingFixture(clock: ManualClock) {
+  const sent: string[] = [];
+  const prepared: string[] = [];
+  const options = {
+    clock,
+    facts: () => ready,
+    draft: () => "draft",
+    prepare: () => {
+      prepared.push("draft");
+      return Promise.resolve();
+    },
+    send: (draft: string) => {
+      sent.push(draft);
+      return Promise.resolve();
+    },
+    stop: () => Promise.resolve(),
+    refuse: () => {},
+    begin: () => {},
+  };
+  return { owner: primary.createComposerAction(options), sent, prepared };
+}
+
+Deno.test("bare Enter prepares and sends only after 250 ms", async () => {
+  const clock = new ManualClock();
+  const { owner, sent, prepared } = timingFixture(clock);
+  const attempt = owner.activate("enter");
+  clock.advanceTo(249);
+  assertEquals(prepared, []);
+  assertEquals(sent, []);
+  clock.advanceTo(250);
+  await attempt;
+  assertEquals(sent, ["draft"]);
+});
+
+Deno.test("apostrophe suppresses Enter at 500 ms, but not at 800 ms", async () => {
+  const clock = new ManualClock();
+  const { owner, sent, prepared } = timingFixture(clock);
+  owner.input("compose's result");
+  clock.advanceTo(500);
+  await owner.activate("enter");
+  assertEquals(clock.pending, 0);
+  assertEquals(prepared, []);
+  clock.advanceTo(800);
+  const attempt = owner.activate("enter");
+  clock.advanceTo(1049);
+  assertEquals(prepared, []);
+  clock.advanceTo(1050);
+  await attempt;
+  assertEquals(sent, ["draft"]);
+});
+
+for (const cause of ["apostrophe", "other edit", "invalidation"] as const) {
+  Deno.test(`pending Enter is cancelled by ${cause}`, async () => {
+    const clock = new ManualClock();
+    const { owner, sent, prepared } = timingFixture(clock);
+    const attempt = owner.activate("enter");
+    clock.advanceTo(100);
+    if (cause === "invalidation") owner.cancelEnter();
+    else owner.input(cause === "apostrophe" ? "'" : "x");
+    clock.advanceTo(250);
+    await attempt;
+    assertEquals(prepared, []);
+    assertEquals(sent, []);
+    assertEquals(clock.pending, 0);
+  });
+}
+
+for (const source of ["button", "shortcut"] as const) {
+  Deno.test(`${source} sends immediately despite a recent apostrophe`, async () => {
+    const clock = new ManualClock();
+    const { owner, sent, prepared } = timingFixture(clock);
+    owner.input("'");
+    await owner.activate(source);
+    assertEquals(prepared, ["draft"]);
+    assertEquals(sent, ["draft"]);
+    assertEquals(clock.now(), 0);
+  });
+}
+
+Deno.test("the Send button supersedes a waiting Enter without a duplicate", async () => {
+  const clock = new ManualClock();
+  const { owner, sent, prepared } = timingFixture(clock);
+  const attempt = owner.activate("enter");
+  await owner.activate("button");
+  await attempt;
+  assertEquals(prepared, ["draft"]);
+  assertEquals(sent, ["draft"]);
+  assertEquals(clock.now(), 0);
+});
 
 for (
   const [name, facts, buttonKind, enterKind, reason] of [
@@ -122,10 +213,12 @@ for (const source of ["enter", "button"] as const) {
     ] as const
   ) {
     Deno.test(`${source} revalidates after preparation: ${name}`, async () => {
+      const clock = new ManualClock();
       const prepare = Promise.withResolvers<void>();
       let facts = { ...ready };
       const effects: string[] = [];
       const owner = primary.createComposerAction({
+        clock,
         facts: () => facts,
         draft: () => "retained draft",
         prepare: () => prepare.promise,
@@ -142,6 +235,10 @@ for (const source of ["enter", "button"] as const) {
         begin: () => {},
       });
       const attempt = owner.activate(source);
+      if (source === "enter") {
+        clock.runNext();
+        await Promise.resolve();
+      }
       assertEquals(owner.state.sending, true);
       facts = { ...facts, ...change };
       prepare.resolve();
@@ -152,6 +249,7 @@ for (const source of ["enter", "button"] as const) {
   }
 
   Deno.test(`${source} sends once, rejects a second draft, and preserves explicit local commands`, async () => {
+    const clock = new ManualClock();
     const ack = Promise.withResolvers<void>();
     const called = Promise.withResolvers<void>();
     const notices: string[] = [], payloads: string[] = [];
@@ -164,6 +262,7 @@ for (const source of ["enter", "button"] as const) {
       clock: { set: () => 0, clear: () => {} },
     });
     const owner = primary.createComposerAction({
+      clock,
       facts: (draft) => ({ ...ready, content: !!draft, running: true }),
       draft: () => draft,
       local: (draft) =>
@@ -191,15 +290,20 @@ for (const source of ["enter", "button"] as const) {
       refuse: (reason) => notices.push(reason),
       begin: () => {},
     });
+    const activate = () => {
+      const result = owner.activate(source);
+      if (clock.pending) clock.runNext();
+      return result;
+    };
     try {
-      const first = owner.activate(source);
+      const first = activate();
       await called.promise;
       draft = "second message";
-      await owner.activate(source);
+      await activate();
       assertEquals(notices, ["Previous message still sending"]);
       assertEquals(draft, "second message");
       draft = "/local";
-      await owner.activate(source);
+      await activate();
       assertEquals(commands, 1);
       assertEquals(owner.state.sending, true);
       assertEquals(payloads, ["first message"]);

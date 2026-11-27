@@ -235,6 +235,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   });
   const activate = (source: ComposerSource) =>
     primary.activate(source).catch(ctx.fail);
+  createEffect(() => props.value.input, primary.cancelEnter);
+  createEffect(() => !editable() || !!props.value.editor, (unavailable) => {
+    if (unavailable) primary.cancelEnter();
+  });
   const primaryState = bindPrimaryAction(primary);
   const refusal = () => {
     const last = lastRefusal();
@@ -259,7 +263,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     category: "Prompt",
     enabled: () => !collapsed(),
     // Keymap owns routing, not admission: even a refused Enter is consumed.
-    run: () => activate("enter"),
+    run: ({ shortcut }) =>
+      shortcut?.toLowerCase() === "enter"
+        ? activate("enter")
+        : activate("shortcut"),
   });
   ownedCommand(ports, {
     id: "prompt.newline",
@@ -314,6 +321,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
   });
   onSettled(() => {
+    const window = input.ownerDocument.defaultView;
+    window?.addEventListener("blur", primary.cancelEnter);
     releases.push(keyboard.onLayerClose("session.escape.reset"));
     const focused = () => ctx.focused();
     releases.push(
@@ -348,6 +357,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     if (!ports.keyboard) releases.push(keyboard.start());
     return () => {
       active = false;
+      primary.cancelEnter();
+      window?.removeEventListener("blur", primary.cancelEnter);
       for (const release of releases) release();
       clearTimeout(timer);
     };
@@ -428,7 +439,9 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
               }}
               onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
               onClick={(event) => setCaret(event.currentTarget.selectionStart)}
+              onBlur={primary.cancelEnter}
               onInput={(event) => {
+                primary.input(event.data);
                 setRefusal(undefined);
                 setCaret(event.currentTarget.selectionStart);
                 const value = event.currentTarget.value;
