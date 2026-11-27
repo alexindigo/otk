@@ -7,7 +7,13 @@ import { property } from "./syntax.ts";
 // value lists and numeric rank maps do; neither may grow a second owner.
 function priorityDefinitions(text: string): number {
   const source = new Source(text);
-  const states = new Set(["blocked", "finished", "working", "none"]);
+  const states = new Set([
+    "blocked",
+    "finished",
+    "working",
+    "dependencies",
+    "none",
+  ]);
   return source.all.filter((node) => {
     const values = node.type === "ArrayExpression"
       ? node.elements.flatMap((e) =>
@@ -24,31 +30,27 @@ function priorityDefinitions(text: string): number {
     return new Set(values.filter((v) => states.has(v))).size > 1;
   }).length;
 }
-Deno.test("lamp display and attention urgency each have one definition in the shared inbox contract", async () => {
+Deno.test("D78: lamp and attention ranks have a single definition in the shared inbox contract", async () => {
   const definitions: string[] = [];
   for (const [path, text] of await productionSources()) {
     if (!/\.tsx?$/.test(path)) continue;
     for (let i = 0; i < priorityDefinitions(text); i++) definitions.push(path);
   }
-  assertEquals(definitions, [
-    "packages/protocol/inbox.ts",
-    "packages/protocol/inbox.ts",
-  ]);
+  assertEquals(definitions, ["packages/protocol/inbox.ts"]);
   const owner = new Source(
     await Deno.readTextFile("packages/protocol/inbox.ts"),
   );
-  for (const name of ["ROLLUP_PRIORITY", "URGENCY_PRIORITY"]) {
-    assert(
-      owner.all.some((n) =>
-        n.type === "VariableDeclarator" && owner.name(n.id) === name
-      ),
-    );
-  }
+  assert(
+    owner.all.some((n) =>
+      n.type === "VariableDeclarator" && owner.name(n.id) === "ROLLUP_PRIORITY"
+    ),
+  );
 });
 Deno.test("priority ownership detects reordered lists and numeric rank maps without treating labels as ranks", () => {
   for (
     const copy of [
       'const order = ["finished", "blocked", "none", "working"];',
+      'const tieBreak = ["dependencies", "finished"];',
       "const rank = { working: 0, finished: 1, blocked: 2, none: 3 };",
     ]
   ) assertEquals(priorityDefinitions(copy), 1);
@@ -62,10 +64,6 @@ Deno.test("priority ownership detects reordered lists and numeric rank maps with
 
 const lampConsumers = new Set([
   "core/index/entity-states.ts",
-  "packages/client/entity-state.ts",
-  "packages/client/inbox.ts",
-  "packages/client/project-projection.ts",
-  "packages/client/request-attention.ts",
 ]);
 const urgencyConsumers = new Set([
   "core/features/navigation-default.ts",
@@ -82,12 +80,17 @@ function crossedOwners(path: string, text: string): string[] {
     ),
   );
   return [
-    ...["attentionStatus", "PROJECT_STATUS_PRIORITY", "INBOX_STATUS_PRIORITY"]
+    ...[
+      "attentionStatus",
+      "PROJECT_STATUS_PRIORITY",
+      "INBOX_STATUS_PRIORITY",
+      "URGENCY_PRIORITY",
+    ]
       .filter((name) => symbols.has(name)),
     ...["ROLLUP_PRIORITY", "rollupStatus"].filter((name) =>
       symbols.has(name) && !lampConsumers.has(path)
     ),
-    ...["URGENCY_PRIORITY", "urgentStatus"].filter((name) =>
+    ...["urgentStatus"].filter((name) =>
       symbols.has(name) && !urgencyConsumers.has(path)
     ),
   ];
@@ -129,6 +132,6 @@ Deno.test("priority boundary catches renamed imports, namespace access and ambig
       "packages/client/inbox.ts",
       'export {rollupStatus as attentionStatus} from "@otk/protocol";',
     ),
-    ["attentionStatus"],
+    ["attentionStatus", "rollupStatus"],
   );
 });

@@ -102,6 +102,8 @@ export interface EntityState {
   opened?: true;
   /** Running PTYs; separate from the session's own native activity. */
   dependencies?: number;
+  /** Aggregate work evidence, even when another state wins the lamp (D78). */
+  liveWork?: true;
   terminal?: number;
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";

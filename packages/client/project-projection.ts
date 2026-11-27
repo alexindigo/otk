@@ -432,9 +432,8 @@ export function createProjectProjection(o: {
       // state is grey (D6).
       const store = o.entities?.(), key = entityKey("project", directory);
       const status = store ? entityState(store, key) : "none";
-      const dependencies = store && !store.isStale
-        ? store.get(key)?.dependencies
-        : undefined;
+      const entity = store && !store.isStale ? store.get(key) : undefined;
+      const dependencies = entity?.dependencies;
       const unread = store ? emphasis(store, key) : false;
       const record = p.record;
       const archived = summary?.archived === true;
@@ -447,6 +446,7 @@ export function createProjectProjection(o: {
         lifecycle: summary,
         status,
         dependencies,
+        liveWork: entity?.liveWork,
         inactive: !!record?.inactive,
         hasSessions,
       });
@@ -460,6 +460,7 @@ export function createProjectProjection(o: {
         !p.row || p.row.visit?.text !== visit?.text ||
         p.row.visit?.iso !== visit?.iso ||
         p.row.visit?.spoken !== visit?.spoken || p.row.status !== status ||
+        p.row.section !== placement.section ||
         p.row.unread !== unread || p.row.dependencies !== dependencies ||
         p.row.parentLabel !== parentLabel
       ) {

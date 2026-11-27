@@ -145,7 +145,8 @@ test("D72 helpers acknowledge the published roster once and a newer run returns 
         { sessionID: success, terminal: 20 },
       ],
     });
-    assertEquals(f.helpers()?.ids, [working, waiting]);
+    // D78 changes the roster's group order, not what acknowledgement clears.
+    assertEquals(f.helpers()?.ids, [waiting, working]);
     assertEquals(f.state(working)?.counts.unseen, 1);
     assertEquals(f.state(waiting)?.counts.unseen, 1);
     assertEquals(await f.rpc.dispatch("sessions.acknowledge", params), {
@@ -153,14 +154,14 @@ test("D72 helpers acknowledge the published roster once and a newer run returns 
     });
     f.close();
     f = open(directory, rows);
-    assertEquals(f.helpers()?.ids, [working, waiting]);
+    assertEquals(f.helpers()?.ids, [waiting, working]);
     assertEquals<unknown>(f.helpers()?.counts, {
       running: 1,
       needsYou: 1,
       finished: 0,
     });
     f.index.upsert({ ...completed, activity: run(23) });
-    assertEquals(f.helpers()?.ids, [working, waiting, success]);
+    assertEquals(f.helpers()?.ids, [waiting, success, working]);
     assertEquals<unknown>(f.helpers()?.counts, {
       running: 1,
       needsYou: 1,
@@ -175,7 +176,7 @@ test("D72 helpers acknowledge the published roster once and a newer run returns 
     assertEquals(f.state(success)?.counts.unseen, 1);
     await f.rpc.dispatch("sessions.seen", { sessionID: success, terminal: 23 });
     assertEquals(f.state(success)?.evidence?.helper, undefined);
-    assertEquals(f.helpers()?.ids, [working, waiting]);
+    assertEquals(f.helpers()?.ids, [waiting, working]);
     assertEquals(f.seen.tokens().find((e) => e.session === success)?.time, 23);
   } finally {
     f.close();

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { RequestMetadata } from "./request-metadata.ts";
-import type { EntityState } from "./entity-state.ts";
+import type { EntityState, HelperDisposition } from "./entity-state.ts";
 import type { PublicFailure } from "./requests.ts";
 export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "inbox.get": { kind: "read", pending: "Loading projects" },
@@ -59,36 +59,37 @@ export interface TaskRecord {
   order: number;
   sessions: string[];
 }
-/** Aggregate lamp display only; never use this order to choose urgent sessions. */
+/** D78: one order for aggregate lamps. D7 navigation uses the same ranks. */
 export const ROLLUP_PRIORITY = [
   "blocked",
-  "working",
   "finished",
+  "working",
   "dependencies",
   "none",
 ] as const;
 export type ProjectStatus = typeof ROLLUP_PRIORITY[number];
-/** Combine lamp states for display, not navigation or notification urgency. */
+/** Combine published states for an aggregate lamp, never an individual session. */
 export function rollupStatus(
   ...states: (ProjectStatus | undefined)[]
 ): ProjectStatus {
   return ROLLUP_PRIORITY.find((state) => states.includes(state)) ??
     "none";
 }
-/** User-attention urgency for session selection; never use for lamp rollups. */
-export const URGENCY_PRIORITY = [
-  "blocked",
-  "finished",
-  "working",
-  "dependencies",
-  "none",
-] as const satisfies readonly ProjectStatus[];
-/** Choose the most urgent attention state, not the aggregate lamp colour. */
-export function urgentStatus(
-  ...states: (ProjectStatus | undefined)[]
-): ProjectStatus {
-  return URGENCY_PRIORITY.find((state) => states.includes(state)) ?? "none";
-}
+/** Navigation ranks published session states; membership and ties are its own. */
+export const urgentStatus = rollupStatus;
+
+/** Helper group lamps describe the disposition, not each session's own lamp. */
+export const HELPER_LAMP_STATE = {
+  needsYou: "blocked",
+  running: "working",
+  finished: "finished",
+  opened: "none",
+} as const satisfies Record<HelperDisposition, ProjectStatus>;
+export const HELPER_LAMP_ORDER: readonly HelperDisposition[] =
+  (Object.keys(HELPER_LAMP_STATE) as HelperDisposition[]).sort((a, b) =>
+    ROLLUP_PRIORITY.indexOf(HELPER_LAMP_STATE[a]) -
+    ROLLUP_PRIORITY.indexOf(HELPER_LAMP_STATE[b])
+  );
 /**
  * Reserved `canonicalRoot` of a removed checkout whose repository cannot be
  * determined. Not a path, so it can never name a project row.

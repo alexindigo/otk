@@ -134,7 +134,7 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
     await shot("main-narrow", name);
     const control = subagents(page);
     await expect(control).toHaveAccessibleName(
-      "Subagents: 1 needs you, 2 running, 1 finished",
+      "Subagents: 1 needs you, 1 finished, 2 running", // D78
     );
     await expect(
       control.locator(".otk-status-light:visible").first(),
@@ -190,7 +190,7 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
       await expect.poll(async () => (await ids()).at(-1)).toBe(id);
       await expect(control).toHaveAccessibleName(
         id === child || id === "tstv1-trail-blocked"
-          ? "Subagents: 1 needs you, 2 running, 1 finished"
+          ? "Subagents: 1 needs you, 1 finished, 2 running"
           : "Subagents: 1 needs you, 2 running, 1 opened",
       );
       await control.click();

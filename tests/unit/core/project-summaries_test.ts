@@ -142,7 +142,7 @@ Deno.test("unknown population retains last-known discovery without inventing emp
   assertEquals(owner.values.get("/unknown")?.lastActivity, null);
 });
 
-Deno.test("repository lamp shows working over an unseen finished checkout but blocked still wins", () => {
+Deno.test("D78: repository lamp shows an unseen finished checkout over work but blocked still wins", () => {
   const owner = new ProjectSummaries(
     (id) => ({ seen: 0, finish: id === "tstv1-done" ? 10 : 0 }),
     () => {},
@@ -170,12 +170,12 @@ Deno.test("repository lamp shows working over an unseen finished checkout but bl
   owner.entry(running);
   assertEquals(owner.values.get("/repo")?.direct?.status, "finished");
   assertEquals(owner.values.get("/tree")?.status, "working");
-  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.status, "finished");
   assertEquals(owner.values.get("/repo")?.unseenCount, 1);
   owner.locationForms({ "/tree": 1 });
   assertEquals(owner.values.get("/repo")?.status, "blocked");
 });
-Deno.test("project summaries own status priority, persisted marks, recency and unavailable authority without digest", () => {
+Deno.test("project summaries own D78 status priority, persisted marks, recency and unavailable authority without digest", () => {
   let seen = 0, finish = 0;
   const emitted: ProjectSummary[] = [];
   const owner = new ProjectSummaries(
@@ -201,7 +201,7 @@ Deno.test("project summaries own status priority, persisted marks, recency and u
     status: "busy",
     activity: { work: { keys: ["run-b"], fresh: true } },
   });
-  assertEquals(owner.values.get("/other")?.status, "working");
+  assertEquals(owner.values.get("/other")?.status, "finished");
   owner.entry({
     ...a,
     attention: { ...a.attention, questions: 1 },
@@ -567,7 +567,7 @@ Deno.test("late recorded roots migrate all retained contributions and exact seed
     false,
     "resolved stored policy is not an obsolete flat row",
   );
-  assertEquals(owner.values.get("/tree")?.status, "working");
+  assertEquals(owner.values.get("/tree")?.status, "finished", "D78");
   assertEquals(owner.values.get("/tree")?.unseenCount, 2);
   assertEquals(owner.values.get("/tree")?.sessionCount, 2);
   assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/sub"]);
