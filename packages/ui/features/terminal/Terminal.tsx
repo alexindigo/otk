@@ -35,6 +35,7 @@ import { TabPanels, TabStrip } from "../../components/Tabs.tsx";
 import ActionButton from "../../components/ActionButton.tsx";
 import { RunIcon } from "../../components/tools/ToolIcons.tsx";
 import PaneState from "../../components/PaneState.tsx";
+import ProgressStatus from "../../components/ProgressStatus.tsx";
 import Surface from "../../components/surface/Surface.tsx";
 import { contextTarget } from "../../components/context-target.ts";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
@@ -353,15 +354,23 @@ function TerminalContent(
           {(feedback) => <PaneState feedback={feedback() || undefined} />}
         </Show>
         <Show
-          when={model.terminals.state.list.length}
+          when={model.terminals.listState === "items"}
           fallback={
             <div class="otk-terminal-empty-body">
               <PaneState>
                 <div class="otk-terminal-empty">
                   <Show
-                    when={!model.terminals.state.loading &&
+                    when={model.terminals.listState === "empty" &&
                       !model.state.creating}
-                    fallback={<p role="status">Opening terminal...</p>}
+                    fallback={
+                      <Show when={!model.terminals.state.error}>
+                        <ProgressStatus
+                          text={model.state.creating
+                            ? "Opening terminal..."
+                            : "Loading terminals..."}
+                        />
+                      </Show>
+                    }
                   >
                     <p class="otk-terminal-empty-note">
                       No terminals in this session

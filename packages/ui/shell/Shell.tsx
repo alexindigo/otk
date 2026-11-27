@@ -719,6 +719,8 @@ export default function Shell(
               },
               exhausted: () => session.state.exhausted,
               paging: () => session.state.paging || session.state.loading,
+              answered: () =>
+                !session.state.loading && session.state.continuity === "ready",
               older: () => session.older(),
               reveal: async (messageID) => {
                 const target = session.state.selection;
@@ -764,11 +766,8 @@ export default function Shell(
             projectLabel: resources.projectLabel,
             projectMetadata: resources.projectMetadata,
             metadataEntry: resources.metadataEntry,
-            sessionRows: resources.sessionRows,
+            sessionCollection: resources.sessionCollection,
             holdTaskOrder: resources.holdTaskOrder,
-            sessionRowsReady: resources.sessionRowsReady,
-            sessionRowsLoading: resources.sessionRowsLoading,
-            sessionRowsStatus: resources.sessionRowsStatus,
             visibleRows: resources.visibleRows,
             projectProgress: resources.projectProgress,
             listInteraction,
@@ -846,6 +845,7 @@ export default function Shell(
               selected={project()}
               prefs={toggles.state.prefs}
               ready={toggles.state.ready}
+              projectsReady={resources.projectsReady()}
               onOpen={openProject}
               onAttention={navigation.openAttention}
               onInactive={resources.inactive}
@@ -974,20 +974,55 @@ export default function Shell(
                             when={session.state.selection}
                             keyed
                             fallback={
-                              <div class="otk-welcome">
-                                <PaneState>
-                                  <h1>
-                                    {project()
-                                      ? "Choose a session"
-                                      : "Open Terminal Kit"}
-                                  </h1>
-                                  <p>
-                                    {project()
-                                      ? "Open Sessions in the right panel, or start a new session."
-                                      : "Choose a project to supervise its sessions."}
-                                  </p>
-                                </PaneState>
-                              </div>
+                              <Show
+                                when={project()}
+                                fallback={
+                                  <div class="otk-welcome">
+                                    <PaneState>
+                                      <h1>Open Terminal Kit</h1>
+                                      <p>
+                                        Choose a project to supervise its
+                                        sessions.
+                                      </p>
+                                    </PaneState>
+                                  </div>
+                                }
+                              >
+                                {(owner) => {
+                                  const state = createMemo(() =>
+                                    resources.projectContents(owner())
+                                  );
+                                  return (
+                                    <Show when={state() !== "items"}>
+                                      <div class="otk-welcome otk-project-hero">
+                                        <PaneState>
+                                          <h1 class="otk-control-label">
+                                            {state() === "loading"
+                                              ? resources.checkoutLabel(
+                                                owner().sidecarId,
+                                                owner().directory,
+                                              )
+                                              : "Choose a session"}
+                                          </h1>
+                                          <div class="otk-project-hero-detail">
+                                            <Show
+                                              when={state() === "loading"}
+                                              fallback={
+                                                <p>
+                                                  Open Sessions in the right
+                                                  panel, or start a new session.
+                                                </p>
+                                              }
+                                            >
+                                              <ProgressStatus text="Loading sessions..." />
+                                            </Show>
+                                          </div>
+                                        </PaneState>
+                                      </div>
+                                    </Show>
+                                  );
+                                }}
+                              </Show>
                             }
                           >
                             {(target) => (

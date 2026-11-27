@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ActionControl,
+  collectionState,
   countLabel,
   messagePresentation,
   messageTimeValue,
@@ -22,6 +23,7 @@ import ChromeMeta, { MetaItem, MetaRow } from "./ChromeMeta.tsx";
 import Clock from "./Clock.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import PaneState from "./PaneState.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import TimeValue from "./TimeValue.tsx";
 import WorkRunList from "./WorkRunList.tsx";
 import type { WorkRuns } from "./work-log.ts";
@@ -170,15 +172,28 @@ export default function WorkPanelView(): Element {
   };
   const onFeedback: Report = (outcome) =>
     shell.reportFailure?.(outcome.feedback);
+  const state = () =>
+    collectionState(
+      shell.transcript.answered?.() === true,
+      Number(!!(reply() && work() && records())),
+    );
   return (
     <div class="otk-work-panel">
       <Show
         when={reply() && work() && records()}
         fallback={
           <PaneState>
-            {session()
-              ? "No work in this session yet."
-              : "Choose a session to view its Work log."}
+            <Show
+              when={session()}
+              fallback="Choose a session to view its Work log."
+            >
+              <Show
+                when={state() === "empty"}
+                fallback={<ProgressStatus text="Loading Work log..." />}
+              >
+                No work in this session yet.
+              </Show>
+            </Show>
           </PaneState>
         }
       >

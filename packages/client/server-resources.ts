@@ -57,6 +57,7 @@ import {
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
+import { type CollectionState, collectionState } from "./collection-state.ts";
 import { createProjectOrder, orderProjectRows } from "./project-order.ts";
 import { createFileFacts, type FileFacts } from "./file-facts.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
@@ -134,9 +135,13 @@ export interface ServerResources {
     sessionID: string,
   ): MergedMetadata | undefined;
   sessionRows(project: ProjectSelection, query?: string): SessionListRow[];
-  sessionRowsReady(project: ProjectSelection): boolean;
-  sessionRowsLoading(project: ProjectSelection): boolean;
-  sessionRowsStatus(project: ProjectSelection): ProgressDisplay;
+  projectContents(project: ProjectSelection): CollectionState;
+  sessionCollection(project: ProjectSelection, query?: string): {
+    state: CollectionState;
+    rows: SessionListRow[];
+    progress: ProgressDisplay;
+  };
+  projectsReady(): boolean;
   projectProgress(
     project: ProjectSelection,
   ): { busy: boolean; announcement: string };
@@ -387,6 +392,10 @@ export function createServerResources(o: {
       listOwner(project.sidecarId).get(input)
     );
   const trees = new Map<string, ReturnType<typeof createSessionTree>>();
+  const rowFacts = new WeakMap<SessionListRow[], {
+    count: number;
+    beforeAnswer: SessionListRow[];
+  }>();
   const listContexts = new WeakMap<TabInput, {
     scope: string;
     values: (SessionStructure & { retained: boolean })[];
@@ -459,7 +468,6 @@ export function createServerResources(o: {
     listContexts.set(input, { scope, values: context });
     return context;
   };
-  const inboxDirectories = new Map<string, string>();
   const sendView = () => {
     const id = visible?.project.sidecarId ?? selected?.sidecarId;
     for (const sidecar of sidecars.state.list) {
@@ -633,6 +641,10 @@ export function createServerResources(o: {
         o.error,
         () => sidecars.connection(id).viewEpoch,
         () => attached(id),
+        () =>
+          visible?.project.sidecarId === id
+            ? projectOwner(id).resolve(visible.project.directory)
+            : undefined,
       );
       inboxes.set(id, model);
       const current = model;
@@ -716,6 +728,7 @@ export function createServerResources(o: {
     dependencies: ReadonlySet<string>;
     dirty: boolean;
     taskSignature: string;
+    tasks: TabInput["inbox"]["tasks"];
     followParent: boolean;
     value: TabInput;
   }>();
@@ -725,10 +738,14 @@ export function createServerResources(o: {
     const followParent = tasksFollowParent;
     const key = JSON.stringify([p.sidecarId, base.directory]);
     void tabContextClock.state.keys[key];
+    const tasks = () =>
+      inbox(p.sidecarId).projectTasks(base.directory) ??
+        base.inbox.tasks;
+    const currentTasks = tasks();
     const previous = tabInputs.get(key);
     if (
       previous?.base === base && previous.followParent === followParent &&
-      !previous.dirty
+      previous.tasks === currentTasks && !previous.dirty
     ) {
       return previous.value;
     }
@@ -753,7 +770,7 @@ export function createServerResources(o: {
       }
     };
     acquire();
-    for (const task of base.inbox.tasks) {
+    for (const task of currentTasks) {
       if (
         (base.directories ?? [base.directory]).includes(task.directory) ||
         followParent && task.sessions.some((id) => dependencies.has(id))
@@ -775,7 +792,10 @@ export function createServerResources(o: {
         return base.entries;
       },
       get inbox() {
-        return base.inbox;
+        const current = base.inbox, values = tasks();
+        return current.tasks === values
+          ? current
+          : { ...current, tasks: values };
       },
       get taskActivity() {
         return base.taskActivity;
@@ -790,7 +810,8 @@ export function createServerResources(o: {
       base,
       dependencies,
       dirty: false,
-      taskSignature: hierarchyTaskSignature(base.inbox.tasks, dependencies),
+      taskSignature: hierarchyTaskSignature(tasks(), dependencies),
+      tasks: currentTasks,
       followParent,
       value,
     });
@@ -814,24 +835,28 @@ export function createServerResources(o: {
     }
     return model;
   };
-  const sessionRows = (
+  const sessionCollection = (
     p: ProjectSelection,
     query?: string,
-  ): SessionListRow[] => {
+  ) => {
     const lists = listsFor(p, query),
       key = JSON.stringify([p.sidecarId, p.directory]);
     let tree = trees.get(key);
     if (!tree) trees.set(key, tree = createSessionTree());
-    const model = tabs(p);
-    model.update(tabInput(p));
+    const input = tabInput(p), model = tabs(p);
+    model.update(input);
     const taskOrder = model.tabs().map((tab) => tab.id);
-    return model.orderRows(tree.rows(
+    const owner = listOwner(p.sidecarId);
+    const tasksKnown =
+      inbox(p.sidecarId).projectTasks(input.directory) !== undefined;
+    const answered = tasksKnown && lists.every((page) => owner.confirmed(page));
+    const rows = model.orderRows(tree.rows(
       [...new Map(
-        lists.flatMap((list) =>
-          listOwner(p.sidecarId).structures(list, listContext(p))
-        ).map((entry) => [entry.id, entry]),
+        lists.flatMap((list) => owner.structures(list, listContext(p))).map((
+          entry,
+        ) => [entry.id, entry]),
       ).values()],
-      inbox(p.sidecarId).state.inbox.tasks,
+      input.inbox.tasks,
       p.directory,
       query,
       projectOwner(p.sidecarId).scopes(
@@ -839,6 +864,27 @@ export function createServerResources(o: {
       ),
       taskOrder,
     ));
+    let facts = rowFacts.get(rows);
+    if (!facts) {
+      const ungrouped = rows.some((row) =>
+        row.kind === "session" && !row.group
+      );
+      const count = rows.reduce(
+        (count, row) => count + Number(row.kind === "session" || !!row.group),
+        0,
+      );
+      facts = {
+        count,
+        beforeAnswer: ungrouped ? rows : rows.filter((row) => !!row.group),
+      };
+      rowFacts.set(rows, facts);
+    }
+    return {
+      state: collectionState(answered, tasksKnown ? facts.count : 0),
+      // The synthetic heading is not evidence of an empty ungrouped list.
+      rows: answered ? rows : facts.beforeAnswer,
+      progress: owner.progress(lists.find((page) => page.loading) ?? lists[0]),
+    };
   };
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
@@ -854,6 +900,7 @@ export function createServerResources(o: {
         state.revision++;
       });
       sendView();
+      for (const model of inboxes.values()) model.invalidateProjectTasks();
       for (const owner of listOwners.values()) owner.refresh();
     }
     approvals(id).receive(frame);
@@ -901,13 +948,6 @@ export function createServerResources(o: {
     }
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
-    if (
-      frame.t === "inbox.snapshot" &&
-      frame.epoch === sidecars.connection(id).viewEpoch &&
-      visible?.project.sidecarId === id
-    ) {
-      inboxDirectories.set(id, visible.project.directory);
-    }
     if (frame.t === "digest.progress") {
       for (const facts of frame.values) {
         progressOwner(id).receive(facts.directory ?? "", facts);
@@ -1032,7 +1072,9 @@ export function createServerResources(o: {
           list,
           rows,
           () =>
-            sessionRows(project, query).filter((row) => row.kind === "session")
+            sessionCollection(project, query).rows.filter((row) =>
+              row.kind === "session"
+            )
               .map((row) => row.key),
         );
       }
@@ -1129,37 +1171,13 @@ export function createServerResources(o: {
     entities: (server) => inbox(server).entities,
     projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
     metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
-    sessionRowsReady: (p) => {
-      const pages = listsFor(
-        p,
-        rowDemand?.project.directory === p.directory &&
-          rowDemand.project.sidecarId === p.sidecarId
-          ? rowDemand.query
-          : "",
-      );
-      return (pages.every((page) => page.ready) || listContext(p).length > 0) &&
-        inbox(p.sidecarId).state.ready &&
-        inboxDirectories.get(p.sidecarId) === p.directory;
-    },
-    sessionRowsLoading: (p) =>
-      listsFor(
-        p,
-        rowDemand?.project.directory === p.directory &&
-          rowDemand.project.sidecarId === p.sidecarId
-          ? rowDemand.query
-          : "",
-      ).some((page) => page.loading),
-    sessionRowsStatus: (p) =>
-      listOwner(p.sidecarId).progress(
-        listsFor(
-          p,
-          rowDemand?.project.directory === p.directory &&
-            rowDemand.project.sidecarId === p.sidecarId
-            ? rowDemand.query
-            : "",
-        ).find((page) => page.loading) ?? listsFor(p)[0],
+    projectContents: (p) => sessionCollection(p).state,
+    sessionCollection,
+    sessionRows: (p, query) => sessionCollection(p, query).rows,
+    projectsReady: () =>
+      sidecars.state.list.every((s) =>
+        projectOrder(s.id).ready && inbox(s.id).state.ready
       ),
-    sessionRows,
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     checkoutLabel: (id, directory) => projectOwner(id).label(directory),
     projectLabel: (id, directory) => projectOwner(id).projectLabel(directory),
@@ -1253,7 +1271,6 @@ export function createServerResources(o: {
       requestSubscriptions.delete(id);
       listOwners.get(id)?.stop();
       listOwners.delete(id);
-      inboxDirectories.delete(id);
       progressOwners.get(id)?.stop();
       progressOwners.delete(id);
       for (const release of projectReleases.get(id) ?? []) release();

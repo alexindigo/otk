@@ -18,6 +18,7 @@ import {
   helperDisposition,
   lamp,
   type LiveWorkOwner,
+  taskHelpersState,
   unknownTime,
 } from "@otk/client";
 import {
@@ -40,6 +41,7 @@ import EntityPill from "./EntityPill.tsx";
 import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import Menu from "./surface/Menu.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
 import "./Subagents.css" with { type: "text" };
@@ -61,12 +63,17 @@ export default function Subagents(
   const session = useOptionalSessionPorts();
   const helpers = () => props.helpers;
   const counts = () => helpers()?.counts;
+  const state = () =>
+    props.entities
+      ? taskHelpersState(props.entities, props.task)
+      : helpers()?.ids.length
+      ? "items"
+      : "empty";
   const presence = new ActivityPresence(solidState);
   let menu: PopoverControl | undefined;
-  createEffect(
-    () => helpers()?.ids.length ?? 0,
-    (count) => presence.publish(count),
-  );
+  createEffect(state, (state) => {
+    if (state !== "loading") presence.publish(state === "items" ? 1 : 0);
+  });
   createEffect(() => presence.retiring, (retiring) => {
     if (retiring) menu?.close(props.focusHome);
   });
@@ -146,7 +153,9 @@ export default function Subagents(
         label="Subagents"
         title="Subagents"
         titleAction={canClear() ? clearTitle : undefined}
-        triggerLabel={`Subagents: ${helperCountsLabel(counts())}`}
+        triggerLabel={state() === "loading"
+          ? "Loading subagents"
+          : `Subagents: ${helperCountsLabel(counts())}`}
         size="fit"
         control={(control) => menu = control}
         dismissOnAction={false}
@@ -161,17 +170,25 @@ export default function Subagents(
           presence.closed();
         }}
         trigger={
-          <LiveCount
-            icon={RobotIcon}
-            parts={helperCountParts(counts()).map((part) => ({
-              id: part.kind,
-              count: part.count,
-              lamp: helpers()?.lamps?.groups[part.kind],
-            }))}
-          />
+          <Show
+            when={state() !== "loading"}
+            fallback={<ProgressStatus text="Loading subagents..." />}
+          >
+            <LiveCount
+              icon={RobotIcon}
+              parts={helperCountParts(counts()).map((part) => ({
+                id: part.kind,
+                count: part.count,
+                lamp: helpers()?.lamps?.groups[part.kind],
+              }))}
+            />
+          </Show>
         }
       >
         <div class="otk-subagent-list" role="presentation">
+          <Show when={state() === "loading"}>
+            <ProgressStatus text="Loading subagents..." />
+          </Show>
           <For each={grouped()} keyed={(group) => group.kind}>
             {(group) => (
               <div

@@ -36,6 +36,14 @@
 .otk-welcome p {
   color: var(--secondary);
 }
+.otk-project-hero-detail {
+  display: grid;
+  align-items: center;
+  min-block-size: 1lh;
+}
+.otk-project-hero-detail p {
+  margin: 0;
+}
 .otk-auth-view {
   display: flex;
   flex: 1;

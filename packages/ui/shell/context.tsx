@@ -42,6 +42,8 @@ export interface ShellPorts {
       | undefined;
     exhausted(): boolean;
     paging(): boolean;
+    /** True only once this selection has a transcript baseline. */
+    answered?(): boolean;
     older(): Promise<void>;
     reveal(messageID: string): Promise<void>;
   };
@@ -61,12 +63,8 @@ export interface ShellPorts {
   projectLabel: import("@otk/client").ServerResources["projectLabel"];
   projectMetadata: import("@otk/client").ServerResources["projectMetadata"];
   metadataEntry: import("@otk/client").ServerResources["metadataEntry"];
-  sessionRows: import("@otk/client").ServerResources["sessionRows"];
+  sessionCollection: import("@otk/client").ServerResources["sessionCollection"];
   holdTaskOrder?: import("@otk/client").ServerResources["holdTaskOrder"];
-  sessionRowsReady: import("@otk/client").ServerResources["sessionRowsReady"];
-  sessionRowsLoading:
-    import("@otk/client").ServerResources["sessionRowsLoading"];
-  sessionRowsStatus: import("@otk/client").ServerResources["sessionRowsStatus"];
   visibleRows: import("@otk/client").ServerResources["visibleRows"];
   projectProgress: import("@otk/client").ServerResources["projectProgress"];
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;

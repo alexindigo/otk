@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  collectionState,
   type Disclosures,
   type DisclosureState,
   errorFeedback,
@@ -14,6 +15,7 @@ import {
 import { archiveEntityID, entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
 import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import SidebarRow, {
@@ -28,9 +30,11 @@ import {
   createSignal,
   createUniqueId,
   For,
+  Match,
   onCleanup,
   onSettled,
   Show,
+  Switch,
 } from "solid-js";
 import {
   checkoutLabel,
@@ -96,6 +100,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   selected?: ProjectSelection;
   prefs: Preferences;
   ready: boolean;
+  projectsReady?: boolean;
   history?: import("solid-js").Element;
   collapseToggle?: import("solid-js").Element;
   ref?(element: HTMLElement): void;
@@ -107,6 +112,8 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   /** The connection's entity states; standalone consumers present rows'. */
   entities?(server: string): EntityStateStore;
 }): import("solid-js").Element {
+  const projectsState = () =>
+    collectionState(props.projectsReady ?? props.ready, props.projects.length);
   const disclosure = props.disclosure;
   const inactiveDisclosure = disclosure.bind("inactive", {
     scope: "",
@@ -1200,8 +1207,17 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       <Show when={collapsed()}>
         <Branches name="Inactive" />
       </Show>
-      <Show when={!collapsed() && !props.projects.length}>
-        <EmptyState>Add a project to get started.</EmptyState>
+      <Show when={!collapsed()}>
+        <Switch>
+          <Match when={projectsState() === "loading"}>
+            <EmptyState>
+              <ProgressStatus text="Loading projects..." />
+            </EmptyState>
+          </Match>
+          <Match when={projectsState() === "empty"}>
+            <EmptyState>Add a project to get started.</EmptyState>
+          </Match>
+        </Switch>
       </Show>
     </SidebarRail>
   );
