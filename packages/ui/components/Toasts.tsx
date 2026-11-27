@@ -83,14 +83,18 @@ export default function Toasts(
       aria-live="polite"
     >
       <Show when={remaining().length > 0}>
-        <button
-          ref={(el) => more = el}
-          type="button"
-          class="otk-toasts-more"
-          onClick={() => props.model.more()}
-        >
-          {overflow()}
-        </button>
+        <div class="otk-toasts-pager">
+          <button
+            ref={(el) => more = el}
+            type="button"
+            class="otk-toasts-more"
+            onClick={() => props.model.more()}
+          >
+            <span class="otk-control-label" title={overflow()}>
+              {overflow()}
+            </span>
+          </button>
+        </div>
       </Show>
       <For
         each={visible()}
@@ -151,7 +155,7 @@ export default function Toasts(
                   </Show>
                 );
                 return (
-                  <MetaRow whole class="otk-toast-location">
+                  <MetaRow whole intrinsic class="otk-toast-location">
                     <MetaItem rank={2}>
                       <strong class="otk-toast-title" title={heading}>
                         {heading}

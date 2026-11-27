@@ -51,7 +51,8 @@
 .otk-project-chip-menu-content {
   display: flex;
   flex-direction: column;
-  width: min(calc(288 * var(--otk-unit)), 70vw);
+  inline-size: max-content;
+  max-inline-size: min(100%, 70vi);
 }
 .otk-project-chip-menu-heading {
   display: flex;

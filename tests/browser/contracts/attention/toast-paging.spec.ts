@@ -25,6 +25,26 @@ test("attention.toasts.page-survives-dismiss", {
     "Distinct failure 1",
   ]);
   await expect(more).toHaveText("23 more failures, 2 more need you");
+  const widths = await cards.evaluateAll((rows) =>
+    rows.map((row) => row.getBoundingClientRect().width)
+  );
+  await expect(more).toBeInViewport({ ratio: 1 });
+  // A long translation or a large count should not become the sizing row.
+  const withLongLabel = await more.locator(".otk-control-label").evaluate(
+    (element) => {
+      const text = element.firstChild as Text;
+      const label = text.data;
+      try {
+        text.data = `${label} `.repeat(10).trimEnd();
+        return Array.from(element.closest(".otk-toasts")!.querySelectorAll(
+          ".otk-toast",
+        )).map((row) => row.getBoundingClientRect().width);
+      } finally {
+        text.data = label;
+      }
+    },
+  );
+  expect(withLongLabel).toEqual(widths);
 
   await cards.filter({ hasText: "Distinct failure 2" }).getByRole("button", {
     name: "Dismiss notification",
