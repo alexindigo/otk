@@ -76,7 +76,7 @@ import ChromeMeta, {
   metaList,
   SectionHeader,
 } from "./ChromeMeta.tsx";
-import TimeText from "./TimeText.tsx";
+import SidebarTimer from "./SidebarTimer.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { connectionFeedback } from "./connection-light.ts";
 import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
@@ -926,10 +926,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
               : undefined}
             meta={
               <Show
-                when={!collapsed() && !editing() &&
-                  (project().source ?? "tracked") === "tracked"}
+                when={!collapsed() && !editing()}
               >
-                <Show when={project().annotation}>
+                <Show
+                  when={(project().source ?? "tracked") === "tracked" &&
+                    project().annotation}
+                >
                   <MetaItem rank={1}>
                     <ChromeMeta
                       class="otk-project-availability"
@@ -939,18 +941,10 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
                     </ChromeMeta>
                   </MetaItem>
                 </Show>
-                <Show when={project().visit}>
-                  {(visit) => (
-                    <MetaItem rank={2}>
-                      <ChromeMeta
-                        class="otk-project-visit"
-                        title="Time since last visit"
-                      >
-                        <TimeText time={visit()} />
-                      </ChromeMeta>
-                    </MetaItem>
-                  )}
-                </Show>
+                <SidebarTimer
+                  class="otk-project-visit"
+                  value={project().timer}
+                />
               </Show>
             }
             control={!collapsed() && !editing()

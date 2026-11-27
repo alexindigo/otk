@@ -1040,6 +1040,7 @@ export class OpencodeV1Adapter implements Harness {
         ? published.activity?.delivered
         : entry.activity?.delivered;
       const terminal = this.#terminals.get(entry.id);
+      const execution = this.#liveWork.get(entry.id);
       if (
         entry.parentID && (terminal?.terminal ?? 0) > (delivered?.terminal ?? 0)
       ) this.#deliveryJoin?.request([entry.id]);
@@ -1058,11 +1059,18 @@ export class OpencodeV1Adapter implements Harness {
             : {}),
           delivered,
           work: {
-            keys: this.#liveWork.has(entry.id)
-              ? [this.#liveWork.get(entry.id)!.key]
-              : [],
+            keys: execution ? [execution.key] : [],
             fresh: !signal.aborted &&
-              this.#liveWork.get(entry.id)?.generation === this.#connection,
+              execution?.generation === this.#connection,
+            items: execution
+              ? [{
+                id: execution.key,
+                kind: "execution",
+                label: "Execution",
+                title: entry.title,
+                startedAt: execution.startedAt,
+              }]
+              : [],
           },
           inputs: {
             keys: inputs,
@@ -1089,7 +1097,19 @@ export class OpencodeV1Adapter implements Harness {
       },
     }, signal);
   }
-  #liveWork = new Map<string, { key: string; generation: number }>();
+  #liveWork = new Map<
+    string,
+    { key: string; generation: number; startedAt: number }
+  >();
+  /** V1 has no busy timestamp. Keep the first positive observation until idle. */
+  #observeExecution(id: string): void {
+    if (this.#liveWork.get(id)?.generation === this.#connection) return;
+    this.#liveWork.set(id, {
+      key: `execution:${this.#connection}:${id}`,
+      generation: this.#connection,
+      startedAt: Date.now(),
+    });
+  }
   #pendingPrompts = new Map<string, Set<string>>();
   #completionReads = new Map<string, object>();
   #confirmedIdle = new Map<string, number>();
@@ -1967,13 +1987,21 @@ export class OpencodeV1Adapter implements Harness {
       // Each native inventory qualifies only its own facts. A failed question
       // inventory cannot discard fresh status or permission evidence.
       if (statuses) {
+        const running = new Set(
+          statuses.filter(({ status }) => status !== "idle").map(({ id }) =>
+            id
+          ),
+        );
         for (const id of this.#liveWork.keys()) {
-          if (this.#index.getMetadata(id)?.directory === directory) {
+          if (
+            this.#index.getMetadata(id)?.directory === directory &&
+            !running.has(id)
+          ) {
             this.#liveWork.delete(id);
           }
         }
         await each(byDirectory.get(directory) ?? [], (entry) => {
-          this.#liveWork.delete(entry.id);
+          if (!running.has(entry.id)) this.#liveWork.delete(entry.id);
           this.#idle.set(entry.id, this.#connection);
           entry.status = "idle";
           entry.retry = undefined;
@@ -1981,13 +2009,7 @@ export class OpencodeV1Adapter implements Harness {
         await each(statuses, (status) => {
           if (status.status !== "idle") {
             this.#idle.delete(status.id);
-            this.#liveWork.set(
-              status.id,
-              {
-                key: `execution:${this.#connection}:${status.id}`,
-                generation: this.#connection,
-              },
-            );
+            this.#observeExecution(status.id);
           } else this.#idle.set(status.id, this.#connection);
           routing.add(status.id);
           const entry = entries.get(status.id) ??
@@ -2643,17 +2665,7 @@ export class OpencodeV1Adapter implements Harness {
           this.#confirmedIdle.delete(sessionID);
         }
         if (status.type === "idle") this.#liveWork.delete(sessionID);
-        else if (
-          this.#liveWork.get(sessionID)?.generation !== this.#connection
-        ) {
-          this.#liveWork.set(
-            sessionID,
-            {
-              key: `execution:${this.#connection}:${sessionID}`,
-              generation: this.#connection,
-            },
-          );
-        }
+        else this.#observeExecution(sessionID);
         entry.status = status.type as IndexEntry["status"];
         entry.activityAuthority = "current";
         entry.retry = entry.status === "retry"

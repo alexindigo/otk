@@ -65,7 +65,7 @@ export interface SessionEvidence {
   helper?: HelperDisposition;
   /** Wall-clock time when the entity owner first observed this needs-you interval. */
   waitingSince?: number;
-  /** Positive native execution clock, retained across its terminal transition. */
+  /** Positive execution clock from the adapter, retained across its terminal transition. */
   run?: { startedAt: number; endedAt?: number };
   /** Positive fresh work evidence, including when a blocker wins. */
   work: boolean;
@@ -104,6 +104,8 @@ export interface EntityState {
   dependencies?: number;
   /** Aggregate work evidence, even when another state wins the lamp (D78). */
   liveWork?: true;
+  /** Oldest proven start among the aggregate's still-running member executions. */
+  runStartedAt?: number;
   terminal?: number;
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";

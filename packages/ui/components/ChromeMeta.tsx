@@ -89,6 +89,7 @@ export function SectionHeader(props: {
   path?: readonly boolean[];
   hasChildren?: boolean;
   leading?(): Element;
+  sidebarMeta?(): Element;
   attributes?: Record<string, unknown>;
   body?(): Element;
   feedback?(): Element;
@@ -184,13 +185,16 @@ export function SectionHeader(props: {
               </span>
             }
             meta={
-              <Show when={props.count !== undefined}>
-                <MetaItem rank={1}>
-                  <ChromeMeta class={props.metaClass}>
-                    {props.count}
-                  </ChromeMeta>
-                </MetaItem>
-              </Show>
+              <>
+                <Show when={props.count !== undefined}>
+                  <MetaItem rank={1}>
+                    <ChromeMeta class={props.metaClass}>
+                      {props.count}
+                    </ChromeMeta>
+                  </MetaItem>
+                </Show>
+                {props.sidebarMeta?.()}
+              </>
             }
           />
         </Show>

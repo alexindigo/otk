@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 import { createDisclosures, DISCLOSURE_KINDS } from "../disclosure.ts";
-import { age } from "../format.ts";
 import { projectHierarchy } from "../inbox.ts";
 import { projectBranchPresentation, projectTree } from "../project-tree.ts";
 
@@ -227,7 +226,6 @@ function row(
     order: 0,
     lastVisit: 0,
     unread: false,
-    visit: age(0, 0),
     ageing: 0,
     topology: {
       repoID: "repo",

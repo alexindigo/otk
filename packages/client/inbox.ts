@@ -26,7 +26,7 @@ import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { checkoutLabel } from "./project-names.ts";
-import { age, type TimeText } from "./format.ts";
+import { sidebarTimer, type SidebarTiming } from "./sidebar-timer.ts";
 import {
   type ProjectPlacement,
   projectPlacement,
@@ -106,7 +106,7 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   status: InboxStatus;
   unread: boolean;
   unseenCount?: number | null;
-  visit?: TimeText;
+  timer?: SidebarTiming;
   /** Unused: names are not tinted by visit age (S4). Optional only so
    * standalone fixtures that still name it keep type-checking. */
   ageing?: number;
@@ -263,7 +263,6 @@ export function inboxProjects(
       );
       const status = statusFor(project.directory);
       const inactive = project.inactive && status === "none";
-      const clock = inactive ? project.inactiveAt ?? project.lastVisit : now;
       return {
         ...project,
         source: "tracked" as const,
@@ -275,7 +274,12 @@ export function inboxProjects(
         inactive,
         status,
         unread: (stateFor(project.directory)?.counts.unseen ?? 0) > 0,
-        visit: age(project.lastVisit, clock, inactive ? "inactive" : "now"),
+        timer: sidebarTimer(
+          status,
+          stateFor(project.directory)?.runStartedAt,
+          now,
+          project,
+        ),
       };
     },
   );
@@ -307,6 +311,11 @@ export function inboxProjects(
       inactive: false,
       lastVisit: 0,
       status: statusFor(directory),
+      timer: sidebarTimer(
+        statusFor(directory),
+        stateFor(directory)?.runStartedAt,
+        now,
+      ),
       unread: (stateFor(directory)?.counts.unseen ?? 0) > 0,
     };
   });
