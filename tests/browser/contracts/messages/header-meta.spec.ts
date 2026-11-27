@@ -35,10 +35,15 @@ function headerGeometry(root: Element) {
     ...counts.filter((_, index) => !controls[index].absent),
   ];
   const rects = elements.map((element) => element.getBoundingClientRect());
+  // The record heading owns its icon and label tracks. MetaRow owns the
+  // spacing between the primary slot and the whole category controls.
+  const primary = label.closest(".otk-meta-primary")!;
+  const slots = [primary.getBoundingClientRect(), ...rects.slice(1)];
   return {
     controls,
     centres: rects.map((r) => r.y + r.height / 2),
-    gaps: rects.slice(1).map((r, i) => r.left - rects[i].right),
+    gaps: slots.slice(1).map((r, i) => r.left - slots[i].right),
+    slotGap: parseFloat(getComputedStyle(primary.parentElement!).columnGap),
     weights: elements.map((element) => getComputedStyle(element).fontWeight),
     pads: counts.map((element) => getComputedStyle(element).paddingInline),
   };
@@ -86,7 +91,7 @@ for (const surface of ["work", "interval"] as const) {
       expect.soft(Math.max(...geometry.centres) - Math.min(...geometry.centres))
         .toBeLessThan(1);
       for (const gap of geometry.gaps) {
-        expect.soft(Math.abs(gap - 16)).toBeLessThan(1);
+        expect.soft(Math.abs(gap - geometry.slotGap)).toBeLessThan(1);
       }
       expect.soft(geometry.weights.every((weight) => weight === "400")).toBe(
         true,
