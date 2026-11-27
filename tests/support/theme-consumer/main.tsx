@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { render } from "@solidjs/web";
 import { createSignal, For } from "solid-js";
-import { SidecarConnection } from "@otk/client";
+import { createDisclosures, SidecarConnection } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import Notices from "./notices.tsx";
 import Lights from "./lights.tsx";
@@ -10,9 +10,11 @@ import {
   browserThemeEnvironment,
   createUiRegistries,
   DeletedSession,
+  DisclosuresProvider,
   paintVisualPreferences,
   PaneState,
   registerOtkThemes,
+  solidState,
   ThemeEngine,
   ThemeRegistry,
   UiProvider,
@@ -22,6 +24,7 @@ import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 import "./scene.css" with { type: "text" };
 const registry = new ThemeRegistry();
+const disclosures = createDisclosures({ factory: solidState });
 registerOtkThemes(registry);
 const theme = new ThemeEngine(registry, browserThemeEnvironment(), "otk-dark");
 theme.start();
@@ -55,8 +58,8 @@ const states = [
     text: "Could not load this conversation",
   },
 ];
-render(() => (
-  <UiProvider registries={createUiRegistries()}>
+function Scene() {
+  return (
     <main data-ready={String(ready())}>
       <header>
         Public component contracts - retained source is not a native failure
@@ -107,6 +110,13 @@ render(() => (
           </div>
         )}
     </main>
+  );
+}
+render(() => (
+  <UiProvider registries={createUiRegistries()}>
+    <DisclosuresProvider owner={disclosures}>
+      <Scene />
+    </DisclosuresProvider>
   </UiProvider>
 ), document.getElementById("app")!);
 await document.fonts.ready;

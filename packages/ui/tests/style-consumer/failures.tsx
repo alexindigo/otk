@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { CommandHub, RequestFailure } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
-import { createSignal, onCleanup, useContext } from "solid-js";
+import { createSignal, onCleanup } from "solid-js";
 import { applicationNotifications } from "../../shell/notifications.ts";
 import Toasts from "../../components/Toasts.tsx";
-import { DisclosuresContext } from "../../components/Disclosure.tsx";
+import { useDisclosures } from "../../components/Disclosure.tsx";
 
 /** Controlled public failures, rendered by the shipped application notification owners. */
 export default function Failures() {
   const notifications = applicationNotifications({
-    disclosures: useContext(DisclosuresContext) ?? undefined,
+    disclosures: useDisclosures(),
     commands: new CommandHub(),
     prefs: () => ({
       ...DEFAULT_PREFS,

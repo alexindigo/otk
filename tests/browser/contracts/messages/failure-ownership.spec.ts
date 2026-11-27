@@ -49,7 +49,7 @@ for (const available of [true, false]) {
       const editor = page.locator("textarea[name=prompt]");
       await editor.fill("Keep this draft when revealing the error");
       await editor.press("Enter");
-      const notice = page.locator(".otk-operation-feedback");
+      const notice = page.locator(".otk-composer-notice");
       const link = notice.getByRole("button", {
         name: "Show error",
       });
@@ -57,8 +57,13 @@ for (const available of [true, false]) {
       // in this transcript projection. Page older history independently.
       await expect(notice).toContainText("Retained native failure");
       await expect(link).toHaveCount(0);
-      await expect(notice.getByRole("button", { name: "Details" }))
-        .toBeEnabled();
+      // Issue 2.114: Details belongs to the notice, not the headline. The
+      // retained record gets sole custody once the reference can be shown.
+      const details = notice.getByRole("button", {
+        name: "Details",
+        exact: true,
+      });
+      await expect(details).toBeEnabled();
       const before =
         (await state.observe<{ pages: (string | null)[] }>()).pages.length;
       await scrollTranscript(page, false);
@@ -68,12 +73,14 @@ for (const available of [true, false]) {
       if (available) {
         await expect(record).toContainText("Retained native failure");
         await expect(link).toBeVisible();
+        await expect(details).toHaveCount(0);
         await link.click();
         await expect(record).toBeFocused();
       } else {
         await expect(record).toHaveCount(0);
         await expect(link).toHaveCount(0);
         await expect(notice).toContainText("Retained native failure");
+        await expect(details).toBeEnabled();
       }
       await expect(editor).toHaveValue(
         "Keep this draft when revealing the error",

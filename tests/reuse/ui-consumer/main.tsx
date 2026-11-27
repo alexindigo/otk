@@ -25,7 +25,7 @@ import {
   ComposerTakeovers,
   createUiRegistries,
   DialogHost,
-  DisclosuresContext,
+  DisclosuresProvider,
   DisplayMenu,
   Docks,
   LIGHT_STATES,
@@ -830,9 +830,9 @@ const Scene = new URL(location.href).searchParams.has("action-toasts")
 const disclosures = createDisclosures({});
 render(
   () => (
-    <DisclosuresContext value={disclosures}>
+    <DisclosuresProvider owner={disclosures}>
       <Scene />
-    </DisclosuresContext>
+    </DisclosuresProvider>
   ),
   document.getElementById("app")!,
 );

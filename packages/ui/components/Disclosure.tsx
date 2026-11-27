@@ -21,13 +21,26 @@ import { discloseInViewport } from "./viewport.ts";
 import "./Tree.css" with { type: "text" };
 import "./Disclosure.css" with { type: "text" };
 
-export const DisclosuresContext: ReturnType<
-  typeof createContext<Disclosures | null>
-> = createContext<Disclosures | null>(null);
+const DisclosuresContext = createContext<Disclosures | undefined>(undefined);
 const DisclosureFocusContext = createContext<(() => boolean) | null>(null);
 
+/** The shared mount for shell and standalone disclosure owners. */
+export function DisclosuresProvider(
+  props: { owner: Disclosures; children: Element },
+): Element {
+  return (
+    <DisclosuresContext value={props.owner}>
+      {props.children}
+    </DisclosuresContext>
+  );
+}
+
+export function useDisclosures(): Disclosures | undefined {
+  return useContext(DisclosuresContext);
+}
+
 function useOwner(): Disclosures {
-  const owner = useContext(DisclosuresContext);
+  const owner = useDisclosures();
   if (!owner) throw new Error("Disclosure requires a DisclosuresContext");
   return owner;
 }

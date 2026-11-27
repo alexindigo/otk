@@ -321,6 +321,10 @@ provide the collection through `UiProvider`. Registration rejects duplicate IDs;
 distinct consumers have independent collections. Register before mounting.
 Registries import no implementations.
 
+`DisclosuresProvider` mounts the client disclosure owner. The shell passes its
+live owner; standalone consumers mount the same provider at their root with one
+`createDisclosures` instance for that scene's lifetime.
+
 `tools.register(name, Component)` receives `ToolProps`: the live protocol call,
 display preferences, width, directory, waiting state and an injected child-open
 callback. External protocol tools resolve by their `name`; unmatched calls use
