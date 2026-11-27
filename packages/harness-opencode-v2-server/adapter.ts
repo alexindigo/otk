@@ -1439,9 +1439,12 @@ export class OpencodeV2ServerAdapter implements Harness {
       if (this.digest && !this.#deliveries) {
         this.#deliveries = new DeliveryBackfill(
           this.digest,
-          (parent, updates, reset) => {
+          (parent, updates, reset, invalidated) => {
             if (generation !== this.#generation || !this.#sink) return;
-            const dirty = new Set(updates.map((row) => row.id));
+            const dirty = new Set([
+              ...invalidated,
+              ...updates.map((row) => row.id),
+            ]);
             if (reset) {
               for (const entry of this.#index.snapshotEntries()) {
                 if (entry.parentID === parent) dirty.add(entry.id);

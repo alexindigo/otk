@@ -15,6 +15,7 @@ export class DeliveryBackfill {
       parent: string,
       updates: readonly { id: string; delivered: DeliveredEvidence }[],
       reset: boolean,
+      invalidated: readonly string[],
     ) => void,
     readonly diagnostic: (error: unknown) => void,
   ) {}
@@ -44,7 +45,12 @@ export class DeliveryBackfill {
             signal: this.#controller.signal,
           });
           this.#controller.signal.throwIfAborted();
-          this.publish(parentID, page.updates, page.reset === true);
+          this.publish(
+            parentID,
+            page.updates,
+            page.reset === true,
+            page.invalidated ?? [],
+          );
           after = page.after;
           // Every chunk relinquishes its worker turn and publication credit.
           await new Promise<void>((resolve) => setTimeout(resolve, 0));

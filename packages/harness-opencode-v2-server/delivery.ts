@@ -86,21 +86,21 @@ export function scanDeliveries(
     ["created", "aggregate_id", "type", "data", "seq"].every((name) =>
         eventColumns.has(name)
       )
-      ? `coalesce((SELECT e.created FROM event e WHERE e.aggregate_id=m.session_id AND e.type='session.inbox.enqueued' AND e.seq<m.seq AND json_valid(e.data) AND json_extract(e.data,'$.inboxID')=m.id ORDER BY e.seq DESC LIMIT 1),m.time_created)`
-      : "m.time_created";
+      ? `(SELECT e.created FROM event e WHERE e.aggregate_id=m.session_id AND e.type IN ('session.inbox.enqueued.1','session.inbox.enqueued') AND e.seq<m.seq AND json_valid(e.data) AND json_extract(e.data,'$.inboxID')=m.id ORDER BY e.seq DESC LIMIT 1)`
+      : "NULL";
   const rows = db.prepare(
     `WITH bounded AS (SELECT * FROM session_message WHERE session_id=? AND seq>=? AND seq<=?), candidates AS (
-    SELECT m.seq,-1 AS ordinal,m.id AS receipt,${receiptBound} AS received,json_object('type','synthetic','metadata',json_extract(m.data,'$.metadata')) AS scalar
+    SELECT m.seq,-1 AS ordinal,m.id AS receipt,m.time_created AS received,${receiptBound} AS enqueued,json_object('type','synthetic','metadata',json_extract(m.data,'$.metadata')) AS scalar
     FROM bounded m WHERE m.type='synthetic' AND json_valid(m.data) AND json_extract(m.data,'$.metadata.source')='subagent'
     UNION ALL
-    SELECT m.seq,CAST(p.key AS INTEGER)*2,m.id||':'||json_extract(p.value,'$.id'),m.time_created,${
+    SELECT m.seq,CAST(p.key AS INTEGER)*2,m.id||':'||json_extract(p.value,'$.id'),m.time_created,NULL,${
       deliveryToolSQL("p.value")
     }
     FROM bounded m,json_each(CASE WHEN json_valid(m.data) THEN m.data ELSE '{}' END,'$.content') p
     WHERE json_extract(p.value,'$.type')='tool' AND json_extract(p.value,'$.name') IN ('subagent','task')
     ${
       split
-        ? `UNION ALL SELECT m.seq,p.ordinal*2+1,m.id||':'||json_extract(p.data,'$.id'),m.time_created,${
+        ? `UNION ALL SELECT m.seq,p.ordinal*2+1,m.id||':'||json_extract(p.data,'$.id'),m.time_created,NULL,${
           deliveryToolSQL("p.data")
         } FROM session_part p JOIN bounded m ON m.session_id=p.session_id AND m.id=p.message_id WHERE p.session_id=? AND p.type='tool' AND json_valid(p.data) AND json_extract(p.data,'$.name') IN ('subagent','task')`
         : ""
@@ -116,13 +116,17 @@ export function scanDeliveries(
       ordinal,
       limit,
     );
-  const receipts = rows.map((r) =>
-    deliveryReceipt(
+  const revalidated: string[] = [];
+  const receipts = rows.flatMap((r) => {
+    const receipt = deliveryReceipt(
       JSON.parse(String(r.scalar)),
       String(r.receipt),
-      Number(r.received),
-    )
-  ).filter((r): r is Receipt => !!r);
+      Number(r.enqueued ?? r.received),
+    );
+    if (!receipt) return [];
+    if (r.enqueued != null) revalidated.push(receipt.receipt);
+    return [receipt];
+  });
   const children = db.prepare(
     `WITH terminals AS (
       SELECT wanted.key AS receipt_index,s.id,s.parent_id,
@@ -157,6 +161,7 @@ export function scanDeliveries(
   const last = rows.at(-1);
   return {
     updates,
+    ...(revalidated.length ? { revalidated } : {}),
     complete: keys.length < limit && rows.length < limit,
     cursor: rows.length === limit && last
       ? JSON.stringify([last.seq, last.ordinal])

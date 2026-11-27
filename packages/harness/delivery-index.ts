@@ -34,22 +34,34 @@ export class DeliveryIndex {
     const cursor = reset ? "" : String(stored.cursor);
     if (reset || !stored.complete) {
       const page = scan(cursor);
+      const invalidated = new Set<string>();
       this.transaction(() => {
         if (stored && stored.source !== source) {
           this.sql.prepare(`DELETE FROM ${table} WHERE parent_id=?`).run(
             input.parentID,
           );
         }
+        const revalidated = new Set(page.revalidated);
         for (const { id, delivered } of page.updates) {
+          const proven = revalidated.delete(delivered.receipt);
           this.sql.prepare(
-            `INSERT INTO ${table}(parent_id,receipt,child_id,terminal,run_id) VALUES(?,?,?,?,?) ON CONFLICT(parent_id,receipt) DO UPDATE SET child_id=excluded.child_id,terminal=excluded.terminal,run_id=excluded.run_id WHERE ${table}.run_id IS NULL`,
+            `INSERT INTO ${table}(parent_id,receipt,child_id,terminal,run_id) VALUES(?,?,?,?,?) ON CONFLICT(parent_id,receipt) DO UPDATE SET child_id=excluded.child_id,terminal=excluded.terminal,run_id=excluded.run_id WHERE ${table}.run_id IS NULL OR (? AND (${table}.child_id<>excluded.child_id OR ${table}.terminal<>excluded.terminal OR ${table}.run_id<>excluded.run_id))`,
           ).run(
             input.parentID,
             delivered.receipt,
             id,
             delivered.terminal,
             delivered.runID ?? null,
+            Number(proven),
           );
+        }
+        // Stronger evidence can rule out a guessed join without proving any
+        // replacement. Keep the receipt record, but do not publish coverage.
+        for (const receipt of revalidated) {
+          const row = this.sql.prepare(
+            `UPDATE ${table} SET run_id=NULL WHERE parent_id=? AND receipt=? AND run_id IS NOT NULL RETURNING child_id`,
+          ).get(input.parentID, receipt);
+          if (typeof row?.child_id === "string") invalidated.add(row.child_id);
         }
         this.sql.prepare(
           `INSERT INTO ${table}_scan(parent_id,source,revision,cursor,complete) VALUES(?,?,?,?,?) ON CONFLICT(parent_id) DO UPDATE SET source=excluded.source,revision=excluded.revision,cursor=excluded.cursor,complete=excluded.complete`,
@@ -61,7 +73,12 @@ export class DeliveryIndex {
           Number(page.complete),
         );
       });
-      return { updates: page.updates, reset: !!reset, after: "scan" };
+      return {
+        updates: page.updates,
+        reset: !!reset,
+        ...(invalidated.size ? { invalidated: [...invalidated] } : {}),
+        after: "scan",
+      };
     }
     const rows = this.sql.prepare(
       `SELECT child_id,terminal,receipt,run_id FROM ${table} d WHERE parent_id=? AND child_id>? AND run_id IS NOT NULL
