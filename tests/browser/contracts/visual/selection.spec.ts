@@ -18,11 +18,16 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
     ids = entries.filter((e) => e.directory === state.directory).map((e) =>
       e.id
     );
-  await state.product("tasks.create", {
+  const task = await state.product("tasks.create", {
     directory: state.directory,
     name: "Selection chain",
     sessions: ids,
   });
+  const otherTasks = await Promise.all(
+    ["Next task", "Later task"].map((name) =>
+      state.product("tasks.create", { directory: state.directory, name })
+    ),
+  );
   await state.product("layout.patch", { rightCollapsed: false });
   await page.goto(state.url + "/#/local/tstv1-otk");
   await expect(page.locator(".otk-subagents")).toBeVisible();
@@ -72,7 +77,25 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
       ).toBe(reduced);
       await observe(".otk-project-inbox [data-otk-selection]", 4);
       await observe(".otk-project-sessions [data-otk-selection]", 10);
-      await observe(".otk-project-tabs [data-otk-selection]", 3);
+      const tabs = page.getByRole("tablist", {
+        name: "Tasks and active sessions",
+      });
+      await expect(tabs.getByRole("tab", { selected: true })).toHaveAttribute(
+        "data-tab",
+        task.id,
+      );
+      for (const other of otherTasks) {
+        await expect(tabs.getByRole("tab", { name: other.name }))
+          .toHaveAttribute("aria-selected", "false");
+      }
+      await observe(".otk-task-list [role=tab][data-otk-selection]", 3);
+      const trail = page.getByRole("navigation", { name: "Task sessions" });
+      await expect(trail.locator("[data-crumb]")).toHaveCount(12);
+      await expect(trail.locator('[aria-current="page"]')).toHaveAttribute(
+        "data-crumb",
+        "tstv1-otk",
+      );
+      await expect(trail.locator("[data-otk-selection]")).toHaveCount(0);
       await observe(".otk-panel-icons [data-otk-selection]", 1);
       await page.locator(".otk-subagents > button").click();
       await expect(page.locator(":popover-open")).toBeVisible();

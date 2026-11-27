@@ -39,6 +39,16 @@ test("menus.narrow-trail-items-start-at-the-row-edge", {
   const titles = JSON.stringify(["root" + "w".repeat(100), "leaf"]);
   await page.evaluate(`styleTest.lists(${titles},'leaf')`);
   const row = page.locator(".otk-task-crumbs .otk-overflow-row");
-  await expect(row).toHaveAttribute("data-fit-mode", "compact");
+  await expect(row).toHaveAttribute("data-fit-mode", "scroll");
+  const lane = row.locator(".otk-overflow-items");
+  await lane.evaluate((el) => el.scrollTo({ left: 0, behavior: "instant" }));
+  await expect.poll(() =>
+    lane.evaluate((el) =>
+      Math.abs(
+        el.querySelector(".otk-overflow-item")!.getBoundingClientRect().left -
+          el.getBoundingClientRect().left,
+      )
+    )
+  ).toBeLessThanOrEqual(0.5);
   await expectStartAligned(row);
 });

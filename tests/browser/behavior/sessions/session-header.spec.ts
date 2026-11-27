@@ -47,9 +47,13 @@ test("sessions.header-title-and-usage-fit-on-one-line", {
       ) continue;
       const range = document.createRange();
       range.selectNode(node);
-      const boxes = Array.from(range.getClientRects());
-      if (boxes.length) {
-        rects.push({ text: node.textContent, lines: boxes.length });
+      // Ellipsis can split a text range into clipped and visible fragments
+      // on the same line. Count vertical line positions, not fragments.
+      const lines = new Set(
+        Array.from(range.getClientRects(), (box) => box.top),
+      );
+      if (lines.size) {
+        rects.push({ text: node.textContent, lines: lines.size });
       }
     }
     return rects;

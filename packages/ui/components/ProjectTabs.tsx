@@ -500,15 +500,19 @@ export default function ProjectTabs(props: {
                       : undefined}
                     {...native.attributes}
                   >
-                    <SelectionContent class="otk-session-selection">
-                      <StatusLight
-                        small
-                        dependencies={tab().dependencies}
-                        state={lamp(
-                          props.model.entities(),
-                          props.model.tabEntityKey(tab()),
-                        )}
-                      />
+                    <SelectionContent
+                      class="otk-session-selection"
+                      leading={
+                        <StatusLight
+                          small
+                          dependencies={tab().dependencies}
+                          state={lamp(
+                            props.model.entities(),
+                            props.model.tabEntityKey(tab()),
+                          )}
+                        />
+                      }
+                    >
                       <span class="otk-tab-text">
                         <span class="otk-control-label otk-tab-title">
                           <Show

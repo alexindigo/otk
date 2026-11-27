@@ -37,7 +37,7 @@
 }
 .otk-tab-open {
   width: 100%;
-  --selection-padding: 0 var(--space-2);
+  --selection-padding: 0 var(--space-2) 0 0;
   height: var(--control-size);
   max-width: 100%;
   padding: 0;
