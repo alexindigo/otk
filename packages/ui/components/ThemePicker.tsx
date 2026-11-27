@@ -161,15 +161,9 @@ export default function ThemePicker(props: {
         <button type="button" onClick={() => void close()}>Cancel</button>
         <ActionSlot
           pending={pending()}
-          feedback={pending()
-            ? {
-              kind: "pending",
-              text: `Saving ${
-                choices.find((choice) => choice.id === selected())?.label ??
-                  "theme"
-              }...`,
-            }
-            : undefined}
+          pendingLabel={`Saving ${
+            choices.find((choice) => choice.id === selected())?.label ?? "theme"
+          }...`}
           control={(control) => status = control}
           focusAction={() => {
             if (saveButton.isConnected) saveButton.focus();

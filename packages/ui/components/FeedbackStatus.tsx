@@ -16,6 +16,8 @@ export default function FeedbackStatus(props: {
   class?: string;
   ref?(element: HTMLDivElement): void;
   focusable?: boolean;
+  /** Hide the status without removing its intrinsic contribution to layout. */
+  inactive?: boolean;
   singleLine?: boolean;
   compact?: boolean;
   fullReason?: boolean;
@@ -34,6 +36,7 @@ export default function FeedbackStatus(props: {
   const native = nativeAttributes(() =>
     feedbackState({
       feedback: feedback(),
+      inactive: props.inactive,
       class: `otk-feedback-status ${props.subgrid ? "uses-subgrid" : ""} ${
         props.singleLine ? "is-single-line" : ""
       } ${props.validation ? "is-validation" : ""} ${props.class ?? ""}`,
