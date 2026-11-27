@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { receivedPrompt } from "../../fixtures/provider.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
 import {
@@ -40,9 +41,19 @@ for (
       description: "Helper permission owner probe",
     });
     await state.queue(["Helper permission owner completed"]);
+    const prompt = "Run the helper permission probe";
     await state.native(`/session/${child.id}/prompt_async`, "POST", {
-      parts: [{ type: "text", text: "Run the helper permission probe" }],
+      parts: [{ type: "text", text: prompt }],
     });
+    // Native async acceptance can precede the first provider call on a cold
+    // stack. Start the permission witness only once this prompt has arrived.
+    await expect.poll(async () => {
+      const { requests } = await state.observe<{ requests: unknown[] }>({
+        fields: ["requests"],
+      });
+      return receivedPrompt(requests, prompt);
+    }, { timeout: 30_000, message: "Provider received the helper prompt" })
+      .toBe(true);
     await expect.poll(async () =>
       (await state.native<{ sessionID: string }[]>("/permission")).some((p) =>
         p.sessionID === child.nativeID
