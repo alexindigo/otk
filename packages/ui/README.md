@@ -93,7 +93,9 @@ attributes, events and `ref` address the actual viewport. Scrollbar paint is
 `otk` by default or `hidden`; legacy `native` and `thin` inputs select OTK paint
 too. Native artwork is always hidden. The transcript retains its persisted
 default-on opt-out. Hover, drag and scrolling reveal the themed thumb; idle
-hides it. Track and drag use the same proportional geometry. Keyboard and wheel
+hides overlay thumbs. `horizontalTrack="in-flow"` gives a horizontal-only lane,
+such as a Markdown table, a visible track in a separate row only when content
+overflows. Track and drag use the same proportional geometry. Keyboard and wheel
 remain native viewport input. Layout, content and scroll-position owners stay
 with their components. Borrowed VirtualLists do not create another scrollport.
 Component CSS never redeclares scrolling or overscroll policy; the architecture

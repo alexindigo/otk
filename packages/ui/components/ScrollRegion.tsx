@@ -37,6 +37,8 @@ export default function ScrollRegion<
     borrowed?: boolean;
     axis?: ScrollAxis;
     scrollbar?: ScrollbarPaint;
+    /** For horizontal-only lanes: reveal the track in its own row on overflow. */
+    horizontalTrack?: "in-flow";
   },
 ): Element {
   // The dynamic tag preserves T at the public boundary. Native event/ref types
@@ -49,6 +51,7 @@ export default function ScrollRegion<
     "as",
     "frameClass",
     "borrowed",
+    "horizontalTrack",
   ]);
   const Tag = dynamic(() => props.as ?? "div");
   const field = untrack(() => props.as === "textarea");
@@ -250,6 +253,8 @@ export default function ScrollRegion<
     <Frame
       class={["otk-scroll-frame", props.frameClass, {
         "otk-scroll-field": field,
+        "has-in-flow-track": props.axis === "x" &&
+          props.horizontalTrack === "in-flow",
         "is-scrolling": active(),
         "is-dragging": dragging(),
       }]}
