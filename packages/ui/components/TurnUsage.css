@@ -5,26 +5,30 @@
   padding: 0 var(--space-1);
 }
 .otk-usage-breakdown {
-  --usage-call-width: calc(48 * var(--otk-unit));
-  --usage-activity-width: calc(200 * var(--otk-unit));
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed;
-  min-width: calc(984 * var(--otk-unit));
-  width: 100%;
+  display: grid;
+  grid-template-columns: max-content max-content
+    repeat(var(--usage-metrics, 1), minmax(max-content, auto));
+  min-inline-size: min-content;
+  /* The numeric columns scroll clear of the overlay thumb and its gutter. */
+  padding-inline-end: var(--space-3);
   font-size: var(--text-meta);
   font-variant-numeric: tabular-nums;
 }
-.otk-usage-breakdown :is(th, td) {
+.otk-usage-breakdown :is(thead, tbody, tfoot, tr) {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+.otk-usage-breakdown :is(th, td:not(.otk-usage-identity), .otk-usage-identity > span) {
   padding: var(--space-1) var(--space-2);
+  align-content: center;
   text-align: right;
   white-space: nowrap;
 }
 .otk-usage-breakdown tfoot th:first-child {
-  text-align: left;
-  z-index: 3;
+  text-align: start;
 }
-.otk-usage-breakdown th {
+.otk-usage-breakdown :is(th, [role="columnheader"], [role="rowheader"]) {
   font-weight: 500;
 }
 .otk-usage-breakdown thead {
@@ -35,9 +39,8 @@
   font-size: var(--text-meta);
   color: var(--otk-fg-3);
 }
-.otk-usage-breakdown .otk-usage-activity,
-.otk-usage-breakdown thead th:nth-child(2) {
-  text-align: left;
+.otk-usage-breakdown .otk-usage-identity > :nth-child(2) {
+  text-align: start;
 }
 .otk-usage-breakdown tfoot :is(th, td) {
   border-block-start: 1px solid var(--otk-border);
@@ -77,53 +80,41 @@
   font-weight: 600;
 }
 .otk-usage-scroll {
+  container-type: inline-size;
   max-height: calc(320 * var(--otk-unit));
   scrollbar-gutter: stable;
 }
-.otk-usage-breakdown thead th {
-  position: sticky;
+.otk-usage-breakdown thead {
   inset-block-start: 0;
-  z-index: 2;
   border-block-end: 1px solid var(--otk-border);
 }
-.otk-usage-breakdown tfoot :is(th, td) {
-  position: sticky;
+.otk-usage-breakdown tfoot {
   inset-block-end: 0;
-  z-index: 2;
 }
-.otk-usage-breakdown :is(thead, tfoot) :is(th, td),
-.otk-usage-breakdown tbody :is(th, .otk-usage-activity) {
+.otk-usage-breakdown :is(thead, tfoot) {
+  position: sticky;
+  z-index: 2;
   background: var(--overlay-bg);
 }
-.otk-usage-breakdown :is(thead, tbody) th:first-child {
-  min-width: var(--usage-call-width);
-  width: var(--usage-call-width);
+.otk-usage-breakdown .otk-usage-identity {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+.otk-usage-breakdown :is(.otk-usage-identity, tfoot th) {
+  /* Pin the identity as one grid item; Activity does not reconstruct Call's width. */
+  grid-column: span 2;
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
-}
-.otk-usage-breakdown :is(thead, tbody) > tr > :nth-child(2) {
-  min-width: var(--usage-activity-width);
-  width: var(--usage-activity-width);
-  max-width: var(--usage-activity-width);
-  position: sticky;
-  inset-inline-start: var(--usage-call-width);
-  z-index: 1;
+  background: var(--overlay-bg);
 }
 .otk-usage-breakdown .otk-usage-activity > span {
   display: block;
+  /* Leave the rest of the scrollport to the ledger, even for a long path. */
+  max-inline-size: 28cqi;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.otk-usage-breakdown thead > tr > :nth-child(-n+2) {
-  z-index: 3;
-}
-.otk-usage-breakdown tfoot th {
-  inset-inline-start: 0;
-}
-.otk-usage-breakdown thead th:nth-child(3) {
-  width: calc(144 * var(--otk-unit));
 }
 .otk-usage-context {
   --usage-context-bar-width: calc(48 * var(--otk-unit));

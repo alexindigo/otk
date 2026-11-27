@@ -36,6 +36,8 @@ const widthPorts: Record<string, Record<string, string>> = {
   },
   "UsageDetail.tsx": {
     width: "The reported context fraction paints an in-flow chart.",
+    "--usage-metrics":
+      "Only the number of reported columns is emitted; CSS sizes each track from its cells.",
   },
   "surface/Popover.tsx": {
     width: "The shared Popover reifies a caller-supplied rect anchor.",

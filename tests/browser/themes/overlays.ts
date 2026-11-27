@@ -309,7 +309,12 @@ export async function usage(
               .toHaveCount(count);
             await expect.poll(() =>
               page.locator(".otk-usage-breakdown tbody tr").evaluateAll(
-                (rows) => rows.map((r) => r.children.length),
+                (rows) =>
+                  rows.map((row) =>
+                    row.querySelectorAll(
+                      ":scope > .otk-usage-identity > *, :scope > td:not(.otk-usage-identity)",
+                    ).length
+                  ),
               )
             ).toEqual(Array(count).fill(cost ? 10 : 9));
             if (!cost) {

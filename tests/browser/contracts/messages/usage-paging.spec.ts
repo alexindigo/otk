@@ -141,7 +141,7 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   await expect(page.locator(".otk-usage-breakdown tfoot tr")).toHaveCount(1);
   expect(
     await rows.evaluateAll((rows) =>
-      rows.reduce((sum, row) => sum + Number(row.children[2].textContent), 0)
+      rows.reduce((sum, row) => sum + Number(row.children[1].textContent), 0)
     ),
   ).toBe(102);
   const foot = page.locator(".otk-usage-breakdown tfoot tr");
@@ -152,10 +152,10 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   expect(
     await rows.evaluateAll((rows) =>
       rows.every((row) =>
-        Number(row.children[2].textContent) ===
-          Number(row.children[3].textContent) +
-            Number(row.children[6].textContent) +
-            Number(row.children[7].textContent)
+        Number(row.children[1].textContent) ===
+          Number(row.children[2].textContent) +
+            Number(row.children[5].textContent) +
+            Number(row.children[6].textContent)
       )
     ),
   ).toBe(true);
@@ -167,7 +167,7 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
     await rows.evaluateAll((rows) =>
       rows.reduce(
         (sum, row) =>
-          sum + Number(row.children[8].textContent!.replace("$", "")),
+          sum + Number(row.children[7].textContent!.replace("$", "")),
         0,
       ).toFixed(
         2,
