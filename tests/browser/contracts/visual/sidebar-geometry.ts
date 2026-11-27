@@ -182,24 +182,34 @@ export async function sidebarGeometry(page: Page, compact = false) {
         };
       });
   });
-  expect(rows.length).toBeGreaterThan(0);
+  // A single Playwright step per snapshot keeps trace recording bounded
+  // while still checking every row, pair, and tolerance in every state.
+  const violations: { contract: string; actual: unknown }[] = [];
+  const check = (pass: boolean, contract: string, actual: unknown) => {
+    if (!pass) violations.push({ contract, actual });
+  };
+  check(rows.length > 0, "rows are present", rows.length);
   const edges = new Map<number, number[]>();
   const labelEdges = new Map<string, number>();
   const disclosures = new Map<number, number>();
   let bottom = -Infinity;
   for (const row of rows) {
-    expect.soft(row.heading.y, "adjacent real rows do not overlap vertically")
-      .toBeGreaterThanOrEqual(bottom - .5);
+    check(
+      row.heading.y >= bottom - .5,
+      "adjacent real rows do not overlap vertically",
+      { row: row.text, y: row.heading.y, bottom },
+    );
     bottom = row.heading.bottom;
     if (!compact) {
       const current = [row.lampSlot.x, row.iconSlot.x],
         previous = edges.get(row.heading.x);
       if (previous) {
         current.forEach((edge, i) =>
-          expect.soft(
-            Math.abs(edge - previous[i]),
+          check(
+            Math.abs(edge - previous[i]) <= .5,
             "same-depth lamp and artwork axes across every row kind",
-          ).toBeLessThanOrEqual(.5)
+            { row: row.text, edge, previous: previous[i] },
+          )
         );
       } else edges.set(row.heading.x, current);
       // WP10 releases the empty artwork track in narrow rows. Compare label
@@ -208,96 +218,123 @@ export async function sidebarGeometry(page: Page, compact = false) {
       const labelEdge = labelEdges.get(labelKey);
       if (labelEdge === undefined) labelEdges.set(labelKey, row.label.x);
       else {
-        expect.soft(
-          Math.abs(row.label.x - labelEdge),
+        check(
+          Math.abs(row.label.x - labelEdge) <= .5,
           "same-depth label axis for the same artwork tracks",
-        )
-          .toBeLessThanOrEqual(.5);
+          { row: row.text, x: row.label.x, labelEdge },
+        );
       }
-      expect.soft(
-        Math.abs(row.label.x - row.iconSlot.right),
+      check(
+        Math.abs(row.label.x - row.iconSlot.right) <= .5,
         "label starts after the artwork track",
-      )
-        .toBeLessThanOrEqual(.5);
-      expect.soft(row.labelText.w, `minimum readable label: ${row.text}`)
-        .toBeGreaterThanOrEqual(row.required - .5);
-      expect.soft(row.whiteSpace, `single-line label: ${row.text}`).toBe(
-        "nowrap",
+        { row: row.text, x: row.label.x, artworkRight: row.iconSlot.right },
+      );
+      check(
+        row.labelText.w >= row.required - .5,
+        `minimum readable label: ${row.text}`,
+        { width: row.labelText.w, required: row.required },
+      );
+      check(
+        row.whiteSpace === "nowrap",
+        `single-line label: ${row.text}`,
+        row.whiteSpace,
       );
       if (row.availability) {
-        expect.soft(
-          row.availability.left,
+        check(
+          row.availability.left >= row.availability.clipLeft - .5,
           "availability starts inside its visible slot",
-        ).toBeGreaterThanOrEqual(row.availability.clipLeft - .5);
-        expect.soft(row.availability.right, "availability never truncates")
-          .toBeLessThanOrEqual(row.availability.clipRight + .5);
+          row.availability,
+        );
+        check(
+          row.availability.right <= row.availability.clipRight + .5,
+          "availability never truncates",
+          row.availability,
+        );
       }
       // 2.109: metadata may yield only as whole facts; all visible facts must
       // fit their owner's clipping box, not merely fit their own DOM box.
       for (const fact of row.facts) {
-        expect.soft(fact.clipping, `metadata never truncates: ${fact.text}`)
-          .toBe(false);
+        check(
+          !fact.clipping,
+          `metadata never truncates: ${fact.text}`,
+          row.text,
+        );
       }
       if (!row.hasMeta) {
-        expect.soft(row.meta.w, "absent meta consumes no track")
-          .toBeLessThanOrEqual(.5);
+        check(row.meta.w <= .5, "absent meta consumes no track", {
+          row: row.text,
+          width: row.meta.w,
+        });
       }
     }
     for (let i = 0; i < row.painted.length; i++) {
       const item = row.painted[i];
-      expect.soft(item.x, "paint stays inside its heading's leading edge")
-        .toBeGreaterThanOrEqual(row.heading.x - .5);
-      expect.soft(item.right, "paint stays inside its heading's trailing edge")
-        .toBeLessThanOrEqual(row.heading.right + .5);
+      check(
+        item.x >= row.heading.x - .5,
+        "paint stays inside its heading's leading edge",
+        { item, heading: row.heading },
+      );
+      check(
+        item.right <= row.heading.right + .5,
+        "paint stays inside its heading's trailing edge",
+        { item, heading: row.heading },
+      );
       for (let j = i + 1; j < row.painted.length; j++) {
         const a = row.painted[i], b = row.painted[j];
         const overlapX = Math.min(a.right, b.right) - Math.max(a.x, b.x),
           overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
-        expect.soft(
-          Math.min(overlapX, overlapY),
+        check(
+          Math.min(overlapX, overlapY) <= .5,
           `paint does not intersect: ${a.kind}/${b.kind}: ${row.text}`,
-        ).toBeLessThanOrEqual(.5);
+          { overlapX, overlapY },
+        );
       }
     }
     const mark = row.painted.find((p) => p.kind === "selection");
     if (row.highlight) {
-      expect.soft(
+      check(
         !!mark,
         "every selected row kind paints its mark, in column and rail",
-      ).toBe(true);
+        row.text,
+      );
     }
     const disclosure = row.painted.find((p) => p.kind === "disclosure");
     if (!compact && disclosure) {
       const previous = disclosures.get(row.heading.x);
       if (previous !== undefined) {
-        expect.soft(
-          Math.abs(disclosure.x - previous),
+        check(
+          Math.abs(disclosure.x - previous) <= .5,
           "repository and section disclosures share the same painted axis",
-        ).toBeLessThanOrEqual(.5);
+          { row: row.text, x: disclosure.x, previous },
+        );
       } else disclosures.set(row.heading.x, disclosure.x);
     }
     if (disclosure && row.highlight) {
-      expect.soft(
-        disclosure.right,
+      check(
+        disclosure.right <= row.highlight.x - .5,
         "painted disclosure stays outside the selection highlight",
-      ).toBeLessThanOrEqual(row.highlight.x - .5);
+        { disclosure, highlight: row.highlight },
+      );
     }
     if (mark && row.highlight) {
-      expect.soft(
+      check(
         Math.min(
           Math.abs(mark.right - row.highlight.x),
           Math.abs(mark.x - row.highlight.x),
-        ),
+        ) > .5,
         "selection mark is outside the highlight, not on its edge",
-      ).toBeGreaterThan(.5);
+        { mark, highlight: row.highlight },
+      );
     }
   }
   if (compact) {
     const lamps = rows.flatMap((r) => r.lamp ? [r.lamp.x] : []);
-    expect.soft(
-      Math.max(...lamps) - Math.min(...lamps),
+    check(
+      Math.max(...lamps) - Math.min(...lamps) <= .5,
       "every compact lamp shares its axis, including Archived",
-    ).toBeLessThanOrEqual(.5);
+      lamps,
+    );
   }
+  expect.soft(violations, "sidebar row geometry").toEqual([]);
   return rows;
 }

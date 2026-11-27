@@ -86,10 +86,10 @@ export default function SidebarRow(props: {
           <MetaRow whole intrinsic>{props.meta}</MetaRow>
           {props.metaControl}
         </span>
-        <Show when={props.feedback}>
-          <span class="otk-sidebar-row-feedback">{props.feedback}</span>
-        </Show>
       </span>
+      <Show when={props.feedback}>
+        <span class="otk-sidebar-row-feedback">{props.feedback}</span>
+      </Show>
     </span>
   );
   return (
