@@ -97,7 +97,7 @@
   max-block-size: stretch;
 }
 /* Borrow inline space when narrow, but keep the owning row's block bounds. */
-@container (inline-size < 28rem) {
+@container transcript-stage (inline-size < 28rem) {
   .otk-toasts.is-layer {
     justify-self: var(--toast-narrow-alignment, center);
     inline-size: min(var(--toast-width), 50vi);

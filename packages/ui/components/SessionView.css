@@ -71,6 +71,8 @@
 
 /* The transcript and notifications layer share one row above the dock. */
 .otk-transcript-stage {
+  /* The toast width query must not depend on the composer dock's presence. */
+  container: transcript-stage / inline-size;
   flex: 1;
   min-block-size: min-content;
   max-block-size: 100%;

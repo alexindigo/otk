@@ -148,7 +148,7 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
           icon.top - c.top,
           c.bottom - icon.bottom,
         ],
-        actionRight: foot.right - allow.right,
+        actionRight: Math.abs(foot.right - allow.right),
         actionCenters: [
           Math.abs(
             text.left + text.width / 2 - allow.left - allow.width / 2,
