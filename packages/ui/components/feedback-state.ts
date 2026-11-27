@@ -2,13 +2,17 @@
 import type { Feedback } from "@otk/client";
 
 /** Feedback semantics and paint are one binding, shared by every surface. */
-export function feedbackState(input: { feedback?: Feedback; class?: string }): {
+export function feedbackState(input: {
+  feedback?: Feedback;
+  class?: string;
+  inactive?: boolean;
+}): {
   class: string;
   role: "alert" | "status";
   "aria-hidden"?: "true";
   "aria-atomic": "true";
 } {
-  const value = input.feedback;
+  const value = input.inactive ? undefined : input.feedback;
   return {
     class: [
       input.class,

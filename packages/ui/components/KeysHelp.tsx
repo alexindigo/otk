@@ -176,9 +176,7 @@ export default function KeysHelp(props: {
       <ActionSlot
         class="otk-key-actions"
         pending={pending()}
-        feedback={pending()
-          ? { kind: "pending", text: "Saving shortcuts..." }
-          : undefined}
+        pendingLabel="Saving shortcuts..."
         control={(control) => status = control}
         focusAction={() => {
           if (resetButton.isConnected) resetButton.focus();
