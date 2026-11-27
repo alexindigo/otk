@@ -18,6 +18,7 @@ export function terminalFacts(info: Info): TerminalEvidence {
   return terminal
     ? {
       terminal,
+      runID: info.id,
       outcome: info.error
         ? info.error.name === "MessageAbortedError" ? "interrupted" : "failed"
         : "succeeded",
@@ -72,11 +73,12 @@ export function terminalSessions(
   return db.prepare(
     `SELECT * FROM (SELECT ${sessionProjection(db)},${
       outcomeProjection("s")
-    } FROM session s WHERE s.id>?) WHERE terminal>0 ORDER BY id LIMIT ?`,
+    },(SELECT m.id FROM message m WHERE m.session_id=s.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown'))) ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS run_id FROM session s WHERE s.id>?) WHERE terminal>0 ORDER BY id LIMIT ?`,
   ).all(after ? ids.decode(after) : "", limit).map((row) => ({
     ...nativeMetadata(row),
     activity: {
       terminal: Number(row.terminal),
+      ...(typeof row.run_id === "string" ? { runID: row.run_id } : {}),
       outcome: row.terminal_outcome as import("@otk/protocol").TerminalOutcome,
       terminalOrigin: "historical",
     },

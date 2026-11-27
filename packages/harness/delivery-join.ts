@@ -17,6 +17,9 @@ export class DeliveryJoin {
     readonly apply: (id: string, fact: DeliveredEvidence | undefined) => void,
     readonly diagnostic: (error: unknown) => void,
     readonly rows = 200,
+    readonly target?: (
+      id: string,
+    ) => { parentID: string; runID: string } | undefined,
   ) {}
   request(ids: Iterable<string>): void {
     if (this.#controller.signal.aborted) return;
@@ -41,9 +44,16 @@ export class DeliveryJoin {
       const batch = [...this.#pending].slice(0, this.rows);
       for (const id of batch) this.#pending.delete(id);
       let facts: Map<string, DeliveredEvidence>;
+      const targets = this.target && Object.fromEntries(batch.flatMap((id) => {
+        const target = this.target!(id);
+        return target ? [[id, target]] : [];
+      }));
       try {
         facts = new Map(
-          (await this.port.read("supervision.delivered", { ids: batch }, {
+          (await this.port.read("supervision.delivered", {
+            ids: batch,
+            ...(targets ? { targets } : {}),
+          }, {
             owner: this.owner,
             priority: "attention",
             signal,

@@ -483,6 +483,13 @@ export class OpencodeV2ServerAdapter implements Harness {
             (id, fact) => this.#applyDelivered(id, fact),
             this.diagnostic,
             config.digest?.publishrows,
+            (id) => {
+              const entry = this.#index.getMetadata(id);
+              const runID = entry?.activity?.runID;
+              return entry?.parentID && runID
+                ? { parentID: entry.parentID, runID }
+                : undefined;
+            },
           );
         }
         this.transcript.start();
@@ -761,7 +768,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     const delivered = entry.activity?.delivered;
     if (
       entry.parentID && terminal.terminal &&
-      (delivered?.terminal ?? 0) < terminal.terminal
+      (!delivered || delivered.parentID !== entry.parentID ||
+        (terminal.runID
+          ? terminal.runID !== delivered.runID
+          : terminal.terminal !== delivered.terminal))
     ) this.#deliveryJoin?.request([entry.id]);
     if (
       entry.parentID && terminal.terminal &&
@@ -959,10 +969,14 @@ export class OpencodeV2ServerAdapter implements Harness {
   #completionCandidates = new Map<string, number>();
   #admissions = new Map<string, Set<string>>();
 
-  #completionInput(id: string, pending: readonly string[] = []): void {
+  #completionInput(
+    id: string,
+    pending: readonly string[] = [],
+    continuation: readonly string[] = [],
+  ): void {
     this.#completionReads.delete(id);
     const keys = [...this.#admissions.get(id) ?? [], ...pending];
-    if (keys.length) this.#completion.set(id, { pending: keys });
+    if (keys.length) this.#completion.set(id, { pending: keys, continuation });
     else this.#completion.delete(id);
     const entry = this.#index.getMetadata(id);
     if (entry) this.#upsert(entry);
@@ -1034,18 +1048,30 @@ export class OpencodeV2ServerAdapter implements Harness {
       );
       const latest = this.#index.getMetadata(id);
       if (!current() || latest?.activity?.terminal !== terminal) return;
-      const pending = [
-        ...jobs.map(({ id }) => `result:${id}`),
+      const continuation = [
         ...(inbox.state === "available"
           ? inbox.items.filter((item) => !parkedShellResult(item))
             .map(({ id, delivery }) => `queued:${delivery}:${id}`)
           : []),
-        ...(active[sid] || millis(native.time.busy) > terminal
-          ? ["native-start"]
-          : []),
+        ...(active[sid] ? ["native-start"] : []),
+      ];
+      // A durable job record can survive the execution that wrote it. It can
+      // leave a result unconfirmed, but is not proof that the parent is active.
+      const pending = [
+        ...continuation,
+        ...jobs.map((job) => {
+          const live = job.status === "running" &&
+            (job.kind === "subagent"
+              ? active[job.childSessionID] !== undefined
+              : job.kind === "shell" &&
+                this.#shells.keys(sid).includes(job.shellID));
+          return live ? `result:${job.id}` : `unconfirmed-result:${job.id}`;
+        }),
+        ...(millis(native.time.busy) > terminal ? ["native-start"] : []),
       ];
       this.#completion.set(id, {
         pending,
+        continuation,
         ...(inbox.state === "available" && !pending.length &&
             metadata(native).activity?.terminal === terminal
           ? { confirmed: terminal }
@@ -1543,6 +1569,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       this.#completionInput(
         changedID,
         event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
+        event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
       );
     }
     if (
@@ -1864,7 +1891,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           : {}),
       };
     }
-    if (value.shellEnd && entry.activity?.terminal === value.shellEnd) {
+    if (
+      !entry.parentID && value.shellEnd &&
+      entry.activity?.terminal === value.shellEnd
+    ) {
       entry.activity = { ...entry.activity, terminalOrigin: "live" };
     }
     if (
@@ -1877,6 +1907,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       entry.activity = {
         ...entry.activity,
         terminalOrigin: "live",
+        ...(entry.parentID && event.id?.startsWith("evt_")
+          ? { runID: event.id.replace(/^evt_/, "msg_") }
+          : {}),
         ...(executionFailure ? { terminalFailure: executionFailure } : {}),
       };
       if (
@@ -1927,7 +1960,7 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     this.#execution(
       entry,
-      ended ?? value.shellEnd,
+      ended ?? (entry.parentID ? undefined : value.shellEnd),
       previousRun !== undefined && event.type !== "session.execution.started" &&
         this.#index.getMetadata(entry.id)?.status === "idle",
     );

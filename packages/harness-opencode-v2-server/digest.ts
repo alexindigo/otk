@@ -201,9 +201,9 @@ export class OpencodeV2DigestSink implements DigestSink {
       () => this.#wait(new Promise<void>((resolve) => setTimeout(resolve, 0))),
     );
     this.readers = {
-      "supervision.delivered": ({ ids }, signal) => {
+      "supervision.delivered": ({ ids, targets }, signal) => {
         signal.throwIfAborted();
-        return Promise.resolve(this.delivered(ids));
+        return Promise.resolve(this.delivered(ids, targets));
       },
       ...this.#preparedReaders({
         ...catalogReaders(() => {
@@ -325,13 +325,16 @@ export class OpencodeV2DigestSink implements DigestSink {
       },
     };
   }
-  delivered(keys: readonly string[]): import("@otk/harness").DeliveryScalar[] {
+  delivered(
+    keys: readonly string[],
+    targets?: Record<string, { parentID: string; runID: string }>,
+  ): import("@otk/harness").DeliveryScalar[] {
     return new DeliveryIndex(
       this.storage.sql,
       "opcv2_delivery",
       (run) => this.storage.transaction(run),
       this.policy.publishrows,
-    ).facts(keys);
+    ).facts(keys, targets);
   }
   connection(value: number): void {
     if (value < this.#connection) return;
