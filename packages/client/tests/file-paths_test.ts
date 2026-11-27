@@ -4,9 +4,45 @@ import {
   folderCommand,
   hrefPath,
   pathSegments,
+  resolveSessionMention,
   textRuns,
 } from "../file-paths.ts";
 import { formatBytes } from "../format.ts";
+
+Deno.test("the shared linkifier recognizes native session IDs without changing the text", () => {
+  const id = "ses_de5e7f01fffeN4upKbwEeHRkSJ";
+  const reference = { raw: id, sessionID: id };
+  for (
+    const [text, where] of [[id, "prose"], [
+      `See (${id}), then continue.`,
+      "prose",
+    ], [id, "code"]] as const
+  ) {
+    const segments = pathSegments(text, where);
+    assertEquals<unknown>(
+      segments.flatMap(({ mention }) => mention ? [mention] : []),
+      [reference],
+    );
+    assertEquals(segments.map((segment) => segment.text).join(""), text);
+  }
+  for (const text of [`prefix_${id}`, `${id}Z`, "ses_not_an_id"]) {
+    assertEquals(pathSegments(text, "prose"), [{ text }]);
+  }
+  // Lexical recognition never asserts existence; an unresolved reference still
+  // carries the exact text the presenter must fall back to.
+  const unknown = "ses_000000000000UnknownSession";
+  assertEquals(pathSegments(unknown, "code")[0].text, unknown);
+  const lookup = (canonical: string) =>
+    canonical === `opcv2-${id}` ? "Review release notes" : undefined;
+  assertEquals(
+    resolveSessionMention(id, `opcv2-${id}`, lookup),
+    "Review release notes",
+  );
+  assertEquals(
+    resolveSessionMention(unknown, `opcv2-${id}`, lookup),
+    undefined,
+  );
+});
 
 Deno.test("path recognition is conservative in prose and whole-span code", () => {
   const mentions = (text: string, where: "prose" | "code" = "prose") =>

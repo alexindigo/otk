@@ -11,9 +11,13 @@ import {
 } from "solid-js";
 import {
   type ActionControl,
+  type EntityStateStore,
   type FileFacts,
+  type InlineMention,
   type PathMention,
   pathTooltip,
+  resolveSessionMention,
+  type ServerResources,
 } from "@otk/client";
 import type { PathSemantics } from "@otk/protocol";
 import { useContentIdentity } from "../features/transcript-context.tsx";
@@ -21,6 +25,7 @@ import type { FileTarget } from "../features/file-paths.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { contextTarget } from "./context-target.ts";
 import ActionButton from "./ActionButton.tsx";
+import EntityPill from "./EntityPill.tsx";
 
 export const PathContext = createContext<
   {
@@ -31,12 +36,60 @@ export const PathContext = createContext<
 >(null);
 export interface FilePathPorts {
   facts(id: string): FileFacts;
+  entry?: ServerResources["entry"];
+  entities?(id: string): EntityStateStore;
   openMenu(element: HTMLElement): void;
   fail(cause: unknown): void;
 }
 export const FilePathServices = createContext<FilePathPorts | null>(null);
 
 export default function PathLink(
+  props: { mention: InlineMention; children: Element },
+): Element {
+  const identity = useContentIdentity();
+  const paths = useContext(PathContext);
+  const services = useContext(FilePathServices);
+  const sidecarId = () => identity.sidecarId ?? "local";
+  const session = () => {
+    if (!("sessionID" in props.mention) || paths?.streaming) return;
+    return props.mention.sessionID;
+  };
+  const entry = () => {
+    const id = session();
+    if (!id) return;
+    return resolveSessionMention(id, identity.sessionID, (canonical) => {
+      const value = services?.entry?.(sidecarId(), canonical);
+      return value && !value.deleted ? value : undefined;
+    });
+  };
+  return (
+    <Show
+      when={"path" in props.mention}
+      fallback={
+        <Show when={entry()} fallback={props.children}>
+          {(value) => (
+            <EntityPill
+              label={value().title || session()!}
+              reference={{
+                sidecarId: sidecarId(),
+                sessionID: value().id,
+                sourceID: session()!,
+                entities: services?.entities?.(sidecarId()),
+                fail: services?.fail,
+              }}
+            />
+          )}
+        </Show>
+      }
+    >
+      <FilePath mention={props.mention as PathMention}>
+        {props.children}
+      </FilePath>
+    </Show>
+  );
+}
+
+function FilePath(
   props: { mention: PathMention; children: Element },
 ): Element {
   const identity = useContentIdentity(),

@@ -9,7 +9,7 @@ import {
   onSettled,
   Show,
 } from "solid-js";
-import { type ComponentProps, Portal } from "@solidjs/web";
+import { type ComponentProps, dynamic, Portal } from "@solidjs/web";
 import { nativeAttributes } from "../native-attributes.ts";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
@@ -61,6 +61,11 @@ export default function Popover(props: {
   dismissOnAction?: boolean;
   /** Non-modal detail previews, available on hover and keyboard focus. */
   preview?: boolean;
+  /** A preview can describe a real navigation link instead of a button. */
+  href?: string;
+  panelRole?: "tooltip";
+  /** Text users copy when the entire presented value is selected. */
+  copySource?: string;
   /** An entity trigger can navigate while retaining the shared preview owner. */
   onActivate?(): void;
   /** Click retains a preview until explicit/outside dismissal. */
@@ -70,7 +75,6 @@ export default function Popover(props: {
   onClose?(): void;
   children: Element;
 }): Element {
-  const triggerNative = nativeAttributes(() => props.triggerAttributes ?? {});
   const anchor = `--otk-popover-${
     createUniqueId().replace(/[^a-zA-Z0-9-]/g, "")
   }`;
@@ -85,7 +89,7 @@ export default function Popover(props: {
   let openedBy: PopoverOpenReason = "keyboard";
   let active = false;
   let pinned = false;
-  let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
+  let panel!: HTMLDivElement, trigger!: HTMLElement;
   let previewFocus: HTMLElement | undefined;
   let restoringFocus = false;
   let hover: ReturnType<typeof hoverIntent> | undefined;
@@ -244,15 +248,59 @@ export default function Popover(props: {
     `${props.triggerLabel ?? props.label}${
       props.applied ? `, ${props.applied}` : ""
     }`;
+  const Trigger = dynamic(() => props.href ? "a" : "button");
+  let pointerDown: { x: number; y: number } | undefined;
+  const triggerNative = nativeAttributes(() => ({
+    ...props.triggerAttributes,
+    onClick: activate,
+    onPointerDown: (event: PointerEvent) => {
+      openedBy = "pointer";
+      pointerDown = { x: event.clientX, y: event.clientY };
+    },
+    onKeyDown: () => {
+      openedBy = "keyboard";
+    },
+  }));
+  function activate(event: MouseEvent) {
+    if (props.href) {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      const selected = document.getSelection();
+      if (
+        event.detail && pointerDown &&
+        (event.clientX !== pointerDown.x || event.clientY !== pointerDown.y) &&
+        !selected?.isCollapsed &&
+        selected?.containsNode(trigger, true)
+      ) {
+        event.preventDefault();
+        return;
+      }
+    }
+    event.preventDefault();
+    const reason = event.detail ? "pointer" : "keyboard";
+    if (props.onActivate) {
+      const action = props.onActivate;
+      dismiss(undefined, reason);
+      action();
+    } else if (props.pinOnClick && !pinned) {
+      pinned = true;
+      if (!panel.matches(":popover-open")) show(undefined, openedBy);
+    } else if (panel.matches(":popover-open")) dismiss(undefined, reason);
+    else show(undefined, openedBy);
+  }
   return (
     <span
       class={`otk-popover ${props.class ?? ""}`}
       ref={setRoot}
+      data-copy-source={props.copySource}
       data-open={String(open())}
     >
       <Show when={props.trigger !== undefined}>
-        <button
-          type="button"
+        <Trigger
+          type={props.href ? undefined : "button"}
+          href={props.href}
+          draggable={props.href ? false : undefined}
           {...triggerNative.attributes}
           {...selection({
             kind: "candidate",
@@ -268,44 +316,19 @@ export default function Popover(props: {
           aria-describedby={props.preview
             ? anchor
             : props.triggerAttributes?.["aria-describedby"]}
-          aria-expanded={open() ? "true" : "false"}
-          popovertarget={anchor}
-          onClick={(event) => {
-            event.preventDefault();
-            if (props.onActivate) {
-              const activate = props.onActivate;
-              dismiss(undefined, event.detail ? "pointer" : "keyboard");
-              activate();
-              return;
-            }
-            if (props.pinOnClick && !pinned) {
-              pinned = true;
-              if (!panel.matches(":popover-open")) show(undefined, openedBy);
-              return;
-            }
-            if (panel.matches(":popover-open")) {
-              dismiss(
-                undefined,
-                event.detail ? "pointer" : "keyboard",
-              );
-            } else show(undefined, openedBy);
-          }}
-          onPointerDown={() => {
-            openedBy = "pointer";
-          }}
-          onKeyDown={() => {
-            openedBy = "keyboard";
-          }}
+          aria-expanded={props.href ? undefined : open() ? "true" : "false"}
+          popovertarget={props.href ? undefined : anchor}
           style={{
             "anchor-name": point() ? undefined : anchor,
             "--control-color": props.triggerColor,
           }}
-          ref={[triggerNative.ref, (el) => {
+          ref={(el: HTMLElement) => {
+            triggerNative.ref(el);
             trigger = el;
-          }]}
+          }}
         >
           {props.trigger}
-        </button>
+        </Trigger>
       </Show>
       <Show when={root()}>
         <Portal mount={host()!}>
@@ -333,6 +356,7 @@ export default function Popover(props: {
             }]}
             id={anchor}
             popover="auto"
+            role={props.panelRole}
             aria-label={props.title ?? props.label}
             style={{ "position-anchor": anchor }}
             ref={(el) => {

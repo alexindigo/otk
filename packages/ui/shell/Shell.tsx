@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { copyText } from "../clipboard.ts";
+import { bindSourceSelectionCopy, copyText } from "../clipboard.ts";
 import {
   attentionCount,
   createModelRecency,
@@ -131,6 +131,7 @@ export default function Shell(
     terminalConnections.update,
   );
   onCleanup(terminalConnections.stop);
+  onCleanup(bindSourceSelectionCopy());
   const recentModel = createModelRecency({
     get: () => toggles.state.prefs["models.recent"],
     set: (value) => resources.setPreference("models.recent", value),
@@ -648,6 +649,8 @@ export default function Shell(
             forms: resources.forms,
             filePaths: {
               facts: resources.fileFacts,
+              entry: resources.entry,
+              entities: resources.entities,
               openMenu: (element) => openFileMenu?.(element),
               fail,
             },
