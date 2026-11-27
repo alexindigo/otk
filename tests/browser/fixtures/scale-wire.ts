@@ -18,6 +18,7 @@ export interface ScaleFrame {
       before?: string;
       kinds?: string[];
       intent?: string;
+      files?: true;
     };
   };
 }
@@ -62,6 +63,7 @@ export function scaleGenerations(frames: ScaleFrame[]) {
         directory: unknown;
         kinds?: string[];
         intent?: string;
+        files?: true;
       }[];
     }
   >();
@@ -86,6 +88,7 @@ export function scaleGenerations(frames: ScaleFrame[]) {
         directory: frame.params?.directory,
         kinds: frame.params?.kinds,
         intent: frame.params?.intent,
+        files: frame.params?.files,
       });
     }
   }
