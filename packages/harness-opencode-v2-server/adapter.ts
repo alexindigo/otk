@@ -1528,6 +1528,15 @@ export class OpencodeV2ServerAdapter implements Harness {
       /^session\.(inbox\.|execution\.started$|compaction\.started$|retry\.scheduled$)/
         .test(event.type)
     ) {
+      const candidate = this.#completionCandidates.get(changedID);
+      if (
+        event.type === "session.execution.started" && candidate !== undefined &&
+        (event.created === undefined || event.created >= candidate)
+      ) {
+        // A successor owns settlement from its start, including when its
+        // interruption leaves the previous durable idle clock in place.
+        this.#completionCandidates.delete(changedID);
+      }
       this.#completionInput(
         changedID,
         event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
@@ -1867,7 +1876,9 @@ export class OpencodeV2ServerAdapter implements Harness {
         terminalOrigin: "live",
         ...(executionFailure ? { terminalFailure: executionFailure } : {}),
       };
-      if (entry.activity.outcome === "succeeded") {
+      if (
+        entry.activity.outcome === "succeeded" && millis(raw.time.busy) <= ended
+      ) {
         this.#completionCandidates.set(entry.id, ended);
       }
     }
