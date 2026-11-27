@@ -10,6 +10,27 @@ type Location = { directory: string; workspaceID?: string };
 type Info = Awaited<
   ReturnType<OpenCodeClient["shell"]["list"]>
 >["data"][number];
+
+/** V2 parks user-shell results (including launch failures) with resume:false.
+ * A model shell's background result has a job ID and wakes the runner. */
+export function parkedShellResult(item: unknown): boolean {
+  if (
+    !item || typeof item !== "object" ||
+    Reflect.get(item, "type") !== "synthetic"
+  ) {
+    return false;
+  }
+  const payload: unknown = Reflect.get(item, "payload");
+  const meta: unknown = payload && typeof payload === "object"
+    ? Reflect.get(payload, "metadata")
+    : undefined;
+  return !!meta && typeof meta === "object" &&
+    Reflect.get(meta, "source") === "shell" &&
+    Reflect.get(meta, "jobID") === undefined &&
+    (typeof Reflect.get(meta, "shellID") === "string" ||
+      Reflect.get(meta, "state") === "error");
+}
+
 export interface RunningShell {
   id: string;
   sessionID: string;

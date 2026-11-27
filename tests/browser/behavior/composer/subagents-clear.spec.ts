@@ -85,11 +85,13 @@ test("composer.subagents-clear-removes-only-finished", {
       await page.keyboard.press("Escape");
       await expect(pill).toBeFocused();
       await page.keyboard.press("Enter");
+      await expect(dropdown.getByRole("menuitem").first()).toBeFocused();
+      await page.keyboard.press("Tab");
       await expect(button).toBeFocused();
       await expect(button).toHaveCSS("outline-style", "solid");
-      await page.keyboard.press("Tab");
-      await expect(dropdown.getByRole("menuitem").first()).toBeFocused();
       await page.keyboard.press("Shift+Tab");
+      await expect(dropdown.getByRole("menuitem").first()).toBeFocused();
+      await page.keyboard.press("Tab");
       await expect(button).toBeFocused();
     }
     const { gaps, headerInsets, oneLine } = await geometry();

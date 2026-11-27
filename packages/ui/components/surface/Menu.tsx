@@ -69,12 +69,15 @@ export default function Menu(props: {
             }
             event.preventDefault();
             event.stopPropagation();
-            if (event.shiftKey) popover.close(undefined, "keyboard");
-            else {
-              const first = items()[0];
-              if (first) rove(first);
-              else popover.close(undefined, "keyboard");
+            if (event.shiftKey) {
+              const rows = items();
+              const item = rows.find((row) => row.tabIndex === 0) ?? rows[0];
+              if (item) {
+                rove(item);
+                return;
+              }
             }
+            popover.close(undefined, "keyboard");
           }}
         >
           {render((button) => {
@@ -108,9 +111,7 @@ export default function Menu(props: {
         tracked = undefined;
         onSettled(() => {
           const title = reason === "keyboard" ? titleControl() : undefined;
-          const first = reason === "keyboard" && !title
-            ? items()[0]
-            : undefined;
+          const first = reason === "keyboard" ? items()[0] : undefined;
           rove(first);
           if (!first) focusControl(title ?? root, { focusVisible: !!title });
         });
@@ -161,7 +162,7 @@ export default function Menu(props: {
           } else if (event.key === "Tab") {
             event.preventDefault();
             event.stopPropagation();
-            const title = event.shiftKey ? titleControl() : undefined;
+            const title = event.shiftKey ? undefined : titleControl();
             if (title) focusControl(title, { focusVisible: true });
             else popover.close(undefined, "keyboard");
           } else if (event.key.length === 1 && event.key !== " ") {

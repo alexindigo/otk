@@ -333,15 +333,16 @@ export default function ProjectSessions(props: {
               <StatusLight state={lamp(entities(), stateKey)} />
             </Show>
           )}
-          feedback={() =>
-            renaming() &&
-              (props.rename!.state.invalid || props.rename!.state.error)
-              ? (
-                <SidebarFeedback>
-                  <TitleFeedback owner={props.rename!} id={feedbackID} />
-                </SidebarFeedback>
-              )
-              : undefined}
+          feedback={() => (
+            <Show
+              when={renaming() &&
+                (props.rename!.state.invalid || props.rename!.state.error)}
+            >
+              <SidebarFeedback>
+                <TitleFeedback owner={props.rename!} id={feedbackID} />
+              </SidebarFeedback>
+            </Show>
+          )}
           header={() => (
             <SidebarRow
               mainRef={(element) => control = element}
