@@ -50,16 +50,28 @@
 .otk-composer-activity-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   inline-size: 100%;
   min-block-size: calc(var(--control-size) + var(--space-2));
 }
-.otk-composer-target {
-  flex: 0 1 auto;
-  min-inline-size: min(var(--row-title-min), 100%);
+.otk-composer-route {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  gap: var(--space-3);
+}
+.otk-composer-target {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, max-content);
+  align-items: center;
+  gap: var(--space-1);
+}
+.otk-composer-target:has(.otk-composer-task) {
+  grid-template-columns: minmax(0, max-content) max-content minmax(0,
+    max-content);
 }
 .otk-composer-live-slot {
   flex: none;
@@ -69,17 +81,15 @@
   margin-inline-start: auto;
   gap: var(--space-4);
 }
-.otk-composer-task {
-  flex: 0 1 auto;
-  min-inline-size: min(var(--row-title-min), 100%);
+.otk-composer-live-slot:empty {
+  display: none;
 }
+.otk-composer-task,
 .otk-composer-destination {
-  flex: none;
-  max-inline-size: 100%;
-}
-.otk-composer-target > .otk-composer-separator {
-  flex: none;
-  white-space: pre;
+  /* A short title keeps its own width. Under pressure, the intrinsic
+     tracks share the remaining space and the label never exceeds its track. */
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min),
+    100%));
 }
 .otk-composer-activity-slot {
   display: grid;
@@ -89,40 +99,17 @@
   container: composer-activity / inline-size;
   flex: none;
 }
-/* At narrow widths keep the shared title floor and let the pills reflow. */
+/* Only the pills wrap. The destination and its activity always share a line. */
 @container composer-activity (inline-size < 33em) {
   .otk-composer-activity-line {
     flex-wrap: wrap;
     row-gap: var(--space-1);
   }
-  .otk-composer-target {
-    flex: 1 1 0;
-    min-inline-size: auto;
-    max-inline-size: 100%;
-  }
-  .otk-composer-destination {
-    max-inline-size: min(var(--row-title-min), 100%);
-  }
-  .otk-composer-task {
-    flex: 1 1 0;
+  .otk-composer-route {
+    flex-basis: 100%;
   }
 }
 @container composer-activity (inline-size < 16em) {
-  .otk-composer-activity {
-    --live-link-display: none;
-  }
-  /* Give the destination the whole line. Its two titles only yield below
-     the shared floor when the line cannot hold both plus the separator. */
-  .otk-composer-target:has(.otk-composer-task) {
-    flex-basis: 100%;
-    min-inline-size: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto
-      fit-content(var(--row-title-min));
-  }
-  .otk-composer-task {
-    min-inline-size: 0;
-  }
   .otk-composer-live-slot {
     max-inline-size: 100%;
     flex-wrap: wrap;

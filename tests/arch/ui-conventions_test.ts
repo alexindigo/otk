@@ -906,10 +906,16 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
     )!.declarations;
   assertEquals(row.get("display"), "flex");
   assertEquals(row.get("align-items"), "center");
-  assertEquals(row.get("justify-content"), "space-between");
+  const route =
+    css.find((rule) =>
+      rule.selector === ".otk-composer-route" && !rule.condition
+    )!.declarations;
+  assertEquals(route.get("display"), "flex");
+  assertEquals(route.get("align-items"), "center");
   const label =
     css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
-  assertEquals(label.get("min-inline-size"), "min(var(--row-title-min),100%)");
+  assertEquals(label.get("min-inline-size"), "0");
+  assertEquals(label.get("display"), "grid");
   assertEquals(label.get("flex"), "0 1 auto");
   assert(
     !css.some((rule) =>
@@ -919,10 +925,7 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
     ),
   );
   assert(
-    css.some((rule) =>
-      rule.condition.includes("@container composer-activity") &&
-      rule.declarations.get("--live-link-display") === "none"
-    ),
+    !css.some((rule) => rule.declarations.has("--live-link-display")),
   );
   assert(
     css.some((rule) =>

@@ -3,8 +3,10 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { seed } from "../../pages/attention.ts";
 import { activity } from "../../pages/sessions.ts";
 import { cleanup, viewport } from "../../pages/terminal.ts";
+import { prompt } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-sessions-default" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
@@ -41,6 +43,122 @@ const activeAnimation = [{
   state: "running",
   props: ["translate"],
 }];
+
+test.describe("live composer destination geometry", () => {
+  test.use({ profile: "isolated" });
+  test("composer.crumbs-and-activity-link-share-one-flow", tags, async (
+    { isolatedState: state, page },
+    info,
+  ) => {
+    const title = "Project status review";
+    const { id } = await seed(state, title);
+    const task = await state.product("tasks.create", {
+      directory: state.directory,
+      name: "UI Update",
+      sessions: [id],
+    });
+    await openSession(state, page, id);
+    const { gate } = await state.queue(["Project status reviewed."], "held");
+    await prompt(page, "Review project status.");
+    const target = page.locator(".otk-composer-target");
+    await expect(target.locator(".otk-composer-destination")).toHaveText(title);
+    await expect(link(page)).toHaveAttribute("data-state", "running");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const facts = [];
+    for (const name of ["short", "long"]) {
+      if (name === "long") {
+        await state.product("tasks.rename", { id: task.id, name: longName });
+        await expect(target.locator(".otk-composer-task")).toHaveText(longName);
+      }
+      for (const [width, scale] of [[1280, 100], [900, 125], [900, 150]]) {
+        await page.setViewportSize({ width, height: 900 });
+        await state.product("prefs.set", {
+          key: "textSize",
+          value: String(scale),
+        });
+        await expect(page.locator("html")).toHaveCSS(
+          "--otk-scale",
+          String(scale / 100),
+        );
+        for (const [theme, label] of themes) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          const geometry = await target.evaluate((element) => {
+            const tokens = (token: string) => {
+              const probe = document.createElement("span");
+              probe.style.cssText =
+                `position:absolute;inline-size:var(${token})`;
+              element.append(probe);
+              const size = probe.getBoundingClientRect().width;
+              probe.remove();
+              return size;
+            };
+            const rects = (selector: string) => {
+              const item = element.querySelector(selector)!;
+              const range = document.createRange();
+              range.selectNodeContents(item);
+              const text = range.getBoundingClientRect();
+              const box = item.getBoundingClientRect();
+              return {
+                left: box.left,
+                right: Math.min(box.right, text.right),
+                width: box.width,
+                full: text.width,
+              };
+            };
+            const task = rects(".otk-composer-task"),
+              dot = rects(".otk-composer-separator"),
+              session = rects(".otk-composer-destination");
+            const connector = element.closest(".otk-composer-activity")!
+              .querySelector(".otk-live-link")!.getBoundingClientRect();
+            return {
+              task,
+              session,
+              taskGap: dot.left - task.right,
+              sessionGap: session.left - dot.right,
+              linkGap: connector.left - session.right,
+              linkWidth: connector.width,
+              crumbGap: tokens("--space-1"),
+              rowGap: tokens("--space-3"),
+            };
+          });
+          const message = `${name}/${width}/${scale}/${label}`;
+          expect.soft(
+            Math.abs(geometry.taskGap - geometry.crumbGap),
+            `${message} task gap`,
+          ).toBeLessThanOrEqual(1);
+          expect.soft(
+            Math.abs(geometry.sessionGap - geometry.crumbGap),
+            `${message} session gap`,
+          ).toBeLessThanOrEqual(1);
+          expect.soft(geometry.linkWidth, `${message} activity link is visible`)
+            .toBeGreaterThan(0);
+          expect.soft(
+            Math.abs(geometry.linkGap - geometry.rowGap),
+            `${message} title-to-link gap (no overlap)`,
+          ).toBeLessThanOrEqual(1);
+          facts.push({ name, width, scale, theme, ...geometry });
+          if (name === "short" && (width === 1280 || scale === 125)) {
+            await page.screenshot({
+              path: info.outputPath(`crumbs-${width}-${label}.png`),
+            });
+          }
+        }
+      }
+    }
+    await info.attach("crumb-geometry", {
+      body: JSON.stringify(facts, null, 2),
+      contentType: "application/json",
+    });
+    await state.release(gate);
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Project status reviewed.",
+    );
+  });
+});
 
 test(
   "composer.docked-terminal-leaves-the-header-with-its-input-and-room-for-history",
@@ -296,10 +414,13 @@ test(
           at(".otk-composer-task").append(probe);
           const floor = probe.getBoundingClientRect().width;
           probe.remove();
-          const titleMinimum = connector.width ? floor : Math.min(
+          const titleMinimum = Math.min(
             floor,
-            title.width - box(".otk-composer-destination").width -
-              box(".otk-composer-separator").width,
+            (title.width - box(".otk-composer-separator").width -
+              2 *
+                parseFloat(
+                  getComputedStyle(at(".otk-composer-target")).columnGap,
+                )) / 2,
           );
           return {
             leading: title.left - box(".otk-prompt-input").left,
@@ -316,8 +437,7 @@ test(
             titleWidth: box(".otk-composer-task").width,
             titleMinimum,
             wrap: wrapped,
-            linkOnPillLine: !connector.width ||
-              Math.abs(center(connector) - center(lastPill)) <= .5,
+            linkOnTitleLine: Math.abs(center(connector) - center(title)) <= .5,
             overflow: row.scrollWidth - row.clientWidth,
             lampGaps: pills.map((pill) =>
               box(`${count(pill)} .otk-chrome-meta`).left -
@@ -333,7 +453,8 @@ test(
             ].map((selector) =>
               center(box(selector)) -
               (wrapped
-                ? selector === ".otk-composer-task"
+                ? selector === ".otk-composer-task" ||
+                    selector === ".otk-live-link"
                   ? center(title)
                   : center(lastPill)
                 : rowCenter)
@@ -354,13 +475,9 @@ test(
         const [axis, delta, limit] of [
           ["leading inset", measured.leading, 1],
           ["trailing inset", measured.trailing, 1],
-          ...(measured.linkWidth
+          ["title to link", measured.titleToLink - 12 * u, .5],
+          ...(!measured.wrap
             ? [
-              ...(measured.wrap ? [] : [[
-                "title to link",
-                measured.titleToLink - 12 * u,
-                .5,
-              ]] as const),
               [
                 "link to pill",
                 measured.linkToPill - 12 * u,
@@ -385,14 +502,12 @@ test(
         expect.soft(Math.abs(delta), `${context}: ${axis}`)
           .toBeLessThanOrEqual(limit);
       }
-      if (stage === "full" || stage === "wrap-with-link") {
-        expect.soft(measured.linkWidth, context).toBeGreaterThanOrEqual(
-          24 * u - .5,
-        );
-      } else expect.soft(measured.linkWidth, context).toBe(0);
+      expect.soft(measured.linkWidth, context).toBeGreaterThanOrEqual(
+        24 * u - .5,
+      );
       expect.soft(measured.pillText, context).toEqual(["1", "2"]);
       expect.soft(measured.wrap, context).toBe(stage !== "full");
-      expect.soft(measured.linkOnPillLine, context).toBe(true);
+      expect.soft(measured.linkOnTitleLine, context).toBe(true);
       expect.soft(measured.overflow, context).toBeLessThanOrEqual(1);
       expect.soft(measured.truncated, context).toEqual([
         false,
