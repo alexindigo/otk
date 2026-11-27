@@ -9,7 +9,7 @@ import "./RecordRow.css" with { type: "text" };
 /** Shared inline record layout; consumers supply presentation and callbacks. */
 export default function RecordRow(props: {
   class?: string;
-  icon(): Element;
+  icon?(): Element;
   children: Element;
   status?(): Element;
   actions?: readonly FittedAction[];
@@ -20,6 +20,7 @@ export default function RecordRow(props: {
     <div
       class={["otk-record-row", props.class, {
         "is-outgoing": props.outgoing,
+        "has-icon": !!props.icon,
         "has-action-slot": props.actions !== undefined,
       }]}
     >
@@ -29,7 +30,9 @@ export default function RecordRow(props: {
         enabled={props.failed === true}
         class="otk-record-row-grid"
       >
-        {props.icon()}
+        <Show when={props.icon}>
+          <ContentSlot content={props.icon} />
+        </Show>
         <div class="otk-record-row-main">
           <div class="otk-record-row-label">{props.children}</div>
           <Show when={props.status}>

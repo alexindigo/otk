@@ -42,20 +42,20 @@ test.describe("work log", () => {
     await openSession(state, page, "tstv1-otk");
     const root = page.locator(".otk-work-log > .otk-tree-node").first();
     await root.locator(":scope > .otk-tree-heading .otk-tree-toggle").click();
-    await expect(root.locator(":scope > .otk-tree-body")).toBeVisible();
+    await expect(root.locator(":scope > .otk-tree-region")).toBeVisible();
     const axes = await root.evaluate((node) => {
       const center = (el: Element) => {
         const { x, width } = el.getBoundingClientRect();
         return x + width / 2;
       };
       const icon = node.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-icon-art",
+        ":scope > .otk-tree-heading .otk-tree-node-slot",
       )!;
       const stem = node.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-icon-stem",
+        ":scope > .otk-tree-heading .otk-tree-stem-paint",
       )!;
       const child = node.querySelector(
-        ":scope > .otk-tree-body .otk-tree-toggle",
+        ":scope > .otk-tree-region .otk-tree-toggle",
       )!;
       return {
         art: icon.childElementCount,
@@ -67,7 +67,7 @@ test.describe("work log", () => {
     expect.soft(axes.art).toBeGreaterThanOrEqual(1);
     expect(Math.abs(axes.stem - axes.icon)).toBeLessThanOrEqual(0.5);
     expect(Math.abs(axes.stem - axes.child)).toBeLessThanOrEqual(0.5);
-    await expect(page.locator(".otk-tree-icon-art:empty")).toHaveCount(0);
+    await expect(page.locator(".otk-tree-node-slot:empty")).toHaveCount(0);
   });
 });
 

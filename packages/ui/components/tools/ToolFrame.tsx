@@ -6,7 +6,7 @@ import { elapsed, errorFeedback, toolFailure } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
 import ActivityIndicator from "../ActivityIndicator.tsx";
 import { ToolIcon } from "../ChromeIcons.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeItem, TreeNode } from "../Tree.tsx";
 import EntityPill from "../EntityPill.tsx";
 import { useOptionalSessionPorts } from "../../registries/session.tsx";
 import { scopedEntityFacts } from "../../entity-facts.ts";
@@ -65,13 +65,17 @@ export default function ToolFrame(props: {
       >
         <TreeNode
           toggleHeader
+          class="otk-tool-row"
+          node={() => props.presentation?.icon() ?? <ToolIcon />}
           label={props.presentation?.verb ?? props.call.tool}
           open={open()}
           onOpen={setExpanded}
+          feedbackGutter
           feedback={failure()
             ? () => (
               <FeedbackStatus
                 placement="record"
+                subgrid
                 time={props.call.time.end}
                 feedback={errorFeedback(failure(), {
                   actionLabel: props.presentation?.verb ?? props.call.tool,
@@ -89,9 +93,6 @@ export default function ToolFrame(props: {
                 "is-error": !!failure(),
               }]}
             >
-              <TreeIcon>
-                {props.presentation?.icon() ?? <ToolIcon />}
-              </TreeIcon>
               <Show when={props.presentation?.entity}>
                 {(entity) => (
                   <EntityPill

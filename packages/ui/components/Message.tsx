@@ -15,7 +15,7 @@ import { createMemo, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
 import RecordKinds from "./RecordKinds.tsx";
-import { TreeItem } from "./Tree.tsx";
+import { TreeItem, TreeNode } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 import TimeValue from "./TimeValue.tsx";
@@ -100,11 +100,8 @@ function PartsView(
       items={props.parts}
       key={(part) => generation(part.id)}
       label="Reply parts"
-      render={(part) => (
-        <TreeItem
-          connected={props.tree === true}
-          last={part().id === props.parts.at(-1)?.id}
-        >
+      render={(part) => {
+        const content = () => (
           <PartView
             part={part()}
             prefs={props.prefs}
@@ -118,8 +115,15 @@ function PartsView(
             recordTime={props.recordTime?.(part())}
             failureTime={props.failureTime?.(part())}
           />
-        </TreeItem>
-      )}
+        );
+        return (
+          <Show when={props.tree} fallback={content()}>
+            <TreeItem last={part().id === props.parts.at(-1)?.id}>
+              {content()}
+            </TreeItem>
+          </Show>
+        );
+      }}
     />
   );
 }
@@ -540,12 +544,8 @@ export default function Message(
           </Show>
         </Show>
         <Show when={assistant()}>
-          {(message) => (
-            <div
-              class={["otk-reply-end", {
-                "has-work": workGroup(),
-              }]}
-            >
+          {(message) => {
+            const metadata = () => (
               <ContentWindow
                 items={["footer"]}
                 key={(key) => key}
@@ -619,8 +619,13 @@ export default function Message(
                   </MessageFooter>
                 )}
               />
-            </div>
-          )}
+            );
+            return (
+              <Show when={workGroup()} fallback={metadata()}>
+                <TreeNode alignLabel header={metadata} />
+              </Show>
+            );
+          }}
         </Show>
         <Show when={error()}>
           <FeedbackStatus

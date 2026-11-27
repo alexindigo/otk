@@ -19,7 +19,7 @@ export async function treeLaneFindings(
     const y = (rect: DOMRect) => rect.top + rect.height / 2;
     const rows = Array.from(scope.querySelectorAll<HTMLElement>(
       ".otk-tree-row:not(.is-compact)",
-    ));
+    )).filter((row) => !row.matches(".is-gap") || box(row).height > 0);
     if (!rows.length) {
       return [{ rule: "step", row: "tree", detail: "no lane rows rendered" }];
     }
@@ -57,13 +57,14 @@ export async function treeLaneFindings(
       });
       return {
         name,
+        gap: row.matches(".is-gap"),
         depth: Number(row.dataset.treeDepth),
         outgoing: row.classList.contains("is-outgoing"),
         rect,
         junction: own(".otk-tree-junction"),
         line: own(".otk-tree-junction > .otk-tree-junction-line"),
         node: own(".otk-tree-frame > .otk-tree-node-lane"),
-        trigger: own(".otk-tree-trigger-slot"),
+        trigger: own(".otk-tree-trigger-slot") ?? own(".otk-tree-trigger"),
         starts: paint.filter((p) => near(p.top, rect.top)).map(x),
         ends: paint.filter((p) => near(p.bottom, rect.bottom)).map(x),
       };
@@ -73,8 +74,16 @@ export async function treeLaneFindings(
       new Map<number, typeof geometry[number]>(),
     ];
     for (const [i, entry] of geometry.entries()) {
-      const { name: row, junction, node, line, depth, outgoing, trigger } =
-        entry;
+      const {
+        name: row,
+        gap: isGap,
+        junction,
+        node,
+        line,
+        depth,
+        outgoing,
+        trigger,
+      } = entry;
       const report = (rule: TreeLaneFinding["rule"], detail: string) =>
         findings.push({ rule, row, detail });
       if (
@@ -86,7 +95,7 @@ export async function treeLaneFindings(
       const axis = x(box(junction));
       const sameDirection = parents[Number(outgoing)];
       const parent = sameDirection.get(depth - 1);
-      sameDirection.set(depth, entry);
+      if (!isGap) sameDirection.set(depth, entry);
       if (junction.matches(".is-tee, .is-elbow")) {
         if (!parent?.node) {
           report("child-junction", "missing the parent node lane");
@@ -95,7 +104,7 @@ export async function treeLaneFindings(
           if (!near(dx, 0)) report("child-junction", `axis delta ${dx} CSS px`);
         }
       }
-      if (parent?.junction) {
+      if (parent?.junction && !isGap) {
         const dx = axis - x(box(parent.junction));
         const step = outgoing ? -indent : indent;
         if (!near(dx, step)) report("step", `${dx} instead of ${step} CSS px`);
@@ -110,9 +119,20 @@ export async function treeLaneFindings(
             report("trigger", `centre delta (${dx}, ${dy}) CSS px`);
           }
         }
+        if (trigger.matches(".otk-tree-trigger")) {
+          const art = trigger.children[1];
+          if (!art || !near(x(box(art)), x(box(node)))) {
+            report(
+              "trigger",
+              "spanning trigger's artwork leaves the node lane",
+            );
+          }
+        }
       }
       const previous = geometry[i - 1];
-      if (!previous || depth === 0 || previous.outgoing !== outgoing) continue;
+      if (
+        !previous || depth === 0 && !isGap || previous.outgoing !== outgoing
+      ) continue;
       const gap = entry.rect.top - previous.rect.bottom;
       if (!near(gap, 0)) report("continuity", `row gap ${gap} CSS px`);
       for (const start of entry.starts) {

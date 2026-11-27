@@ -9,3 +9,7 @@
   min-inline-size: var(--space-6);
   border-block-start: 1px dotted var(--otk-fg-3);
 }
+
+.otk-transcript-gap-row {
+  --tree-height: var(--control-size);
+}

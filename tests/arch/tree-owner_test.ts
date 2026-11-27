@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { Source } from "./analysis.ts";
-import { rules, variables } from "./styles.ts";
+import { cssTree, rules, selectorAlternatives, variables } from "./styles.ts";
 
 const components = "packages/ui/components";
 const sidebars = ["ProjectInbox", "ProjectSessions"];
@@ -101,20 +101,19 @@ Deno.test("the only live disclosure instance is owned by shell state", async () 
   assertEquals(owners, ["packages/ui/state/shell.ts"]);
 });
 
-Deno.test("flat TreeNode paths use TreeLanes and share the disclosure control", async () => {
+Deno.test("flat and nested TreeNode paths share the same lanes and disclosure control", async () => {
   const text = await Deno.readTextFile("packages/ui/components/Tree.tsx");
   const node = text.slice(text.indexOf("export function TreeNode"));
   assert(node.includes("path?: readonly boolean[]"));
   const source = new Source(node);
   const elements = source.all.filter((n) => n.type === "JSXOpeningElement")
     .map((n) => source.name(n.name));
-  assertEquals(elements.filter((name) => name === "Junction").length, 1);
   assertEquals(
     elements.filter((name) => name === "DisclosureToggle").length,
     1,
   );
-  assertEquals(elements.filter((name) => name === "TreeLanes").length, 1);
-  assert(node.includes("<IconStemContext value={stem}>"));
+  assertEquals(elements.filter((name) => name === "TreeLanes").length, 2);
+  assert(node.includes("<TreeLanesContext value={region}>"));
 });
 
 const tree = `${components}/Tree`;
@@ -149,14 +148,6 @@ Deno.test("Tree.css alone declares lane tokens and owns lane selectors and track
         columns &&
         variables(columns).some(({ name }) => name === "--tree-indent")
       ) {
-        // The existing transcript footer still follows the legacy transcript
-        // tracks. WP2 moves it onto TreeNode when it migrates that tree.
-        if (
-          path === `${components}/Message.css` &&
-          selector === ".otk-reply-end.has-work" &&
-          columns.replaceAll(/\s/g, "") ===
-            "var(--tree-indent)var(--tree-content-gutter,var(--tree-indent))var(--space-2)minmax(0,1fr)"
-        ) continue;
         violations.push(`${path}: ${selector} grid-template-columns`);
       }
     }
@@ -197,4 +188,78 @@ Deno.test("TreeLanes is the only lane renderer and Tree the only lane-state cons
   }
   assertEquals(imports, [`${tree}.tsx`]);
   assertEquals([...new Set(renderers)], [`${tree}.tsx:TreeLanes`]);
+});
+
+Deno.test("legacy transcript tree geometry is retired", async () => {
+  const violations: string[] = [];
+  const retired =
+    /\b(?:TreeIcon|TreeConnector|IconStemContext|otk-tree-continuation|otk-tree-body)\b|--tree-content-gutter\b/;
+  for (const root of ["packages/ui", "web/src"]) {
+    for await (const path of files(root)) {
+      if (!/\.(?:tsx?|css|md)$/.test(path)) continue;
+      const match = (await Deno.readTextFile(path)).match(retired);
+      if (match) violations.push(`${path}: ${match[0]}`);
+    }
+  }
+  assertEquals(violations, []);
+});
+
+Deno.test("tree row spacing is a lane gap, never a margin on a TreeNode", async () => {
+  const rowClasses = new Set([
+    "otk-tool-line",
+    "otk-tree-node",
+    "otk-tree-row",
+  ]);
+  const styles = [];
+  for await (const path of files(components)) {
+    if (path.endsWith(".css")) styles.push(path);
+    if (!path.endsWith(".tsx")) continue;
+    const text = await Deno.readTextFile(path);
+    if (!text.includes("<TreeNode")) continue;
+    const source = new Source(text, path);
+    for (const node of source.all) {
+      if (
+        node.type !== "JSXOpeningElement" ||
+        source.name(node.name) !== "TreeNode"
+      ) continue;
+      const classes = source.value(source.attr(node, "class"));
+      if (!classes) continue;
+      for (const candidate of source.all) {
+        if (
+          candidate.type !== "StringLiteral" ||
+          candidate.start! < classes.start! ||
+          candidate.end! > classes.end!
+        ) continue;
+        for (const token of candidate.value.split(/\s+/).filter(Boolean)) {
+          rowClasses.add(token);
+        }
+      }
+    }
+  }
+  const violations = [];
+  for (const path of styles) {
+    for (
+      const { selector, declarations } of rules(await Deno.readTextFile(path))
+    ) {
+      if (
+        ![...declarations.keys()].some((name) => /^margin(?:-|$)/.test(name))
+      ) continue;
+      for (const branch of selectorAlternatives(selector)) {
+        const parsed = cssTree.parse(branch, { context: "selector" });
+        if (parsed.type !== "Selector") continue;
+        const parts = parsed.children.toArray();
+        const target = parts.slice(
+          parts.findLastIndex((part) => part.type === "Combinator") + 1,
+        );
+        if (
+          target.some((part) =>
+            part.type === "ClassSelector" && rowClasses.has(part.name)
+          )
+        ) {
+          violations.push(`${path}: ${branch}`);
+        }
+      }
+    }
+  }
+  assertEquals(violations, []);
 });

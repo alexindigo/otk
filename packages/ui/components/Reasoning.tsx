@@ -8,7 +8,7 @@ import TimeText from "./TimeText.tsx";
 import Blocks from "./Blocks.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
+import { TreeItem, TreeNode } from "./Tree.tsx";
 import { ActivityIcon } from "./ChromeIcons.tsx";
 export default function Reasoning(
   props: {
@@ -39,14 +39,6 @@ export default function Reasoning(
   function Heading() {
     return (
       <>
-        <TreeIcon>
-          <Show
-            when={props.part.time.end === undefined}
-            fallback={<ActivityIcon />}
-          >
-            <ActivityIndicator small decorative />
-          </Show>
-        </TreeIcon>
         {props.part.time.end === undefined ? "Thinking..." : "Thought for"}
         <Show when={props.part.time.end !== undefined}>
           {" "}
@@ -61,6 +53,15 @@ export default function Reasoning(
     <section class={["otk-reasoning", { "is-open": open() }]}>
       <TreeNode
         toggleHeader
+        class="otk-reasoning-row"
+        node={() => (
+          <Show
+            when={props.part.time.end === undefined}
+            fallback={<ActivityIcon />}
+          >
+            <ActivityIndicator small decorative />
+          </Show>
+        )}
         label="Thought"
         open={open()}
         onOpen={setExpanded}

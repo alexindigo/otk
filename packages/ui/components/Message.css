@@ -37,18 +37,6 @@
   margin-block: var(--space-2);
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
 }
-.otk-reply-end.has-work {
-  display: grid;
-  grid-template-columns: var(--tree-indent)
-    var(--tree-content-gutter, var(--tree-indent)) var(--space-2)
-    minmax(0, 1fr);
-}
-.otk-reply-end.has-work > .otk-reply-end-work {
-  grid-column: 1 / -1;
-}
-.otk-reply-end.has-work > :not(.otk-reply-end-work) {
-  grid-column: 4;
-}
 .otk-send-meta {
   display: inline-flex;
   align-items: center;

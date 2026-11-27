@@ -8,7 +8,7 @@
   column-gap: var(--space-2);
 }
 .otk-disclosure-layout > * {
-  grid-column: 2;
+  grid-column: 2 / -1;
 }
 .otk-disclosure-layout > .otk-disclosure-layout {
   grid-column: 1 / -1;
@@ -48,7 +48,7 @@
   flex: 0 0 var(--disclosure-gutter);
 }
 .otk-disclosure-region {
-  grid-column: 2;
+  grid-column: 2 / -1;
   min-inline-size: 0;
 }
 .otk-disclosure-layout .otk-disclosure-frame {
@@ -77,4 +77,23 @@
 }
 .otk-disclosure-icon path {
   stroke: currentColor;
+}
+.otk-disclosure-button.is-track-aligned {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  column-gap: inherit;
+  justify-self: stretch;
+  inline-size: auto;
+}
+.otk-disclosure-button.is-track-aligned > .otk-disclosure-icon {
+  grid-column: 1;
+  aspect-ratio: 1;
+  min-block-size: 0;
+}
+.otk-disclosure-button.is-track-aligned > .otk-disclosure-label {
+  grid-column: 3 / -1;
+}
+.otk-disclosure-frame:has(> .otk-disclosure-button.is-track-aligned) > .otk-disclosure-region {
+  grid-column: 3 / -1;
 }

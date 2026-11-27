@@ -68,7 +68,7 @@ Deno.test("tool rows and shared trees inherit scaled geometry", async () => {
   assertEquals(tree.includes("--tree-icon-size: var(--icon-compact)"), true);
   assertMatch(
     tree,
-    /grid-template-rows: var\(--tree-row-height, var\(--tree-default-row-height\)\)\s+1fr/,
+    /grid-template-rows: \[line-start\] var\(--tree-line\)/,
   );
   assertEquals(tool.includes("flex: 0 0 var(--icon-compact)"), true);
   assertEquals(tool.includes("width: var(--icon-compact)"), true);
