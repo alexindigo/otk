@@ -27,6 +27,7 @@ export function deliveredTerminal(entry: IndexMetadata): number {
 /** Fresh positive evidence as the interpreter counts it; absence is zero. */
 export interface SessionInputs {
   work: boolean;
+  continuation?: boolean;
   /** Own pending permissions left after the approval policy. */
   permissions: number;
   /** Own pending questions and forms. */
@@ -49,6 +50,7 @@ export class SessionSupervision {
     acknowledged: number,
     retainedTerminal = 0,
     inputs = this.inputs(entry),
+    operation?: "working" | "blocked",
   ): Supervision {
     const evidence = entry.activity;
     const terminal = Math.max(retainedTerminal, evidence?.terminal ?? 0);
@@ -89,10 +91,22 @@ export class SessionSupervision {
       : unseen
       ? "finishedUnseen"
       : "none";
+    const settlement = this.#fresh && entry.activityAuthority !== "stale" &&
+        !entry.archived && !operation &&
+        !needsInput && !inputs.work && terminal > 0 && outcome &&
+        evidence?.completion?.confirmed === terminal
+      ? {
+        id: terminal,
+        outcome,
+        live: true,
+        unseen,
+      }
+      : undefined;
     return {
       state,
       terminal,
       unseen,
+      ...(settlement ? { settlement } : {}),
       ...detail,
       ...(outcome ? { outcome } : {}),
     };
@@ -106,8 +120,12 @@ export class SessionSupervision {
         ? Math.max(0, this.#permissions(entry.id))
         : evidence.permissions.keys.length
       : 0;
+    const continuation = entry.activityAuthority !== "stale" &&
+      !!evidence?.completion?.pending.length;
     return {
-      work: !!(evidence?.work?.fresh && evidence.work.keys.length),
+      work: continuation ||
+        !!(evidence?.work?.fresh && evidence.work.keys.length),
+      ...(continuation ? { continuation } : {}),
       permissions,
       questions: evidence?.inputs?.fresh ? evidence.inputs.keys.length : 0,
     };

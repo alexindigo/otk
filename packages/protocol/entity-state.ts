@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProjectStatus } from "./inbox.ts";
 import type { PublicFailure } from "./requests.ts";
-import type { TerminalOutcome } from "./supervision.ts";
+import type { SessionSettlement, TerminalOutcome } from "./supervision.ts";
 
 export type EntityKind =
   | "session"
@@ -55,6 +55,9 @@ export interface RunningShells extends EntityLamp {
   }[];
 }
 export interface SessionEvidence {
+  settlement?: SessionSettlement;
+  /** Admitted input or result work owned by this session, not descendants. */
+  continuation?: true;
   helper?: HelperDisposition;
   /** Wall-clock time when the entity owner first observed this needs-you interval. */
   waitingSince?: number;

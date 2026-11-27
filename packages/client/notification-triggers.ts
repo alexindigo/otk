@@ -3,6 +3,7 @@ import type {
   ErrorObservation,
   IndexEntry,
   ServerFrame,
+  SessionSettlement,
   TerminalEvidence,
   TerminalOutcome,
 } from "@otk/protocol";
@@ -72,6 +73,8 @@ export class NotificationTriggers {
       generation?: string;
       roots: Map<string, Facts>;
       finishes: Map<string, TerminalEvidence>;
+      settled: Map<string, number>;
+      pendingSettlement: Map<string, SessionSettlement>;
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
@@ -160,11 +163,18 @@ export class NotificationTriggers {
     const replaced = !state || state.generation !== change.generation;
     const baseline = replaced || change.baseline;
     if (!state || replaced) {
+      if (state) {
+        for (const session of state.settled.keys()) {
+          this.settlement(sidecar, session, null);
+        }
+      }
       state = {
         rev: change.revision,
         generation: change.generation,
         roots: new Map(),
         finishes: new Map(),
+        settled: new Map(),
+        pendingSettlement: new Map(),
       };
       this.#connections.set(sidecar, state);
     } else if (change.revision <= state.rev) return;
@@ -209,7 +219,64 @@ export class NotificationTriggers {
           : entry.completedAt || (baseline ? current?.terminal : undefined),
         !replaced,
       );
+      const pending = state.pendingSettlement.get(entry.id);
+      if (pending && current) this.settlement(sidecar, entry.id, pending);
+      else if (!current && (entry.before || entry.after)) {
+        state.pendingSettlement.delete(entry.id);
+      }
     }
+    if (!baseline) {
+      for (const { sessionID, value } of change.settlements ?? []) {
+        this.settlement(sidecar, sessionID, value);
+      }
+    }
+  }
+
+  settlement(
+    sidecar: string,
+    session: string,
+    value: SessionSettlement | null,
+  ): void {
+    const connection = this.#connections.get(sidecar);
+    if (!connection) return;
+    const id = sessionKey(sidecar, session), previous = this.#outcomes.get(id);
+    if (!value || !value.unseen || value.outcome !== "succeeded") {
+      connection.pendingSettlement.delete(session);
+      if (previous?.kind === "done") {
+        this.#outcomes.delete(id);
+        this.retract(previous.id);
+      }
+      return;
+    }
+    if (!value.live || value.id <= (connection.settled.get(session) ?? 0)) {
+      return;
+    }
+    const entry = connection.roots.get(session);
+    if (!entry) {
+      const pending = connection.pendingSettlement.get(session);
+      if (!pending || value.id >= pending.id) {
+        connection.pendingSettlement.set(session, value);
+      }
+      return;
+    }
+    connection.pendingSettlement.delete(session);
+    connection.settled.set(session, value.id);
+    const note: Note = {
+      id,
+      kind: "done",
+      sessionRef: { sidecar, session },
+      title: "Session done",
+      body: sessionTitle(session, entry.title),
+      actions: [{
+        label: "Open",
+        command: "session.open",
+        args: { sidecarId: sidecar, sessionID: session },
+        default: true,
+      }],
+    };
+    if (previous && previous.id !== id) this.retract(previous.id);
+    this.#outcomes.set(id, note);
+    this.emit(note);
   }
 
   // Standalone frame consumers borrow the ordinary canonical reducer as before.
@@ -242,6 +309,8 @@ export class NotificationTriggers {
         rev,
         roots: new Map(),
         finishes: new Map(),
+        settled: new Map(),
+        pendingSettlement: new Map(),
       });
     }
     const rows = this.project(sidecar, [
@@ -325,7 +394,7 @@ export class NotificationTriggers {
     const acknowledged = !!entry.terminal && entry.unseen === false;
     if (acknowledged) {
       const note = this.#outcomes.get(id);
-      if (note) {
+      if (note && note.kind !== "done") {
         this.#outcomes.delete(id);
         this.retract(note.id);
       }
@@ -350,7 +419,10 @@ export class NotificationTriggers {
       !entry.error
     ) return;
     const priorOutcome = this.#outcomes.get(id);
-    if (old.status === "idle" && entry.status !== "idle" && priorOutcome) {
+    if (
+      old.status === "idle" && entry.status !== "idle" && priorOutcome &&
+      priorOutcome.kind !== "done"
+    ) {
       this.#outcomes.delete(id);
       this.retract(priorOutcome.id);
     }
@@ -447,6 +519,7 @@ export class NotificationTriggers {
       });
     } else if (
       !acknowledged && finished && outcome !== "failed" &&
+      outcome !== "succeeded" &&
       entry.status === "idle" &&
       !entry.permissions &&
       !entry.questions
@@ -461,12 +534,10 @@ export class NotificationTriggers {
         publishOutcome({
           // Failures always use structured action/target/cause/recovery above.
           id,
-          kind: outcome === "succeeded" ? "done" : "info",
+          kind: "info",
           sessionRef: { sidecar, session },
           title: outcome === "interrupted"
             ? "Session interrupted"
-            : outcome === "succeeded"
-            ? "Session done"
             : "Session finished (outcome unknown)",
           body: sessionTitle(session, entry.title),
           actions: [{

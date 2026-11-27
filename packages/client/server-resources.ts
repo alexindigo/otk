@@ -694,6 +694,9 @@ export function createServerResources(o: {
             }
           }
         }
+        if (changes.settlements) {
+          owner.settled(changes.settlements);
+        }
       });
     }
     return model;

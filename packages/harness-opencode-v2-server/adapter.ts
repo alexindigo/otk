@@ -164,6 +164,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           this.#metadataRefresh.clear();
           this.#activeRead = undefined;
           this.#activityCurrent = false;
+          this.#completion.clear();
+          this.#completionReads.clear();
+          this.#completionCandidates.clear();
+          this.#admissions.clear();
           this.pending.uncertain();
           this.transcript.disconnect();
           this.#generation = generation;
@@ -341,7 +345,9 @@ export class OpencodeV2ServerAdapter implements Harness {
             input.sessionID,
             "prompt",
             operation,
-            () => this.prompts.prompt(input, operation),
+            () =>
+              this.#admit(input.sessionID, () =>
+                this.prompts.prompt(input, operation)),
           ),
         abort: (id, operation) => this.prompts.abort(id, operation),
         withdraw: (id, messageID, operation) =>
@@ -704,6 +710,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ...entry,
       activity: {
         ...terminal,
+        completion: this.#completion.get(entry.id),
         delivered: this.#delivered(entry),
         work: {
           keys: [
@@ -940,6 +947,116 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     this.#upsert(entry);
   }
+  #completion = new Map<
+    string,
+    NonNullable<NonNullable<SessionMetadata["activity"]>["completion"]>
+  >();
+  #completionReads = new Map<string, { terminal: number }>();
+  #completionCandidates = new Map<string, number>();
+  #admissions = new Map<string, Set<string>>();
+
+  #completionInput(id: string, pending: readonly string[] = []): void {
+    this.#completionReads.delete(id);
+    const keys = [...this.#admissions.get(id) ?? [], ...pending];
+    if (keys.length) this.#completion.set(id, { pending: keys });
+    else this.#completion.delete(id);
+    const entry = this.#index.getMetadata(id);
+    if (entry) this.#upsert(entry);
+  }
+
+  async #admit<T>(id: string, submit: () => Promise<T>): Promise<T> {
+    const admissions = this.#admissions.get(id) ?? new Set<string>();
+    const key = `start:${crypto.randomUUID()}`;
+    admissions.add(key);
+    this.#admissions.set(id, admissions);
+    this.#completionInput(id);
+    try {
+      return await submit();
+    } finally {
+      admissions.delete(key);
+      if (this.#admissions.get(id) === admissions) {
+        if (!admissions.size) this.#admissions.delete(id);
+        this.#completionInput(id);
+        // Admission has reached the native inbox or failed. Read the native
+        // handoff, never join the prompt receipt to a possibly old idle row.
+        this.#confirmCompletion(
+          id,
+          this.stream.client,
+          this.stream.client.signal,
+        );
+      }
+    }
+  }
+
+  #confirmCompletion(id: string, client: V2Client, signal: AbortSignal): void {
+    if (!this.#activityCurrent || signal.aborted) return;
+    const entry = this.#index.getMetadata(id), sid = ids.decode(id);
+    const terminal = entry?.activity?.terminal;
+    if (
+      !terminal || this.#completionCandidates.get(id) !== terminal ||
+      entry?.activity?.outcome !== "succeeded" ||
+      this.#admissions.get(id)?.size ||
+      this.#running.has(sid) || this.#shells.busy(sid) ||
+      this.#completion.get(id)?.confirmed === terminal ||
+      this.#completionReads.get(id)?.terminal === terminal
+    ) return;
+    this.#completionInput(id, ["native-confirmation"]);
+    // A previous terminal's wait can span the successor execution. Its
+    // completion must neither suppress nor retire this terminal's proof.
+    const read = { terminal };
+    this.#completionReads.set(id, read);
+    const current = () =>
+      this.#completionReads.get(id) === read && !signal.aborted;
+    void (async () => {
+      // The coordinator owns the final drain, including late wakes. Jobs
+      // remain on this roster through enqueue+wake, not just process exit.
+      await client.settled(sid);
+      if (!current()) return;
+      const jobs = await client.read(
+        (api) => api.experimental.job.list({ sessionID: sid }, { signal }),
+        signal,
+      );
+      if (!current()) return;
+      const inbox = await this.transcript.reader.inbox(id, signal);
+      if (!current()) return;
+      const active = await client.read(
+        (api) => api.session.active({ signal }),
+        signal,
+      );
+      if (!current()) return;
+      const native = await client.read(
+        (api) => api.session.get({ sessionID: sid }, { signal }),
+        signal,
+      );
+      const latest = this.#index.getMetadata(id);
+      if (!current() || latest?.activity?.terminal !== terminal) return;
+      const pending = [
+        ...jobs.map(({ id }) => `result:${id}`),
+        ...(inbox.state === "available"
+          ? inbox.items.map(({ id, delivery }) => `queued:${delivery}:${id}`)
+          : []),
+        ...(active[sid] || millis(native.time.busy) > terminal
+          ? ["native-start"]
+          : []),
+      ];
+      this.#completion.set(id, {
+        pending,
+        ...(inbox.state === "available" && !pending.length &&
+            metadata(native).activity?.terminal === terminal
+          ? { confirmed: terminal }
+          : {}),
+      });
+      this.#upsert(latest);
+    })().catch((error) => {
+      if (!current()) return;
+      this.#completionInput(id);
+      if (!(error instanceof V2MissingSession)) this.diagnostic(error);
+    }).finally(() => {
+      if (this.#completionReads.get(id) === read) {
+        this.#completionReads.delete(id);
+      }
+    });
+  }
   async #hydrate(
     wanted: readonly string[],
     signal: AbortSignal,
@@ -996,6 +1113,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);
+    this.#completion.delete(id);
+    this.#completionReads.delete(id);
+    this.#completionCandidates.delete(id);
+    this.#admissions.delete(id);
     this.#lists.invalidate();
     if (this.digest) {
       await this.digest.deleted(generation, id, Date.now(), metadata);
@@ -1399,6 +1520,16 @@ export class OpencodeV2ServerAdapter implements Harness {
       ? ids.encode(event.data.sessionID)
       : undefined;
     if (
+      changedID && generation === this.#generation &&
+      /^session\.(inbox\.|execution\.started$|compaction\.started$|retry\.scheduled$)/
+        .test(event.type)
+    ) {
+      this.#completionInput(
+        changedID,
+        event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
+      );
+    }
+    if (
       this.#inventoryChanges &&
       /^(session\.(execution\.|shell\.|created$|forked$|moved$|deleted$|renamed$|metadata\.updated$|archived$|unarchived$)|shell\.)/
         .test(event.type)
@@ -1531,6 +1662,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     if (typeof sid !== "string" || sid === "global") return;
+    if (/^session\.inbox\./.test(event.type)) {
+      this.#confirmCompletion(ids.encode(sid), client, signal);
+    }
     if (
       !/^session\.execution\./.test(event.type) &&
       !/^session\.(created|forked|renamed|moved|metadata\.updated|archived|unarchived|deleted|retry\.scheduled|step\.started)$/
@@ -1729,6 +1863,9 @@ export class OpencodeV2ServerAdapter implements Harness {
         terminalOrigin: "live",
         ...(executionFailure ? { terminalFailure: executionFailure } : {}),
       };
+      if (entry.activity.outcome === "succeeded") {
+        this.#completionCandidates.set(entry.id, ended);
+      }
     }
     if (
       value.retry && value.retry.type !== "session.retry.scheduled"
@@ -1776,6 +1913,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       previousRun !== undefined && event.type !== "session.execution.started" &&
         this.#index.getMetadata(entry.id)?.status === "idle",
     );
+    this.#confirmCompletion(entry.id, client, signal);
     if (value.projects) {
       this.#queueProjects(
         [raw.location.directory, ...(previous ? [previous.directory] : [])],

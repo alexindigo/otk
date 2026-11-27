@@ -174,7 +174,8 @@ export class EntityStates {
       ? this.get(entityKey("task", task))?.helpers
       : undefined;
     if (
-      session.evidence?.nativeRun || session.shells?.state === "working" ||
+      session.evidence?.nativeRun || session.evidence?.continuation ||
+      session.shells?.state === "working" ||
       helpers?.counts.running
     ) {
       return "running";
@@ -440,11 +441,13 @@ export class EntityStates {
       else this.session(entry, acknowledged, retainedTerminal);
     });
     const inputs = { ...native, permissions: permissions.length };
+    const operation = this.#operations.get(entry.id);
     const verdict = this.supervision.session(
       entry,
       acknowledged,
       retainedTerminal,
       inputs,
+      operation,
     );
     const upserts: EntityState[] = [], removals: string[] = [];
     const contribution = this.#contribution(entry.id);
@@ -462,7 +465,6 @@ export class EntityStates {
       this.#retire(entry.id, removals);
       this.#ancestors(entry.id, upserts);
     } else {
-      const operation = this.#operations.get(entry.id);
       const state = rollupStatus(this.supervision.status(verdict), operation);
       const counts = own(state, verdict.unseen === true);
       this.#own.set(entry.id, counts);
@@ -1031,6 +1033,8 @@ export class EntityStates {
       ? "finished"
       : undefined;
     const evidence: SessionEvidence = {
+      ...(verdict.settlement ? { settlement: verdict.settlement } : {}),
+      ...(inputs.continuation ? { continuation: true as const } : {}),
       ...(helper ? { helper } : {}),
       ...(helper === "needsYou"
         ? { waitingSince: before?.evidence?.waitingSince ?? Date.now() }

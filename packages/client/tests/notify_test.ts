@@ -169,6 +169,12 @@ for (const kind of ["permissions", "questions"] as const) {
           }),
         }],
       });
+      triggers.settlement("s", "a", {
+        id: 3,
+        outcome: "succeeded",
+        live: true,
+        unseen: true,
+      });
       const completed = receipts.get("s/a");
       assertEquals(completed?.kind, "done");
       assert(
@@ -279,6 +285,13 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
       entry: entry("a", { activity: { terminal: 2, outcome: "succeeded" } }),
     }],
   });
+  assertEquals(emitted, []);
+  triggers.settlement("s", "a", {
+    id: 2,
+    outcome: "succeeded",
+    live: true,
+    unseen: true,
+  });
   assertEquals(emitted.map((n) => [n.id, n.kind]), [["s/a", "done"]]);
   assertEquals(
     triggers.receive("s", {
@@ -324,6 +337,12 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
       op: "upsert",
       entry: entry("a", { activity: { terminal: 2, outcome: "succeeded" } }),
     }],
+  });
+  triggers.settlement("other", "a", {
+    id: 2,
+    outcome: "succeeded",
+    live: true,
+    unseen: true,
   });
   assertEquals(emitted.at(-1)?.id, "other/a");
 });
