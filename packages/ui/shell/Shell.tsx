@@ -547,7 +547,7 @@ export default function Shell(
   });
   onSettled(() => {
     const stopNotifications = notifications.start(),
-      stopKeyboard = keyboard.start();
+      stopKeyboard = keyboard.start(document, () => !!session.state.selection);
     const unbindPalette = keyboard.keymap.bind({
       id: "palette.open",
       command: "palette.open",

@@ -63,6 +63,11 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const ports = useCommandPorts();
   const keyboard = ports.keyboard ??
     createKeyboard(ports.commands, (error) => ctx.fail(error));
+  onSettled(() =>
+    ports.keyboard?.focusHome(() =>
+      props.suspended || props.value.editor ? undefined : input
+    )
+  );
   const hints = commandHints({ ...ports, keyboard });
   const submitTitle = () => {
     const newline = hints.keys("prompt.newline");
