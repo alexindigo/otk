@@ -112,7 +112,7 @@ export function MetaRow(
         if (props.intrinsic) {
           root.style.setProperty("--meta-intrinsic", `${total()}px`);
         }
-        const available = root.clientWidth;
+        const available = root.getBoundingClientRect().width;
         const overflows = () => total() > available + 0.5;
         const compact = (item: HTMLElement) => {
           if (
