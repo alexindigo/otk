@@ -30,7 +30,10 @@ async function paint(page: Page, theme: string, scale: number) {
 async function openList(page: Page, url: string) {
   await page.clock.setFixedTime(new Date("2026-11-20T01:23:00.107-08:00"));
   await open(page, url + subagentsScene);
-  await page.getByRole("button", { name: /^Subagents:/ }).click();
+  await page.getByRole("button", {
+    name: "Subagents: 1 needs you, 1 finished, 3 running",
+    exact: true,
+  }).click();
   await expect(page.getByRole("menu", { name: "Subagents", exact: true }))
     .toBeVisible();
 }

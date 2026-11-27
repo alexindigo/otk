@@ -6,6 +6,7 @@ import {
   elapsed,
   presentedEntity,
   presentFailure,
+  taskHelpers,
 } from "@otk/client";
 import TimeText from "../../components/TimeText.tsx";
 import {
@@ -80,6 +81,24 @@ function SubagentTimes() {
       },
     }];
   }));
+  // Issue 2.152 / D81: task evidence admits the shared Subagents roster.
+  const taskID = "time-units";
+  const task = entityKey("task", taskID);
+  state[task] = {
+    ...presentedEntity("task", taskID, "blocked"),
+    helpers: {
+      ids,
+      counts: { running: running.length, needsYou: 1, finished: 1 },
+      lamps: {
+        all: { state: "blocked" },
+        groups: {
+          running: { state: "working" },
+          needsYou: { state: "blocked" },
+          finished: { state: "finished" },
+        },
+      },
+    },
+  };
   const entities = createEntityStateStore({ read: () => state });
   const owner = createLiveWork({
     items: () =>
@@ -99,18 +118,8 @@ function SubagentTimes() {
       <Subagents
         focusHome={() => home.focus()}
         entities={entities}
-        helpers={{
-          ids,
-          counts: { running: running.length, needsYou: 1, finished: 1 },
-          lamps: {
-            all: { state: "blocked" },
-            groups: {
-              running: { state: "working" },
-              needsYou: { state: "blocked" },
-              finished: { state: "finished" },
-            },
-          },
-        }}
+        task={task}
+        helpers={taskHelpers(entities, task)}
         current={running[1][0]}
         owner={owner}
         title={(id) => id}
