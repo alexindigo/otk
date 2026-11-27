@@ -58,18 +58,22 @@ Deno.test("UI convention: only the composer uses the stop square", async () => {
         ["packages/ui/components/Prompt.tsx", square],
         ["packages/ui/components/RunningCommand.tsx", square],
         [
-          "packages/ui/components/RunningShell.tsx",
+          "packages/ui/components/LiveWork.tsx",
           'import * as Icons from "./ChromeIcons.tsx"; <Icons.StopIcon />;',
         ],
         [
           "packages/ui/components/TerminateButton.tsx",
           'import { CloseIcon } from "./ChromeIcons.tsx"; <CloseIcon />;',
         ],
+        [
+          "packages/ui/components/Subagents.tsx",
+          'import TerminateButton from "./TerminateButton.tsx"; <TerminateButton />;',
+        ],
       ]),
     ).map((error) => error.split(":")[0]),
     [
       "packages/ui/components/RunningCommand.tsx",
-      "packages/ui/components/RunningShell.tsx",
+      "packages/ui/components/LiveWork.tsx",
     ],
   );
   assertEquals(stopGlyphErrors(await productionSources()), []);

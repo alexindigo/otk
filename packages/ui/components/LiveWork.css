@@ -28,3 +28,6 @@
 .otk-live-work-elapsed {
   text-align: end;
 }
+.otk-live-work-list:has(.otk-live-work-terminate) {
+  grid-template-columns: auto minmax(0, 1fr) auto var(--control-size);
+}

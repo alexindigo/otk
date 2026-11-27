@@ -100,13 +100,19 @@ Deno.test("composer link and helper lamp read separate published scopes", () => 
 Deno.test("live-work stop capability and admission survive presentation replacement", async () => {
   let finish!: () => void, calls = 0;
   const item = {
-    id: "helper/h",
+    id: "h",
     sessionID: "h",
     kind: "helper" as const,
     label: "Helper",
     title: "Work",
   };
-  const shell = { ...item, id: "shell/s", kind: "shell" as const };
+  const shell = { ...item, kind: "shell" as const };
+  let shellSupported = false;
+  const stopShell = (id: string) => {
+    assertEquals(id, "h");
+    calls++;
+    return Promise.resolve();
+  };
   const owner = createLiveWork({
     items: () => [item, shell],
     stopHelper: () => async (id) => {
@@ -114,15 +120,25 @@ Deno.test("live-work stop capability and admission survive presentation replacem
       calls++;
       await new Promise<void>((resolve) => finish = resolve);
     },
+    stopShell: () => shellSupported ? stopShell : undefined,
   });
-  assertEquals(owner.canStop(shell.id), false);
-  assertEquals(owner.canStop(item.id), true);
-  const first = owner.stop(item.id), second = owner.stop(item.id);
+  assertEquals(owner.canStop("shell/h"), false);
+  assertEquals(owner.canStop("helper/h"), true);
+  shellSupported = true;
+  assertEquals(owner.canStop("shell/h"), true);
+  assertEquals(owner.canStop("shell/absent"), false);
+  const first = owner.stop("helper/h"), second = owner.stop("helper/h");
   assertEquals(first, second);
   await Promise.resolve();
   assertEquals(calls, 1);
-  assertEquals(owner.stopping(item.id), true);
+  assertEquals(owner.stopping("helper/h"), true);
+  const shellStop = owner.stop("shell/h");
+  assertEquals(shellStop, owner.stop("shell/h"));
+  await shellStop;
+  assertEquals(calls, 2);
+  assertEquals(owner.stopping("helper/h"), true);
+  assertEquals(owner.stopping("shell/h"), false);
   finish();
   await first;
-  assertEquals(owner.stopping(item.id), false);
+  assertEquals(owner.stopping("helper/h"), false);
 });

@@ -35,13 +35,14 @@ export function sessionPorts(o: {
   const connection = resources.sidecars.connection(target.sidecarId);
   const entities = () => resources.inbox(target.sidecarId).entities;
   const sessionKey = entityKey("session", target.sessionID);
+  const shells = () => sessionShells(entities(), sessionKey);
+  const rpc = actions.rpc(target);
   const liveWork = createLiveWork({
-    items: () =>
-      (entityLiveWork(entities(), sessionKey) ?? []).flatMap((item) =>
+    items: () => [
+      ...(entityLiveWork(entities(), sessionKey) ?? []).flatMap((item) =>
         item.kind === "helper"
           ? [{
             ...item,
-            id: `helper/${item.id}`,
             kind: item.kind,
             sessionID: item.id,
             label: derivedValue(
@@ -50,10 +51,26 @@ export function sessionPorts(o: {
           }]
           : []
       ),
+      ...(shells()?.items ?? []).map((item) => ({
+        ...item,
+        kind: "shell" as const,
+        sessionID: target.sessionID,
+      })),
+    ],
     stopHelper: () =>
       resources.linked(target.sidecarId) &&
         resources.declares(target.sidecarId, "prompt")
         ? (id) => actions.abort({ ...target, sessionID: id })
+        : undefined,
+    stopShell: () =>
+      resources.linked(target.sidecarId) &&
+        resources.declares(target.sidecarId, "shell.terminate")
+        ? async (shellID) => {
+          await rpc("shell.terminate", {
+            sessionID: target.sessionID,
+            shellID,
+          });
+        }
         : undefined,
   });
   return {
@@ -61,7 +78,7 @@ export function sessionPorts(o: {
       c === "history"
         ? resources.anyAdvertised(c)
         : resources.declares(target.sidecarId, c),
-    rpc: actions.rpc(target),
+    rpc,
     connectionKey: () => resources.connectionKey(target.sidecarId),
     connected: () => resources.linked(target.sidecarId),
     onToolCompleted: (listener) => session.onToolCompleted(target, listener),
@@ -101,7 +118,7 @@ export function sessionPorts(o: {
     location: (id) => actions.location(target, id),
     liveWork,
     delivery: actions.delivery(target),
-    shells: () => sessionShells(entities(), sessionKey),
+    shells,
     trail: () => o.tabs?.()?.trail(),
     stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
     clearFinished: (task) =>
