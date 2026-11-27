@@ -45,12 +45,14 @@ async function noClippedRecovery(page: Page) {
     async () => (await visible()).every((control) => control.fits),
     { message: "All visible recovery controls fit whole after layout settles" },
   ).toBe(true);
-  const keep = row.getByRole("button", {
+  // The compact failure has its own Details menu; recovery is a separate row.
+  const recovery = row.and(page.locator(":not(.otk-failure-content *)"));
+  const keep = recovery.getByRole("button", {
     name: "Keep without a saved copy",
     exact: true,
   });
   if (!await keep.isVisible()) {
-    await row.getByRole("button", { name: "More actions", exact: true })
+    await recovery.getByRole("button", { name: "More actions", exact: true })
       .click();
     await expect(
       page.getByRole("menu").getByRole("menuitem", {
@@ -388,19 +390,32 @@ test(
     await expect(alert).toHaveCount(1);
     await expect(alert).toContainText("Copy not saved");
     await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
+    await expect(choice.locator(".otk-failure-summary-reason")).toHaveText(
       "The replacement was not sent.",
     );
     await expect(alert.locator(".otk-failure-reason:visible")).toHaveText(
       plainReason,
     );
-    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+    const details = choice.getByRole("button", {
+      name: "Details",
+      exact: true,
+    });
+    const instructions = choice.locator(
+      ".otk-failure-detail-body .otk-failure-recovery",
+    );
+    await expect(instructions).toHaveCount(0);
+    await details.click();
+    await expect(instructions).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
     await expect(choice).not.toContainText(plainReason);
+    await details.click();
     await choice.getByRole("button", { name: "Save copy", exact: true })
       .click();
-    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+    await expect(choice.getByRole("button", { name: "Save copy", exact: true }))
+      .toBeEnabled();
+    await details.click();
+    await expect(instructions).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
     await expect(choice).not.toContainText(plainReason);
@@ -478,8 +493,9 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await expect(page.locator(".otk-composer-notice")).toContainText(
     "Saving the earlier conversation",
   );
-  await expect(page.locator(".otk-composer-notice .otk-failure-reason:visible"))
-    .toHaveText(plainReason + " The conversation was restored.");
+  await expect(
+    page.locator(".otk-composer-notice .otk-failure-summary-reason"),
+  ).toHaveText(plainReason + " The conversation was restored.");
   await expect(page.locator(".otk-composer-notice")).not.toContainText(
     "replacement was not sent",
   );

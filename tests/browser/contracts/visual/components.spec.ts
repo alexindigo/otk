@@ -245,7 +245,9 @@ test(
             ],
             pane: rect(pane),
             content: rect(content),
-            centres: Array.from(operation.children).map((el) => {
+            centres: Array.from(
+              operation.querySelectorAll(".otk-record-row-grid > *"),
+            ).map((el) => {
               const r = el.getBoundingClientRect();
               return r.y + r.height / 2;
             }),
@@ -253,11 +255,6 @@ test(
               document.querySelectorAll('[disabled],[aria-disabled="true"]')
                 .length,
             colour: getComputedStyle(operation).color,
-            signal: operation.querySelector(".otk-failure-signal")
-              ? getComputedStyle(
-                operation.querySelector(".otk-failure-signal")!,
-              ).boxShadow
-              : undefined,
           };
         });
         expect(g.disabled).toBe(0);
@@ -267,6 +264,7 @@ test(
         expect(
           Math.abs(g.pane[1] + g.pane[3] / 2 - g.content[1] - g.content[3] / 2),
         ).toBeLessThan(1);
+        expect(g.centres).toHaveLength(feedback === "error" ? 3 : 2);
         expect(Math.max(...g.centres) - Math.min(...g.centres)).toBeLessThan(1);
         if (feedback === "clear") baseline = g.boxes;
         else {
@@ -277,9 +275,12 @@ test(
           expect(g.boxes[1][3]).toBeGreaterThanOrEqual(baseline![1][3]);
         }
         if (feedback === "error") {
-          // Failure content keeps foreground text; its shared signal owns danger.
+          // WP5 paints danger on the icon, not the text or a second stripe.
           expect(g.colour).toBe("rgb(230, 234, 239)");
-          expect(g.signal).toBe("rgb(255, 128, 128) 2px 0px 0px 0px inset");
+          const notice = page.locator(".otk-operation-feedback");
+          await expect(notice.locator(".otk-failure-signal")).toHaveCount(0);
+          await expect(notice.locator(".otk-composer-notice-icon svg"))
+            .toHaveCSS("color", "rgb(255, 128, 128)");
         }
       }
     }
