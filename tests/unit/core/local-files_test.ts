@@ -9,12 +9,14 @@ import {
   MAX_STAT_PATHS,
   OperationFailure,
 } from "@otk/protocol";
+import { ImageRoots } from "../../../core/files/image-roots.ts";
 import { LocalFiles } from "../../../core/files/local-files.ts";
 
 async function tree(
   test: (
     tree: { root: string; home: string; work: string; files: LocalFiles },
   ) => Promise<void>,
+  allowHome = false,
 ) {
   const root = await Deno.makeTempDir();
   const home = join(root, "home"),
@@ -27,7 +29,23 @@ async function tree(
       root,
       home,
       work,
-      files: new LocalFiles({ home, deny: [deny] }),
+      files: new LocalFiles({
+        home,
+        deny: [deny],
+        roots: new ImageRoots({
+          home,
+          templates: allowHome ? ["{checkouts}", home] : [
+            "{checkouts}",
+            "~/Documents/{project}",
+            "~/TemporaryFiles/{project}",
+          ],
+          identity: {
+            topology: () => undefined,
+            availability: () => undefined,
+            topologies: () => [],
+          },
+        }),
+      }),
     });
   } finally {
     await Deno.remove(root, { recursive: true });
@@ -207,11 +225,44 @@ const testPng = (width = 320, height = 200, size = 33) => {
   return png;
 };
 
+Deno.test("preview and inline images share the allowed-folder boundary", () =>
+  tree(async ({ files, home, work }) => {
+    const project = join(home, "TemporaryFiles/work");
+    const outside = join(home, "Downloads");
+    await Deno.mkdir(project, { recursive: true });
+    await Deno.mkdir(join(outside, "folder.png"), { recursive: true });
+    await Deno.writeFile(join(project, "image.png"), testPng());
+    await Deno.symlink(join(outside, "folder.png"), join(work, "alias.png"));
+    const inside = "~/TemporaryFiles/work/image.png";
+    assertEquals((await files.preview(work, inside)).kind, "image");
+    assertEquals(
+      (await files.imageFacts(work, [inside], imageLimits))[0]
+        .status,
+      "image",
+    );
+    for (
+      const path of [
+        "~/Downloads/missing.png",
+        "alias.png",
+        "~/TemporaryFiles/work/../../Downloads/missing.png",
+      ]
+    ) {
+      assertEquals(
+        (await files.imageFacts(work, [path], imageLimits))[0],
+        { path, status: "unavailable", reason: "outside" },
+      );
+      assertEquals(await files.preview(work, path), {
+        kind: "unavailable",
+        reason: "outside",
+      }, path);
+    }
+  }));
+
 Deno.test("inline image roots guard both lexical and canonical containment", () =>
   tree(async ({ files, root, home, work }) => {
-    const roots = [work, join(home, "TemporaryFiles/p")];
-    await Deno.mkdir(roots[1], { recursive: true });
-    await Deno.writeFile(join(roots[1], "image.png"), testPng());
+    const project = join(home, "TemporaryFiles/work");
+    await Deno.mkdir(project, { recursive: true });
+    await Deno.writeFile(join(project, "image.png"), testPng());
     await Deno.writeFile(join(work, "image.png"), testPng());
     await Deno.writeFile(join(root, "outside.png"), testPng());
     await Deno.symlink(join(root, "outside.png"), join(work, "outbound.png"));
@@ -224,19 +275,23 @@ Deno.test("inline image roots guard both lexical and canonical containment", () 
     };
     try {
       assertEquals(
-        await files.imageFacts(roots, work, ["../inbound.png"], imageLimits),
+        await files.imageFacts(work, ["../inbound.png"], imageLimits),
         [{ path: "../inbound.png", status: "unavailable", reason: "outside" }],
       );
+      assertEquals(await files.preview(work, "../inbound.png"), {
+        kind: "unavailable",
+        reason: "outside",
+      });
       assertEquals(touched, []);
     } finally {
       Deno.realPath = realPath;
     }
     assertEquals(
-      (await files.imageFacts(roots, work, ["outbound.png"], imageLimits))[0],
+      (await files.imageFacts(work, ["outbound.png"], imageLimits))[0],
       { path: "outbound.png", status: "unavailable", reason: "outside" },
     );
-    for (const path of ["image.png", "~/TemporaryFiles/p/image.png"]) {
-      const [fact] = await files.imageFacts(roots, work, [path], imageLimits);
+    for (const path of ["image.png", "~/TemporaryFiles/work/image.png"]) {
+      const [fact] = await files.imageFacts(work, [path], imageLimits);
       assert(fact.status === "image");
       assertEquals([fact.width, fact.height, fact.mime], [
         320,
@@ -268,10 +323,10 @@ Deno.test("inline image policy conceals credential paths and dotfiles even throu
     );
     paths.push("alias.png");
     assertEquals(
-      await files.imageFacts([home, work], work, paths, imageLimits),
+      await files.imageFacts(work, paths, imageLimits),
       paths.map((path) => ({ path, status: "unavailable", reason: "denied" })),
     );
-  }));
+  }, true));
 
 Deno.test("inline images sniff MIME, refuse declarations and apply byte and pixel limits", () =>
   tree(async ({ files, work }) => {
@@ -301,7 +356,7 @@ Deno.test("inline images sniff MIME, refuse declarations and apply byte and pixe
       "above.png",
       "pixels.png",
     ];
-    const states = (await files.imageFacts([work], work, paths, imageLimits))
+    const states = (await files.imageFacts(work, paths, imageLimits))
       .map((f) =>
         f.status === "image"
           ? [f.mime, f.width, f.height, f.size]
@@ -345,7 +400,7 @@ Deno.test("inline-image read refuses a regular file whose identity changed befor
     };
     try {
       assertEquals(
-        await files.imageBytes([work], work, "target.png", imageLimits),
+        await files.imageBytes(work, "target.png", imageLimits),
         {
           fact: {
             path: "target.png",
@@ -453,7 +508,6 @@ Deno.test("inline dimensions use raster headers and oriented JPEG dimensions", (
       await Deno.writeFile(join(work, name), bytes);
     }
     const facts = await files.imageFacts(
-      [work],
       work,
       fixtures.map(([name]) => name),
       imageLimits,

@@ -255,6 +255,11 @@ export async function startApplication(
     const home = environment.HOME ?? "";
     const files = new LocalFiles({
       home,
+      roots: new ImageRoots({
+        templates: cfg.images.roots,
+        home,
+        identity: inbox.summaries.identity,
+      }),
       deny: [
         cfg.state.path,
         operatorConfigDirectory(environment),
@@ -264,11 +269,6 @@ export async function startApplication(
     });
     const inlineImages = new InlineImages({
       files,
-      roots: new ImageRoots({
-        templates: cfg.images.roots,
-        home,
-        identity: inbox.summaries.identity,
-      }),
       limits: cfg.images,
       concurrency: cfg.images.concurrency,
       directory: async (id, signal) =>

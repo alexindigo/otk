@@ -23,6 +23,7 @@ import {
   MAX_STAT_PATHS,
   OperationFailure,
 } from "@otk/protocol";
+import type { ImageRoots } from "./image-roots.ts";
 import {
   mightBeSvg,
   rasterSize,
@@ -229,10 +230,15 @@ function unavailable(): OperationFailure {
 
 export class LocalFiles {
   constructor(
-    private readonly options: { home: string; deny: readonly string[] },
+    private readonly options: {
+      home: string;
+      deny: readonly string[];
+      roots: Pick<ImageRoots, "roots">;
+    },
   ) {}
 
-  private async scope(directory: string): Promise<Scope> {
+  // Link discovery is not authority to serve a preview.
+  private async factScope(directory: string): Promise<Scope> {
     const roots = [this.options.home, directory].filter(isAbsolute);
     const deny = this.options.deny.filter(Boolean).map((path) => resolve(path));
     const [realRoots, realDeny] = await Promise.all([
@@ -272,7 +278,7 @@ export class LocalFiles {
     paths.forEach(validateLocalPath);
     signal?.throwIfAborted();
     // Share the root lookup without letting it sit outside the path deadline.
-    const scope = this.scope(directory);
+    const scope = this.factScope(directory);
     const facts: FileFact[] = [];
     for (const path of paths) {
       signal?.throwIfAborted();
@@ -336,8 +342,53 @@ export class LocalFiles {
     return { path, status: "absent" };
   }
 
-  async imageFacts(
+  /** The shared lexical and canonical boundary for serving local files. */
+  async #allowedTarget(
     roots: readonly string[],
+    directory: string,
+    path: string,
+    hideDotfiles: boolean,
+    signal?: AbortSignal,
+  ): Promise<
+    { target: Target; scope: Scope } | "outside" | "denied" | "missing"
+  > {
+    const lexical = lexicalPath(path, this.options.home, directory);
+    const lexicalRoot = lexical && longestRoot(lexical, roots);
+    // Don't probe an unapproved name, even to see whether it exists.
+    if (!lexical || !lexicalRoot) return "outside";
+    const lexicalDeny = this.options.deny.filter(Boolean).map((value) =>
+      resolve(value)
+    );
+    if (
+      (hideDotfiles && hidden(lexical, lexicalRoot)) ||
+      !permitted(lexical, { deny: lexicalDeny, roots })
+    ) return "denied";
+
+    signal?.throwIfAborted();
+    const real = await realPath(lexical);
+    if (!real) return "missing";
+    const canonicalRoots = (await Promise.all(roots.map(realPath))).filter((
+      value,
+    ) => value !== undefined);
+    const root = longestRoot(real, canonicalRoots);
+    if (!root) return "outside";
+    const deny = [
+      ...lexicalDeny,
+      ...(await Promise.all(lexicalDeny.map(realPath))).filter((value) =>
+        value !== undefined
+      ),
+    ];
+    const scope = { roots: canonicalRoots, deny };
+    if ((hideDotfiles && hidden(real, root)) || !permitted(real, scope)) {
+      return "denied";
+    }
+    signal?.throwIfAborted();
+    const info = await Deno.stat(real);
+    if (!info.isFile && !info.isDirectory) return "missing";
+    return { target: { lexical, real, info }, scope };
+  }
+
+  async imageFacts(
     directory: string,
     paths: readonly string[],
     limits: ImageLimits,
@@ -347,6 +398,7 @@ export class LocalFiles {
       throw new HarnessError("params", "Too many local file paths");
     }
     paths.forEach(validateLocalPath);
+    const roots = this.options.roots.roots(directory);
     const output: InlineImageFact[] = [];
     for (const path of paths) {
       signal?.throwIfAborted();
@@ -371,7 +423,6 @@ export class LocalFiles {
   }
 
   async imageBytes(
-    roots: readonly string[],
     directory: string,
     path: string,
     limits: ImageLimits,
@@ -383,7 +434,7 @@ export class LocalFiles {
   > {
     validateLocalPath(path);
     const result = await this.#imageRead(
-      roots,
+      this.options.roots.roots(directory),
       directory,
       path,
       limits,
@@ -419,45 +470,21 @@ export class LocalFiles {
       reason: InlineImageReason,
       extra?: Pick<ImageUnavailable, "size" | "limit" | "width" | "height">,
     ) => ({ fact: { path, status: "unavailable" as const, reason, ...extra } });
-    const resolved = lexicalPath(path, this.options.home, directory);
-    const lexicalRoot = resolved && longestRoot(resolved, roots);
-    if (!resolved || !lexicalRoot) return unavailable("outside");
-    const lexicalDeny = this.options.deny.filter(Boolean).map((value) =>
-      resolve(value)
-    );
-    if (
-      hidden(resolved, lexicalRoot) ||
-      !permitted(resolved, { deny: lexicalDeny, roots })
-    ) {
-      return unavailable("denied");
-    }
-
     try {
-      signal?.throwIfAborted();
-      const real = await realPath(resolved);
-      if (!real) return unavailable("missing");
-      const canonicalRoots = (await Promise.all(roots.map(realPath))).filter((
-        value,
-      ) => value !== undefined);
-      const root = longestRoot(real, canonicalRoots);
-      if (!root) return unavailable("outside");
-      const deny = [
-        ...lexicalDeny,
-        ...(await Promise.all(lexicalDeny.map(realPath))).filter((value) =>
-          value !== undefined
-        ),
-      ];
-      const scope = { roots: canonicalRoots, deny };
-      if (hidden(real, root) || !permitted(real, scope)) {
-        return unavailable("denied");
-      }
-      signal?.throwIfAborted();
-      const info = await Deno.stat(real);
+      const allowed = await this.#allowedTarget(
+        roots,
+        directory,
+        path,
+        true,
+        signal,
+      );
+      if (typeof allowed === "string") return unavailable(allowed);
+      const { target, scope } = allowed;
+      const { lexical: resolved, info } = target;
       if (!info.isFile) return unavailable("missing");
       const tooLarge = (size: number) =>
         unavailable("too-large", { size, limit: limits.maxbytes });
       if (info.size > limits.maxbytes) return tooLarge(info.size);
-      const target = { lexical: resolved, real, info };
       const cap = Math.min(limits.maxbytes + 1, info.size + 1);
       const header = Math.min(cap, HEADER_BYTES);
       let opened = await read(target, scope, complete ? cap : header, signal);
@@ -531,9 +558,18 @@ export class LocalFiles {
     validateLocalPath(path);
     signal?.throwIfAborted();
     try {
-      const scope = await this.scope(directory);
-      const target = await this.resolve(path, directory, scope, signal);
-      if (target) {
+      const allowed = await this.#allowedTarget(
+        this.options.roots.roots(directory),
+        directory,
+        path,
+        false,
+        signal,
+      );
+      if (allowed === "outside") {
+        return { kind: "unavailable", reason: allowed };
+      }
+      if (typeof allowed !== "string") {
+        const { target, scope } = allowed;
         const { lexical: resolved, real, info } = target;
         const name = basename(resolved);
         if (info.isDirectory) {

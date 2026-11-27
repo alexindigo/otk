@@ -10,10 +10,9 @@ Deno.test("inline image byte admission is FIFO, bounded and abortable", async ()
     directory: () => Promise.resolve("/fixture"),
     concurrency: 1,
     limits: { maxbytes: 1024, maxpixels: 1000 },
-    roots: { roots: () => ["/fixture"] },
     files: {
       imageFacts: () => Promise.resolve([]),
-      async imageBytes(_roots, _directory, path) {
+      async imageBytes(_directory, path) {
         issued.push(path);
         await new Promise<void>((resolve) => readers.set(path, resolve));
         return { fact: { path, reason: "missing", status: "unavailable" } };
