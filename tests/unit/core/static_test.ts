@@ -19,7 +19,6 @@ test("static owner resolves regular files and SPA paths by type with mount-relat
       ["/index.html", "./"],
       ["/assets", "./"],
       ["/assets/", "../"],
-      ["/assets/missing.js", "../"],
       ["/nested/route", "../"],
       ["/nested/route/", "../../"],
       ["/assets%2F", "../"],
@@ -57,6 +56,48 @@ test("static owner resolves regular files and SPA paths by type with mount-relat
     assertEquals(response.status, 404, path);
     await response.text();
   }
+});
+
+test("unmatched asset requests never receive the SPA document", async () => {
+  const root = await tempDir("static-miss-");
+  await Deno.writeTextFile(join(root, "index.html"), "<head></head><p>SPA</p>");
+  const app = { staticRoot: root };
+  for (
+    const [path, dest] of [
+      ["/home/fixture/x/a.PNG", null],
+      ["/assets/missing.js", "document"],
+      ["/sessions/abc", "image"],
+      ["/sessions/abc", "style"],
+    ] as const
+  ) {
+    const response = await Reflect.apply(staticResponse, undefined, [
+      path,
+      app,
+      { dest },
+    ]) as Response;
+    assertEquals(response.status, 404, path);
+    assertEquals(
+      response.headers.get("content-type"),
+      "text/plain; charset=utf-8",
+    );
+    assertEquals(response.headers.get("x-content-type-options"), "nosniff");
+    assertEquals(response.headers.get("cache-control"), "no-store");
+    assertEquals(await response.text(), "Not found");
+  }
+  const navigation = await Reflect.apply(staticResponse, undefined, [
+    "/sessions/abc",
+    app,
+    { dest: "document" },
+  ]) as Response;
+  assertEquals(navigation.status, 200);
+  assertEquals(
+    navigation.headers.get("content-type"),
+    "text/html; charset=utf-8",
+  );
+  await navigation.text();
+  const api = await staticResponse("/api/x", app);
+  assertEquals(api.status, 404);
+  assertEquals(await api.json(), { code: "not_found" });
 });
 
 test("static owner uses bundled fallback when the configured index is absent or not a file", async () => {

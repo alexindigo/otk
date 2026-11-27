@@ -4,6 +4,7 @@ import {
   extname,
   fromFileUrl,
   isAbsolute,
+  relative,
   resolve,
 } from "@std/path/posix";
 import { encodeBase64 } from "@std/encoding/base64";
@@ -14,12 +15,20 @@ import { HarnessError } from "@otk/harness";
 import {
   type FileFact,
   type FilePreview,
+  type InlineImageFact,
+  type InlineImageReason,
   MAX_PATH_CHARS,
   MAX_PREVIEW_IMAGE_BYTES,
   MAX_PREVIEW_TEXT_BYTES,
   MAX_STAT_PATHS,
   OperationFailure,
 } from "@otk/protocol";
+import {
+  mightBeSvg,
+  rasterSize,
+  rasterType,
+  svgSize,
+} from "./image-headers.ts";
 
 const CONTROL = /\p{Cc}/u;
 // Existence is not permission to disclose. Check both aliases and targets.
@@ -28,8 +37,12 @@ const CREDENTIALS =
 const IMAGE_EXTENSION = /^\.(?:png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i;
 const SNIFF_BYTES = 1024;
 const STAT_MS = 1000;
+const HEADER_BYTES = 256 * 1024;
+export type ImageLimits = { maxbytes: number; maxpixels: number };
+type ImageGood = Extract<InlineImageFact, { status: "image" }>;
+type ImageUnavailable = Extract<InlineImageFact, { status: "unavailable" }>;
 
-function validate(path: string) {
+export function validateLocalPath(path: string) {
   if (!path || path.length > MAX_PATH_CHARS || CONTROL.test(path)) {
     throw new HarnessError("params", "Invalid local file path");
   }
@@ -59,6 +72,16 @@ function lexicalPath(path: string, home: string, directory: string) {
 
 const inside = (path: string, root: string) =>
   path === root || path.startsWith(root === "/" ? root : root + "/");
+const longestRoot = (path: string, roots: readonly string[]) =>
+  roots.reduce<string | undefined>(
+    (longest, root) =>
+      inside(path, root) && root.length > (longest?.length ?? 0)
+        ? root
+        : longest,
+    undefined,
+  );
+const hidden = (path: string, root: string) =>
+  relative(root, path).split("/").some((segment) => segment.startsWith("."));
 const realPath = (path: string) => Deno.realPath(path).catch(() => undefined);
 type Scope = { roots: readonly string[]; deny: readonly string[] };
 type Target = { lexical: string; real: string; info: Deno.FileInfo };
@@ -68,6 +91,33 @@ const permitted = (path: string, scope: Scope) =>
 const contained = (path: string, scope: Scope) =>
   permitted(path, scope) &&
   scope.roots.some((root) => inside(path, root));
+
+async function withinFactDeadline<T>(
+  path: string,
+  signal: AbortSignal | undefined,
+  readFact: (active: AbortSignal) => Promise<T>,
+): Promise<T | { path: string; status: "unknown" }> {
+  const deadline = new AbortController();
+  const active = signal
+    ? AbortSignal.any([signal, deadline.signal])
+    : deadline.signal;
+  active.throwIfAborted();
+  const timeout = new Promise<{ path: string; status: "unknown" }>(
+    (resolve, reject) => {
+      active.addEventListener("abort", () => {
+        if (signal?.aborted) reject(signal.reason);
+        else resolve({ path, status: "unknown" });
+      }, { once: true });
+    },
+  );
+  const timer = setTimeout(() => deadline.abort(), STAT_MS);
+  try {
+    return await Promise.race([readFact(active), timeout]);
+  } finally {
+    clearTimeout(timer);
+    deadline.abort();
+  }
+}
 
 /** Approve the opened object before reading bytes, not just the requested name. */
 async function read(
@@ -110,6 +160,7 @@ async function read(
     return {
       bytes: await boundedBytes(handle, limit, signal, once),
       size: info.size,
+      witness: `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}`,
     };
   } finally {
     await handle.close();
@@ -218,37 +269,20 @@ export class LocalFiles {
     if (paths.length > MAX_STAT_PATHS) {
       throw new HarnessError("params", "Too many local file paths");
     }
-    paths.forEach(validate);
+    paths.forEach(validateLocalPath);
     signal?.throwIfAborted();
     // Share the root lookup without letting it sit outside the path deadline.
     const scope = this.scope(directory);
     const facts: FileFact[] = [];
     for (const path of paths) {
       signal?.throwIfAborted();
-      const deadline = new AbortController();
-      const active = signal
-        ? AbortSignal.any([signal, deadline.signal])
-        : deadline.signal;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const timeout = new Promise<FileFact>((done, reject) => {
-        const aborted = () =>
-          signal?.aborted
-            ? reject(signal.reason)
-            : done({ path, status: "unknown" });
-        active.addEventListener("abort", aborted, { once: true });
-        timer = setTimeout(() => deadline.abort(), STAT_MS);
-      });
-      try {
-        facts.push(
-          await Promise.race([
-            this.fact(directory, path, scope, active),
-            timeout,
-          ]),
-        );
-      } finally {
-        clearTimeout(timer);
-        deadline.abort();
-      }
+      facts.push(
+        await withinFactDeadline(
+          path,
+          signal,
+          (active) => this.fact(directory, path, scope, active),
+        ),
+      );
     }
     return facts;
   }
@@ -302,12 +336,199 @@ export class LocalFiles {
     return { path, status: "absent" };
   }
 
+  async imageFacts(
+    roots: readonly string[],
+    directory: string,
+    paths: readonly string[],
+    limits: ImageLimits,
+    signal?: AbortSignal,
+  ): Promise<InlineImageFact[]> {
+    if (paths.length > MAX_STAT_PATHS) {
+      throw new HarnessError("params", "Too many local file paths");
+    }
+    paths.forEach(validateLocalPath);
+    const output: InlineImageFact[] = [];
+    for (const path of paths) {
+      signal?.throwIfAborted();
+      output.push(
+        await withinFactDeadline(
+          path,
+          signal,
+          async (active) =>
+            (await this.#imageRead(
+              roots,
+              directory,
+              path,
+              limits,
+              false,
+              active,
+            ))
+              .fact,
+        ),
+      );
+    }
+    return output;
+  }
+
+  async imageBytes(
+    roots: readonly string[],
+    directory: string,
+    path: string,
+    limits: ImageLimits,
+    signal?: AbortSignal,
+  ): Promise<
+    { fact: ImageGood; bytes: Uint8Array<ArrayBuffer>; etag: string } | {
+      fact: ImageUnavailable;
+    }
+  > {
+    validateLocalPath(path);
+    const result = await this.#imageRead(
+      roots,
+      directory,
+      path,
+      limits,
+      true,
+      signal,
+    );
+    if (!("bytes" in result)) return result;
+    const hash = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(result.witness),
+    );
+    const value = Array.from(
+      new Uint8Array(hash, 0, 16),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+    return { fact: result.fact, bytes: result.bytes, etag: `"${value}"` };
+  }
+
+  async #imageRead(
+    roots: readonly string[],
+    directory: string,
+    path: string,
+    limits: ImageLimits,
+    complete: boolean,
+    signal?: AbortSignal,
+  ): Promise<
+    { fact: ImageGood; bytes: Uint8Array<ArrayBuffer>; witness: string } | {
+      fact: ImageUnavailable;
+    }
+  > {
+    // Existence is disclosed only inside allowed roots.
+    const unavailable = (
+      reason: InlineImageReason,
+      extra?: Pick<ImageUnavailable, "size" | "limit" | "width" | "height">,
+    ) => ({ fact: { path, status: "unavailable" as const, reason, ...extra } });
+    const resolved = lexicalPath(path, this.options.home, directory);
+    const lexicalRoot = resolved && longestRoot(resolved, roots);
+    if (!resolved || !lexicalRoot) return unavailable("outside");
+    const lexicalDeny = this.options.deny.filter(Boolean).map((value) =>
+      resolve(value)
+    );
+    if (
+      hidden(resolved, lexicalRoot) ||
+      !permitted(resolved, { deny: lexicalDeny, roots })
+    ) {
+      return unavailable("denied");
+    }
+
+    try {
+      signal?.throwIfAborted();
+      const real = await realPath(resolved);
+      if (!real) return unavailable("missing");
+      const canonicalRoots = (await Promise.all(roots.map(realPath))).filter((
+        value,
+      ) => value !== undefined);
+      const root = longestRoot(real, canonicalRoots);
+      if (!root) return unavailable("outside");
+      const deny = [
+        ...lexicalDeny,
+        ...(await Promise.all(lexicalDeny.map(realPath))).filter((value) =>
+          value !== undefined
+        ),
+      ];
+      const scope = { roots: canonicalRoots, deny };
+      if (hidden(real, root) || !permitted(real, scope)) {
+        return unavailable("denied");
+      }
+      signal?.throwIfAborted();
+      const info = await Deno.stat(real);
+      if (!info.isFile) return unavailable("missing");
+      const tooLarge = (size: number) =>
+        unavailable("too-large", { size, limit: limits.maxbytes });
+      if (info.size > limits.maxbytes) return tooLarge(info.size);
+      const target = { lexical: resolved, real, info };
+      const cap = Math.min(limits.maxbytes + 1, info.size + 1);
+      const header = Math.min(cap, HEADER_BYTES);
+      let opened = await read(target, scope, complete ? cap : header, signal);
+      if (!opened) return unavailable("missing");
+      if (
+        opened.size > limits.maxbytes || opened.bytes.length > limits.maxbytes
+      ) return tooLarge(Math.max(opened.bytes.length, opened.size));
+      if (opened.size !== info.size) return unavailable("missing");
+      let type = rasterType(opened.bytes);
+      let size: [number, number] | undefined;
+      if (type) {
+        size = rasterSize(opened.bytes.subarray(0, HEADER_BYTES), type);
+      } else {
+        if (
+          opened.bytes.length < opened.size && !complete &&
+          mightBeSvg(asText(opened.bytes, true) ?? "not svg")
+        ) {
+          opened = await read(target, scope, cap, signal);
+          if (!opened) return unavailable("missing");
+          if (
+            opened.size > limits.maxbytes ||
+            opened.bytes.length > limits.maxbytes
+          ) return tooLarge(Math.max(opened.bytes.length, opened.size));
+        }
+        if (opened.bytes.length !== opened.size) {
+          return unavailable("not-image");
+        }
+        size = svgSize(asText(opened.bytes) ?? "");
+        if (size) type = "image/svg+xml";
+      }
+      if (
+        !type || !size ||
+        size.some((value) => !Number.isFinite(value) || value <= 0)
+      ) return unavailable("not-image");
+      const [width, height] = size;
+      if (width * height > limits.maxpixels) {
+        return unavailable("too-many-pixels", {
+          width,
+          height,
+          limit: limits.maxpixels,
+        });
+      }
+      if (complete && opened.bytes.length !== opened.size) {
+        return unavailable("missing");
+      }
+      return {
+        fact: {
+          path,
+          status: "image",
+          resolved,
+          name: basename(resolved),
+          mime: type,
+          width,
+          height,
+          size: opened.size,
+        },
+        bytes: opened.bytes,
+        witness: opened.witness,
+      };
+    } catch {
+      signal?.throwIfAborted();
+      return unavailable("missing");
+    }
+  }
+
   async preview(
     directory: string,
     path: string,
     signal?: AbortSignal,
   ): Promise<FilePreview> {
-    validate(path);
+    validateLocalPath(path);
     signal?.throwIfAborted();
     try {
       const scope = await this.scope(directory);

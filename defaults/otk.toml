@@ -52,6 +52,15 @@ concurrency = 4 # OTK_ATTACHMENTS_CONCURRENCY — aggregate origin/path preparat
 maxrefs = 64 # OTK_ATTACHMENTS_MAXREFS — maximum attachment references per send, positive count
 maxbytes = 33554432 # OTK_ATTACHMENTS_MAXBYTES — combined decoded upload bytes per send
 
+[images]
+# OTK_IMAGES_ROOTS: comma-separated. {checkouts} expands to this session's checkout,
+# canonical root and known worktrees. {project} is the canonical folder's basename.
+# ~/ is the sidecar HOME. Absolute paths are supported; an empty list disables local images.
+roots = ["{checkouts}", "~/Documents/{project}", "~/TemporaryFiles/{project}"]
+maxbytes = 10485760 # OTK_IMAGES_MAXBYTES: maximum size of one served image
+maxpixels = 40000000 # OTK_IMAGES_MAXPIXELS: maximum width times height
+concurrency = 4 # OTK_IMAGES_CONCURRENCY: simultaneous image byte reads
+
 [index]
 days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older sessions remain indexed
 

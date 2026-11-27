@@ -2,7 +2,10 @@
 import { HttpError, type Middleware } from "@pathfinder/pathfinder";
 import type { ServiceConfig } from "../config/schema.ts";
 import type {} from "../http/app.ts";
-export function allowedOrigin(req: Request, cfg: ServiceConfig): boolean {
+export function allowedOrigin(
+  req: Request,
+  cfg: Pick<ServiceConfig, "server">,
+): boolean {
   const origin = req.headers.get("origin");
   return origin !== null && origin !== "null" &&
     (origin === new URL(req.url).origin || cfg.server.origins.includes(origin));

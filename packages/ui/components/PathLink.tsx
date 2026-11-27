@@ -36,6 +36,7 @@ export const PathContext = createContext<
 >(null);
 export interface FilePathPorts {
   facts(id: string): FileFacts;
+  api?(id: string): URL;
   entry?: ServerResources["entry"];
   retainSessionReference?: ServerResources["retainSessionReference"];
   entities?(id: string): EntityStateStore;

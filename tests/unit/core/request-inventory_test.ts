@@ -39,6 +39,7 @@ import {
 } from "../../../core/mod.ts";
 import { InboxFeature } from "../../../core/features/inbox.ts";
 import { NavigationDefault } from "../../../core/features/navigation-default.ts";
+import { InlineImages } from "../../../core/files/inline-images.ts";
 import { test } from "../../support/resources.ts";
 import { registerCatalogs } from "../../../core/features/catalogs.ts";
 import { createCatalogCodecs } from "@otk/protocol";
@@ -329,9 +330,19 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     signal: new AbortController().signal,
   });
   registerTerminals(rpc, terminals);
+  const localFiles = new Core.LocalFiles({ home: terminalRoot, deny: [] });
+  const images = cfg().images;
   Core.registerLocalFiles(
     rpc,
-    new Core.LocalFiles({ home: terminalRoot, deny: [] }),
+    localFiles,
+    new InlineImages({
+      files: localFiles,
+      roots: { roots: () => [terminalRoot] },
+      limits: images,
+      concurrency: images.concurrency,
+      directory: async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    }),
   );
   const rows = [
     "tasks.create",
@@ -415,6 +426,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "terminal.close",
     "file.stat",
     "file.preview",
+    "file.images",
   ];
   try {
     assertEquals(rows.length, new Set(rows).size);
@@ -439,7 +451,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 34,
+      read: 35,
       native: 24,
       local: 13,
       "prepared-local": 8,

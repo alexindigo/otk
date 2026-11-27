@@ -56,6 +56,12 @@ export const SERVICE_SCHEMA: Schema = {
   index: { days: "int" },
   catalogs: { concurrency: "int", statconcurrency: "int", pending: "int" },
   attachments: { concurrency: "int", maxrefs: "int", maxbytes: "int" },
+  images: {
+    roots: "list",
+    maxbytes: "int",
+    maxpixels: "int",
+    concurrency: "int",
+  },
   messages: {
     bridgepages: "int",
     prefetchms: "int",
@@ -120,6 +126,12 @@ export interface ServiceConfig {
   index: { days: number };
   catalogs: { concurrency: number; statconcurrency: number; pending: number };
   attachments: AttachmentPolicy;
+  images: {
+    roots: string[];
+    maxbytes: number;
+    maxpixels: number;
+    concurrency: number;
+  };
   digest: DigestPolicy;
   messages: MessagePolicy;
 }
