@@ -15,6 +15,127 @@ const turns = async () => {
   for (let n = 0; n < 20; n++) await Promise.resolve();
 };
 
+Deno.test("one-shot file lookups do not retain project observations behind an unrelated subscription", async () => {
+  let watches = 0, reads = 0;
+  const owner = new DirectoryCatalogs({
+    read<K extends keyof ProviderReadKinds>(): Promise<
+      ProviderReadKinds[K]["result"]
+    > {
+      reads++;
+      return Promise.resolve(
+        { physical: "/p", items: [] } as ProviderReadKinds[K]["result"],
+      );
+    },
+    release() {},
+  }, {
+    pending: 64,
+    watch() {
+      watches++;
+      const closed = Promise.withResolvers<void>();
+      return {
+        close: () => closed.resolve(),
+        [Symbol.dispose]: () => closed.resolve(),
+        [Symbol.asyncIterator]() {
+          return {
+            next: () =>
+              closed.promise.then(() => ({
+                done: true as const,
+                value: undefined,
+              })),
+          };
+        },
+      } as Deno.FsWatcher;
+    },
+  });
+  const passive = owner.acquire("/p", true);
+  try {
+    await owner.get("/p", "files");
+    await owner.get("/p", "files");
+    assertEquals({ watches, reads, directories: owner.size }, {
+      watches: 0,
+      reads: 2,
+      directories: 1,
+    });
+    assertEquals(passive.snapshot().values.files?.value, undefined);
+  } finally {
+    passive.release();
+    await owner.stop();
+  }
+});
+
+Deno.test("catalog observation shares a hard 32-watch budget and rescans when it cannot watch", async () => {
+  let active = 0, peak = 0, renamed = false;
+  const make = () =>
+    new DirectoryCatalogs({
+      read<K extends keyof ProviderReadKinds>(
+        _kind: K,
+        input: ProviderReadKinds[K]["input"],
+      ): Promise<ProviderReadKinds[K]["result"]> {
+        const { directory, path } =
+          input as ProviderReadKinds["catalog.files"]["input"];
+        const entries = path
+          ? [renamed ? "new.ts" : "old.ts"]
+          : Array.from({ length: 18 }, (_, i) => `src-${i}`);
+        return Promise.resolve(
+          {
+            physical: `${directory}/${path}`,
+            items: entries.map((name) => {
+              const local = path ? `${path}/${name}` : name;
+              return {
+                path: local,
+                canonicalPath: `${directory}/${local}`,
+                directory: !path,
+              };
+            }),
+          } as ProviderReadKinds[K]["result"],
+        );
+      },
+      release() {},
+    }, {
+      pending: 64,
+      watch() {
+        peak = Math.max(peak, ++active);
+        const closed = Promise.withResolvers<void>();
+        const close = () => {
+          active--;
+          closed.resolve();
+        };
+        return {
+          close,
+          [Symbol.dispose]: close,
+          [Symbol.asyncIterator]() {
+            return {
+              next: () =>
+                closed.promise.then(() => ({
+                  done: true as const,
+                  value: undefined,
+                })),
+            };
+          },
+        } as Deno.FsWatcher;
+      },
+    });
+  const a = make(), b = make();
+  const first = a.acquire("/a"), overflow = b.acquire("/b");
+  try {
+    await first.get("files");
+    await overflow.get("files");
+    assertEquals({ peak, active }, { peak: 32, active: 19 });
+    renamed = true;
+    assertEquals(
+      (await overflow.get("files")).some((item) =>
+        item.path === "src-0/new.ts"
+      ),
+      true,
+    );
+    overflow.release();
+    first.release();
+    assertEquals(active, 0);
+  } finally {
+    await Promise.all([a.stop(), b.stop()]);
+  }
+});
+
 for (const synchronous of [false, true]) {
   Deno.test(`catalog lifetime retries an unpublished demand failure (synchronous: ${synchronous})`, async () => {
     let calls = 0;

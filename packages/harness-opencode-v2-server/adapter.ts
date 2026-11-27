@@ -308,8 +308,8 @@ export class OpencodeV2ServerAdapter implements Harness {
         models: this.catalogs.models,
         files: this.catalogs.files,
         catalogs: {
-          watch: (directory, listener, signal) =>
-            this.catalogs!.watch(directory, listener, signal),
+          watch: (directory, listener, signal, files) =>
+            this.catalogs!.watch(directory, listener, signal, files),
           demand: (directory, demand, signal) =>
             this.catalogs!.demand(directory, demand, signal),
           refresh: (directory, signal, kinds) =>
