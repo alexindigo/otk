@@ -35,6 +35,7 @@ export function unknownPartPresentation(part: Part): PartPresentation {
       : {}),
     run: activity && {
       lane: activity.category === "delegation" ? "delegation" : undefined,
+      agent: activity.entity?.label,
       label: activity.title,
       merge: activity.summary && {
         key: `activity:${activity.summary.kind}`,

@@ -9,13 +9,12 @@ import {
   messageTimeValue,
   replyErrorFeedback,
   runnableText,
+  workFailureFeedback,
 } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { createMemo, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
-import WorkLog from "./WorkLog.tsx";
-import RecordKinds from "./RecordKinds.tsx";
-import { TreeNode } from "./Tree.tsx";
+import WorkStrip from "./WorkStrip.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 import TimeValue from "./TimeValue.tsx";
@@ -29,6 +28,7 @@ import {
   createMessageLayout,
   messageLayoutRole,
   type ReplyStart as ReplyStartData,
+  type WorkRuns,
 } from "./work-log.ts";
 import MessageFooter, { type FooterCompletion } from "./MessageFooter.tsx";
 import { contextTarget } from "./context-target.ts";
@@ -47,7 +47,6 @@ import {
 } from "../features/transcript-context.tsx";
 export interface MessageControl {
   reveal(): void;
-  revealWork(): Promise<void>;
   revealFooter(): Promise<void>;
 }
 function ReplyStart(props: {
@@ -112,6 +111,12 @@ export default function Message(
     copyIncomplete?: boolean;
     /** The transcript's one in-flow progress for an active native record. */
     activeRecord?: boolean;
+    work?: {
+      runs: WorkRuns;
+      shown: boolean;
+      action(run?: string): import("@otk/client").ActionControl;
+      onFeedback: NonNullable<Parameters<typeof WorkStrip>[0]["onFeedback"]>;
+    };
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
@@ -183,11 +188,7 @@ export default function Message(
     await footerControl?.reveal("footer", { align: "nearest", intent: "user" });
   };
   let usageControl: { open(): void } | undefined;
-  const replySources = createMemo(() =>
-    frames().flatMap((frame) =>
-      frame.groups.flatMap((group) => group.replyStart ?? [])
-    )
-  );
+  const replySources = () => framing().replyAgents;
   const replySource = (source: () => ReplyStartData) => (
     <ReplyStart
       source={{
@@ -198,8 +199,6 @@ export default function Message(
       sessionID={props.message.sessionID}
     />
   );
-  const workGroup = () => frames().at(-1)?.groups.at(-1)?.work;
-  const segmentWindows = new Map<string, VirtualListControl>();
   contentOwner(identity, {
     get usage() {
       return props.openUsage
@@ -222,15 +221,6 @@ export default function Message(
         (prompt() && bubble ? bubble : article).focus({ preventScroll: true });
       },
       revealFooter,
-      async revealWork() {
-        const frame = frames().at(-1), group = frame?.groups.at(-1);
-        if (frame && group?.work) {
-          await segmentWindows.get(frame.id)?.reveal(group.id, {
-            align: "nearest",
-            intent: "user",
-          });
-        }
-      },
     })
   );
   const target = () => ({
@@ -268,8 +258,10 @@ export default function Message(
   const error = () =>
     replyErrorFeedback(
       props.message,
-      frames().flatMap((frame) =>
-        frame.groups.flatMap((group) => group.parts).flatMap((part) => {
+      (props.segments ?? [{ parts: props.message.parts }]).flatMap((
+        { parts: source },
+      ) =>
+        source.flatMap((part) => {
           const failure = parts.presentation(part, props.prefs).failure;
           return failure ? [failure] : [];
         })
@@ -343,65 +335,20 @@ export default function Message(
                 key={(group) => group.id}
                 label="Reply segments"
                 role="segment"
-                control={(control) => {
-                  const id = frame().id;
-                  segmentWindows.set(id, control);
-                  return () => segmentWindows.delete(id);
-                }}
                 render={(group) => (
-                  <Show
-                    when={group().work}
-                    fallback={
-                      <>
-                        <PartsView
-                          parts={group().parts}
-                          prefs={props.prefs}
-                          directory={props.directory}
-                          permissions={props.permissions}
-                          onOpenChild={props.onOpenChild}
-                          user={props.message.role === "user"}
-                          streaming={streaming()}
-                          pending={props.pending}
-                          sourceID={sourceID}
-                          recordTime={recordTime}
-                          failureTime={failureTime}
-                        />
-                      </>
-                    }
-                  >
-                    <RecordKinds
-                      items={group().parts}
-                      counts={group().recordCounts}
-                      activity={(part) =>
-                        parts.presentation(part, props.prefs).activity}
-                      prefs={props.prefs}
-                      identity={group().id}
-                      render={(visible, meta) => (
-                        <WorkLog
-                          owner={props.ownerID ?? props.message.id}
-                          prefs={props.prefs}
-                          required={group().required}
-                          meta={meta}
-                          body={() => (
-                            <PartsView
-                              tree
-                              parts={visible()}
-                              prefs={props.prefs}
-                              directory={props.directory}
-                              permissions={props.permissions}
-                              onOpenChild={props.onOpenChild}
-                              user={props.message.role === "user"}
-                              streaming={streaming()}
-                              pending={props.pending}
-                              sourceID={sourceID}
-                              recordTime={recordTime}
-                              failureTime={failureTime}
-                            />
-                          )}
-                        />
-                      )}
-                    />
-                  </Show>
+                  <PartsView
+                    parts={group().parts}
+                    prefs={props.prefs}
+                    directory={props.directory}
+                    permissions={props.permissions}
+                    onOpenChild={props.onOpenChild}
+                    user={props.message.role === "user"}
+                    streaming={streaming()}
+                    pending={props.pending}
+                    sourceID={sourceID}
+                    recordTime={recordTime}
+                    failureTime={failureTime}
+                  />
                 )}
               />
               <Show when={progress() && frame().id === frames().at(-1)?.id}>
@@ -463,7 +410,7 @@ export default function Message(
         </Show>
         <Show when={assistant()}>
           {(message) => {
-            const metadata = () => (
+            return (
               <ContentWindow
                 items={["footer"]}
                 key={(key) => key}
@@ -473,75 +420,107 @@ export default function Message(
                   footerControl = control;
                 }}
                 render={() => (
-                  <MessageFooter
-                    whole
-                    completion={props.completion}
-                    leading={
-                      <Show when={replySources()[0]}>
-                        {replySource}
-                      </Show>
-                    }
-                    ref={sourceRegion(() => props.lastID ?? props.message.id)}
-                    at={outcomeClock()?.at}
-                    actions={!props.readOnly
-                      ? { kind: "reply", target: target() }
-                      : undefined}
-                    duration={
-                      <Show
-                        when={presentation().time?.timing ||
-                          presentation().time?.fallback}
-                      >
-                        <TimeValue
-                          class="otk-turn-time"
-                          value={messageTimeValue(presentation().time)}
-                        />
-                      </Show>
-                    }
-                  >
-                    <span>
-                      {message().model.provider}/{message().model.model}
-                    </span>
-                    <Show when={presentation().usage}>
-                      {(usage) => (
-                        <MetaItem
-                          rank={2}
-                          compactInPlace
-                          required={!!props.openUsage}
-                        >
-                          <TurnUsage
-                            summary={usage().summary}
-                            detail={() => props.usage}
-                            error={props.usageError}
-                            open={props.openUsage}
-                            control={(control) => {
-                              usageControl = control;
-                            }}
-                            showCost={props.prefs.showCost}
+                  <div class="otk-reply-end">
+                    <Show
+                      when={props.work && props.work.runs.segments.length > 0 &&
+                        props.work}
+                    >
+                      {(work) => (
+                        <>
+                          <WorkStrip
+                            runs={work().runs}
+                            shown={work().shown}
+                            action={(run) => work().action(run)}
+                            onFeedback={(outcome) => work().onFeedback(outcome)}
                           />
-                        </MetaItem>
+                          <For
+                            each={work().runs.failed}
+                            keyed={(run) => run.key}
+                          >
+                            {(run) => (
+                              <FeedbackStatus
+                                feedback={workFailureFeedback(run(), () => {
+                                  const port = work();
+                                  void port.action(run().key).run().then(
+                                    (outcome) => {
+                                      if (outcome.kind !== "shown") {
+                                        port.onFeedback(outcome);
+                                      }
+                                    },
+                                  );
+                                })}
+                                summaryOnly
+                              />
+                            )}
+                          </For>
+                        </>
                       )}
                     </Show>
-                    <For each={presentation().facts}>
-                      {(text) => <span>{text}</span>}
-                    </For>
-                    <Show when={message().interrupted}>
-                      <span>interrupted</span>
-                    </Show>
-                    {/* Fit turn-level metadata before the per-source details. */}
-                    <For
-                      each={replySources().slice(1)}
-                      keyed={(source) => source.messageID}
+                    <MessageFooter
+                      whole
+                      completion={props.completion}
+                      leading={
+                        <Show when={replySources()[0]}>
+                          {replySource}
+                        </Show>
+                      }
+                      ref={sourceRegion(() => props.lastID ?? props.message.id)}
+                      at={outcomeClock()?.at}
+                      actions={!props.readOnly
+                        ? { kind: "reply", target: target() }
+                        : undefined}
+                      duration={
+                        <Show
+                          when={presentation().time?.timing ||
+                            presentation().time?.fallback}
+                        >
+                          <TimeValue
+                            class="otk-turn-time"
+                            value={messageTimeValue(presentation().time)}
+                          />
+                        </Show>
+                      }
                     >
-                      {replySource}
-                    </For>
-                  </MessageFooter>
+                      <span>
+                        {message().model.provider}/{message().model.model}
+                      </span>
+                      <Show when={presentation().usage}>
+                        {(usage) => (
+                          <MetaItem
+                            rank={2}
+                            compactInPlace
+                            required={!!props.openUsage}
+                          >
+                            <TurnUsage
+                              summary={usage().summary}
+                              detail={() => props.usage}
+                              error={props.usageError}
+                              open={props.openUsage}
+                              control={(control) => {
+                                usageControl = control;
+                              }}
+                              showCost={props.prefs.showCost}
+                            />
+                          </MetaItem>
+                        )}
+                      </Show>
+                      <For each={presentation().facts}>
+                        {(text) => <span>{text}</span>}
+                      </For>
+                      <Show when={message().interrupted}>
+                        <span>interrupted</span>
+                      </Show>
+                      {/* Fit turn-level metadata before the other agent facts. */}
+                      <For
+                        each={replySources().slice(1)}
+                        keyed={(source) => source.agent}
+                      >
+                        {replySource}
+                      </For>
+                    </MessageFooter>
+                  </div>
                 )}
               />
-            );
-            return (
-              <Show when={workGroup()} fallback={metadata()}>
-                <TreeNode alignLabel header={metadata} />
-              </Show>
             );
           }}
         </Show>

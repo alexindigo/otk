@@ -12,13 +12,12 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
   type CodeBlockSource,
   createTranscriptInteraction,
-  type DisclosureContextInput,
   type DisclosureIdentity,
   type NativeSourceOwner,
   recordKindKey,
   type TranscriptInteraction,
 } from "@otk/client";
-import type { DisclosureCategory, Preferences } from "@otk/protocol";
+import type { DisclosureCategory } from "@otk/protocol";
 import { copyText } from "../clipboard.ts";
 import {
   DisclosureFocusHome,
@@ -159,17 +158,6 @@ export function transcriptDisclosureIdentity() {
       interaction.placement,
     ) ?? { scope: "standalone", id };
   };
-}
-
-/** Work membership may change without changing the reader's disclosure intent. */
-export function retainedWorkDisclosure(
-  scope: () => string,
-  prefs: () => Partial<Preferences>,
-  required: () => boolean,
-) {
-  const identify = transcriptDisclosureIdentity();
-  const input: DisclosureContextInput = { category: "work", prefs, required };
-  return { identity: () => identify({ owner: scope() }), input };
 }
 
 const key = (identity: ContentIdentity) =>

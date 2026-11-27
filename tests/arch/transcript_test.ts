@@ -9,7 +9,7 @@ function violations(path: string, text: string): string[] {
     if (
       node.type === "JSXElement" &&
       node.openingElement.name.type === "JSXIdentifier" &&
-      ["ToolFrame", "WorkLog"].includes(node.openingElement.name.name) &&
+      node.openingElement.name.name === "ToolFrame" &&
       !node.openingElement.attributes.some((attribute) =>
         attribute.type === "JSXAttribute" && attribute.name.name === "body" &&
         attribute.value?.type === "JSXExpressionContainer" &&
@@ -149,7 +149,7 @@ Deno.test("transcript window negatives reject eager folded renderers and duplica
   assertEquals(
     violations(
       "packages/ui/components/Message.tsx",
-      "const view = <WorkLog><Code /></WorkLog>; createWindow();",
+      "const view = <ToolFrame><Code /></ToolFrame>; createWindow();",
     ),
     ["eager folded body", "duplicate viewport math"],
   );

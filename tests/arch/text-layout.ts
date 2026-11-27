@@ -98,6 +98,10 @@ const widthPorts: Record<string, Record<string, string>> = {
     "--usage-metrics":
       "Only the number of reported columns is emitted; CSS sizes each track from its cells.",
   },
+  "WorkStrip.tsx": {
+    "--work-segments":
+      "The chart's unitless item count shares one bounded track; it never measures or sets a text width.",
+  },
   "surface/Popover.tsx": {
     width: "The shared Popover reifies a caller-supplied rect anchor.",
   },

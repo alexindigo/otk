@@ -16,12 +16,12 @@ Deno.test("shell transcripts share the owner but clear only their own session sc
   const disclosures = createDisclosures({});
   const first = createTranscriptInteraction(disclosures, "local/first");
   const next = createTranscriptInteraction(disclosures, "local/second");
-  first.workDisclosure("reply").set(true);
-  next.workDisclosure("reply").set(true);
+  first.disclosure("activity", "reply", first.generation("reply")).set(true);
+  next.disclosure("activity", "reply", next.generation("reply")).set(true);
   const sidebar = disclosures.bind("archive", { scope: "local", id: "repo" });
   void sidebar.set(true);
   assertEquals(
-    disclosures.bind("work", {
+    disclosures.bind("activity", {
       scope: "local/first",
       id: "reply",
       generation: first.generation("reply"),
@@ -29,8 +29,14 @@ Deno.test("shell transcripts share the owner but clear only their own session sc
     true,
   );
   first.clear();
-  assertEquals(first.workDisclosure("reply").value(), undefined);
-  assertEquals(next.workDisclosure("reply").value(), true);
+  assertEquals(
+    first.disclosure("activity", "reply", first.generation("reply")).value(),
+    undefined,
+  );
+  assertEquals(
+    next.disclosure("activity", "reply", next.generation("reply")).value(),
+    true,
+  );
   assertEquals(sidebar.open(), true);
 });
 
@@ -83,54 +89,100 @@ Deno.test("disclosure notifications target only changed keys and reveal ancestry
 
 Deno.test("work intent survives a reply remount and overrides the default", () => {
   const owner = createTranscriptInteraction();
-  owner.workDisclosure("reply").set(true);
-  const mounted = owner.workDisclosure("reply");
-  assertEquals(mounted.expanded("work"), true);
-  assertEquals(owner.workDisclosure("other-reply").expanded("work"), false);
-  assertEquals(owner.workDisclosure("reply").expanded("work"), true);
+  owner.disclosure("activity", "reply", owner.generation("reply")).set(true);
+  const mounted = owner.disclosure(
+    "activity",
+    "reply",
+    owner.generation("reply"),
+  );
+  assertEquals(mounted.expanded("system"), true);
+  assertEquals(
+    owner.disclosure("activity", "other-reply", owner.generation("other-reply"))
+      .expanded("system"),
+    false,
+  );
+  assertEquals(
+    owner.disclosure("activity", "reply", owner.generation("reply")).expanded(
+      "system",
+    ),
+    true,
+  );
   mounted.set(false);
   assertEquals(
-    owner.workDisclosure("reply").expanded("work", {
-      expandWork: true,
-    }),
+    owner.disclosure("activity", "reply", owner.generation("reply")).expanded(
+      "system",
+      {
+        expandSystem: true,
+      },
+    ),
     false,
   );
 });
 
 Deno.test("work intent belongs to the reply and is retired with it", () => {
   const owner = createTranscriptInteraction();
-  const early = owner.workDisclosure("reply");
+  const early = owner.disclosure(
+    "activity",
+    "reply",
+    owner.generation("reply"),
+  );
   early.set(true);
-  assertEquals(owner.workDisclosure("reply").expanded("work"), true);
+  assertEquals(
+    owner.disclosure("activity", "reply", owner.generation("reply")).expanded(
+      "system",
+    ),
+    true,
+  );
   owner.retireIdentity("reply");
   assertEquals(early.value(), undefined);
   early.set(true);
-  assertEquals(owner.workDisclosure("reply").expanded("work"), false);
+  assertEquals(
+    owner.disclosure("activity", "reply", owner.generation("reply")).expanded(
+      "system",
+    ),
+    false,
+  );
 });
 
 Deno.test("work intent survives zero members", () => {
   const owner = createTranscriptInteraction();
-  owner.workDisclosure("reply").set(true);
+  owner.disclosure("activity", "reply", owner.generation("reply")).set(true);
   // The first work record goes away; the reply identity is still current.
   owner.retireIdentity("first");
-  assertEquals(owner.workDisclosure("reply").expanded("work"), true);
-  const remounted = owner.workDisclosure("reply");
-  assertEquals(remounted.expanded("work"), true);
+  assertEquals(
+    owner.disclosure("activity", "reply", owner.generation("reply")).expanded(
+      "system",
+    ),
+    true,
+  );
+  const remounted = owner.disclosure(
+    "activity",
+    "reply",
+    owner.generation("reply"),
+  );
+  assertEquals(remounted.expanded("system"), true);
   remounted.set(false);
   assertEquals(
-    owner.workDisclosure("reply").expanded("work", {
-      expandWork: true,
-    }),
+    owner.disclosure("activity", "reply", owner.generation("reply")).expanded(
+      "system",
+      {
+        expandSystem: true,
+      },
+    ),
     false,
   );
 });
 
 Deno.test("clearing retires work handles even if the reply generation is reused", () => {
   const owner = createTranscriptInteraction();
-  const old = owner.workDisclosure("reply");
+  const old = owner.disclosure("activity", "reply", owner.generation("reply"));
   old.set(true);
   owner.clear();
-  const fresh = owner.workDisclosure("reply");
+  const fresh = owner.disclosure(
+    "activity",
+    "reply",
+    owner.generation("reply"),
+  );
   assertEquals(fresh.value(), undefined);
   old.set(true);
   assertEquals(fresh.value(), undefined);

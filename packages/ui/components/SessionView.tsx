@@ -48,6 +48,7 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
+import type { ShellWork } from "../state/shell.ts";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
@@ -121,6 +122,7 @@ export default function SessionView(props: {
   latestPrompt?: import("@otk/protocol").LatestPrompt;
   catalog?: ModelCatalog;
   usageOwner?: SessionUsageOwner;
+  work?: ShellWork;
   entry?: IndexEntry;
   openUsage?(turnID: string): () => void;
   usageError?(turnID: string): FailureValue | undefined;
@@ -516,6 +518,19 @@ export default function SessionView(props: {
       region.release?.();
     };
   };
+  const { commands } = commandPorts;
+  const workTarget = (turn: string) =>
+    props.sidecarId && props.info?.id
+      ? { sidecarId: props.sidecarId, sessionID: props.info.id, turn }
+      : undefined;
+  const workRuns = (turn: string) => {
+    const target = workTarget(turn);
+    return target && props.work?.model(target)?.runs(turn) || undefined;
+  };
+  const showWork = (turn: string, run?: string) => {
+    const target = workTarget(turn);
+    if (target) return commands.run("work.show", { ...target, run });
+  };
   const controls = new Map<string, MessageControl>();
   const reveal = ownedCommand(useCommandPorts(), {
     id: "transcript.reveal",
@@ -523,12 +538,19 @@ export default function SessionView(props: {
     category: "Transcript",
     arguments: {
       type: "object",
-      properties: { messageID: { type: "string" } },
+      properties: {
+        messageID: { type: "string" },
+        partID: { type: "string", optional: true },
+        replyOnly: { type: "boolean", optional: true },
+      },
     },
     enabled: (_ctx, target?: { messageID: string }) =>
       !props.branchHistory?.state.opened && !!target?.messageID &&
       (!!projection().messagesByID[target.messageID] || !!props.transcript),
-    run: async (_ctx, target: { messageID: string }) => {
+    run: async (
+      _ctx,
+      target: { messageID: string; partID?: string; replyOnly?: boolean },
+    ) => {
       setRevealError(undefined);
       await props.transcript?.ensure(target.messageID, revealLifetime.signal);
       const message = projection().messagesByID[target.messageID];
@@ -542,6 +564,19 @@ export default function SessionView(props: {
       const reply = props.transcript?.projection.entry(message.id) ??
         projection().repliesByID[replyKey(message)];
       const key = reply?.key ?? replyKey(message);
+      const runs = workRuns(key);
+      const run = target.partID
+        ? runs?.runOf(target.partID)
+        : message.parts.map((part) => runs?.runOf(part.id)).find(Boolean);
+      if (run && reply && !target.replyOnly) {
+        await window?.reveal(key, {
+          align: "nearest",
+          intent: "user",
+        });
+        await controls.get(reply.message.id)?.revealFooter();
+        await showWork(key, run);
+        return;
+      }
       const ancestors = recordGroups().parents[key] ?? [];
       const part = message.parts[0];
       const recordOwner = recordGroups().owners[key];
@@ -1013,6 +1048,47 @@ export default function SessionView(props: {
                                                     message().sessionID,
                                                   turnID: turnID(),
                                                 });
+                                                const work = () => {
+                                                  const runs = workRuns(key);
+                                                  const target = workTarget(
+                                                    key,
+                                                  );
+                                                  return runs && target
+                                                    ? {
+                                                      runs,
+                                                      shown: props.work?.shows(
+                                                        target,
+                                                        key,
+                                                      ) ?? false,
+                                                      action: (run?: string) =>
+                                                        commands.control(
+                                                          "work.show",
+                                                          { ...target, run },
+                                                          {
+                                                            target,
+                                                            shown: () =>
+                                                              props.work?.shows(
+                                                                target,
+                                                                key,
+                                                              ) ?? false,
+                                                            unshown:
+                                                              "The Work log did not open.",
+                                                            recovery:
+                                                              "Try opening the Work log again.",
+                                                          },
+                                                        ),
+                                                      onFeedback: (
+                                                        outcome: {
+                                                          feedback:
+                                                            import("@otk/client").Feedback;
+                                                        },
+                                                      ) =>
+                                                        setRevealError(
+                                                          outcome.feedback,
+                                                        ),
+                                                    }
+                                                    : undefined;
+                                                };
                                                 return (
                                                   <>
                                                     <Message
@@ -1025,6 +1101,7 @@ export default function SessionView(props: {
                                                       segments={reply()
                                                         .segments}
                                                       message={message()}
+                                                      work={work()}
                                                       send={reply().send}
                                                       sourceTime={(id) =>
                                                         projection()

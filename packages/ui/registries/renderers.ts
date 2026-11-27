@@ -17,6 +17,8 @@ export interface PartRowSlots {
 export interface WorkRunFacts {
   lane?: "thinking" | "delegation";
   label: string;
+  agent?: string;
+  failureReason?: string;
   merge?: {
     key: string;
     verb: string;

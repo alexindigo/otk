@@ -34,10 +34,6 @@ export interface TranscriptInteraction {
     prefs?: Partial<Preferences>,
   ): boolean;
   disclosure(kind: DisclosureKind, key: string, generation: string): Disclosure;
-  /** Work-log disclosure belongs to the reply's work-log identity;
-   * member records only populate the log. */
-  workDisclosure(scope: string): Disclosure;
-  subscribeWork(scope: string, listener: () => void): () => void;
   retire(key: string): void;
   subscribe(
     listener: () => void,
@@ -104,12 +100,6 @@ export function createTranscriptInteraction(
     reveal(ancestors) {
       disclosures.reveal("activity", ancestors.map((key) => identify(key)));
       disclosures.reveal("silent", ancestors.map((key) => identify(key)));
-    },
-    subscribeWork(key, listener) {
-      return disclosures.subscribe(listener, "work", identify(key));
-    },
-    workDisclosure(key) {
-      return disclosure("work", key, generation(key));
     },
     retire: (id) => disclosures.retire({ scope, id }),
     generation,

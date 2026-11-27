@@ -6,7 +6,7 @@ import { property } from "./syntax.ts";
 export function disclosureErrors(path: string, text: string): string[] {
   const source = new Source(text, path);
   const errors: string[] = [];
-  const leaf = /\/(?:WorkLog|Reasoning|ToolOutput|UnknownPart)\.tsx$/.test(
+  const leaf = /\/(?:Reasoning|ToolOutput|UnknownPart)\.tsx$/.test(
     path,
   );
   for (const node of source.all) {

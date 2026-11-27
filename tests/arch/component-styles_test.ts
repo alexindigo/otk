@@ -19,7 +19,7 @@ const boundaries = [
     "otk-popover-trigger",
     "otk-chrome-icon",
   ]],
-  ["components/Message.css", ["otk-text", "otk-work-fold", "otk-work-rule"]],
+  ["components/Message.css", ["otk-text", "otk-work-strip"]],
   ["components/DisplayMenu.css", ["otk-popover-trigger"]],
   ["components/TurnUsage.css", ["otk-popover-trigger"]],
   ["components/Reasoning.css", ["otk-chrome-icon"]],

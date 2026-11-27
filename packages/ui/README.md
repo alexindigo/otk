@@ -464,9 +464,11 @@ retaining positive measured numbers but never presenting a provisional zero as
 Worked for 0s. Only explicit unknown evidence uses the shared unknown label.
 Reply footers also show model-call count, charged turn tokens and
 backend-reported cost after working time. Footers and opened detail bind the
-adapter's whole-turn result. The footer alone presents reply working time;
-work-log headers always say Work log and show category counts, never a second
-duration or counting cue. Entity previews and usage tables pass the same client
+adapter's whole-turn result. The footer shows one agent fact per distinct
+agent. The Work strip above it shows action counts or the active run's elapsed
+time, not reply working time; it opens that reply's work in the right panel.
+The panel's turn header reads the same working-time presentation as the footer.
+Entity previews and usage tables pass the same client
 timing presentation through TimeValue unchanged; Time columns request the
 presenter's bare-value form rather than stripping the fact's wording. There is
 no loaded-page turn timing fallback; missing turn evidence stays counting until

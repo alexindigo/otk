@@ -17,7 +17,8 @@ import ProjectInbox from "../../components/ProjectInbox.tsx";
 import Settings from "../../components/Settings.tsx";
 import Message from "../../components/Message.tsx";
 import ActivityGroup from "../../components/ActivityGroup.tsx";
-import WorkLog from "../../components/WorkLog.tsx";
+import WorkStrip from "../../components/WorkStrip.tsx";
+import { workRuns } from "../../components/work-log.ts";
 import Reasoning from "../../components/Reasoning.tsx";
 import NativeSource from "../../components/parts/NativeSource.tsx";
 import Timeline from "../../components/Timeline.tsx";
@@ -221,9 +222,22 @@ export default function FailureLayout() {
           }}
         />
         <h3>Work and source</h3>
-        <WorkLog
-          owner="style-failure"
-          body={() => <p>Owned work content remains available.</p>}
+        <WorkStrip
+          runs={workRuns({
+            parts: [{ kind: "meta", id: "check" }],
+            terminal: true,
+            now: 2000,
+            presentation: () => ({
+              work: { start: 1000, end: 2000 },
+              run: { label: "Check output" },
+            }),
+          })}
+          shown={false}
+          action={() => ({
+            availability: () => ({ available: true }),
+            subscribe: () => () => {},
+            run: () => Promise.resolve({ kind: "shown" }),
+          })}
         />
         <Reasoning
           part={{

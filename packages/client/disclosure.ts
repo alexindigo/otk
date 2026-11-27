@@ -8,7 +8,6 @@ import {
 import { createState, type StateFactory } from "./state.ts";
 
 export type DisclosureKind =
-  | "work"
   | "activity"
   | "revert"
   | "silent"
@@ -36,7 +35,6 @@ export interface DisclosurePolicy {
 }
 
 export const DISCLOSURE_KINDS = {
-  work: { default: "category", lifetime: "tab", empty: "hide" },
   activity: { default: "category", lifetime: "tab", empty: "hide" },
   revert: { default: false, lifetime: "tab", empty: "hide" },
   silent: { default: "category", lifetime: "tab", empty: "hide" },
@@ -129,7 +127,7 @@ function defaultFor(
   if (policy !== "category") return policy;
   const defaults = { ...DEFAULT_PREFS, ...input?.prefs?.() };
   const categories: Record<DisclosureCategory, boolean> = {
-    work: defaults.expandWork,
+    work: false,
     toolOutput: defaults.expandToolOutput,
     reasoning: defaults.thinking === "show",
     fileChanges: !defaults.collapseFileChanges,

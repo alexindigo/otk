@@ -4,6 +4,7 @@ import type {
   AssistantMessage,
   Message,
   Part,
+  PublicFailure,
   TurnTiming,
 } from "@otk/protocol";
 import { TurnTimingAccumulator } from "@otk/protocol";
@@ -38,7 +39,10 @@ export interface WorkRun {
   thinkingIDs?: string[];
   live: boolean;
   failed: boolean;
+  failure?: PublicFailure;
+  failureReason?: string;
   child?: string;
+  agent?: string;
 }
 export interface WorkSegment {
   run: string;
@@ -47,6 +51,7 @@ export interface WorkSegment {
   live: boolean;
   weightMs: number;
   title: string;
+  agent?: string;
 }
 export interface WorkRuns {
   runs: WorkRun[];
@@ -55,6 +60,7 @@ export interface WorkRuns {
   failed: WorkRun[];
   live?: WorkRun;
   bookkeeping: Part[];
+  trailingThoughts: string[];
   summary: string;
   runOf(partID: string): string | undefined;
 }
@@ -107,7 +113,8 @@ export function createWorkModel(
   };
   return {
     runs,
-    turns: () => input.replyKeys().filter((key) => !!runs(key)?.runs.length),
+    turns: () =>
+      input.replyKeys().filter((key) => !!runs(key)?.segments.length),
   };
 }
 
@@ -116,6 +123,7 @@ interface WorkRecord {
   time: WorkTime;
   facts: WorkRunFacts;
   failed: boolean;
+  failure?: PublicFailure;
 }
 
 function deriveWorkRuns(
@@ -127,7 +135,12 @@ function deriveWorkRuns(
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
-    if (workLogBookkeeping(part)) {
+    if (
+      workLogBookkeeping(part) ||
+      (value.activity?.fold &&
+        foldRecords([part], () => value.activity, () => false).visible
+            .length === 0)
+    ) {
       bookkeeping.push(part);
       continue;
     }
@@ -137,6 +150,7 @@ function deriveWorkRuns(
       id: part.id,
       time: value.work,
       facts,
+      failure: value.failure,
       failed:
         !!(value.failure || value.required || value.activity?.tone === "error"),
     };
@@ -147,8 +161,9 @@ function deriveWorkRuns(
   const runs: WorkRun[] = [], strip: WorkRun[] = [], thinking: WorkRun[] = [];
   const runByPart = new Map<string, string>();
   let previousMerge: string | undefined, actions = 0, live: WorkRun | undefined;
-  for (const { id, time: { start, end }, facts, failed } of records) {
-    const { lane = "action", label, merge, child } = facts;
+  for (const { id, time: { start, end }, facts, failed, failure } of records) {
+    const { lane = "action", label, merge, child, agent, failureReason } =
+      facts;
     if (merge?.keep === "latest" && latest.get(merge.key)?.id !== id) continue;
     const active = !terminal && start !== undefined && end === undefined;
     if (lane === "thinking") {
@@ -161,7 +176,10 @@ function deriveWorkRuns(
         end,
         live: active,
         failed,
+        failure,
+        failureReason,
         child,
+        agent,
       };
       strip.push(run);
       thinking.push(run);
@@ -181,9 +199,12 @@ function deriveWorkRuns(
         ? undefined
         : Math.max(run.end, end);
       run.failed ||= failed;
+      run.failure ??= failure;
+      run.failureReason ??= failureReason;
       run.live ||= active;
       if (lane === "delegation") run.lane = lane;
       run.child ??= child;
+      run.agent ??= agent;
     } else {
       run = {
         key: id,
@@ -194,7 +215,10 @@ function deriveWorkRuns(
         end,
         live: active,
         failed,
+        failure,
+        failureReason,
         child,
+        agent,
       };
       if (thinking.length) {
         run.thinkingIDs = thinking.map((thought) => thought.key);
@@ -231,6 +255,7 @@ function deriveWorkRuns(
     failed,
     live,
     bookkeeping,
+    trailingThoughts: thinking.map((thought) => thought.key),
     summary: `Work log: ${count}${
       labels.length ? `. ${labels.join("; ")}` : ""
     }`,
@@ -247,8 +272,8 @@ function workSegment(
   target: string,
   now: () => number,
 ): WorkSegment {
-  const { lane, failed, live, label, start, end } = run;
-  const value = { run: target, lane, failed, live };
+  const { lane, failed, live, label, start, end, agent } = run;
+  const value = { run: target, lane, failed, live, agent };
   const title = (weight: number | undefined) =>
     `${label}, ${weight === undefined ? UNKNOWN_TIME : elapsed(weight).text}`;
   if (live) {
@@ -281,7 +306,7 @@ function compactSegments(segments: WorkSegment[]): WorkSegment[] {
     segments.length > WORK_STRIP_MAX_SEGMENTS && index + 1 < segments.length;
   ) {
     const [a, b] = [segments[index], segments[index + 1]];
-    if (eligible(a, b) && a.lane === b.lane) join(index);
+    if (eligible(a, b) && a.lane === b.lane && a.agent === b.agent) join(index);
     else index++;
   }
   while (segments.length > WORK_STRIP_MAX_SEGMENTS) {
@@ -349,24 +374,15 @@ export function partFrames(
   reply = false,
 ): PartFrame[] {
   const frames: PartFrame[] = [];
-  const work: Part[] = [];
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
-    if (reply && value.work) {
-      work.push(part);
-      continue;
-    }
+    if (reply && value.work) continue;
     const transcript = value.frame === "transcript",
       previous = frames.at(-1);
     if (!transcript && previous && !previous.transcript) {
       previous.parts.push(part);
     } else frames.push({ id: part.id, parts: [part], transcript });
-  }
-  if (work.length) {
-    const last = frames.at(-1);
-    if (last && !last.transcript) last.parts.push(...work);
-    else frames.push({ id: work[0].id, parts: work, transcript: false });
   }
   return frames;
 }
