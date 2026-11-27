@@ -48,7 +48,7 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
   ) {
     await expect(
       page.locator(
-        `.otk-project-sessions .otk-session-row[data-session=${id}] .otk-sidebar-lamp .otk-status-light`,
+        `.otk-project-sessions .otk-session-row[data-session=${id}] .otk-tree-node-slot .otk-status-light`,
       ),
     )
       .toHaveAttribute("data-state", status);

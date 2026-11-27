@@ -99,6 +99,29 @@ export function SectionHeader(props: {
       (props.count === undefined
         ? props.label
         : `${props.label}, ${props.count}`);
+  const sectionControl = (
+    toggleID: string,
+    className: string,
+    children: Element,
+  ) => (
+    <button
+      id={toggleID}
+      ref={native.ref}
+      {...native.attributes}
+      type="button"
+      class={[
+        "otk-section-header otk-tree-control",
+        props.headerClass,
+        className,
+      ]}
+      aria-label={description()}
+      title={description()}
+      aria-expanded={props.open ? "true" : "false"}
+      onClick={() => props.onOpen(!props.open)}
+    >
+      {children}
+    </button>
+  );
   return (
     <TreeNode
       compact={props.compact}
@@ -117,57 +140,59 @@ export function SectionHeader(props: {
       onOpen={props.onOpen}
       feedback={props.feedback}
       body={props.body}
+      node={props.sidebar ? () => props.leading?.() : undefined}
+      frame={props.sidebar
+        ? ({ class: surface, toggleID, children }) => (
+          <Show when={!props.compact || props.leading}>
+            {sectionControl(toggleID, surface, children)}
+          </Show>
+        )
+        : undefined}
       header={(_connected, toggleID) => (
-        <Show when={!props.compact || props.leading}>
-          <button
-            id={toggleID}
-            ref={native.ref}
-            {...native.attributes}
-            type="button"
-            class={["otk-section-header otk-tree-control", props.headerClass]}
-            aria-label={description()}
-            title={description()}
-            aria-expanded={props.open ? "true" : "false"}
-            onClick={() =>
-              props.onOpen(!props.open)}
-          >
-            <Show
-              when={props.sidebar}
-              fallback={
-                <>
-                  {props.leading?.()}
-                  <Show when={!props.compact}>
-                    <SectionHeaderMeta
-                      label={props.label}
-                      count={props.count}
-                      metaClass={props.metaClass}
-                    />
-                    <span class="otk-section-header-rule" aria-hidden="true" />
-                  </Show>
-                </>
-              }
-            >
-              <SidebarRow
-                compact={props.compact}
-                lamp={props.leading?.()}
-                label={
-                  <span class="otk-section-row-label">
-                    <SectionHeaderLabel label={props.label} />
-                    <span class="otk-section-header-rule" aria-hidden="true" />
-                  </span>
-                }
-                meta={
-                  <Show when={props.count !== undefined}>
-                    <MetaItem rank={1}>
-                      <ChromeMeta class={props.metaClass}>
-                        {props.count}
-                      </ChromeMeta>
-                    </MetaItem>
-                  </Show>
-                }
-              />
+        <Show
+          when={props.sidebar}
+          fallback={
+            <Show when={!props.compact || props.leading}>
+              {sectionControl(
+                toggleID,
+                "",
+                (
+                  <>
+                    {props.leading?.()}
+                    <Show when={!props.compact}>
+                      <SectionHeaderMeta
+                        label={props.label}
+                        count={props.count}
+                        metaClass={props.metaClass}
+                      />
+                      <span
+                        class="otk-section-header-rule"
+                        aria-hidden="true"
+                      />
+                    </Show>
+                  </>
+                ),
+              )}
             </Show>
-          </button>
+          }
+        >
+          <SidebarRow
+            label={
+              <span class="otk-section-row-label">
+                <SectionHeaderLabel label={props.label} />
+                <span class="otk-section-header-rule" aria-hidden="true" />
+              </span>
+            }
+            meta={
+              <Show when={props.count !== undefined}>
+                <MetaItem rank={1}>
+                  <ChromeMeta class={props.metaClass}>
+                    {props.count}
+                  </ChromeMeta>
+                </MetaItem>
+              </Show>
+            }
+          />
         </Show>
       )}
     />

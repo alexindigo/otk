@@ -63,10 +63,10 @@ export async function sidebarGeometry(page: Page, compact = false) {
       }
       return true;
     };
-    return Array.from(root.querySelectorAll(".otk-sidebar-row")).filter(visible)
-      .map((row) => {
-        const heading = row.closest(".otk-tree-heading") ??
-          row.closest(".otk-project-row")!;
+    return Array.from(root.querySelectorAll(".otk-tree-frame")).filter(visible)
+      .map((frame) => {
+        const row = frame.querySelector(".otk-sidebar-row")!;
+        const heading = frame.closest(".otk-tree-heading")!;
         const name = row.querySelector(
           ".otk-sidebar-title-text, .otk-section-row-label .otk-control-label",
         );
@@ -92,11 +92,11 @@ export async function sidebarGeometry(page: Page, compact = false) {
         const required = name?.closest(".otk-section-row-label")
           ? fullText
           : Math.min(sixCharacters, fullText);
-        const lamp = row.querySelector(
+        const lamp = frame.querySelector(
           ".otk-lamp-body",
         );
         const svg = heading.querySelector(
-          ":scope > .otk-tree-own .otk-disclosure-icon svg",
+          ":scope > .otk-tree-trigger-slot .otk-disclosure-icon svg",
         );
         const selection =
           heading.querySelector(".otk-sidebar-selection.is-selected") ??
@@ -152,7 +152,7 @@ export async function sidebarGeometry(page: Page, compact = false) {
           ),
           painted,
           label: box(label),
-          lampSlot: box(row.querySelector(".otk-sidebar-lamp")!),
+          lampSlot: box(frame.querySelector(".otk-tree-node-lane")!),
           iconSlot: box(row.querySelector(".otk-sidebar-icon")!),
           labelText: box(name ?? label),
           required,

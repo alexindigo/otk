@@ -256,13 +256,13 @@ test("sessions.removed-checkouts-retain-repo-policy-and-mandatory-activity", {
       const heading = tree.querySelector(":scope > .otk-tree-heading")!;
       // 2.108: the first grid column can be the selection mark, not the
       // depth track. The tree owner exposes the actual junction track.
-      const indent = heading.querySelector(":scope > .otk-tree-own")!
+      const indent = heading.querySelector(":scope > .otk-tree-junction")!
         .getBoundingClientRect().width;
       const child = document.querySelector(
         `.otk-project-row[data-project="${two}"]`,
       )!.closest(".otk-tree-node")!;
       const junction = child.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-own",
+        ":scope > .otk-tree-heading > .otk-tree-junction",
       )!.getBoundingClientRect();
       const parent = tree.parentElement!.closest(".otk-project-tree")!;
       return {

@@ -16,7 +16,11 @@ import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
-import SidebarRow from "./SidebarRow.tsx";
+import SidebarRow, {
+  SidebarFeedback,
+  SidebarFrame,
+  SidebarLampAction,
+} from "./SidebarRow.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import {
   createEffect,
@@ -635,57 +639,6 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       </div>
     );
   }
-  function ProjectNode(
-    item: {
-      item: Extract<BranchRow, { kind: "project" }> & { path: boolean[] };
-      section?: Section;
-    },
-  ) {
-    const node = () => item.item.node;
-    const key = node().key;
-    const movable = () => !!item.section && reorderable(node());
-    onCleanup(() => {
-      headings.delete(key);
-      focusButtons.delete(key);
-      rowErrors.delete(key);
-    });
-    return (
-      <TreeNode
-        path={item.item.path}
-        class={item.item.archived ? "otk-project-archive" : undefined}
-        heading={movable()
-          ? {
-            "data-project-root": key,
-            "data-defer-touch-menu": reorder.defersTouchMenu(key)
-              ? ""
-              : undefined,
-            ref: (element: HTMLDivElement) => {
-              headings.set(key, element);
-            },
-            ...(props.onMove && props.ready
-              ? reorder.handlers(item.section!, key)
-              : {}),
-          }
-          : undefined}
-        compact={collapsed()}
-        selected={props.selected?.sidecarId === node().project.sidecarId &&
-          props.selected?.directory === node().project.directory}
-        label={`Worktrees in ${node().project.displayName}`}
-        open={item.item.intent.open()}
-        hasChildren={item.item.hasChildren}
-        showEmptyToggle={item.item.detachedArchive}
-        onOpen={(open) => void item.item.intent.set(open)}
-        header={(connected) => (
-          <Row
-            project={node().project}
-            reorderKey={movable() ? key : undefined}
-            connected={connected}
-            disclosure={item.item.intent}
-          />
-        )}
-      />
-    );
-  }
   const orphanArchives = createMemo(() => {
     const live = new Set(rows().map(repositoryKey));
     const repos = new Map<string, ProjectRow>();
@@ -782,17 +735,23 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     },
     { arguments: { type: "boolean" } },
   );
-  function Row(
+  function ProjectNode(
     row: {
-      project: ProjectRow;
-      connected?: boolean;
-      reorderKey?: string;
-      disclosure: DisclosureState;
+      item: Extract<BranchRow, { kind: "project" }> & { path: boolean[] };
+      section?: Section;
     },
   ) {
     const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
-    const project = () => row.project;
+    const node = () => row.item.node;
+    const project = () => node().project;
+    const reorderKey = node().key;
+    const movable = () => !!row.section && reorderable(node());
+    onCleanup(() => {
+      headings.delete(reorderKey);
+      focusButtons.delete(reorderKey);
+      rowErrors.delete(reorderKey);
+    });
     const renaming = () => {
       const target = renameTarget(project());
       return !!target && !!props.projectRename?.matches(target);
@@ -830,148 +789,188 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     const status = () => lamp(entities(), key());
     const lampLabel = () => stateLabel(status());
     return (
-      <SidebarRow
-        frame={{
-          ref: (element) => {
-            root = element;
-            bindFocus(element);
-            contextTarget(target)(element);
-            if (row.reorderKey) {
-              rowErrors.set(row.reorderKey, (cause) =>
-                setRowError(
-                  failureValue(cause, { actionLabel: "Saving project order" }),
-                ));
-            }
-          },
-          class: `otk-project-row otk-sidebar-selection${
-            project().depth ? " is-subproject" : ""
-          }`,
-          selected: selected(),
-          attributes: {
-            "data-project": project().directory,
-            "data-server": project().sidecarId,
-            "data-project-sessions": project().sessionIDs,
-            "data-inactive": project().inactive ? "true" : "false",
-            "data-source": project().source,
-            "data-group": projectGroup(project()),
-            "data-rollup": status(),
-            "data-summary-authority": project().summary?.authority,
-            "data-project-parent": project().topology?.parentDirectory,
-            "data-project-repo": project().topology?.repoID,
-            "data-project-availability": project().availability,
-            "data-project-archived": project().archived ? "true" : "false",
-          },
-        }}
-        editing={editing()}
-        mainRef={(element) => {
-          openButton = element;
-          if (row.reorderKey) focusButtons.set(row.reorderKey, element);
-        }}
+      <TreeNode
+        path={row.item.path}
+        class={row.item.archived ? "otk-project-archive" : undefined}
+        heading={movable()
+          ? {
+            "data-project-root": reorderKey,
+            "data-defer-touch-menu": reorder.defersTouchMenu(reorderKey)
+              ? ""
+              : undefined,
+            ref: (element: HTMLDivElement) => {
+              headings.set(reorderKey, element);
+            },
+            ...(props.onMove && props.ready
+              ? reorder.handlers(row.section!, reorderKey)
+              : {}),
+          }
+          : undefined}
         compact={collapsed()}
-        lamp={
-          <StatusLight state={status()} dependencies={project().dependencies} />
-        }
-        lampAction={{
-          "aria-label": status() === "none"
-            ? `Open project ${name()}`
-            : `${lampLabel()}: open session in ${name()}`,
-          title: status() === "none"
-            ? `Open project ${project().directory}`
-            : `${lampLabel()}: open session in ${project().directory}`,
-          onClick: () =>
-            void (status() === "none"
-              ? open(project())
-              : openAttention(project())),
-        }}
-        action={{
-          class: "otk-project-open",
-          "aria-label": `Open project ${name()}${
-            project().parentLabel ? ` in ${project().parentLabel}` : ""
-          }${duplicate() ? ` on ${project().label}` : ""}${
-            project().annotation ? `, ${project().annotation}` : ""
-          }`,
-          title: `${metaList([project().directory, project().label])}${
-            projectGroup(project()) === "discovered" ? "" : ` - ${lampLabel()}`
-          }${project().annotation ? `, ${project().annotation}` : ""}`,
-          onClick: () => void open(project()),
-        }}
-        avatar={project().artwork === "avatar" &&
-            (project().summary?.presentation?.name ||
-              project().summary?.presentation?.color)
-          ? { name: name(), color: project().summary?.presentation?.color }
-          : undefined}
-        title={{
-          text: name(),
-          pending: renaming()
-            ? props.projectRename!.state.pendingTitle
-            : undefined,
-          emphasis: !!project().unread,
-          qualifiers: [
-            ...(project().inactive && project().parentLabel
-              ? [{
-                text: project().parentLabel!,
-                title: project().topology?.canonicalRoot,
-              }]
-              : []),
-            ...(duplicate()
-              ? [{ text: project().label, title: project().label }]
-              : []),
-          ],
-        }}
-        editor={editing()
-          ? (
-            <TitleEditor
-              owner={props.projectRename!}
-              label="Rename project"
-              feedbackID={rowErrorID}
-            />
-          )
-          : undefined}
-        meta={
-          <Show
-            when={!collapsed() && !editing() &&
-              (project().source ?? "tracked") === "tracked"}
+        selected={selected()}
+        label={`Worktrees in ${project().displayName}`}
+        open={row.item.intent.open()}
+        hasChildren={row.item.hasChildren}
+        showEmptyToggle={row.item.detachedArchive}
+        onOpen={(open) => void row.item.intent.set(open)}
+        frame={({ class: surface, children }) => (
+          <SidebarFrame
+            frame={{
+              ref: (element) => {
+                root = element;
+                bindFocus(element);
+                contextTarget(target)(element);
+                if (movable()) {
+                  rowErrors.set(reorderKey, (cause) =>
+                    setRowError(
+                      failureValue(cause, {
+                        actionLabel: "Saving project order",
+                      }),
+                    ));
+                }
+              },
+              class: `${surface} otk-project-row otk-sidebar-selection${
+                project().depth ? " is-subproject" : ""
+              }`,
+              selected: selected(),
+              attributes: {
+                "data-project": project().directory,
+                "data-server": project().sidecarId,
+                "data-project-sessions": project().sessionIDs,
+                "data-inactive": project().inactive ? "true" : "false",
+                "data-source": project().source,
+                "data-group": projectGroup(project()),
+                "data-rollup": status(),
+                "data-summary-authority": project().summary?.authority,
+                "data-project-parent": project().topology?.parentDirectory,
+                "data-project-repo": project().topology?.repoID,
+                "data-project-availability": project().availability,
+                "data-project-archived": project().archived ? "true" : "false",
+              },
+            }}
           >
-            <Show when={project().annotation}>
-              <MetaItem rank={1}>
-                <ChromeMeta
-                  class="otk-project-availability"
-                  title="Availability"
-                >
-                  {project().annotation}
-                </ChromeMeta>
-              </MetaItem>
-            </Show>
-            <Show when={project().visit}>
-              {(visit) => (
-                <MetaItem rank={2}>
-                  <ChromeMeta
-                    class="otk-project-visit"
-                    title="Time since last visit"
-                  >
-                    <TimeText time={visit()} />
-                  </ChromeMeta>
-                </MetaItem>
-              )}
-            </Show>
-          </Show>
-        }
-        control={!collapsed() && !editing()
-          ? (
-            <CommandMenu
-              class="otk-project-menu"
-              triggerClass="otk-project-menu-trigger"
-              label={`Project menu for ${name()}`}
-              trigger="⋯"
-              targets={() => [target()]}
-              beforeRun={() => setRowError("")}
-              onError={setRowError}
-              feedbackID={rowErrorID}
+            {children}
+          </SidebarFrame>
+        )}
+        node={() => (
+          <SidebarLampAction
+            label={status() === "none"
+              ? `Open project ${name()}`
+              : `${lampLabel()}: open session in ${name()}`}
+            title={status() === "none"
+              ? `Open project ${project().directory}`
+              : `${lampLabel()}: open session in ${project().directory}`}
+            onClick={() =>
+              void (status() === "none"
+                ? open(project())
+                : openAttention(project()))}
+          >
+            <StatusLight
+              state={status()}
+              dependencies={project().dependencies}
             />
-          )
-          : undefined}
-        feedback={
-          <>
+          </SidebarLampAction>
+        )}
+        header={() => (
+          <SidebarRow
+            editing={editing()}
+            mainRef={(element) => {
+              openButton = element;
+              if (movable()) focusButtons.set(reorderKey, element);
+            }}
+            action={{
+              class: "otk-project-open",
+              "aria-label": `Open project ${name()}${
+                project().parentLabel ? ` in ${project().parentLabel}` : ""
+              }${duplicate() ? ` on ${project().label}` : ""}${
+                project().annotation ? `, ${project().annotation}` : ""
+              }`,
+              title: `${metaList([project().directory, project().label])}${
+                projectGroup(project()) === "discovered"
+                  ? ""
+                  : ` - ${lampLabel()}`
+              }${project().annotation ? `, ${project().annotation}` : ""}`,
+              onClick: () => void open(project()),
+            }}
+            avatar={project().artwork === "avatar" &&
+                (project().summary?.presentation?.name ||
+                  project().summary?.presentation?.color)
+              ? { name: name(), color: project().summary?.presentation?.color }
+              : undefined}
+            title={{
+              text: name(),
+              pending: renaming()
+                ? props.projectRename!.state.pendingTitle
+                : undefined,
+              emphasis: !!project().unread,
+              qualifiers: [
+                ...(project().inactive && project().parentLabel
+                  ? [{
+                    text: project().parentLabel!,
+                    title: project().topology?.canonicalRoot,
+                  }]
+                  : []),
+                ...(duplicate()
+                  ? [{ text: project().label, title: project().label }]
+                  : []),
+              ],
+            }}
+            editor={editing()
+              ? (
+                <TitleEditor
+                  owner={props.projectRename!}
+                  label="Rename project"
+                  feedbackID={rowErrorID}
+                />
+              )
+              : undefined}
+            meta={
+              <Show
+                when={!collapsed() && !editing() &&
+                  (project().source ?? "tracked") === "tracked"}
+              >
+                <Show when={project().annotation}>
+                  <MetaItem rank={1}>
+                    <ChromeMeta
+                      class="otk-project-availability"
+                      title="Availability"
+                    >
+                      {project().annotation}
+                    </ChromeMeta>
+                  </MetaItem>
+                </Show>
+                <Show when={project().visit}>
+                  {(visit) => (
+                    <MetaItem rank={2}>
+                      <ChromeMeta
+                        class="otk-project-visit"
+                        title="Time since last visit"
+                      >
+                        <TimeText time={visit()} />
+                      </ChromeMeta>
+                    </MetaItem>
+                  )}
+                </Show>
+              </Show>
+            }
+            control={!collapsed() && !editing()
+              ? (
+                <CommandMenu
+                  class="otk-project-menu"
+                  triggerClass="otk-project-menu-trigger"
+                  label={`Project menu for ${name()}`}
+                  trigger="⋯"
+                  targets={() => [target()]}
+                  beforeRun={() => setRowError("")}
+                  onError={setRowError}
+                  feedbackID={rowErrorID}
+                />
+              )
+              : undefined}
+          />
+        )}
+        feedback={() => (
+          <SidebarFeedback>
             <Show
               when={renaming()}
               fallback={
@@ -1000,12 +999,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
               </Show>
             </Show>
             <DisclosureFeedback
-              disclosure={row.disclosure}
+              disclosure={row.item.intent}
               actionLabel="Saving project tree"
               class="otk-project-disclosure-error"
             />
-          </>
-        }
+          </SidebarFeedback>
+        )}
       />
     );
   }

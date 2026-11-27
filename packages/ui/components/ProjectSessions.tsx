@@ -6,7 +6,7 @@ import { sessionSummary } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectSessions.css" with { type: "text" };
-import SidebarRow from "./SidebarRow.tsx";
+import SidebarRow, { SidebarFeedback, SidebarFrame } from "./SidebarRow.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import ProgressStatus from "./ProgressStatus.tsx";
@@ -303,11 +303,11 @@ export default function ProjectSessions(props: {
           showEmptyToggle={false}
           onOpen={(value) => void disclosure()?.set(value)}
           label={`Child sessions of ${title()}`}
-          header={() => (
-            <SidebarRow
+          frame={({ class: surface, children }) => (
+            <SidebarFrame
               frame={{
                 selected: selected(),
-                class: `otk-session-row ${
+                class: `${surface} otk-session-row ${
                   entry() ? sessionState(entry()!) : ""
                 }${editing() ? " is-editing" : ""}`,
                 ref: (element) => {
@@ -324,12 +324,27 @@ export default function ProjectSessions(props: {
                   onDblClick: pinRow,
                 },
               }}
+            >
+              {children}
+            </SidebarFrame>
+          )}
+          node={() => (
+            <Show when={entry()} fallback={<SessionsIcon />}>
+              <StatusLight state={lamp(entities(), stateKey)} />
+            </Show>
+          )}
+          feedback={() =>
+            renaming() &&
+              (props.rename!.state.invalid || props.rename!.state.error)
+              ? (
+                <SidebarFeedback>
+                  <TitleFeedback owner={props.rename!} id={feedbackID} />
+                </SidebarFeedback>
+              )
+              : undefined}
+          header={() => (
+            <SidebarRow
               mainRef={(element) => control = element}
-              lamp={
-                <Show when={entry()} fallback={<SessionsIcon />}>
-                  <StatusLight state={lamp(entities(), stateKey)} />
-                </Show>
-              }
               action={entry() && !editing()
                 ? {
                   class: "otk-session-open",
@@ -351,15 +366,6 @@ export default function ProjectSessions(props: {
                     feedbackID={feedbackID}
                     label="Rename session"
                     maxLength={MAX_SESSION_TITLE}
-                  />
-                )
-                : undefined}
-              feedback={renaming() &&
-                  (props.rename!.state.invalid || props.rename!.state.error)
-                ? (
-                  <TitleFeedback
-                    owner={props.rename!}
-                    id={feedbackID}
                   />
                 )
                 : undefined}

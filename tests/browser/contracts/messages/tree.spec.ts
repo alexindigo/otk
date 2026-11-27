@@ -7,28 +7,40 @@ import { revealAcquired, scrollTranscript } from "../../pages/transcript.ts";
 async function geometry(nodes: Locator) {
   const facts = await nodes.evaluateAll((nodes) =>
     nodes.map((node) => {
-      const rail = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-own",
+      const row = node.querySelector(":scope > .otk-tree-heading")!;
+      const flat = row.matches(".otk-tree-row");
+      const rail = row.querySelector(
+        flat ? ":scope > .otk-tree-junction" : ":scope > .otk-tree-own",
       )!;
-      const box = rail.querySelector(".otk-tree-toggle");
+      const box = flat
+        ? row.querySelector(":scope > .otk-tree-trigger-slot .otk-tree-toggle")
+        : rail.querySelector(".otk-tree-toggle");
       const connector = rail.querySelector(".otk-tree-connector")!;
       const upper = rail.querySelector(".otk-tree-upper")!;
       const lower = rail.querySelector(".otk-tree-lower")!;
       const r = rail.getBoundingClientRect(), b = box?.getBoundingClientRect();
-      const heading = rail.querySelector(".otk-tree-first-line")!
+      const heading = rail.querySelector(
+        ".otk-tree-first-line, .otk-tree-junction-line",
+      )!
         .getBoundingClientRect();
       const c = connector.getBoundingClientRect(),
         u = upper.getBoundingClientRect();
-      const content = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-label",
-      )!.firstElementChild!.getBoundingClientRect();
+      const label = row.querySelector(
+        flat
+          ? ":scope > .otk-tree-frame > .otk-tree-label"
+          : ":scope > .otk-tree-label",
+      )!;
+      const content = (label.firstElementChild ?? label)
+        .getBoundingClientRect();
       const style = getComputedStyle(lower);
       const continuation = node.querySelector(
         ":scope > .otk-tree-body > .otk-tree-continuation",
       );
-      const incoming = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-incoming",
-      );
+      const incoming = flat && rail.matches(".is-tee, .is-elbow")
+        ? rail
+        : node.querySelector(
+          ":scope > .otk-tree-heading > .otk-tree-incoming",
+        );
       const incomingBox = incoming?.getBoundingClientRect();
       const parent = node.parentElement?.closest(".otk-tree-node");
       const parentRail = parent?.querySelector(
@@ -42,21 +54,24 @@ async function geometry(nodes: Locator) {
       const parentStem = parent?.querySelector(
         ":scope > .otk-tree-heading .otk-tree-icon-stem",
       )?.getBoundingClientRect();
-      const icon =
-        node.querySelector(":scope > .otk-tree-heading .otk-tree-icon") ??
-          parent?.querySelector(":scope > .otk-tree-heading .otk-tree-icon");
+      const icon = row.querySelector(".otk-tree-icon, .otk-tree-node-slot") ??
+        parent?.querySelector(":scope > .otk-tree-heading .otk-tree-icon");
       const svg = box?.querySelector("svg");
       const parentHeading = parent?.querySelector(":scope > .otk-tree-heading")
         ?.getBoundingClientRect();
       const firstChild = parent?.querySelector(
         ":scope > .otk-tree-body > .otk-tree-children .otk-tree-node",
       );
-      const label = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-label",
-      )!.getBoundingClientRect();
+      // The connector ends at the content-side lane, which now holds the
+      // separate node slot on flat rows. Nested rows still start at the label.
+      const contentEdge =
+        (flat ? row.querySelector(":scope > .otk-tree-frame")! : label)
+          .getBoundingClientRect();
       return {
         connected: node.classList.contains("is-connected"),
-        last: node.classList.contains("is-last"),
+        last: flat
+          ? rail.matches(".is-elbow")
+          : node.classList.contains("is-last"),
         outgoing: node.classList.contains("is-outgoing"),
         box: b ? [b.x + b.width / 2, b.y + b.height / 2] : undefined,
         boxTop: b?.top,
@@ -79,8 +94,8 @@ async function geometry(nodes: Locator) {
         rowCenter: heading.y + heading.height / 2,
         connector: [c.x, c.right, c.y],
         labelEdge: node.classList.contains("is-outgoing")
-          ? label.right
-          : label.left,
+          ? contentEdge.right
+          : contentEdge.left,
         parentBottom: firstChild === node ? parentHeading?.bottom : undefined,
         upper: u.bottom,
         lowerStart: lower.getBoundingClientRect().top,
@@ -294,7 +309,7 @@ test.describe("project tree", () => {
           ":scope > .otk-tree-heading .otk-tree-connector",
         )!
           .getBoundingClientRect();
-        const marker = element.querySelector(".otk-project-marker")!
+        const marker = element.querySelector(".otk-tree-node-line")!
           .getBoundingClientRect();
         return {
           end: connector.right,
@@ -431,12 +446,13 @@ test.describe("virtual session tree", () => {
       // the consumer's row frame.
       const heading = element.querySelector(":scope > .otk-tree-heading")!;
       return Array.from(heading.querySelectorAll(
-        ":scope > .otk-tree-rails > .otk-tree-junction, :scope > .otk-tree-own",
+        ":scope > .otk-tree-lanes > .otk-tree-lane, :scope > .otk-tree-junction",
       )).map(
         (cell) => {
           const box = cell.getBoundingClientRect();
           const connector = cell.querySelector(".otk-tree-connector");
           return {
+            blank: cell.matches(".is-blank"),
             height: box.height,
             rowHeight: row.height,
             y: box.y,
@@ -447,8 +463,10 @@ test.describe("virtual session tree", () => {
         },
       );
     });
-    // The nested row keeps two ancestor rails and its own junction.
-    expect(facts).toHaveLength(3);
+    // The row keeps two ancestor rails and its junction, plus the explicit
+    // blank lane that replaces the old unmeasured root spacer.
+    expect(facts).toHaveLength(4);
+    expect(facts[0].blank).toBe(true);
     expect(facts.filter((fact) => fact.connector !== undefined)).toHaveLength(
       1,
     );

@@ -292,7 +292,7 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   ) {
     const lamp = note.locator(".otk-toast-lead .otk-status-light");
     const sidebar = page.locator(
-      `.otk-project-sessions .otk-session-row[data-session="${session.id}"] .otk-sidebar-lamp .otk-status-light`,
+      `.otk-project-sessions .otk-session-row[data-session="${session.id}"] .otk-tree-node-slot .otk-status-light`,
     );
     await expect(lamp).toHaveCount(1);
     await expect(sidebar).toHaveAttribute("data-state", state);
