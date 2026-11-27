@@ -317,6 +317,9 @@ export class Connections {
         selected: raw.selected as string | undefined,
         crumbs: list(raw.crumbs),
         rows: list(raw.rows),
+        references: raw.references === undefined
+          ? undefined
+          : list(raw.references),
         historyNeighbors: raw.historyNeighbors === undefined
           ? undefined
           : list(raw.historyNeighbors),

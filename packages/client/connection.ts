@@ -249,6 +249,7 @@ export class SidecarConnection {
       ...value,
       crumbs: [...value.crumbs],
       rows: [...value.rows],
+      references: value.references?.slice(),
       epoch: this.#view.epoch + 1,
     };
     this.#reconcileView();
