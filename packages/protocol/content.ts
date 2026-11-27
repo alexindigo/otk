@@ -356,6 +356,9 @@ export interface Activity {
   /** Neutral live-work identity supplied by the harness, never inferred from wording. */
   work?: { kind: "shell" };
   layout: "row" | "boundary";
+  /** Records sharing a key form one session boundary (e.g. a marker and its
+   * summary). If unset, use the part ID; never infer the key from wording. */
+  boundary?: { key: string };
   direction?: "outgoing";
   category: DisclosureCategory;
   state?: ActivityState;

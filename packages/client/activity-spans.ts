@@ -2,6 +2,7 @@
 import type { Activity } from "@otk/protocol";
 import type { TranscriptReply } from "./transcript-projection.ts";
 import { workLogBookkeeping } from "./record-folds.ts";
+import { sessionBoundary } from "./boundaries.ts";
 
 export interface ActivityGroup {
   key: string;
@@ -28,6 +29,8 @@ export interface RecordProjection {
   revision: number;
   keys: string[];
   groups: Record<string, ActivityGroup>;
+  /** Entry key (first member) to all native boundary members in order. */
+  boundaries: Record<string, string[]>;
   parents: Record<string, string[]>;
   /** Final measured child key, separate from its native/disclosure identity. */
   leaves: Record<string, string>;
@@ -91,6 +94,7 @@ const empty = (): RecordProjection => ({
   revision: 0,
   keys: [],
   groups: Object.create(null),
+  boundaries: Object.create(null),
   parents: Object.create(null),
   leaves: Object.create(null),
   owners: Object.create(null),
@@ -122,7 +126,7 @@ export function createRecordProjection(): {
   };
   return {
     update(key, sourceRevision) {
-      if (value.owners[key] !== key) return value;
+      if (value.owners[key] !== key || value.boundaries[key]) return value;
       const next = revision(key, sourceRevision);
       if (value.revisions[key] === next) return value;
       value = {
@@ -153,6 +157,7 @@ export function createRecordProjection(): {
       };
       let interval: ActivityGroup | undefined, conversation: string | undefined;
       let contextEnd = 0, contextHasContent = false;
+      const boundaryEntries = new Map<string, string>();
       for (let index = 0; index < ids.length; index++) {
         if (index > 0 && breaks.has(ids[index - 1])) {
           interval = undefined;
@@ -160,12 +165,16 @@ export function createRecordProjection(): {
         }
         const id = ids[index];
         const reply = replies[id];
-        if (reply.message.role === "context" && index >= contextEnd) {
+        const boundary = sessionBoundary(reply.message);
+        if (
+          !boundary && reply.message.role === "context" && index >= contextEnd
+        ) {
           contextEnd = index;
           contextHasContent = false;
           while (
             contextEnd < ids.length &&
-            replies[ids[contextEnd]].message.role === "context"
+            replies[ids[contextEnd]].message.role === "context" &&
+            !sessionBoundary(replies[ids[contextEnd]].message)
           ) {
             contextHasContent ||= !!replies[ids[contextEnd]].message.parts
               .length;
@@ -174,12 +183,25 @@ export function createRecordProjection(): {
         }
         // Headers alone cannot offer an activity disclosure. Once the interval
         // has content, retain every source row, including empty breakouts.
-        if (reply.message.role !== "context" || !contextHasContent) {
+        if (
+          boundary || reply.message.role !== "context" || !contextHasContent
+        ) {
           interval = undefined;
           conversation = id;
+          if (boundary) {
+            const entry = boundaryEntries.get(boundary.key);
+            if (entry !== undefined) {
+              next.boundaries[entry].push(id);
+              next.owners[id] = entry;
+              continue;
+            }
+            boundaryEntries.set(boundary.key, id);
+            next.boundaries[id] = [id];
+          } else {
+            next.revisions[id] = revision(id, reply.revision);
+          }
           next.keys.push(id);
           next.owners[id] = id;
-          next.revisions[id] = revision(id, reply.revision);
           continue;
         }
         if (!interval) {
@@ -245,6 +267,12 @@ export function createRecordProjection(): {
             revision: 0,
           });
         }
+      }
+      for (const [key, members] of Object.entries(next.boundaries)) {
+        next.revisions[key] = revision(
+          key,
+          members.map((id) => [id, replies[id].revision]),
+        );
       }
       for (const group of Object.values(next.groups)) {
         group.title = summary(group.members, replies);

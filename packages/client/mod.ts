@@ -88,6 +88,7 @@ export {
 export * from "./transcripts.ts";
 export * from "./transcript-projection.ts";
 export * from "./activity-spans.ts";
+export * from "./boundaries.ts";
 export * from "./transcript-interaction.ts";
 export * from "./tool-failure.ts";
 export * from "./message-policy.ts";

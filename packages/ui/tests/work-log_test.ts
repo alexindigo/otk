@@ -55,6 +55,30 @@ const readFacts = {
   merge: { key: "tool:read", verb: "Read", noun: "file", plural: "files" },
 };
 
+Deno.test("boundary parts are never work runs", () => {
+  const interrupted: Part = {
+    kind: "external",
+    id: "interrupted",
+    name: "interruption",
+    activity: {
+      category: "record",
+      kindLabel: "Execution",
+      title: "Interrupted",
+      layout: "boundary",
+      tone: "normal",
+    },
+  };
+  const result = workRuns({
+    parts: [interrupted],
+    presentation: unknownPartPresentation,
+    terminal: true,
+    now: 0,
+  });
+  assertEquals(result.runs, []);
+  assertEquals(result.segments, []);
+  assertEquals(result.runOf(interrupted.id), undefined);
+});
+
 Deno.test("2.115 sample reply: five rows, seven actions, no step or completion rows", () => {
   const { parts, add, action, step, presentation } = workFixture();
   const update = (done: number) =>
