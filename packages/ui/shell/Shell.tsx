@@ -194,6 +194,23 @@ export default function Shell(
     fail,
     /Mac|iPhone|iPad/.test(navigator.platform),
   );
+  createEffect(
+    () => {
+      const checkout = project(), selected = session.state.selection;
+      return JSON.stringify([
+        checkout?.sidecarId,
+        checkout?.directory,
+        selected?.sidecarId,
+        selected?.sessionID,
+        checkout && tabsFor(checkout).state.selected?.id,
+      ]);
+    },
+    (current, previous) => {
+      if (previous !== undefined && current !== previous) {
+        keyboard.focusOwner.navigationChanged();
+      }
+    },
+  );
   const notifications = applicationNotifications({
     commands,
     disclosures,

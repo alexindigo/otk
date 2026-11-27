@@ -8,6 +8,7 @@ import { useSessionPorts } from "../registries/session.tsx";
 import ContentSlot from "./ContentSlot.tsx";
 import { ComposerProvider } from "../registries/composer.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import LiveWork from "./LiveWork.tsx";
 import LiveLink from "./LiveLink.tsx";
 import Subagents from "./Subagents.tsx";
@@ -27,7 +28,9 @@ export default function ComposerTakeovers(
   const { takeovers } = useUiRegistries(), session = useSessionPorts();
   const { commands } = useCommandPorts();
   let activity: HTMLDivElement | undefined;
-  const focusHome = () => activity?.focus();
+  const focusHome = () => {
+    focusControl(activity, { focusVisible: false });
+  };
   const shells = () => session.shells?.();
   const title = (id: string) =>
     session.entry(id)?.title ?? "Session unavailable";

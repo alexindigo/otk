@@ -5,6 +5,7 @@ import Popover, {
   type PopoverControl,
   type PopoverOpenReason,
 } from "./Popover.tsx";
+import { focusControl } from "../../keyboard/focus.ts";
 
 export default function Menu(props: {
   label: string;
@@ -54,7 +55,7 @@ export default function Menu(props: {
       item.setAttribute("role", "menuitem");
       item.tabIndex = item === button ? 0 : -1;
     }
-    button?.focus();
+    focusControl(button, { focusVisible: true });
   };
   const titleAction = createMemo(() => props.titleAction);
   const titleContent = createMemo(() => {
@@ -68,11 +69,11 @@ export default function Menu(props: {
             }
             event.preventDefault();
             event.stopPropagation();
-            if (event.shiftKey) popover.close();
+            if (event.shiftKey) popover.close(undefined, "keyboard");
             else {
               const first = items()[0];
               if (first) rove(first);
-              else popover.close();
+              else popover.close(undefined, "keyboard");
             }
           }}
         >
@@ -111,7 +112,7 @@ export default function Menu(props: {
             ? items()[0]
             : undefined;
           rove(first);
-          if (!first) (title ?? root).focus();
+          if (!first) focusControl(title ?? root, { focusVisible: !!title });
         });
       }}
       onClose={props.onClose}
@@ -161,8 +162,8 @@ export default function Menu(props: {
             event.preventDefault();
             event.stopPropagation();
             const title = event.shiftKey ? titleControl() : undefined;
-            if (title) title.focus();
-            else popover.close();
+            if (title) focusControl(title, { focusVisible: true });
+            else popover.close(undefined, "keyboard");
           } else if (event.key.length === 1 && event.key !== " ") {
             event.preventDefault();
             event.stopPropagation();

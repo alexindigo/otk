@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { focusControl } from "../keyboard/focus.ts";
 import "./Prompt.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
 import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
@@ -100,7 +101,9 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     caret,
     active: () => active,
     selection: () => ({ start: input.selectionStart, end: input.selectionEnd }),
-    focus: () => input.focus(),
+    focus: () => {
+      focusControl(input);
+    },
     focused: () =>
       !props.suspended && document.activeElement === input &&
       !props.value.editor,

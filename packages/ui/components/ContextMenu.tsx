@@ -2,6 +2,7 @@
 import { onCleanup, onSettled } from "solid-js";
 import type { ContextTarget } from "@otk/client";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import { localKeyboard } from "../keyboard/ownership.ts";
 import {
   browserContextTargets,
@@ -19,7 +20,7 @@ export default function ContextMenu(
     control?(openFor: (element: HTMLElement) => void): void;
   },
 ): import("solid-js").Element {
-  const { commands } = useCommandPorts();
+  const { commands, keyboard: dispatcher } = useCommandPorts();
   let targets: ContextTarget[] = [];
   let menu!: PopoverControl, returnFocus = () => {};
   let retained: (() => void)[] = [];
@@ -38,7 +39,7 @@ export default function ContextMenu(
     width = 0,
     height = 0,
   ) => {
-    menu.close(() => {});
+    menu.close(false);
     releaseOrigin();
     targets = focused === document.body && reason === "keyboard"
       ? []
@@ -48,7 +49,10 @@ export default function ContextMenu(
         reason === "pointer" ? { x, y } : undefined,
       );
     returnFocus = () => {
-      if (focused?.isConnected) focused.focus();
+      focusControl(focused, {
+        focusVisible:
+          (dispatcher?.focusOwner.modality() ?? reason) === "keyboard",
+      });
     };
     const origin =
       path.find((node): node is HTMLElement => node instanceof HTMLElement) ??
@@ -59,7 +63,7 @@ export default function ContextMenu(
         detail: { release: retained },
       }),
     );
-    menu.open({ x, y, width, height, origin, focus: returnFocus }, reason);
+    menu.open({ x, y, width, height, origin, returnTo: focused }, reason);
   };
   const openFor = (
     origin: HTMLElement,
@@ -132,7 +136,7 @@ export default function ContextMenu(
       if (nativeTextContext(event.composedPath())) {
         pending = undefined;
         clearTimeout(opening);
-        menu.close(() => {});
+        menu.close(false);
         return;
       }
       event.preventDefault();
@@ -163,7 +167,7 @@ export default function ContextMenu(
       if (nativeTextContext(event.composedPath())) {
         pending = undefined;
         clearTimeout(opening);
-        menu.close(() => {});
+        menu.close(false);
         return;
       }
       event.preventDefault();

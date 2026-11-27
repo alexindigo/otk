@@ -19,6 +19,7 @@ import { contextTarget } from "./context-target.ts";
 import ActionButton from "./ActionButton.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import { breadcrumbRows } from "./list-presentation.ts";
+import { selectionFocus } from "../keyboard/context.tsx";
 import "./TaskTrail.css" with { type: "text" };
 
 /** D67: data-only ancestry navigation. No sub-session inventory lives here. */
@@ -139,6 +140,12 @@ export default function TaskTrail(props: {
       >
         {(row, compact, scrolling) => {
           const target = contextTarget(() => props.target(row().id));
+          let control: HTMLElement | undefined;
+          const bindFocus = selectionFocus(
+            "crumb",
+            () => row().id === props.selected,
+            () => control,
+          );
           const attributes = () => ({
             "data-crumb": row().id,
             "data-depth": row().depth,
@@ -150,7 +157,10 @@ export default function TaskTrail(props: {
             ...place(row()),
           }));
           return (
-            <span class={["otk-trail-link", { "is-paged": scrolling() }]}>
+            <span
+              ref={bindFocus}
+              class={["otk-trail-link", { "is-paged": scrolling() }]}
+            >
               {separator(row().first)}
               <Show
                 when={editing(row().id) && props.rename!.editing}
@@ -161,7 +171,10 @@ export default function TaskTrail(props: {
                       sidecarId: props.sidecarId,
                       sessionID: row().id,
                     })}
-                    ref={target}
+                    ref={(element) => {
+                      target(element);
+                      control = element;
+                    }}
                     location={place(row())}
                     attributes={attributes()}
                     title={props.tooltip(row().id)}
