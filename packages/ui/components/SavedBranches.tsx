@@ -77,6 +77,10 @@ export function SavedBranchNotice(
   },
 ) {
   const state = () => props.owner.state;
+  const dismiss = (diagnosticID: string | undefined) =>
+    diagnosticID && !state().recovery && !state().permanence && !state().choice
+      ? () => props.owner.dismissError(diagnosticID)
+      : undefined;
   const perform = (action: () => void) => {
     try {
       action();
@@ -87,7 +91,12 @@ export function SavedBranchNotice(
   return (
     <>
       <Show when={props.feedback}>
-        {(value) => <OperationFeedback feedback={value()} />}
+        {(value) => (
+          <OperationFeedback
+            feedback={value()}
+            onDismiss={dismiss(value().diagnosticID)}
+          />
+        )}
       </Show>
       <Show
         when={props.recoveryVisible !== false && state().recovery &&

@@ -482,6 +482,7 @@ export function createRequestFeedback(
         return local;
       }
       if (state.error) {
+        if (state.feedbackDismissed) return;
         const shown = shipped.place(state.error, {
           surface: "feedback",
           view: state.error.facts?.target,
@@ -491,6 +492,9 @@ export function createRequestFeedback(
           ...shown,
           identity: state.ref.key,
           diagnosticID: state.error.diagnosticID,
+          ...(state.phase === "failed" && !state.error.facts?.record
+            ? { dismiss: () => tracker.dismissFeedback(state) }
+            : {}),
         };
       }
       if (state.connection === "authentication-required") {
@@ -522,7 +526,20 @@ export function createRequestFeedback(
       };
     },
     fail(cause) {
-      local = actionFeedback(cause);
+      const feedback = actionFeedback(cause);
+      const notice = feedback &&
+          (feedback.kind === "info" || feedback.kind === "error") &&
+          !feedback.failure?.value.facts?.record
+        ? {
+          ...feedback,
+          dismiss() {
+            if (local !== notice) return;
+            local = undefined;
+            notify();
+          },
+        }
+        : feedback;
+      local = notice;
       notify();
     },
     clear() {

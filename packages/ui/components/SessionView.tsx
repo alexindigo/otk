@@ -453,6 +453,8 @@ export default function SessionView(props: {
                 run: recovery.run,
               },
             }}
+            dismissLabel="Discard draft"
+            onDismiss={recovery.discard}
           />
         )}
       </For>

@@ -70,6 +70,8 @@ export interface Feedback {
   text: string;
   field?: string;
   action?: { label: string; run(): void };
+  /** Owner-provided intent to hide settled feedback, not undo the action. */
+  dismiss?(): void;
   failure?: FailurePresentation;
 }
 export interface FeedbackOwner {

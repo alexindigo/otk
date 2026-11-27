@@ -5,7 +5,7 @@ import Disclosure from "./Disclosure.tsx";
 import Clock from "./Clock.tsx";
 import FailureSignal, { type FailureAnnouncement } from "./FailureSignal.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
-import { ActivityIcon, AlertIcon, CloseIcon } from "./ChromeIcons.tsx";
+import { ActivityIcon, AlertIcon } from "./ChromeIcons.tsx";
 import type { FittedAction } from "./FittedActions.tsx";
 import "./FailureContent.css" with { type: "text" };
 
@@ -44,7 +44,6 @@ export default function FailureContent(
       placement: "feedback";
       row(input: FailureFeedbackRow): Element;
       icon?(): Element;
-      onDismiss?(): void;
     }),
 ) {
   const compact = () => props.compact || props.inline;
@@ -129,17 +128,7 @@ export default function FailureContent(
           }]
           : [];
       }
-      return [
-        ...(props.action ? [{ key: "recover", ...props.action }] : []),
-        ...(props.onDismiss
-          ? [{
-            key: "dismiss",
-            label: "Dismiss notice",
-            icon: CloseIcon,
-            run: props.onDismiss,
-          }]
-          : []),
-      ];
+      return props.action ? [{ key: "recover", ...props.action }] : [];
     };
     return (
       <div
