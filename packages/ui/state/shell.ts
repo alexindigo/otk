@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, onCleanup } from "solid-js";
+import { entityKey } from "@otk/protocol";
 import {
   type BranchHistory,
   browserStorage,
@@ -451,16 +452,18 @@ export function createShellState(
     const selected = session.state.selection, data = actions.info();
     const project = selected ? undefined : navigation.state.project;
     const sidecar = selected?.sidecarId ?? project?.sidecarId;
+    const run = selected &&
+      resources.entities(selected.sidecarId).get(
+        entityKey("session", selected.sessionID),
+      );
     return {
       selected,
       directory: selected ? data?.directory : project?.directory,
       loading: session.state.loading,
       settings: navigation.state.settings,
       connected: !!sidecar && resources.connected(sidecar),
-      finish: selected
-        ? resources.inbox(selected.sidecarId).state.inbox
-          .finishes[selected.sessionID] ?? 0
-        : 0,
+      finish: run?.terminal ?? 0,
+      runID: run?.runID,
     };
   }, (value) => {
     if (value) navigation.observeView(value);

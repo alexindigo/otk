@@ -107,6 +107,8 @@ export interface EntityState {
   /** Oldest proven start among the aggregate's still-running member executions. */
   runStartedAt?: number;
   terminal?: number;
+  /** Stable record identity for a native helper run, separate from its clock. */
+  runID?: string;
   outcome?: TerminalOutcome;
   terminalOrigin?: "live" | "historical";
   evidence?: SessionEvidence;

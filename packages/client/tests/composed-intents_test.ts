@@ -28,6 +28,7 @@ Deno.test("repeated delete joins its captured interrupt and deletion before asyn
           counts: { ...counts, working: 1 },
           evidence: {
             work: true,
+            nativeRun: true,
             permissions: 0,
             questions: 0,
             descendants: counts,

@@ -29,7 +29,7 @@ import type {
   Preferences,
   ServerFrame,
 } from "@otk/protocol";
-import { registerBadgeChannel } from "../features/notify/badge.ts";
+import { attentionBadge } from "../features/notify/badge.ts";
 import { registerOsChannel } from "../features/notify/os.ts";
 import { registerSoundChannel } from "../features/notify/sound.ts";
 import { registerToastChannel } from "../features/notify/toast.ts";
@@ -137,7 +137,7 @@ export function applicationNotifications(input: {
   const toast = registerToastChannel(hub, input.disclosures),
     os = registerOsChannel(hub),
     sound = registerSoundChannel(hub),
-    stopBadge = registerBadgeChannel(hub);
+    badge = attentionBadge();
   const candidates = new Map<string, Note>();
   const receipts = new Map<string, Note>();
   const publish = (incoming: Note, previous?: Note) => {
@@ -307,6 +307,7 @@ export function applicationNotifications(input: {
   return {
     hub,
     toast: toast.model,
+    badge: badge.update,
     os,
     update,
     info: (text: string) => message(text),
@@ -371,7 +372,7 @@ export function applicationNotifications(input: {
       toast.stop();
       os.stop();
       sound.stop();
-      stopBadge();
+      badge.stop();
     },
   };
 }

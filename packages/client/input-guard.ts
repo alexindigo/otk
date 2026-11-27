@@ -6,6 +6,8 @@ export interface ReleaseInput {
   draft: "kept" | "dropped";
   /** Captured draft identities being released; defaults to the current session. */
   keys?: readonly string[];
+  /** A deleted view can lose request input while keeping its stored draft. */
+  retainedOnly?: boolean;
   message?: string;
 }
 
@@ -66,7 +68,7 @@ export function createInputGuard(
     // nor navigation consumes this captured draft; only committed deletion does.
     const key = o.key(), keys = input.keys ?? [key];
     const retention = keys.includes(key) ? o.retention?.() : undefined;
-    const losesDraft = keys.some((key) => {
+    const losesDraft = !input.retainedOnly && keys.some((key) => {
       const draft = o.drafts.current(key);
       return !!draft.input.trim() || draft.chips.length > 0 || !!draft.editor;
     });

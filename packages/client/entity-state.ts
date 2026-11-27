@@ -253,9 +253,7 @@ export function sessionWorkStatus(
 
 /** Run evidence excludes background shell work, not V1's native execution. */
 export function sessionRunning(store: EntityStateStore, key: string): boolean {
-  const evidence = sessionEvidence(store, key);
-  return !!evidence?.work &&
-    (!sessionShells(store, key)?.count || !!evidence.liveWork?.length);
+  return sessionEvidence(store, key)?.nativeRun === true;
 }
 
 export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {
@@ -286,6 +284,16 @@ export function attention(
 ): { blocked: number; finished: number } {
   const value = store.isStale ? undefined : store.get(k)?.counts;
   return { blocked: value?.blocked ?? 0, finished: value?.finished ?? 0 };
+}
+/** Counts unique sessions across live sidecars, rather than delivery receipts. */
+export function globalAttention(stores: Iterable<EntityStateStore>): number {
+  let total = 0;
+  for (const store of stores) {
+    if (store.isStale) continue;
+    const counts = store.get(entityKey("global", "global"))?.counts;
+    if (counts) total += counts.blocked + counts.finished;
+  }
+  return total;
 }
 export function liveWork(
   store: EntityStateStore,

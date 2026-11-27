@@ -1735,26 +1735,27 @@ continue to measure their actual CSS boxes.
 ## Notification channels
 
 Consumers select `registerToastChannel`, `registerOsChannel`,
-`registerSoundChannel` and `registerBadgeChannel` against their injected public
-client hub. Registrations own their presentation and teardown; they import no
-application, RPC implementation or native backend. `Toasts` renders the returned
-toast model: information/done chips expire after six seconds, keyed input chips
-are active and errors sticky. Each message borrows the shared feedback binding's
-alert/status semantics and names itself with the owner's complete notification
-text. Toast's Surface body scrolls when the viewport constrains it. The stack
-shows at most three cards, newest first, and the overflow control pages through
-the remaining cards. Opening Sessions detaches the stack so it cannot cover the
-session lamps. Each card has one square top-right dismiss control. Session notes
-show the same live lamp as the sidebar (failures use their own tone), then the
-project badge/name, task and, when distinct, session. The shared whole-item row
-yields lower priority facts without clipping; the announcement retains the full
-location. The target offers the guarded Open action, and failures retain their
-disclosure. Dismissal affects presentation only; action buttons use
-delivery-scoped public command IDs. Permission details use the shared summary's
-compact, single-line target with the full text in its title. Session activity
-labels and stale-resume descriptions come from the client formatter. Attention
-is cleared by actual viewing/resolution, not by dismissal or command promise
-completion.
+`registerSoundChannel` against their injected public client hub. The favicon
+uses `attentionBadge` with the canonical connected-sidecar session count; it
+does not subscribe to notification delivery. Registrations own their
+presentation and teardown; they import no application, RPC implementation or
+native backend. `Toasts` renders the returned toast model: information/done
+chips expire after six seconds, keyed input chips are active and errors sticky.
+Each message borrows the shared feedback binding's alert/status semantics and
+names itself with the owner's complete notification text. Toast's Surface body
+scrolls when the viewport constrains it. The stack shows at most three cards,
+newest first, and the overflow control pages through the remaining cards.
+Opening Sessions detaches the stack so it cannot cover the session lamps. Each
+card has one square top-right dismiss control. Session notes show the same live
+lamp as the sidebar (failures use their own tone), then the project badge/name,
+task and, when distinct, session. The shared whole-item row yields lower
+priority facts without clipping; the announcement retains the full location. The
+target offers the guarded Open action, and failures retain their disclosure.
+Dismissal affects presentation only; action buttons use delivery-scoped public
+command IDs. Permission details use the shared summary's compact, single-line
+target with the full text in its title. Session activity labels and stale-resume
+descriptions come from the client formatter. Attention is cleared by actual
+viewing/resolution, not by dismissal or command promise completion.
 
 The OS channel uses secure-context browser `Notification`, tag replacement,
 silent OS presentation and a focus/default-command click handler. `request`

@@ -97,7 +97,12 @@ export const acknowledgeReceipt = metadataReceipt(
         if (!Number.isSafeInteger(terminal)) {
           throw new TypeError("Invalid terminal in acknowledgement receipt");
         }
-        return { sessionID: sessionID(row)!, terminal };
+        const runID = text(row, "runID", true);
+        return {
+          sessionID: sessionID(row)!,
+          terminal,
+          ...(runID ? { runID } : {}),
+        };
       }),
     };
   },

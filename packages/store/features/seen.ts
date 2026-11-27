@@ -19,6 +19,10 @@ export const seenMigrations: FeatureMigrations = {
     version: 4,
     sql:
       "ALTER TABLE session_seen ADD COLUMN open_generation INTEGER NOT NULL DEFAULT 0;",
+  }, {
+    version: 5,
+    sql:
+      "CREATE TABLE session_run_seen (user TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,terminal INTEGER NOT NULL,PRIMARY KEY(user,session,run)) STRICT;",
   }],
 };
 export interface SeenChange {
@@ -27,6 +31,7 @@ export interface SeenChange {
   time: number;
   terminal?: number;
   opened?: boolean;
+  runID?: string;
 }
 export class Seen extends MetadataChanges<SeenChange> {
   protected override changeKey(value: SeenChange): string {
@@ -65,11 +70,20 @@ export class Seen extends MetadataChanges<SeenChange> {
     session: string,
     terminal: number,
     tx?: StoreWrite,
+    runID?: string,
   ): number {
     if (!Number.isSafeInteger(terminal) || terminal < 0) {
       throw new TypeError("Invalid terminal token");
     }
     return this.db.write((scope) => {
+      if (runID) {
+        this.db.connection.prepare(
+          "INSERT INTO session_run_seen(user,session,run,terminal) VALUES(?,?,?,?) ON CONFLICT DO NOTHING",
+        )
+          .run(key(user), key(session), key(runID), terminal);
+        this.changed({ user, session, time: terminal, terminal, runID }, scope);
+        return terminal;
+      }
       const row = this.db.connection.prepare(
         "INSERT INTO session_seen(user,session,time,terminal) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET terminal=MAX(terminal,excluded.terminal) RETURNING terminal,opened",
       ).get(key(user), key(session), terminal)!;
@@ -109,28 +123,43 @@ export class Seen extends MetadataChanges<SeenChange> {
     ).get(key(user), key(session));
     return row ? Number(row.open_generation) : undefined;
   }
-  releaseOpened(user: string, session: string, generation: number, tx?: StoreWrite): boolean {
+  releaseOpened(
+    user: string,
+    session: string,
+    generation: number,
+    tx?: StoreWrite,
+  ): boolean {
     return this.db.write((scope) => {
       const row = this.db.connection.prepare(
         "UPDATE session_seen SET opened=0,open_generation=open_generation+1 WHERE user=? AND session=? AND opened=1 AND open_generation=? RETURNING terminal",
       ).get(key(user), key(session), generation);
       if (!row) return false;
       const terminal = Number(row.terminal);
-      this.changed({ user, session, time: terminal, terminal, opened: false }, scope);
+      this.changed(
+        { user, session, time: terminal, terminal, opened: false },
+        scope,
+      );
       return true;
     }, tx);
   }
   acknowledgeMany(
     user: string,
-    entries: readonly { session: string; terminal: number }[],
+    entries: readonly { session: string; terminal: number; runID?: string }[],
     tx?: StoreWrite,
   ): number[] {
     return this.db.write(
       (scope) =>
-        entries.map(({ session, terminal }) =>
-          this.acknowledge(user, session, terminal, scope)
+        entries.map(({ session, terminal, runID }) =>
+          this.acknowledge(user, session, terminal, scope, runID)
         ),
       tx,
+    );
+  }
+  runTerminal(user: string, session: string, runID: string): number {
+    return Number(
+      this.db.connection.prepare(
+        "SELECT terminal FROM session_run_seen WHERE user=? AND session=? AND run=?",
+      ).get(key(user), key(session), key(runID))?.terminal ?? 0,
     );
   }
   tokens(): SeenChange[] {

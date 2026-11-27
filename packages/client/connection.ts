@@ -442,11 +442,12 @@ export class SidecarConnection {
         const attachment = this.#attachment;
         if (!current() || socket !== this.#socket || !attachment) return;
         const frame: ServerFrame = JSON.parse(data);
-        // Inbox patches are one revision stream for this connection, across
-        // view changes. Let the inbox owner check sequence continuity; dropping
-        // an in-flight patch here silently converts later live facts to history.
+        // Inbox patches and settlement edges have their own revision fences
+        // across view changes. In particular an in-flight settlement must not
+        // be lost when a new view replaces the one that observed the work.
         if (
           frame.t !== "load.chunk" && frame.t !== "inbox.patch" &&
+          frame.t !== "inbox.settlement" &&
           frame.epoch !== undefined &&
           frame.epoch < this.#view.epoch
         ) return;

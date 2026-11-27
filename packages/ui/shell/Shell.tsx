@@ -3,6 +3,7 @@ import { bindSourceSelectionCopy, copyText } from "../clipboard.ts";
 import {
   attentionCount,
   createModelRecency,
+  globalAttention,
   requireCommittedSend,
 } from "@otk/client";
 import PaneState from "../components/PaneState.tsx";
@@ -281,6 +282,17 @@ export default function Shell(
     locate: resources.notificationLocation,
     observeEntries: resources.observeEntries,
   });
+  createEffect(
+    () =>
+      toggles.state.prefs["notify.badge"]
+        ? globalAttention(
+          sidecars.state.list.flatMap(({ id }) =>
+            resources.connected(id) ? [resources.entities(id)] : []
+          ),
+        )
+        : 0,
+    notifications.badge,
+  );
   createEffect(
     () =>
       sidecars.state.list.map(({ id, label, continuity }) => ({
@@ -994,7 +1006,8 @@ export default function Shell(
                               >
                                 {(owner) => {
                                   const state = createMemo(() =>
-                                    resources.projectContents(owner())
+                                    navigation.state.projectSelection ??
+                                      resources.projectContents(owner())
                                   );
                                   return (
                                     <Show when={state() !== "items"}>
@@ -1006,6 +1019,8 @@ export default function Shell(
                                                 owner().sidecarId,
                                                 owner().directory,
                                               )
+                                              : state() === "unavailable"
+                                              ? "Sessions unavailable"
                                               : "Choose a session"}
                                           </h1>
                                           <div class="otk-project-hero-detail">
@@ -1013,8 +1028,9 @@ export default function Shell(
                                               when={state() === "loading"}
                                               fallback={
                                                 <p>
-                                                  Open Sessions in the right
-                                                  panel, or start a new session.
+                                                  {state() === "unavailable"
+                                                    ? "Reconnect or choose a different project."
+                                                    : "Open Sessions in the right panel, or start a new session."}
                                                 </p>
                                               }
                                             >
@@ -1168,7 +1184,7 @@ export default function Shell(
                                     exhausted={session.state.exhausted}
                                     error={session.state.error}
                                     sessionError={session.state.content.error}
-                                    errorState={session.state.content
+                                    diagnostics={session.state.content
                                       .errorState}
                                     draft={draft()}
                                     forkNote={forkNotes.get(draftKey())}

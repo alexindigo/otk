@@ -90,6 +90,27 @@ function owner() {
   return { entries, published, states, supervision, put, get, mature };
 }
 
+test("an orphan result and an in-flight settlement read prove no live session work", () => {
+  const o = owner();
+  for (const pending of ["native-confirmation", "result:orphan"]) {
+    o.put({
+      ...base,
+      activity: {
+        terminal: 50,
+        outcome: "succeeded",
+        completion: { pending: [pending] },
+        work: keys(),
+      },
+    }, 50);
+    const state = o.get(base.id);
+    assertEquals(state?.state, "none");
+    assertEquals(state?.evidence?.work, false);
+    assertEquals(state?.evidence?.nativeRun, undefined);
+    assertEquals(state?.evidence?.settlement, undefined);
+    assertEquals(o.states.composerLink(base.id), "none");
+  }
+});
+
 test("successful session settles only after native confirmation of its current work", () => {
   const o = owner();
   const success = {
@@ -104,7 +125,14 @@ test("successful session settles only after native confirmation of its current w
   put(success);
   assertEquals(settlement(), undefined);
   for (const pending of ["queued", "parked", "starting", "returning"]) {
-    put({ ...success, completion: { pending: [pending], confirmed: 50 } });
+    put({
+      ...success,
+      completion: {
+        pending: [pending],
+        continuation: [pending],
+        confirmed: 50,
+      },
+    });
     assertEquals(settlement(), undefined);
     assertEquals(o.get(base.id)?.state, "working");
     assertEquals(o.states.composerLink(base.id), "running");

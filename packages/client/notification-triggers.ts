@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
+  EntityState,
   ErrorObservation,
   IndexEntry,
   ServerFrame,
@@ -19,6 +20,7 @@ import {
   acceptsPatch,
   type ClientIndex,
   createIndex,
+  decodeIndexObservation,
   type IndexChanges,
   sessionKey,
 } from "./index.ts";
@@ -26,7 +28,7 @@ import type { EntryChanges } from "./entry-observations.ts";
 import type { Note } from "./notifications.ts";
 type IndexFrame = Extract<ServerFrame, { t: "index.snapshot" | "index.patch" }>;
 interface Facts {
-  status: IndexEntry["status"];
+  working: boolean;
   permissions: number;
   permissionIDs: readonly string[];
   questions: number;
@@ -37,33 +39,66 @@ interface Facts {
   directory?: string;
   title: string;
   terminal?: number;
+  runID?: string;
   outcome?: TerminalOutcome;
   unseen?: boolean;
   terminalOrigin?: TerminalEvidence["terminalOrigin"];
   terminalFailure?: TerminalEvidence["terminalFailure"];
 }
-const facts = (entry?: IndexEntry): Facts | undefined =>
-  !entry || entry.deleted || entry.archived ? undefined : {
-    status: entry.status,
-    permissions: entry.attention.permissions,
-    permissionIDs: entry.activity?.permissions?.keys ?? [],
-    questions: entry.attention.questions,
-    questionIDs: entry.activity?.inputs?.keys ?? [],
-    error: entry.attention.error,
-    observations: entry.attention.errorState?.observations.filter((item) =>
-      !item.cleared
-    ),
-    directory: entry.directory,
-    errorIdentity: JSON.stringify(
-      entry.attention.errorState?.observations.filter((o) => !o.cleared) ??
-        entry.attention.error ?? "",
-    ),
-    title: entry.title,
-    terminal: entry.activity?.terminal,
-    outcome: entry.activity?.outcome,
-    terminalOrigin: entry.activity?.terminalOrigin,
-    terminalFailure: entry.activity?.terminalFailure,
+function diagnosticFacts(
+  entry: IndexEntry,
+): Pick<Facts, "error" | "observations" | "errorIdentity"> {
+  const { diagnostic } = decodeIndexObservation(entry);
+  const errors = diagnostic["errorState"]?.observations.filter((item) =>
+    !item.cleared
+  );
+  return {
+    error: diagnostic.error,
+    observations: errors,
+    errorIdentity: JSON.stringify(errors ?? diagnostic.error ?? ""),
   };
+}
+const facts = (entry?: IndexEntry): Facts | undefined => {
+  if (!entry || entry.deleted || entry.archived) return;
+  const { diagnostic, native, phase } = decodeIndexObservation(entry);
+  return {
+    working: phase !== "idle",
+    permissions: diagnostic.permissions,
+    permissionIDs: native?.permissions?.keys ?? [],
+    questions: diagnostic.questions,
+    questionIDs: native?.inputs?.keys ?? [],
+    ...diagnosticFacts(entry),
+    directory: entry.directory,
+    title: entry.title,
+    terminal: native?.terminal,
+    outcome: native?.outcome,
+    terminalOrigin: native?.terminalOrigin,
+    terminalFailure: native?.terminalFailure,
+  };
+};
+function publishedFacts(
+  entry: IndexEntry | undefined,
+  entity: EntityState | null,
+): Facts | undefined {
+  if (!entry || entry.deleted || entry.archived) return;
+  const evidence = entity?.evidence;
+  return {
+    title: entry.title,
+    directory: entry.directory,
+    working: evidence?.work === true,
+    permissions: evidence?.permissions ?? 0,
+    permissionIDs: evidence?.requests?.permissions.map(({ id }) => id) ?? [],
+    questions: evidence?.questions ?? 0,
+    questionIDs: evidence?.requests?.questions.map(({ id }) => id) ?? [],
+    ...diagnosticFacts(entry),
+    terminal: entity?.terminal,
+    runID: entity?.runID,
+    terminalOrigin: entity?.terminalOrigin,
+    outcome: entity?.outcome,
+    unseen: entity ? entity.counts.unseen > 0 : undefined,
+    terminalFailure: evidence?.failure,
+  };
+}
 /** Root comparison facts only; application delivery borrows accepted projected deltas. */
 export class NotificationTriggers {
   #connections = new Map<
@@ -180,43 +215,30 @@ export class NotificationTriggers {
     } else if (change.revision <= state.rev) return;
     state.rev = change.revision;
     for (const entry of change.changes) {
+      if (entry.entity !== undefined) {
+        const value = publishedFacts(entry.after, entry.entity);
+        this.#compare(
+          sidecar,
+          entry.id,
+          value,
+          baseline || entry.admitted === true,
+          value?.terminalOrigin === "live" ? value.terminal : undefined,
+          !replaced,
+        );
+        const pending = state.pendingSettlement.get(entry.id);
+        if (pending && value) this.settlement(sidecar, entry.id, pending);
+        else if (!value) state.pendingSettlement.delete(entry.id);
+        continue;
+      }
       const current = facts(entry.after);
-      // Native terminal evidence can precede its view-scoped inbox publication.
-      // An acknowledgement of an older terminal cannot acknowledge this run.
-      const nativeLive = !!entry.before && current?.terminalOrigin === "live" &&
-        ((current.terminal ?? 0) > (entry.before.activity?.terminal ?? 0) ||
-          current.terminal === entry.before.activity?.terminal &&
-            entry.before.activity?.terminalOrigin !== "live");
-      if (
-        current && entry.completedAt &&
-        entry.completedAt >= (current.terminal ?? 0) &&
-        !(nativeLive && entry.completedAt === current.terminal &&
-          entry.completionOrigin !== "live")
-      ) {
-        current.terminal = entry.completedAt;
-        current.outcome = entry.completedOutcome;
-        current.terminalOrigin = entry.completionOrigin;
-        current.terminalFailure = entry.completedFailure;
-      }
-      if (current && entry.completedAt === current.terminal) {
-        current.unseen = entry.completedUnseen;
-      }
-      if (entry.after && !current && entry.completedAt) {
-        state.finishes.set(entry.id, {
-          terminal: entry.completedAt,
-          outcome: entry.completedOutcome,
-          terminalOrigin: entry.completionOrigin,
-          terminalFailure: entry.completedFailure,
-        });
-      }
       this.#compare(
         sidecar,
         entry.id,
         current,
         baseline,
-        nativeLive
+        current?.terminalOrigin === "live" || baseline
           ? current?.terminal
-          : entry.completedAt || (baseline ? current?.terminal : undefined),
+          : undefined,
         !replaced,
       );
       const pending = state.pendingSettlement.get(entry.id);
@@ -324,7 +346,7 @@ export class NotificationTriggers {
         entry.id,
         facts(entry),
         !previous,
-        entry.activity?.terminal,
+        decodeIndexObservation(entry).native?.terminal,
       );
     }
     for (const id of pending) this.#compare(sidecar, id, undefined, false);
@@ -343,7 +365,7 @@ export class NotificationTriggers {
       id = sessionKey(sidecar, session);
     const old = previous ??
       {
-        status: "idle",
+        working: false,
         permissions: 0,
         permissionIDs: [],
         questions: 0,
@@ -375,7 +397,7 @@ export class NotificationTriggers {
           (outcome !== undefined && outcome !== priorFinish.outcome ||
             entry.terminalOrigin === "live" &&
               priorFinish.terminalOrigin !== "live"));
-    if (completedAt && (baseline || entry.status === "idle")) {
+    if (completedAt && (baseline || !entry.working)) {
       state.finishes.set(
         session,
         latestTerminal(priorFinish, {
@@ -391,7 +413,10 @@ export class NotificationTriggers {
         }),
       );
     }
-    const acknowledged = !!entry.terminal && entry.unseen === false;
+    const acknowledged = !!entry.terminal && (entry.unseen === false ||
+      old.unseen === false && old.terminal === entry.terminal &&
+        old.runID === entry.runID);
+    if (acknowledged) entry.unseen = false;
     if (acknowledged) {
       const note = this.#outcomes.get(id);
       if (note && note.kind !== "done") {
@@ -420,7 +445,7 @@ export class NotificationTriggers {
     ) return;
     const priorOutcome = this.#outcomes.get(id);
     if (
-      old.status === "idle" && entry.status !== "idle" && priorOutcome &&
+      !old.working && entry.working && priorOutcome &&
       priorOutcome.kind !== "done"
     ) {
       this.#outcomes.delete(id);
@@ -520,7 +545,7 @@ export class NotificationTriggers {
     } else if (
       !acknowledged && finished && outcome !== "failed" &&
       outcome !== "succeeded" &&
-      entry.status === "idle" &&
+      !entry.working &&
       !entry.permissions &&
       !entry.questions
     ) {

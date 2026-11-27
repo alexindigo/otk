@@ -125,7 +125,10 @@ test("a newer explicit Open survives older Clear and a newer run remains unseen"
   const entered = Promise.withResolvers<void>();
   const validate = Promise.withResolvers<void>();
   let holdNext = false;
-  const helper = row(success, { parentID: root, activity: run(20) });
+  const helper = row(success, {
+    parentID: root,
+    activity: { ...run(20), runID: "run-2" },
+  });
   const f = open(await fixture(), [row(root), helper], () => {
     if (!holdNext) return;
     holdNext = false;
@@ -143,12 +146,13 @@ test("a newer explicit Open survives older Clear and a newer run remains unseen"
     try {
       await entered.promise;
       await f.rpc.dispatch("sessions.opened", opened);
-      f.index.upsert({ ...helper, activity: run(21) });
+      // Same millisecond as R2: only the captured run identity separates them.
+      f.index.upsert({ ...helper, activity: { ...run(20), runID: "run-3" } });
     } finally {
       validate.resolve();
       await oldClear;
     }
-    assertEquals(f.state(success)?.terminal, 21);
+    assertEquals(f.state(success)?.runID, "run-3");
     assertEquals(f.state(success)?.counts.unseen, 1);
     assertEquals(f.state(success)?.opened, true);
   } finally {

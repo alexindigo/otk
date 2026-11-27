@@ -153,6 +153,7 @@ Deno.test("canonical transcript busy follows own work evidence even when the lam
     counts: { working: 0, blocked: 1, finished: 0, unseen: 0 },
     evidence: {
       work: true,
+      nativeRun: true,
       permissions: 0,
       questions: 1,
       descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },
@@ -177,6 +178,7 @@ Deno.test("canonical transcript busy follows own work evidence even when the lam
       "positive work reached the canonical projection",
     );
     value.evidence!.work = false;
+    delete value.evidence!.nativeRun;
     entities.observe(["session:tstv1-s"], "live");
     assertEquals(
       owner.projection.busy(false),
@@ -184,6 +186,7 @@ Deno.test("canonical transcript busy follows own work evidence even when the lam
       "unchanged blocked state cannot retain old work",
     );
     value.evidence!.work = true;
+    value.evidence!.nativeRun = true;
     entities.observe(["session:tstv1-s"], "live");
     assertEquals(owner.projection.busy(true), false);
     entities.stale(true);

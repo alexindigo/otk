@@ -125,16 +125,16 @@ Deno.test("beta.1 references migrate atomically, merge only permitted collisions
         user: "alice",
         session: "opcv1-ses_one",
         time: 8,
-         terminal: 0,
-         opened: 1,
-         open_generation: 0,
+        terminal: 0,
+        opened: 1,
+        open_generation: 0,
       }, {
         user: "bob",
         session: "opcv1-ses_one",
         time: 6,
-         terminal: 0,
-         opened: 0,
-         open_generation: 0,
+        terminal: 0,
+        opened: 0,
+        open_generation: 0,
       }],
     );
     assertEquals(

@@ -223,7 +223,7 @@ export {
   registerOsChannel,
 } from "./features/notify/os.ts";
 export { registerSoundChannel } from "./features/notify/sound.ts";
-export { registerBadgeChannel } from "./features/notify/badge.ts";
+export { attentionBadge } from "./features/notify/badge.ts";
 export { default as Toasts } from "./components/Toasts.tsx";
 export {
   default as NotificationSettings,

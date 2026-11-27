@@ -82,7 +82,7 @@ Deno.test("same-terminal failure enriches a live outcome but does not revive ack
     f.finish("root", 10, "failed", true, "historical");
     assertEquals(f.notes, []);
     f.finish("root", 20, "unknown", true, "live");
-    f.finish("root", 20, "failed");
+    f.finish("root", 20, "failed", true, "live");
     assertEquals(f.notes, ["info", "error"]);
     assertEquals(f.replacements.map((note) => note.kind), ["info"]);
     f.finish("root", 30, "unknown", true, "live");

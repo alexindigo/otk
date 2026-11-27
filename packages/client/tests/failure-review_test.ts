@@ -309,6 +309,7 @@ Deno.test("the session entity's paired outcome reaches finish notifications befo
             terminal: 20,
             unseen: true,
             outcome: "failed",
+            terminalOrigin: "live",
           }),
         },
         { op: "finish", sessionID: "root", time: 20 },
