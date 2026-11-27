@@ -22,7 +22,7 @@ async function expectStartAligned(row: Locator) {
 }
 
 test("menus.intrinsic-revert-actions-start-at-the-row-edge", {
-  tag: ["@contracts", "@isolated"],
+  tag: ["@menus", "@contracts", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   await page.goto(state.url + "/?scene=notice-lifetime");
   await expect(page.locator("html")).toHaveAttribute("data-ready", "true");
@@ -31,7 +31,7 @@ test("menus.intrinsic-revert-actions-start-at-the-row-edge", {
 });
 
 test("menus.narrow-trail-items-start-at-the-row-edge", {
-  tag: ["@contracts", "@isolated"],
+  tag: ["@menus", "@contracts", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   await page.setViewportSize({ width: 600, height: 800 });
   await page.goto(state.url + "/?scene=lists");
