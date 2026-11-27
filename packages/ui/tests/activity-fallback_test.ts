@@ -354,7 +354,7 @@ Deno.test("active record progress skips queued users but respects actual turn an
   };
   const queued: Message = { ...prompt, id: "queued", time: { created: 3 } };
   const owner = createTranscriptProjection();
-  owner.replace([prompt, record, queued]);
+  owner.reset([prompt, record, queued]);
   owner.busy(true);
   assertEquals([...owner.state.queuedIDs], ["queued"]);
   assertEquals(activeProgressRecord(owner.state), "record");
@@ -375,7 +375,7 @@ Deno.test("active record progress skips queued users but respects actual turn an
   });
   assertEquals([...owner.state.queuedIDs], []);
   assertEquals(activeProgressRecord(owner.state), undefined);
-  owner.replace([prompt, record, queued]);
+  owner.reset([prompt, record, queued]);
   assertEquals(activeProgressRecord(owner.state), "record");
   const assistant: Message = {
     id: "assistant",

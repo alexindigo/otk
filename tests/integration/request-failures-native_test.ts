@@ -98,7 +98,7 @@ for (const kind of ["model", "provider"] as const) {
         );
       }
       const projection = createTranscriptProjection();
-      projection.replace(page.items);
+      projection.reset(page.items);
       assert(
         projection.state.repliesByID[`reply:${prompt.id}`].messageIDs.includes(
           failure.id,

@@ -25,7 +25,7 @@ for (const local of [false, true]) {
     })`,
     () => {
       const transcript = createTranscriptProjection();
-      transcript.replace([{
+      transcript.reset([{
         id: "record",
         sessionID: view.sessionID,
         role: "context",

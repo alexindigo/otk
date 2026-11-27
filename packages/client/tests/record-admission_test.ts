@@ -47,7 +47,7 @@ Deno.test("record admission belongs to the complete context interval, not each e
     parts: [],
   });
   const first = header("first", 1), last = header("last", 2);
-  projection.replace([first, last]);
+  projection.reset([first, last]);
   assertEquals(projection.state.records.keys, [first.id, last.id]);
   assertEquals(Object.keys(projection.state.records.groups), []);
   projection.apply({

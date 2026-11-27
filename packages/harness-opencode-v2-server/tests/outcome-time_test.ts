@@ -77,7 +77,7 @@ Deno.test("failed-idle and interrupted-idle records carry the native event time"
 Deno.test("grouped failed run retains the last assistant's outcome independently of digest timing", () => {
   const projection = createTranscriptProjection();
   const message = mapMessage(raw, "opcv2-s", { order: 2, replyTo: "prompt" });
-  projection.replace([
+  projection.reset([
     mapMessage(
       { ...raw, id: "previous", time: { created: 100, completed: 900 } },
       "opcv2-s",

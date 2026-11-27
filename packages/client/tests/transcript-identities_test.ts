@@ -18,7 +18,7 @@ const step = (id: string, created: number): AssistantMessage => ({
 });
 Deno.test("page boundaries do not freeze a growing reply's native fork boundary", () => {
   const owner = createTranscriptProjection();
-  owner.replace([step("first", 1)]);
+  owner.reset([step("first", 1)]);
   owner.boundaries([{
     turnID: "turn",
     firstID: "first",
@@ -32,7 +32,7 @@ Deno.test("page boundaries do not freeze a growing reply's native fork boundary"
 });
 Deno.test("native message identities cannot collide with object prototype properties", () => {
   const owner = createTranscriptProjection();
-  owner.replace([
+  owner.reset([
     {
       id: "constructor",
       sessionID: "tstv1-s",

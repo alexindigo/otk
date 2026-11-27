@@ -26,7 +26,7 @@ import { resources, tempDir, withResources } from "../support/resources.ts";
 /** Match the client page consumer: the baseline and its sealed replay are one read. */
 function pageMessages(page: Pick<MessagePage, "items" | "catchup">): Message[] {
   const projection = createTranscriptProjection();
-  projection.replace(page.items);
+  projection.reset(page.items);
   for (const { event } of page.catchup) projection.apply(event);
   return projection.messages();
 }
@@ -66,7 +66,7 @@ async function observed(
     content: (_id, op) => projection.apply(op),
   });
   adapter.core.subscriptions(id, 1);
-  projection.replace(pageMessages(await adapter.core.listMessages(id, {})));
+  projection.reset(pageMessages(await adapter.core.listMessages(id, {})));
   return { adapter, projection, errors, removed, connections };
 }
 function record(message: Message) {
