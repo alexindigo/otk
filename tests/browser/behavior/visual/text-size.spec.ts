@@ -253,7 +253,7 @@ toolTest("visual.text-size-native-tool-control-geometry", {
     const tool = (await row.locator(".otk-tool-toggle").boundingBox())!;
     expect(tool.height).toBeGreaterThanOrEqual(26 * size / 100 - 1);
     const icon = (await row.locator(
-      ".otk-tool-state > .otk-tree-icon .otk-tree-icon-art > svg",
+      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot > svg",
     ).boundingBox())!;
     expect(icon.width).toBeCloseTo(13 * size / 100, 1);
     expect(icon.height).toBeCloseTo(13 * size / 100, 1);

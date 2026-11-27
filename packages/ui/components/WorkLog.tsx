@@ -5,7 +5,7 @@ import { retainedWorkDisclosure } from "../features/transcript-context.tsx";
 import ChromeMeta, { MetaRow } from "./ChromeMeta.tsx";
 import { WorkLogIcon } from "./ChromeIcons.tsx";
 import RecordRow from "./RecordRow.tsx";
-import { TreeIcon, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import type { Preferences } from "@otk/protocol";
 import { discloseInViewport } from "./viewport.ts";
 
@@ -32,13 +32,7 @@ export default function WorkLog(
       event.isTrusted && value !== open(),
     );
   const primary = (toggleID: string) => (
-    <RecordRow
-      icon={() => (
-        <TreeIcon>
-          <WorkLogIcon />
-        </TreeIcon>
-      )}
-    >
+    <RecordRow>
       <button
         id={toggleID}
         type="button"
@@ -55,6 +49,7 @@ export default function WorkLog(
     <section ref={(element) => frame = element} class="otk-work-log">
       <TreeNode
         toggleHeader
+        node={() => <WorkLogIcon />}
         label="Work log"
         open={open()}
         onOpen={change}

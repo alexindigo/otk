@@ -23,9 +23,9 @@ test("visual.record-tree-content-gutter-preserves-both-artwork-axes", {
     for (const record of await page.locator(".otk-native-record").all()) {
       await record.locator(".otk-tool-toggle").press("ArrowRight");
       const axes = await record.evaluate((el) => {
-        const art = el.querySelector(".otk-tree-icon-art")!
+        const art = el.querySelector(".otk-tree-node-slot")!
           .getBoundingClientRect();
-        const guide = el.querySelector(".otk-tree-incoming")!
+        const guide = el.querySelector(".otk-tree-region .otk-tree-junction")!
           .getBoundingClientRect();
         return { art: art.x + art.width / 2, guide: guide.x + guide.width / 2 };
       });
@@ -165,9 +165,8 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).all()
       ) {
         const edges = await record.evaluate((el) => {
-          const heading = Array.from(
-            el.querySelector(".otk-tool-state")!.children,
-          ).find((child) => !child.classList.contains("otk-tree-icon"))!;
+          const heading = el.querySelector(".otk-tool-state")!
+            .firstElementChild!;
           return [
             heading,
             el.querySelector(".otk-failure-main-reason")!,
@@ -379,13 +378,17 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         }
       }
       if (surface === "icons") {
-        await expect(page.locator(".otk-tool-state .otk-tree-icon-art svg"))
+        await expect(
+          page.locator(
+            "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot svg",
+          ),
+        )
           .toHaveCount(6);
         await expect(page.locator(".otk-todos .otk-state-shape")).toHaveCount(
           4,
         );
         await expect(
-          page.locator(".otk-state-shape text, .otk-tree-icon-art text"),
+          page.locator(".otk-state-shape text, .otk-tree-node-slot text"),
         ).toHaveCount(0);
         await expect(
           page.getByText(

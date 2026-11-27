@@ -55,9 +55,9 @@ slots. The terminal frame uses Surface's `panel` density, independent of the
 shells its tab strip and panels render.
 
 Projects, Sessions and their section headers pass lamps, labels and feedback to
-`TreeNode`. `Tree` owns the flat row grid and all lane paint; `--tree-indent` is
-both the lane width and the depth step. The client derives lane states from the
-row path even when other rows are unmounted. A row surface borrows both grid
+`TreeNode`. `Tree` owns the shared row grid and all lane paint; `--tree-indent`
+is both the lane width and the depth step. The client derives lane states from
+the row path even when other rows are unmounted. A row surface borrows both grid
 axes, so hover, focus and selection still include the lamp without owning a
 track. The selection mark remains outside that surface. `SidebarRow` owns the
 artwork slot, shrinkable single-line title and ranked whole metadata. Missing
@@ -217,18 +217,17 @@ Standalone feedback retains its heading. DisclosureToggle owns a control-height
 square gutter and the shared disclosure-layout grid: headings, reasons, actions
 and Details labels share its content edge, independently of whether a signal is
 painted. Toast messages borrow that same grid and failure content borrows its
-subgrid without size containment. Record headers borrow the same content gutter;
-TreeIcon keeps its artwork and guide in the native tree-indent cell, with any
-remaining gutter in a trailing track. Error colour belongs to the shared
-FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
-its surface edge. Compact callers and containers at or below 320px show the
-heading and controls, with complete reasons inside Details. The shared
-ScrollRegion bounds expanded details; target labels and diagnostic IDs truncate
-with full-value titles. FeedbackStatus normalizes text-only errors through the
-client presenter too. ConnectionBadge owns the lamp, optional label/action and
-ConnectionStatus grid on every surface. A containing title replaces its label;
-otherwise the single state line shares that label's column. Quiet connection
-copy borrows ChromeMeta.
+subgrid without size containment. Record tree feedback can borrow the artwork
+and label tracks directly. Error colour belongs to the shared FailureSignal
+stripe, never paragraph paint; Toast instead owns that signal at its surface
+edge. Compact callers and containers at or below 320px show the heading and
+controls, with complete reasons inside Details. The shared ScrollRegion bounds
+expanded details; target labels and diagnostic IDs truncate with full-value
+titles. FeedbackStatus normalizes text-only errors through the client presenter
+too. ConnectionBadge owns the lamp, optional label/action and ConnectionStatus
+grid on every surface. A containing title replaces its label; otherwise the
+single state line shares that label's column. Quiet connection copy borrows
+ChromeMeta.
 
 FailurePresenter receives the current view and suppresses that session's target
 on every inline surface; notifications and genuinely cross-session targets keep
@@ -1143,24 +1142,17 @@ travel and re-entry retain the preview. Keyboard focus and explicit opening
 bypass the hover delay. Reduced motion does not change either interaction
 deadline.
 
-`TreeNode` owns the Explorer-style dotted connectors, square SVG +/- junction,
-header, optional feedback track and lazy body grid. Feedback grows below the
-header instead of moving its junction away from the row's lamp. `TreeItem`
-supplies last-child and direction facts, including across virtual record
-boundaries; outgoing branches mirror that same grid. Disclosure state and
-callbacks remain in the existing interaction owner. `TreeGuide` borrows the same
-junction cells for already-expanded virtual session hierarchies, using plain
-client `treePaths` rather than mounted neighbours. No component paints a second
-nesting rail or elbow. Horizontal levels use the named 19u tree indent,
-independent of row height, with the named 9u box size and half-cell dotted
-stubs. Outgoing grids reverse their tracks and header flow, never text
-direction. `TreeIcon` owns the leading artwork slot and the downward child rail;
-callers inject their lamp or kind artwork. The child junction is aligned with
-that parent icon, not its disclosure box. TreeIcon never invents artwork: it
-renders the caller's semantic kind icon or lamp, or an empty slot when there is
-none. Body-only leaf content needs no icon or disclosure. Header and body
-factories borrow ContentSlot so record updates retain the mounted preview
-lifetime.
+`TreeNode` owns the Explorer-style lane grid for both flat and nested rows.
+Callers inject artwork, label, trigger, feedback and body content; only Tree
+positions those slots. `TreeItem` supplies nested topology, including across
+virtual record boundaries. Flat lists supply explicit client `treePaths`. The
+same client `laneStates` paints both. `--tree-indent` is both the 19-unit lane
+width and depth step. A child's junction occupies its parent's artwork lane.
+Regions are not indented; row gaps carry the active continuation lanes. Outgoing
+branches reverse tracks, not text direction. Feedback extends the lanes below
+the first line without moving its junction. Disclosure choices and callbacks
+stay in the existing interaction owner. Factories borrow ContentSlot so record
+updates retain mounted content.
 
 DisclosureToggle owns that SVG artwork, keyboard expansion and one button.
 TreeNode's toggleHeader associates its decorative junction label with the

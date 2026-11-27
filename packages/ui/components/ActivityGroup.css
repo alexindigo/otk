@@ -5,7 +5,9 @@
 }
 .otk-record-group {
   --tree-height: var(--control-size);
-  margin-block-end: var(--message-gap, var(--space-6));
+}
+.otk-activity-group {
+  --tree-row-gap: var(--message-gap, var(--space-6));
 }
 .otk-record-group-count,
 .otk-record-group-time {

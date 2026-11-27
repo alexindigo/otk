@@ -87,6 +87,7 @@ export default function FailureContent(
   const details = () => (
     <div class="otk-failure-details">
       <Disclosure
+        trackAligned={props.placement === "record" && props.subgrid}
         kind="failureDetails"
         variant="label"
         identity={{

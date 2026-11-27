@@ -69,7 +69,12 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
     const facts = await summary.evaluate((element) => {
       const style = getComputedStyle(element),
         root = element.closest("[data-background-interval]")!;
-      const box = root.getBoundingClientRect();
+      // Tree owns the conversation gap as a separate row, not a margin on
+      // this section. Measure the same collapsed heading as before.
+      const box = root.querySelector(
+        ":scope > .otk-tree-node > .otk-tree-heading",
+      )!
+        .getBoundingClientRect();
       return {
         color: style.color,
         weight: style.fontWeight,

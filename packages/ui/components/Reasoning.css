@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-reasoning {
   color: var(--secondary);
-  margin: 0 0 var(--space-1);
 }
 .otk-reasoning-heading {
   display: flex;
@@ -20,4 +19,8 @@
   gap: var(--space-2);
   color: var(--otk-fg-3);
   font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
+}
+
+.otk-reasoning-row {
+  --tree-row-gap: var(--space-1);
 }

@@ -17,7 +17,9 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
     "apply_patch",
   );
   await expect(
-    patch.locator(".otk-tool-state > .otk-tree-icon .otk-tree-icon-art"),
+    patch.locator(
+      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot",
+    ),
   ).not.toHaveText("\u25c7");
   const read = page.locator("[data-tool=read]").filter({ hasText: "beta.ts" });
   await expect(read).toContainText("190");

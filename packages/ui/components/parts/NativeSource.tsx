@@ -15,7 +15,7 @@ import {
   retainedDisclosure,
   useNativeSource,
 } from "../../features/transcript-context.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeItem, TreeNode } from "../Tree.tsx";
 import { WorkLogIcon } from "../ChromeIcons.tsx";
 import { sourcePreview } from "./native-source-preview.ts";
 
@@ -83,6 +83,8 @@ export default function NativeSource(props: {
     <section class={["otk-tool-line otk-native-source", { "is-open": open() }]}>
       <TreeNode
         toggleHeader
+        class="otk-tool-row"
+        node={() => <WorkLogIcon />}
         label="Source"
         open={open()}
         onOpen={setOpen}
@@ -94,9 +96,6 @@ export default function NativeSource(props: {
             aria-expanded={open() ? "true" : "false"}
             onClick={() => setOpen(!open())}
           >
-            <TreeIcon>
-              <WorkLogIcon />
-            </TreeIcon>
             <span class="otk-control-label">Source</span>
           </button>
         )}

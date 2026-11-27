@@ -10,11 +10,14 @@
   /* The icon stays on the rail edge and actions keep their fitting lane.
      The title floor is relative to the space left for the middle tracks. */
   display: grid;
-  grid-template: "icon main actions" / max-content minmax(0, 1fr) auto;
+  grid-template: "main actions" / minmax(0, 1fr) auto;
   align-items: center;
   min-block-size: var(--control-size);
 }
-.otk-record-row-grid > :first-child {
+.otk-record-row.has-icon > .otk-record-row-grid {
+  grid-template: "icon main actions" / max-content minmax(0, 1fr) auto;
+}
+.otk-record-row.has-icon > .otk-record-row-grid > :first-child {
   grid-area: icon;
 }
 .otk-record-row-main {
@@ -25,6 +28,8 @@
   align-items: center;
   align-self: stretch;
   min-inline-size: 0;
+}
+.otk-record-row.has-icon .otk-record-row-main {
   padding-inline-start: var(--space-2);
 }
 .otk-record-row-label {
@@ -51,11 +56,16 @@
   margin-inline-start: var(--space-2);
 }
 .otk-record-row.is-outgoing > .otk-record-row-grid {
+  grid-template: "actions main" / auto minmax(0, 1fr);
+}
+.otk-record-row.is-outgoing.has-icon > .otk-record-row-grid {
   grid-template: "actions main icon" / auto minmax(0, 1fr) max-content;
 }
 .otk-record-row.is-outgoing .otk-record-row-main {
   grid-template: "status label" / minmax(0, max-content)
     minmax(auto, 1fr);
+}
+.otk-record-row.is-outgoing.has-icon .otk-record-row-main {
   padding-inline: 0 var(--space-2);
 }
 .otk-record-row.is-outgoing .otk-record-row-label {

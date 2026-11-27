@@ -12,18 +12,20 @@ async function geometry(row: Locator) {
     const rect = (selector: string) =>
       node.querySelector(selector)
         ?.getBoundingClientRect();
+    const tree = node.closest(".otk-tree-heading")!;
     const ruler = document.createElement("span");
     ruler.style.position = "absolute";
-    node.append(ruler);
+    tree.append(ruler);
     const token = (name: string) => {
       ruler.style.width = `var(${name})`;
       return ruler.getBoundingClientRect().width;
     };
-    const height = token("--tree-row-height"), gap = token("--space-2");
+    const height = token("--tree-line"), gap = token("--space-2");
     ruler.remove();
     const heading = node.getBoundingClientRect();
     const label = rect(".otk-record-row-label, .otk-record-group-toggle")!;
-    const icon = rect(".otk-tree-icon")!;
+    const icon = tree.querySelector(".otk-tree-node-lane")!
+      .getBoundingClientRect();
     const actions = rect(".otk-record-row-actions, .otk-fitted-actions")!;
     const status = rect(".otk-record-row-status");
     const buttons = Array.from(

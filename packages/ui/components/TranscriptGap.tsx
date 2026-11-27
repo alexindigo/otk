@@ -4,7 +4,7 @@ import type { Element } from "solid-js";
 import { GapIcon } from "./ChromeIcons.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import RecordRow from "./RecordRow.tsx";
-import { TreeIcon } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import "./TranscriptGap.css" with { type: "text" };
 
 const labels = {
@@ -26,27 +26,28 @@ export default function TranscriptGap(props: {
       role="status"
       aria-busy={loading() ? "true" : "false"}
     >
-      <RecordRow
-        icon={() => (
-          <TreeIcon>
-            <GapIcon />
-          </TreeIcon>
+      <TreeNode
+        class="otk-transcript-gap-row"
+        node={() => <GapIcon />}
+        header={() => (
+          <RecordRow
+            failed={failed()}
+            actions={loading() ? [] : [{
+              key: "bridge",
+              label: failed() ? "Retry" : "Load",
+              title: failed()
+                ? "Retry loading earlier messages"
+                : "Load earlier messages",
+              run: props.onLoad,
+            }]}
+          >
+            <ChromeMeta truncate title={labels[state()]}>
+              {labels[state()]}
+            </ChromeMeta>
+            <span class="otk-transcript-gap-rule" aria-hidden="true" />
+          </RecordRow>
         )}
-        failed={failed()}
-        actions={loading() ? [] : [{
-          key: "bridge",
-          label: failed() ? "Retry" : "Load",
-          title: failed()
-            ? "Retry loading earlier messages"
-            : "Load earlier messages",
-          run: props.onLoad,
-        }]}
-      >
-        <ChromeMeta truncate title={labels[state()]}>
-          {labels[state()]}
-        </ChromeMeta>
-        <span class="otk-transcript-gap-rule" aria-hidden="true" />
-      </RecordRow>
+      />
     </div>
   );
 }
