@@ -62,6 +62,16 @@ export const TerminalIcon = () => (
     <path d="m7 9 3 3-3 3M13 15h4" />
   </Icon>
 );
+export const RobotIcon = () => (
+  <Icon>
+    <rect x="4" y="7" width="16" height="13" rx="3" />
+    <path d="M12 7V3m-2 0h4M2 12v3m20-3v3M9 16h6" />
+    <g fill="currentColor" stroke="none">
+      <circle cx="9" cy="12" r="1.25" />
+      <circle cx="15" cy="12" r="1.25" />
+    </g>
+  </Icon>
+);
 export const ExpandIcon = () => (
   <Icon>
     <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6" />

@@ -2,7 +2,7 @@
 import "./LiveCount.css" with { type: "text" };
 import { lamp } from "@otk/client";
 import type { EntityLamp } from "@otk/protocol";
-import { For } from "solid-js";
+import { type Element, For } from "solid-js";
 import StatusLight from "./StatusLight.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 
@@ -10,6 +10,7 @@ export const LIVE_COUNT_TRIGGER = "otk-live-count-trigger";
 
 /** Layout shared by the composer's work pills. */
 export default function LiveCount(props: {
+  icon: () => Element;
   parts: readonly {
     id: string;
     count: number;
@@ -18,6 +19,7 @@ export default function LiveCount(props: {
 }) {
   return (
     <span class="otk-live-count-compact" aria-hidden="true">
+      <props.icon />
       <For each={props.parts} keyed={(item) => item.id}>
         {(item) => (
           <span class="otk-live-count">

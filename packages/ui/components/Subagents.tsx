@@ -33,7 +33,7 @@ import ActionButton from "./ActionButton.tsx";
 import TerminateButton, { bindWorkTermination } from "./TerminateButton.tsx";
 import StatusLight from "./StatusLight.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
-import { CheckAllIcon } from "./ChromeIcons.tsx";
+import { CheckAllIcon, RobotIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
 import ChromeMeta, { MetaItem, MetaRow } from "./ChromeMeta.tsx";
 import EntityPill from "./EntityPill.tsx";
@@ -162,6 +162,7 @@ export default function Subagents(
         }}
         trigger={
           <LiveCount
+            icon={RobotIcon}
             parts={helperCountParts(counts()).map((part) => ({
               id: part.kind,
               count: part.count,
