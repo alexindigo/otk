@@ -42,7 +42,7 @@ import { PendingAttentionIndex } from "./attention.ts";
 import { commands } from "./commands.ts";
 import { type PendingRoute, V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
-import { V2Shells } from "./shells.ts";
+import { parkedShellResult, V2Shells } from "./shells.ts";
 import { requestFailureRecord } from "./request-failure.ts";
 import { EventRefresh } from "./event-refresh.ts";
 
@@ -1037,7 +1037,8 @@ export class OpencodeV2ServerAdapter implements Harness {
       const pending = [
         ...jobs.map(({ id }) => `result:${id}`),
         ...(inbox.state === "available"
-          ? inbox.items.map(({ id, delivery }) => `queued:${delivery}:${id}`)
+          ? inbox.items.filter((item) => !parkedShellResult(item))
+            .map(({ id, delivery }) => `queued:${delivery}:${id}`)
           : []),
         ...(active[sid] || millis(native.time.busy) > terminal
           ? ["native-start"]
@@ -1523,8 +1524,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    const parked = event.type === "session.inbox.enqueued" &&
+      parkedShellResult(event.data.item);
     if (
-      changedID && generation === this.#generation &&
+      changedID && generation === this.#generation && !parked &&
       /^session\.(inbox\.|execution\.started$|compaction\.started$|retry\.scheduled$)/
         .test(event.type)
     ) {
@@ -1675,7 +1678,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     if (typeof sid !== "string" || sid === "global") return;
-    if (/^session\.inbox\./.test(event.type)) {
+    if (!parked && /^session\.inbox\./.test(event.type)) {
       this.#confirmCompletion(ids.encode(sid), client, signal);
     }
     if (

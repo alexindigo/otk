@@ -318,6 +318,8 @@ isolatedTest.describe("native sends with held receipts", () => {
         }).toBe(true);
         expect(frames.sent.filter(({ frame }) => frame.method === method))
           .toHaveLength(1);
+        await expect(page.locator(`[data-session="${session.id}"]`))
+          .toHaveAttribute("data-status", "idle");
         await expect(input).toHaveValue("");
         await expect(send).toBeDisabled();
       }

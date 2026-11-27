@@ -2,7 +2,24 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { type OperationContext, OperationFailure } from "@otk/protocol";
 import { V2Client } from "../client.ts";
-import { V2Shells } from "../shells.ts";
+import { parkedShellResult, V2Shells } from "../shells.ts";
+
+Deno.test("user shell records park while model shell jobs queue a native continuation", () => {
+  const result = (metadata: Record<string, unknown>) => ({
+    type: "synthetic",
+    delivery: "steer",
+    payload: { metadata },
+  });
+  const shell = { source: "shell", shellID: "sh_a", state: "completed" };
+  assertEquals(parkedShellResult(result(shell)), true);
+  assertEquals(
+    parkedShellResult(result({ source: "shell", state: "error" })),
+    true,
+  );
+  assertEquals(parkedShellResult(result({ ...shell, jobID: "job_a" })), false);
+  assertEquals(parkedShellResult(result({ source: "subagent" })), false);
+  assertEquals(parkedShellResult({ ...result(shell), type: "user" }), false);
+});
 
 function info(id: string, sessionID = "ses_owner") {
   return {
