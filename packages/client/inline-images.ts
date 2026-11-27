@@ -5,7 +5,7 @@ import {
   type PathSemantics,
 } from "@otk/protocol";
 import { hrefPath, type PathMention } from "./file-paths.ts";
-import { formatBytes } from "./format.ts";
+import { formatBytes, metaList } from "./format.ts";
 
 export type ImageSource =
   | { kind: "local"; mention: PathMention }
@@ -81,7 +81,9 @@ export function imageFactsLine(
     "image/webp": "WebP",
     "image/svg+xml": "SVG",
   }[fact.mime];
-  return `${kind} image · ${fact.width} x ${fact.height} · ${
-    formatBytes(fact.size)
-  }`;
+  return metaList([
+    `${kind} image`,
+    `${fact.width} x ${fact.height}`,
+    formatBytes(fact.size),
+  ]);
 }

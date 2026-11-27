@@ -649,6 +649,7 @@ export default function Shell(
             forms: resources.forms,
             filePaths: {
               facts: resources.fileFacts,
+              api: (id) => sidecars.connection(id).base,
               entry: resources.entry,
               entities: resources.entities,
               openMenu: (element) => openFileMenu?.(element),

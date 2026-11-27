@@ -17,6 +17,7 @@ export interface FileTarget {
   sessionID: string;
   mention: PathMention;
   fact: FileFactFound;
+  image?: { url: string; facts: string; name: string };
 }
 
 export function registerFileCommands(
@@ -39,6 +40,13 @@ export function registerFileCommands(
         reason: "This file cannot be previewed",
       },
     async run(_context, target: FileTarget) {
+      if (target.image) {
+        await commands.run("dialog.open", {
+          id: "image",
+          input: { ...target.image, path: target.fact.resolved, target },
+        });
+        return;
+      }
       const { sidecarId, sessionID, mention } = target;
       const invalidate = () =>
         facts(sidecarId).invalidate(sessionID, mention.path);
@@ -58,6 +66,8 @@ export function registerFileCommands(
           input: {
             name: preview.name,
             url: `data:${preview.mime};base64,${preview.dataBase64}`,
+            path: preview.resolved,
+            target,
           },
         });
       } else if (preview.kind === "text") {

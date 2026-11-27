@@ -24,7 +24,7 @@ function pathBatch(p: Record<string, unknown>) {
 export function registerLocalFiles(
   rpc: RpcRegistry,
   files: LocalFiles,
-  images?: InlineImages,
+  images: InlineImages,
 ): void {
   rpc.register("file.stat", {
     params: pathBatch,
@@ -38,19 +38,17 @@ export function registerLocalFiles(
         ctx.execution?.signal,
       ),
   });
-  if (images) {
-    rpc.register("file.images", {
-      params: pathBatch,
-      execution: readExecution((p: { sessionID: string }) => ({
-        sessionID: p.sessionID,
-      })),
-      async handler(ctx, p) {
-        const signal = ctx.execution?.signal;
-        const directories = await ctx.sessionDirectories([p.sessionID], signal);
-        return await images.facts(directories[p.sessionID], p.paths, signal);
-      },
-    });
-  }
+  rpc.register("file.images", {
+    params: pathBatch,
+    execution: readExecution((p: { sessionID: string }) => ({
+      sessionID: p.sessionID,
+    })),
+    async handler(ctx, p) {
+      const signal = ctx.execution?.signal;
+      const directories = await ctx.sessionDirectories([p.sessionID], signal);
+      return await images.facts(directories[p.sessionID], p.paths, signal);
+    },
+  });
   rpc.register("file.preview", {
     params: (p) => ({ sessionID: sessionID(p)!, path: text(p, "path")! }),
     execution: readExecution((p: { sessionID: string; path: string }) => ({

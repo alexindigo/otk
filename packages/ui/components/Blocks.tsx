@@ -14,6 +14,7 @@ import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
 import { hrefPath, pathSegments, textRuns } from "@otk/client";
 import CodeBlock from "./CodeBlock.tsx";
+import InlineImage from "./InlineImage.tsx";
 import TaskMarker from "./TaskMarker.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
 import PathLink, { PathContext } from "./PathLink.tsx";
@@ -156,16 +157,7 @@ function LinkInline(props: InlineProps<"link">) {
   );
 }
 function ImageInline(props: InlineProps<"image">) {
-  return (
-    <img
-      class="otk-prose-image"
-      src={props.item.src.startsWith("data:image/")
-        ? props.item.src
-        : safeHref(props.item.src)}
-      alt={props.item.alt}
-      loading="lazy"
-    />
-  );
+  return <InlineImage src={props.item.src} alt={props.item.alt} />;
 }
 function BreakInline() {
   return <br />;
