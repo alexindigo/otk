@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
-import { age, createTreeDisclosure } from "@otk/client";
+import { age, createDisclosures } from "@otk/client";
 import { solidState } from "../../state/binding.ts";
-import { DEFAULT_PREFS } from "@otk/protocol";
+import { DEFAULT_PREFS, projectLayoutKey } from "@otk/protocol";
 import ProjectInbox, {
   type ProjectRow,
 } from "../../components/ProjectInbox.tsx";
@@ -58,7 +58,6 @@ const checkout = (name: string, extra: Partial<ProjectRow> = {}) =>
     ...extra,
   });
 export default function SidebarRows() {
-  const tree = createTreeDisclosure(solidState);
   const params = new URL(location.href).searchParams;
   const [prefs, setPrefs] = createSignal({
     ...DEFAULT_PREFS,
@@ -71,6 +70,39 @@ export default function SidebarRows() {
   const [selected, setSelected] = createSignal({
     sidecarId: "local",
     directory: "/projects/ndash",
+  });
+  const tree = createDisclosures({
+    factory: solidState,
+    durable: {
+      projectBranch: {
+        read: ({ scope: sidecarId, id: directory }) =>
+          !prefs().shellLayout.projectCollapsed
+            ?.[projectLayoutKey({ sidecarId, directory })],
+        save: ({ scope: sidecarId, id: directory }, open) => {
+          setPrefs((p) => ({
+            ...p,
+            shellLayout: {
+              ...p.shellLayout,
+              projectCollapsed: {
+                ...p.shellLayout.projectCollapsed,
+                [projectLayoutKey({ sidecarId, directory })]: !open,
+              },
+            },
+          }));
+          return Promise.resolve();
+        },
+      },
+      discovered: {
+        read: () => !prefs().shellLayout.discoveredCollapsed,
+        save: (_, open) => {
+          setPrefs((p) => ({
+            ...p,
+            shellLayout: { ...p.shellLayout, discoveredCollapsed: !open },
+          }));
+          return Promise.resolve();
+        },
+      },
+    },
   });
   return (
     <div class="sidebar-row-scene">
@@ -103,20 +135,6 @@ export default function SidebarRows() {
           setPrefs((p) => ({
             ...p,
             shellLayout: { ...p.shellLayout, ...patch },
-          }));
-          return Promise.resolve();
-        }}
-        onProjectCollapse={(project, collapsed) => {
-          setPrefs((p) => ({
-            ...p,
-            shellLayout: {
-              ...p.shellLayout,
-              projectCollapsed: {
-                ...p.shellLayout.projectCollapsed,
-                [JSON.stringify([project.sidecarId, project.directory])]:
-                  collapsed,
-              },
-            },
           }));
           return Promise.resolve();
         }}

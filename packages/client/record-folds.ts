@@ -17,6 +17,7 @@ export function recordKindDisclosure(
   category: DisclosureCategory,
 ): ReturnType<TranscriptInteraction["disclosure"]> {
   return interaction.disclosure(
+    "recordKinds",
     recordKindKey(owner, category),
     interaction.generation(owner),
   );

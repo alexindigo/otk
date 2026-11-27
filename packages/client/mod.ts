@@ -8,7 +8,7 @@ export {
 } from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
-export * from "./tree-disclosure.ts";
+export * from "./disclosure.ts";
 export * from "./project-placement.ts";
 export { ActivityPresence } from "./activity-presence.ts";
 export {

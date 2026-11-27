@@ -56,6 +56,8 @@ import {
   createTranscriptInteraction,
   type TranscriptInteraction,
 } from "./transcript-interaction.ts";
+import type { Disclosures } from "./disclosure.ts";
+import { sessionKey } from "./index.ts";
 import {
   createTranscriptProjection,
   type TranscriptProjection,
@@ -191,6 +193,7 @@ export function createTranscript(
   policy: () => MessagePolicy | undefined = () =>
     connection(target.sidecarId).messages,
   entities?: EntityStateStore,
+  disclosures?: Disclosures,
 ): TranscriptOwner {
   const requests = connection(target.sidecarId).attention;
   const requestEntry = (id: string) => entry(target.sidecarId, id);
@@ -347,7 +350,10 @@ export function createTranscript(
     });
     return early.promise;
   };
-  const interaction = createTranscriptInteraction();
+  const interaction = createTranscriptInteraction(
+    disclosures,
+    sessionKey(target.sidecarId, target.sessionID),
+  );
   const helper = (
     id: string,
   ): import("@otk/protocol").HelperSummary | undefined => {

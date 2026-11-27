@@ -9,6 +9,7 @@ import {
 import {
   age,
   CommandHub,
+  createDisclosures,
   createDrafts,
   createInbox,
   createNativeSources,
@@ -16,7 +17,6 @@ import {
   createSessionSubmission,
   createTabs,
   createTaskActions,
-  createTreeDisclosure,
   elapsed,
   exactCount,
   type MergedEntry,
@@ -1117,7 +1117,7 @@ export function SecondaryFailures(
 export default function SharedControls(
   props: { onTheme(id: string): void },
 ): Element {
-  const tree = createTreeDisclosure(solidState);
+  const tree = createDisclosures({ factory: solidState });
   const registry = createPreferences(),
     commands = new CommandHub(),
     ui = createUiRegistries();

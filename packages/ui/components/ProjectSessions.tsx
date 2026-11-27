@@ -24,11 +24,12 @@ import type {
   InboxSnapshot,
   IndexEntry,
   SessionTreeTarget,
-  ShellLayout,
 } from "@otk/protocol";
 import {
   createEntityStateStore,
   createSessionTree,
+  type Disclosures,
+  type DisclosureState,
   type EntityStateStore,
   lamp,
   type ListInteraction,
@@ -36,23 +37,17 @@ import {
   type MergedMetadata,
   type ProjectSelection,
   type Selection,
+  SESSION_TREE_DISCLOSURES,
   type SessionListRow,
   type SessionRename,
   type SessionTreeItem,
   sessionTreeView,
   sessionWorkStatus,
-  type TreeDisclosure,
-  type TreeDisclosures,
   usageCost,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import SessionStateMeta from "./SessionStateMeta.tsx";
-import {
-  entityKey,
-  MAX_SESSION_TITLE,
-  taskEntityID,
-  treeLayoutKey,
-} from "@otk/protocol";
+import { entityKey, MAX_SESSION_TITLE, taskEntityID } from "@otk/protocol";
 import UsageCost from "./UsageCost.tsx";
 import { PlusIcon, SearchIcon, SessionsIcon } from "./ChromeIcons.tsx";
 import {
@@ -67,9 +62,7 @@ import { orderInteraction } from "./order-interaction.ts";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
-  disclosure: TreeDisclosures;
-  treeCollapsed: ShellLayout["treeCollapsed"];
-  onTreeCollapse(target: SessionTreeTarget, collapsed: boolean): Promise<void>;
+  disclosure: Disclosures;
   entries?: readonly MergedEntry[];
   rows?(query: string): SessionListRow[];
   onRows?(keys: readonly string[], query: string): void;
@@ -161,15 +154,8 @@ export default function ProjectSessions(props: {
       setError(failureValue(e, { actionLabel: "Opening session" }))
     );
   const hierarchy = createSessionTree();
-  const bind = (target: SessionTreeTarget) => {
-    const key = treeLayoutKey(target);
-    return props.disclosure.bind(
-      target.kind,
-      target,
-      () => !props.treeCollapsed?.[key],
-      (open) => props.onTreeCollapse(target, !open),
-    );
-  };
+  const bind = ({ kind, sidecarId: scope, id }: SessionTreeTarget) =>
+    props.disclosure.bind(SESSION_TREE_DISCLOSURES[kind], { scope, id });
   const allRows = createMemo(() => {
     const project = props.project;
     return project && props.ready !== false
@@ -191,8 +177,8 @@ export default function ProjectSessions(props: {
     return counts;
   });
   const tree = createMemo(() => {
-    let failure: TreeDisclosure | undefined;
-    const bindings = new Map<string, TreeDisclosure>();
+    let failure: DisclosureState | undefined;
+    const bindings = new Map<string, DisclosureState>();
     const rows = props.project
       ? sessionTreeView(allRows(), props.project, (item) => {
         const disclosure = bind(item.target);

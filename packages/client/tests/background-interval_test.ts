@@ -108,7 +108,8 @@ Deno.test("background interval survives queued admission, singleton append and h
   const interaction = createTranscriptInteraction();
   interaction.reveal(p.state.records.parents.r2);
   assertEquals(
-    interaction.disclosure(key, interaction.generation(key)).expanded("record"),
+    interaction.disclosure("activity", key, interaction.generation(key))
+      .expanded("record"),
     true,
   );
   p.reset(p.messages());

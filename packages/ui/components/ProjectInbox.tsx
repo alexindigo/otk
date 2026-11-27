@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  type Disclosures,
   errorFeedback,
   type FailureValue,
   failureValue,
@@ -7,7 +8,6 @@ import {
   projectBranchPresentation,
   projectGroup,
   projectTree,
-  type TreeDisclosures,
 } from "@otk/client";
 import { archiveEntityID, entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
 import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
@@ -81,7 +81,7 @@ export interface ProjectRow extends ProjectProjectionRow {
   otkProjectID?: string;
 }
 export default function ProjectInbox<T extends ProjectRow>(props: {
-  disclosure: TreeDisclosures;
+  disclosure: Disclosures;
   projects: T[];
   duplicateName(name: string): boolean;
   projectLabel?(sidecarId: string, directory: string): string;
@@ -98,19 +98,14 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
   onMove?(id: string, move: ProjectMove): Promise<void>;
   onLayout(patch: Partial<ShellLayout>): Promise<void>;
-  onProjectCollapse?(
-    project: ProjectSelection,
-    collapsed: boolean,
-  ): Promise<void>;
   /** The connection's entity states; standalone consumers present rows'. */
   entities?(server: string): EntityStateStore;
 }): import("solid-js").Element {
   const disclosure = props.disclosure;
-  const inactiveDisclosure = disclosure.bind(
-    "inactive",
-    { id: "" },
-    () => false,
-  );
+  const inactiveDisclosure = disclosure.bind("inactive", {
+    scope: "",
+    id: "inactive",
+  });
   const inactiveOpen = inactiveDisclosure.open;
   const [error, setError] = createSignal<FailureValue>("");
   const ports = useCommandPorts(), { commands } = ports;
@@ -524,14 +519,10 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       !!item.archive && archivedRows(node().project).length > 0;
     const ownsNestedArchive = () =>
       archive() && node().project.directory === repository(node().project);
-    const intent = disclosure.bind(
-      "project",
-      { sidecarId: node().project.sidecarId, id: node().project.directory },
-      () => !layout().projectCollapsed?.[node().key],
-      props.onProjectCollapse
-        ? (value) => props.onProjectCollapse!(node().project, !value)
-        : undefined,
-    );
+    const intent = disclosure.bind("projectBranch", {
+      scope: node().project.sidecarId,
+      id: node().project.directory,
+    });
     const expanded = intent.open;
     const presentation = () =>
       projectBranchPresentation(
@@ -573,7 +564,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           hasChildren={presentation().hasChildren}
           showEmptyToggle={false}
           bodyVisible={children().length > 0 || nestedArchive()}
-          onOpen={props.onProjectCollapse ? save : undefined}
+          onOpen={save}
           header={(connected) => (
             <Row
               project={node().project}
@@ -632,9 +623,9 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   });
   function Archive(section: { repo: ProjectRow }) {
     const intent = disclosure.bind("archive", {
-      sidecarId: section.repo.sidecarId,
+      scope: section.repo.sidecarId,
       id: repository(section.repo),
-    }, () => false);
+    });
     const expanded = intent.open;
     const setExpanded = (value: boolean) => {
       void intent.set(value);
@@ -713,12 +704,10 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       </Show>
     );
   }
-  const discoveredDisclosure = disclosure.bind(
-    "discovered",
-    { id: "" },
-    () => !layout().discoveredCollapsed,
-    (value) => props.onLayout({ discoveredCollapsed: !value }),
-  );
+  const discoveredDisclosure = disclosure.bind("discovered", {
+    scope: "",
+    id: "discovered",
+  });
   const discoveredOpen = discoveredDisclosure.open;
   const toggleDiscovered = ownedAction(
     "projects.discovered",

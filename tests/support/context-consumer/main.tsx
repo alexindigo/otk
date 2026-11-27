@@ -5,7 +5,7 @@ import {
   age,
   type CommandDefinition,
   CommandHub,
-  createTreeDisclosure,
+  createDisclosures,
   SidecarConnection,
 } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
@@ -131,7 +131,7 @@ function TranscriptProbe() {
   );
 }
 function ProjectProbe() {
-  const tree = createTreeDisclosure(solidState);
+  const tree = createDisclosures({ factory: solidState });
   const [ready, setReady] = createSignal(true);
   return (
     <section id="project-probe">
