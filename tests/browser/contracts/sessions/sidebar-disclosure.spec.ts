@@ -125,7 +125,7 @@ test.describe("sidebar disclosure intent", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     const feedback = parent.locator(
-      ":scope > .otk-tree-feedback .otk-project-disclosure-error",
+      ".otk-sidebar-row-feedback .otk-project-disclosure-error",
     );
     await expect(feedback).toBeVisible();
     await expect(feedback).toContainText("The project layout is not valid.");
@@ -134,7 +134,7 @@ test.describe("sidebar disclosure intent", () => {
         ":scope > .otk-tree-heading .otk-tree-toggle",
       )!.getBoundingClientRect();
       const row = node.querySelector(
-        ":scope > .otk-tree-heading .otk-project-row",
+        ":scope > .otk-tree-heading .otk-sidebar-row-main",
       )!.getBoundingClientRect();
       const lamp = node.querySelector(
         ":scope > .otk-tree-heading .otk-status-light",
@@ -283,13 +283,16 @@ test.describe("sidebar branch topology cases", () => {
         await expect(row(`${root}/sidebar/all-required-child-${n}`))
           .toBeVisible();
       }
-      await expect(branch("archive-only").locator(".otk-archived-toggle"))
+      const archive = branch("archive-only")
+        .locator("xpath=parent::div[@data-project-root]")
+        .locator(".otk-archived-toggle");
+      await expect(archive)
         .toBeVisible();
       await toggle("archive-only").click();
-      await expect(branch("archive-only").locator(".otk-archived-toggle"))
+      await expect(archive)
         .toHaveCount(0);
       await toggle("archive-only").click();
-      await branch("archive-only").locator(".otk-archived-toggle").click();
+      await archive.click();
       await expect(row(`${root}/sidebar/archive-only-child-0`)).toBeVisible();
       await expect(row(`${root}/sidebar/missing-root-child-0`)).toBeAttached();
       await expect(

@@ -319,7 +319,7 @@ test(
       await discoveredToggle.click();
     }
     const projects = page.locator(
-      '[data-project-section="Discovered"] [data-project-root]',
+      '[data-project-section="Discovered"] .otk-tree-heading[data-project-root]',
     );
     await expect(projects).toHaveCount(20);
     const source = (await projects.first().boundingBox())!;
@@ -366,7 +366,7 @@ test(
       await inactiveToggle.getAttribute("aria-expanded") === "false"
     ) await inactiveToggle.click();
     const inactive = page.locator(
-      '[data-project-section="Inactive"] [data-project-root]',
+      '[data-project-section="Inactive"] .otk-tree-heading[data-project-root]',
     ).last();
     await inactive.scrollIntoViewIfNeeded();
     const before = await projects.evaluateAll((rows) =>

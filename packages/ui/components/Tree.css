@@ -255,6 +255,15 @@
 .otk-tree-node.has-selection-slot.is-flat > .otk-tree-heading > .otk-tree-label {
   grid-column: 4;
 }
+.otk-tree-node.has-selection-slot.is-flat.is-compact > .otk-tree-heading {
+  grid-template-columns: var(--space-2) minmax(0, 1fr) var(--space-2);
+}
+.otk-tree-node.is-flat.is-compact > .otk-tree-heading > .otk-tree-rails {
+  display: none;
+}
+.otk-tree-node.has-selection-slot.is-flat.is-compact > .otk-tree-heading > .otk-tree-label {
+  grid-column: 2;
+}
 .otk-tree-node.has-selection-slot > .otk-tree-heading > .otk-tree-selection {
   grid-column: 1;
 }
