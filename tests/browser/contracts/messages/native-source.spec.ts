@@ -2,7 +2,6 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt as composer } from "../../pages/composer.ts";
 import {
   openWorkLogs,
   prompt,
@@ -23,14 +22,17 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Native source",
   });
-  await openSession(state, page, session.id);
   const v2 = state.controller.info!.version.startsWith("2.");
   if (v2) {
-    // A V2 shell is a native shell record.
-    await composer(page).press("!");
-    await composer(page).pressSequentially("echo native-source");
-    await composer(page).press("Enter");
-  } else {
+    // Acquire a settled native shell record from history. An already-exited
+    // live row can still receive a newer Source revision during the hold.
+    await state.product("session.shell", {
+      sessionID: session.id,
+      command: "echo native-source",
+    });
+  }
+  await openSession(state, page, session.id);
+  if (!v2) {
     // V1 step boundaries are qualified native records.
     await state.product("prefs.set", { key: "expandStepMarkers", value: true });
     await toolScript(state, "bash", {
@@ -81,8 +83,9 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
     "true",
   );
   await expect(source).toContainText("Loading source");
+  await expect.poll(() => page.evaluate("window.sourceReads.length")).toBe(1);
   await shoot("loading");
-  await page.evaluate("window.releaseSource()");
+  await page.evaluate("window.sourceMode='pass';window.releaseSource()");
   await expect(source.locator(".otk-native-preview")).toContainText(
     v2 ? "native-source" : '"type":"step-',
   );

@@ -73,10 +73,10 @@ async function layout(
     "data-collapsed",
     String(left),
   );
-  await expect(page.locator(".otk-right-panel")).toHaveJSProperty(
-    "hidden",
-    right,
-  );
+  const panel = page.locator('aside.otk-sidebar-rail[data-side="right"]');
+  await expect(panel).toHaveCount(1);
+  await expect(panel).toHaveAttribute("data-collapsed", String(right));
+  await expect(panel).toBeVisible();
   await settled(page);
 }
 async function centers(page: Page, selector: string, a: string, b: string) {
@@ -1066,14 +1066,9 @@ test(
             expect(await geometry()).toEqual(before);
             await page.goto(state.url + "/#/local/tstv1-otk");
             await layout(state, page, false, false);
-            const session = await page.locator('[data-session="tstv1-otk"]')
-              .evaluate((el) => {
-                const r = el.getBoundingClientRect(),
-                  t = el.querySelector(".otk-session-title")!
-                    .getBoundingClientRect();
-                // Tree depth owns the outer indent; the row owns its gutter.
-                return { gutter: t.left - r.left, height: r.height };
-              });
+            const sessionHeight = await page.locator(
+              '[data-session="tstv1-otk"]',
+            ).evaluate((el) => el.getBoundingClientRect().height);
             await page.locator("[data-panel-view=timeline]").click();
             await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
             const first = page.locator('[data-timeline-prompt="prompt-0"]');
@@ -1084,7 +1079,11 @@ test(
                     .getBoundingClientRect();
                 return { gutter: t.left - r.left, height: r.height };
               }),
-            ).toEqual(session);
+            ).toEqual({
+              // Timeline is flat: keep row padding without the session tree slots.
+              gutter: await cssLength(first, "--space-2"),
+              height: sessionHeight,
+            });
             const actions = () =>
               first.locator("[data-message-command]").evaluateAll((els) =>
                 els.map((el) => {
@@ -1147,7 +1146,8 @@ test(
                     mobile: false,
                   });
                   await settled(page);
-                  const g = await page.locator(".otk-breadcrumb-row").evaluate(
+                  const crumbRow = page.locator(".otk-breadcrumb-row");
+                  const g = await crumbRow.evaluate(
                     (row) => {
                       const r = row.getBoundingClientRect(),
                         chips = Array.from(
@@ -1158,12 +1158,16 @@ test(
                         ),
                         meter = row.querySelector("output")!
                           .getBoundingClientRect(),
-                        lane = row.querySelector(".otk-overflow-items")!
-                          .getBoundingClientRect(),
+                        lane = row.querySelector(".otk-overflow-items")!,
+                        items = lane.getBoundingClientRect(),
                         action = document.querySelector(".otk-new-session")!
                           .getBoundingClientRect();
                       return {
                         height: r.height,
+                        controlsHeight: items.height,
+                        paged: lane.closest(".otk-overflow-row")!.classList
+                          .contains("is-paged"),
+                        trackBelowControls: r.bottom - items.bottom,
                         centres: chips.map((el) => {
                           const b = el.getBoundingClientRect();
                           return b.y + b.height / 2;
@@ -1173,8 +1177,9 @@ test(
                         ),
                         menus:
                           row.querySelectorAll(".otk-folded-crumbs").length,
-                        bounds: lane.right <= meter.left + 1 &&
-                          lane.right <= action.left + 1 && chips.every((el) => {
+                        bounds: items.right <= meter.left + 1 &&
+                          items.right <= action.left + 1 &&
+                          chips.every((el) => {
                             const b = el.getBoundingClientRect(),
                               label = el.querySelector(".otk-crumb-title")!,
                               first = el.querySelector(".otk-trail-first")
@@ -1193,7 +1198,19 @@ test(
                       };
                     },
                   );
-                  expect(g.height).toBeLessThanOrEqual(32);
+                  // D67's paged trail keeps the same single control line and
+                  // reserves a separate, in-flow horizontal scroll track.
+                  expect(g.controlsHeight).toBeLessThanOrEqual(32);
+                  if (g.paged) {
+                    const [track, gap] = await Promise.all([
+                      cssLength(crumbRow, "--space-2"),
+                      cssLength(crumbRow, "--space-1"),
+                    ]);
+                    expect(g.trackBelowControls).toBe(track + gap);
+                    expect(g.height).toBeLessThanOrEqual(32 + track + gap);
+                  } else {
+                    expect(g.height).toBeLessThanOrEqual(32);
+                  }
                   expect(g.selected && g.bounds).toBe(true);
                   expect(Math.max(...g.centres) - Math.min(...g.centres))
                     .toBeLessThanOrEqual(1);

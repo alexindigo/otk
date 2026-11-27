@@ -120,8 +120,12 @@ test.describe("live hints", () => {
     await edit.click();
     const editor = page.locator("textarea[name=editor]");
     await expect(editor).toHaveValue("Keep this prompt");
-    await expect(page.locator("dialog[open] .otk-surface-title button"))
-      .toHaveText("Close");
+    const close = page.locator("dialog[open] .otk-surface-title").getByRole(
+      "button",
+      { name: "Close Edit prompt", exact: true },
+    );
+    await expect(close.locator("svg")).toBeVisible();
+    await expect(close).toHaveText("");
     await expect(page.locator(".otk-editor p")).toHaveText(
       "Save to keep changes",
     );

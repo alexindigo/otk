@@ -825,6 +825,22 @@ const containsStringType = (node: t.Node): boolean => {
 const elementName = (node: t.JSXOpeningElement) =>
   node.name.type === "JSXIdentifier" ? node.name.name : "";
 
+Deno.test("UI convention: task tabs render their lamp in the shared leading slot", async () => {
+  const path = "packages/ui/components/ProjectTabs.tsx";
+  const source = new Source(await Deno.readTextFile(path), path);
+  const selection = source.all.find((node): node is t.JSXOpeningElement =>
+    node.type === "JSXOpeningElement" &&
+    elementName(node) === "SelectionContent"
+  );
+  assert(selection);
+  const leading = selection.attributes.find((attr): attr is t.JSXAttribute =>
+    attr.type === "JSXAttribute" && property(attr.name) === "leading"
+  )?.value;
+  assert(leading?.type === "JSXExpressionContainer");
+  assert(leading.expression.type === "JSXElement");
+  assertEquals(elementName(leading.expression.openingElement), "StatusLight");
+});
+
 Deno.test("UI convention: unowned compact controls retain native geometry", async () => {
   const geometry = (css: string) =>
     rules(css).flatMap((rule) =>

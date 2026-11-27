@@ -181,7 +181,8 @@ async function allMarks(
       expect([item.w, item.h, item.start]).toEqual([
         3,
         14,
-        item.external ? item.railWidth : 3,
+        // Style7 finding 5: Tree reserves the mark before the row tracks.
+        item.external ? 0 : 3,
       ]);
       expect(item.centred).toBeLessThanOrEqual(.5);
     } else {expect([item.h, item.start, item.end, item.bottom]).toEqual([
@@ -236,25 +237,33 @@ export async function usage(
         for (const width of [320, 280]) {
           await state.product("layout.patch", { rightWidth: width });
           await state.product("prefs.set", { key: "showCost", value: true });
+          await expect(page.locator(".otk-right-panel")).toHaveCSS(
+            "width",
+            `${width}px`,
+          );
           await expect(page.locator(".otk-session-cost")).toHaveCount(
             name === "unknown" || name === "unreported" ? 2 : 3,
           );
+          await frames(page);
           const boxes = await page.locator(
             ".otk-session-row:has(.otk-session-cost)",
           ).evaluateAll((rows) =>
             rows.map((row) => {
-              const c = row.querySelector(".otk-session-cost")!
-                  .getBoundingClientRect(),
+              const cost = row.querySelector(".otk-session-cost")!,
+                c = cost.getClientRects().length
+                  ? cost.getBoundingClientRect()
+                  : null,
                 t = row.querySelector(".otk-session-title")!
                   .getBoundingClientRect(),
                 l = row.querySelector(".otk-status-light")!
-                  .getBoundingClientRect();
+                  .getBoundingClientRect(),
+                bounds = row.getBoundingClientRect();
               return {
-                right: c.right,
-                centre: c.y + c.height / 2,
+                cost: c && { right: c.right, centre: c.y + c.height / 2 },
+                edge: bounds.right,
                 title: t.y + t.height / 2,
                 light: l.y + l.height / 2,
-                height: row.getBoundingClientRect().height,
+                height: bounds.height,
                 overflow: row.scrollWidth > row.clientWidth,
               };
             })
@@ -263,12 +272,27 @@ export async function usage(
             page.locator(".otk-session-row:has(.otk-session-cost)").first(),
             "--row-project",
           );
+          const inset = await cssLength(
+            page.locator(".otk-right-panel"),
+            "--space-2",
+          );
+          const painted = boxes.flatMap((box) => box.cost ? [box.cost] : []);
+          expect(painted.length).toBeGreaterThan(0);
+          if (width === 320) expect(painted).toHaveLength(boxes.length);
           for (const box of boxes) {
-            expect(Math.abs(box.right - boxes[0].right)).toBeLessThanOrEqual(
-              .5,
-            );
-            expect(Math.abs(box.centre - box.title)).toBeLessThanOrEqual(.5);
-            expect(Math.abs(box.centre - box.light)).toBeLessThanOrEqual(.5);
+            // 2.109 yields whole facts before squeezing the title. A yielded
+            // cost still exists in the DOM but has no painted geometry.
+            if (box.cost) {
+              expect(Math.abs(box.cost.right - painted[0].right))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(box.cost.right - (box.edge - inset)))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(box.cost.centre - box.title))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(box.cost.centre - box.light))
+                .toBeLessThanOrEqual(.5);
+            }
+            expect(Math.abs(box.title - box.light)).toBeLessThanOrEqual(.5);
             expect(box.height).toBe(rowHeight);
             expect(box.overflow).toBe(false);
           }
@@ -375,6 +399,9 @@ export async function usage(
       }
     }
     await prefs("showCost", true);
+    // The exact-cost witness includes the context meter. Give this collection
+    // its own viewport instead of inheriting the preceding narrow ledger case.
+    await page.setViewportSize({ width: 1280, height: 720 });
     for (
       const [i, label, exact] of [
         [0, "$0.00", "$0"],
@@ -399,6 +426,8 @@ export async function usage(
         ).toHaveText(label);
         await expect(page.locator(".otk-context-meter .otk-usage-cost"))
           .toHaveText(label);
+        await expect(page.locator(".otk-context-meter .otk-usage-cost"))
+          .toBeVisible();
         await expect(
           page.locator(
             `[data-session="${content.sessionID}"] .otk-session-open`,
@@ -560,8 +589,10 @@ export async function surfaces(
           await expect(page.locator(".otk-editor p")).toHaveText(
             "Save to keep changes",
           );
-          await expect(page.locator("dialog[open] .otk-surface-title button"))
-            .toHaveText("Close");
+          const close = page.locator("dialog[open] .otk-surface-title")
+            .getByRole("button", { name: "Close Edit prompt", exact: true });
+          await expect(close.locator("svg")).toBeVisible();
+          await expect(close).toHaveText("");
         }
         if (name !== "Display") {
           if (name === "Editor" || name === "New task") {

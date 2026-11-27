@@ -70,7 +70,7 @@
   align-items: center;
 }
 .otk-meta-compact,
-.otk-meta-item.is-compact > .otk-meta-full {
+.otk-meta-item.is-compact:not([data-meta-compact]) > .otk-meta-full {
   display: none;
 }
 .otk-meta-item.is-compact > .otk-meta-compact {
@@ -111,4 +111,8 @@
   visibility: hidden;
   display: flex;
   pointer-events: none;
+}
+.otk-meta-item.is-compact[data-meta-compact] {
+  --meta-label-full: none;
+  --meta-label-compact: inline;
 }

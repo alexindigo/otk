@@ -252,11 +252,18 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
     await page.setViewportSize({ width: 900, height: 1000 });
     await expect(fit).toHaveAttribute("data-fit-mode", "compact");
     await expect.poll(ids).toEqual([root, child, deep]);
-    await expect(trail.locator(".otk-trail-compact-title:visible")).toHaveCount(
-      3,
-    );
+    for (const id of [root, child]) {
+      await expect(crumb(id).locator(".otk-trail-compact-title"))
+        .toBeVisible();
+    }
+    const currentTitle = crumb(deep).locator(".otk-trail-title");
+    await expect(currentTitle).toBeVisible();
+    await expect(currentTitle).toHaveText("Nested verification branch tail");
+    await expect(currentTitle).toHaveCSS("text-overflow", "ellipsis");
     await expect.poll(() =>
-      trail.locator(".otk-trail-first:visible").evaluateAll((nodes) =>
+      trail.locator("[data-crumb] .otk-trail-first:visible").evaluateAll((
+        nodes,
+      ) =>
         nodes.every((node) => {
           const first = node.getBoundingClientRect(),
             control = node.closest("[data-crumb]")!.getBoundingClientRect();

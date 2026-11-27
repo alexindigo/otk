@@ -264,14 +264,14 @@ test.describe("V2 records", () => {
         .filter({
           has: page.locator(".otk-entity-pill", { hasText: "Junior" }),
         })
-        .filter({ has: page.locator(".otk-tool-verb", { hasText: "failed" }) });
+        .filter({ has: page.getByText("failed", { exact: true }) });
       await expect(
         failed.getByRole("button", {
           name: "Junior details",
           exact: true,
         }),
       ).toHaveText("Junior");
-      await expect(failed.locator(".otk-tool-verb")).toHaveText("failed");
+      await expect(failed.getByText("failed", { exact: true })).toBeVisible();
       await expect(failed).toHaveClass(/is-error/);
       await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible();
       await expect(
