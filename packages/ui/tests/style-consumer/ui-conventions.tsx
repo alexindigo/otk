@@ -78,7 +78,7 @@ function SubagentTimes() {
   const owner = createLiveWork({
     items: () =>
       running.map(([id]) => ({
-        id: `helper/${id}`,
+        id,
         kind: "helper",
         label: id,
         title: id,

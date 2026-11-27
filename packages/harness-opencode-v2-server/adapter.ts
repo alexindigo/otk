@@ -321,6 +321,10 @@ export class OpencodeV2ServerAdapter implements Harness {
       : {};
     const capabilities: Capabilities = {
       revertCommit: this.transcript.revertCommit,
+      "shell.terminate": {
+        terminate: (id, shellID, operation) =>
+          this.#shells.terminate(this.stream.client, id, shellID, operation),
+      },
       projectEdit: projectEditor(
         () => this.stream.client,
         (project) => {

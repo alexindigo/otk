@@ -710,6 +710,8 @@ export class OpencodeV1Adapter implements Harness {
         };
       })(),
     );
+    // V1 shell tools run inside a turn, outside the native PTY registry.
+    // V1 can run a shell command, but cannot advertise shell.terminate.
     registry.register("shell", shell(this.client, directory, launch));
     registry.register(
       "commands",

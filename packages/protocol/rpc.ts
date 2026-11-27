@@ -36,6 +36,7 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.create": { kind: "mutation", pending: "Creating session" },
   "session.prompt": { kind: "mutation", pending: "Sending prompt" },
   "session.shell": { kind: "mutation", pending: "Running command" },
+  "shell.terminate": { kind: "mutation", pending: "Terminating shell" },
   "session.command": { kind: "mutation", pending: "Running command" },
   "session.abort": { kind: "mutation", pending: "Stopping session" },
   "session.withdraw": { kind: "mutation", pending: "Stopping" },
@@ -261,6 +262,10 @@ export interface RpcMethods
   };
   "session.prompt": { params: PromptInput; result: PromptReceipt | null };
   "session.shell": { params: ShellInput; result: SubmissionReceipt };
+  "shell.terminate": {
+    params: { sessionID: string; shellID: string };
+    result: null;
+  };
   "session.command": {
     params: Omit<CommandInput, "arguments"> & { arguments?: string };
     result: SubmissionReceipt;
@@ -366,6 +371,7 @@ export interface CoreRequestReceipts {
     variant?: string;
   };
   "shell-settled": { completed: true; submission?: SubmissionReceipt };
+  "shell-terminated": { completed: true };
   "command-settled": { completed: true; submission?: SubmissionReceipt };
   "interrupt-sent": { completed: true };
   "prompt-withdrawal": WithdrawReceipt;

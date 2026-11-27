@@ -6,7 +6,6 @@ import {
   createUniqueId,
   For,
   onCleanup,
-  onSettled,
   Show,
 } from "solid-js";
 import {
@@ -31,7 +30,7 @@ import { scopedEntityFacts } from "../entity-facts.ts";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { solidState } from "../state/binding.ts";
 import ActionButton from "./ActionButton.tsx";
-import TerminateButton from "./TerminateButton.tsx";
+import TerminateButton, { bindWorkTermination } from "./TerminateButton.tsx";
 import StatusLight from "./StatusLight.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import { CheckAllIcon } from "./ChromeIcons.tsx";
@@ -95,15 +94,11 @@ export default function Subagents(
   let timer: ReturnType<typeof setInterval> | undefined;
   const stop = () => clearInterval(timer);
   onCleanup(stop);
-  const [revision, setRevision] = createSignal(0);
-  onSettled(() =>
-    props.owner?.subscribe(() => setRevision((value) => value + 1))
+  const termination = bindWorkTermination(
+    () => props.owner,
+    "helper",
+    "subagent",
   );
-  const workID = (id: string) => `helper/${id}`;
-  const stopping = (id: string) => {
-    revision();
-    return props.owner?.stopping(workID(id));
-  };
   const ports = useCommandPorts();
   const clearCommand = `subagents.clearFinished@${createUniqueId()}`;
   const task = () => props.task ? entities()?.get(props.task)?.id : undefined;
@@ -130,29 +125,6 @@ export default function Subagents(
     unshown: "The finished subagents are still listed.",
     recovery: "Try again; if it keeps failing, reload OTK",
   });
-  const stopCommand = `subagents.stop@${createUniqueId()}`;
-  ownedCommand(ports, {
-    id: stopCommand,
-    title: "Terminate subagent",
-    category: "Session",
-    scope: "control",
-    arguments: { type: "string" },
-    availability: (_context, id: string) =>
-      props.owner?.canStop(workID(id)) ? { available: true } : {
-        available: false,
-        reason: "Subagent cannot be terminated",
-        hidden: true,
-      },
-    run: (_context, id: string) => props.owner?.stop(workID(id)),
-  });
-  const stopAction = (id: string) =>
-    ports.commands.control(stopCommand, id, {
-      target: { label: props.title(id) },
-      // The request has settled; the lamp still follows native work evidence.
-      shown: () => true,
-      unshown: "The termination request did not complete.",
-      recovery: "Check the subagent and try again if it is still running",
-    });
   const clearTitle = (bind: (button: HTMLElement) => void) => (
     <ActionButton
       ref={bind}
@@ -300,9 +272,9 @@ export default function Subagents(
                         <div class="otk-subagent-terminate">
                           <Show when={group().kind === "running"}>
                             <TerminateButton
-                              action={stopAction(id)}
+                              action={termination.action(id, props.title(id))}
                               name={props.title(id)}
-                              busy={stopping(id)}
+                              busy={termination.busy(id)}
                             />
                           </Show>
                         </div>
