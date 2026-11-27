@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { HarnessError } from "@otk/harness";
 import type { OperationContext } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
@@ -136,6 +137,34 @@ export class V2Shells {
     this.#remove(id);
     return { sessionID, ended: event.created };
   }
+  /** Only a shell in the captured session's native roster can be terminated. */
+  async terminate(
+    client: V2Client,
+    id: string,
+    shellID: string,
+    operation?: OperationContext,
+  ): Promise<void> {
+    const shell = this.#bySession.get(ids.decode(id))?.get(shellID);
+    if (!shell) {
+      throw new HarnessError(
+        "shell",
+        "That shell is not running in this session.",
+      );
+    }
+    await this.#terminate(client, shell, operation);
+    // Exit/deletion events own the roster, not the caller or its HTTP receipt.
+  }
+  async #terminate(
+    client: V2Client,
+    shell: RunningShell,
+    operation?: OperationContext,
+  ): Promise<void> {
+    await client.effect(
+      (api) => api.shell.remove({ id: shell.id, location: shell.location }),
+      operation,
+      ["ShellNotFoundError"],
+    );
+  }
   /** Discover every asking session's shell before mutating; never stop another session's work. */
   async interrupt(
     client: V2Client,
@@ -164,11 +193,7 @@ export class V2Shells {
     await interrupt(client, id, operation);
     for (const shell of rows) {
       if (shell.sessionID !== sessionID) continue;
-      await client.effect(
-        (api) => api.shell.remove({ id: shell.id, location: shell.location }),
-        operation,
-        ["ShellNotFoundError"],
-      );
+      await this.#terminate(client, shell, operation);
     }
   }
 }

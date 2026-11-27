@@ -26,21 +26,29 @@ export interface LiveWorkOwner {
 export function createLiveWork(input: {
   items(): readonly RunningWork[];
   stopHelper?(): ((id: string) => Promise<void>) | undefined;
+  stopShell?(): ((id: string) => Promise<void>) | undefined;
 }): LiveWorkOwner {
   const state = createState({ pending: new Set<string>() });
   const pending = new Map<string, Promise<void>>();
-  const item = (id: string) => input.items().find((item) => item.id === id);
+  const action = (id: string) => {
+    const item = input.items().find((item) => `${item.kind}/${item.id}` === id);
+    if (!item) return;
+    const stop = item.kind === "helper"
+      ? input.stopHelper?.()
+      : input.stopShell?.();
+    if (stop) return () => stop(item.id);
+  };
   return {
     items: input.items,
-    canStop: (id) => item(id)?.kind === "helper" && !!input.stopHelper?.(),
+    canStop: (id) => !!action(id),
     stopping: (id) => state.state.pending.has(id),
     subscribe: (listener) => state.subscribe(listener),
     stop(id) {
       const admitted = pending.get(id);
       if (admitted) return admitted;
-      const current = item(id), stop = input.stopHelper?.();
-      if (current?.kind !== "helper" || !stop) return Promise.resolve();
-      const work = Promise.resolve().then(() => stop(current.sessionID))
+      const stop = action(id);
+      if (!stop) return Promise.resolve();
+      const work = Promise.resolve().then(stop)
         .finally(() => {
           pending.delete(id);
           state.update((s) => s.pending.delete(id));

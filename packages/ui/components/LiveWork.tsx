@@ -14,6 +14,7 @@ import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
+import TerminateButton, { bindWorkTermination } from "./TerminateButton.tsx";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
@@ -24,6 +25,11 @@ export default function LiveWork(
   props: { shells?: RunningShells; sessionID: string; focusHome(): void },
 ) {
   const session = useOptionalSessionPorts();
+  const termination = bindWorkTermination(
+    () => session?.liveWork,
+    "shell",
+    "shell",
+  );
   const count = () => props.shells?.count ?? 0;
   const label = () => countLabel(count(), "shell");
   const presence = new ActivityPresence(solidState);
@@ -73,45 +79,57 @@ export default function LiveWork(
           aria-label="Running shells"
         >
           <For each={props.shells?.items} keyed={(item) => item.id}>
-            {(item) => (
-              <div
-                class="otk-live-work-item"
-                role="listitem"
-                data-running-work={`shell/${item().id}`}
-              >
-                <EntityPill
-                  label={item().label}
-                  facts={scopedEntityFacts(session, {
-                    sessionID: props.sessionID,
-                  })}
-                />
-                <span
-                  class="otk-live-work-title otk-control-label"
-                  title={item().title}
+            {(item) => {
+              const name = () => item().title || item().label;
+              return (
+                <div
+                  class="otk-live-work-item"
+                  role="listitem"
+                  data-running-work={`shell/${item().id}`}
                 >
-                  {item().title}
-                </span>
-                <ChromeMeta
-                  class="otk-live-work-elapsed"
-                  aria-label="Running for"
-                >
-                  {item().startedAt === undefined
-                    ? (
-                      <TimeValue
-                        value={unknownTime(
-                          "The native start time was not recorded.",
-                        )}
+                  <EntityPill
+                    label={item().label}
+                    facts={scopedEntityFacts(session, {
+                      sessionID: props.sessionID,
+                    })}
+                  />
+                  <span
+                    class="otk-live-work-title otk-control-label"
+                    title={item().title}
+                  >
+                    {item().title}
+                  </span>
+                  <ChromeMeta
+                    class="otk-live-work-elapsed"
+                    aria-label="Running for"
+                  >
+                    {item().startedAt === undefined
+                      ? (
+                        <TimeValue
+                          value={unknownTime(
+                            "The native start time was not recorded.",
+                          )}
+                        />
+                      )
+                      : (
+                        <>
+                          Running for{" "}
+                          <TimeText time={elapsed(now() - item().startedAt!)} />
+                        </>
+                      )}
+                  </ChromeMeta>
+                  <Show when={termination.available(item().id)}>
+                    <div class="otk-live-work-terminate">
+                      <TerminateButton
+                        action={termination.action(item().id, name())}
+                        name={name()}
+                        busy={termination.busy(item().id)}
                       />
-                    )
-                    : (
-                      <>
-                        Running for{" "}
-                        <TimeText time={elapsed(now() - item().startedAt!)} />
-                      </>
-                    )}
-                </ChromeMeta>
-              </div>
-            )}
+                    </div>
+                  </Show>
+                </div>
+              );
+            }}
           </For>
         </ScrollRegion>
       </Popover>

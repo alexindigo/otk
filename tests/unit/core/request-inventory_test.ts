@@ -259,6 +259,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "sessionActions",
       "sessionArchive",
       "shell",
+      "shell.terminate",
       "commands",
       "history",
       "files",
@@ -351,6 +352,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "session.restore",
     "session.prompt",
     "session.shell",
+    "shell.terminate",
     "session.command",
     "session.abort",
     "session.withdraw",
@@ -436,7 +438,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     }
     assertEquals(counts, {
       read: 34,
-      native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
+      native: 24,
       local: 13,
       "prepared-local": 7,
       lease: 2,
