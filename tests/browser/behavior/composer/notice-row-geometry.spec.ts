@@ -6,7 +6,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 
 test.use({ profile: "isolated", viewport: { width: 1280, height: 800 } });
 
-async function geometry(notice: Locator) {
+async function geometry(notice: Locator, compact: boolean) {
   const facts = await notice.evaluate((frame) => {
     const ruler = document.createElement("span");
     ruler.style.position = "absolute";
@@ -15,10 +15,19 @@ async function geometry(notice: Locator) {
       ruler.style.inlineSize = `var(${name})`;
       return ruler.getBoundingClientRect().width;
     };
-    const limit = token("--control-size") + 2 * token("--space-1");
+    const control = token("--control-size");
+    const padding = token("--space-1");
     const gap = token("--space-2");
     ruler.remove();
     const box = frame.getBoundingClientRect();
+    const headline = frame.querySelector(".otk-composer-notice-row")!
+      .getBoundingClientRect();
+    const details = frame.querySelector(".otk-failure-details button")
+      ?.getBoundingClientRect();
+    const detailsIcon = frame.querySelector(".otk-disclosure-icon")
+      ?.getBoundingClientRect();
+    const detailsLabel = frame.querySelector(".otk-disclosure-label")
+      ?.getBoundingClientRect();
     const label = frame.querySelector(".otk-record-row-label")
       ?.getBoundingClientRect();
     const icon = frame.querySelector(".otk-composer-notice-icon")
@@ -34,9 +43,19 @@ async function geometry(notice: Locator) {
       parseFloat(css.borderLeftWidth) + parseFloat(css.paddingLeft);
     const center = (r: DOMRect) => r.top + r.height / 2;
     return {
-      limit,
-      height: box.height,
-      hasSlots: !!(label && icon && artwork && actions.length),
+      control,
+      padding,
+      height: headline.height,
+      hasSlots: !!(label && icon && artwork),
+      actionCount: actions.length,
+      startPadding: headline.top - box.top,
+      endPadding: box.bottom - (details ?? headline).bottom,
+      details: details && detailsIcon && detailsLabel && label && icon && {
+        height: details.height,
+        rowGap: details.top - headline.bottom,
+        iconDelta: Math.abs(detailsIcon.left - icon.left),
+        labelDelta: Math.abs(detailsLabel.left - label.left),
+      },
       axis: label && icon
         ? [icon, ...actions].map((r) => Math.abs(center(r) - center(label)))
         : [],
@@ -53,12 +72,31 @@ async function geometry(notice: Locator) {
       columns: { textarea: textLeft, icon: icon?.left, label: label?.left },
     };
   });
-  expect.soft(facts.height, "closed notice is one control high plus padding")
-    .toBeLessThanOrEqual(facts.limit + 1);
+  // Issue 2.114 WP3: the headline keeps its original one-control height;
+  // only an owned Details trigger gets a second track, below the headline.
+  expect.soft(Math.abs(facts.height - facts.control), "one-control headline")
+    .toBeLessThanOrEqual(1);
+  for (const inset of [facts.startPadding, facts.endPadding]) {
+    expect.soft(Math.abs(inset - facts.padding)).toBeLessThanOrEqual(1);
+  }
+  expect.soft(facts.actionCount).toBe(compact ? 0 : 1);
+  if (compact) {
+    expect.soft(facts.details, "Details has its own track").toBeTruthy();
+    if (facts.details) {
+      expect.soft(Math.abs(facts.details.height - facts.control))
+        .toBeLessThanOrEqual(1);
+      expect.soft(Math.abs(facts.details.rowGap - facts.padding))
+        .toBeLessThanOrEqual(1);
+      expect.soft(facts.details.iconDelta).toBeLessThanOrEqual(1);
+      expect.soft(facts.details.labelDelta).toBeLessThanOrEqual(1);
+    }
+  } else {
+    expect.soft(facts.details).toBeUndefined();
+  }
   expect.soft(facts.hasSlots, "notice uses the record grid slots").toBe(true);
   if (!facts.hasSlots) return;
   for (const offset of facts.axis) expect.soft(offset).toBeLessThanOrEqual(1);
-  expect.soft(facts.insetDelta).toBeLessThanOrEqual(1);
+  if (!compact) expect.soft(facts.insetDelta).toBeLessThanOrEqual(1);
   expect.soft(facts.artworkPadded).toBe(true);
   // WP5 notice-padding amendment: align the icon slot, not the label, to
   // the fixed textarea text edge; keep the shared record-row gap.
@@ -135,6 +173,16 @@ test("composer.notice-row-aligns-pointer-and-retained-failure", {
         "--otk-scale",
         String(Number(scale) / 100),
       );
+      // WP3 presents the right panel as a sheet when it does not fit. Keep
+      // the conversation in front so the narrow matrix measures painted UI.
+      const rightCollapsed = width === 900;
+      await state.product("layout.patch", { rightCollapsed });
+      await expect(page.locator(".otk-app")).toHaveAttribute(
+        "data-right-collapsed",
+        String(rightCollapsed),
+      );
+      await expect(page.locator(".otk-main")).not.toHaveAttribute("inert", "");
+      await expect(input).toBeVisible();
       for (
         const [theme, id] of [["dark", "otk-dark"], ["linen", "otk-light"], [
           "stone",
@@ -168,7 +216,10 @@ test("composer.notice-row-aligns-pointer-and-retained-failure", {
             Math.abs(left - values["no-notice"]!),
             `${key}: ${name} moved the textarea text`,
           ).toBeLessThanOrEqual(1);
-          noticeColumns.set(`${key} ${name}`, await geometry(notice));
+          noticeColumns.set(
+            `${key} ${name}`,
+            await geometry(notice, name === "compact"),
+          );
         }
         if (name === "compact") {
           await revertGeometry(page.locator(".otk-revert-group"));
@@ -179,6 +230,11 @@ test("composer.notice-row-aligns-pointer-and-retained-failure", {
     await page.setViewportSize({ width: 1280, height: 800 });
     await state.product("prefs.set", { key: "textSize", value: "100" });
     await expect(page.locator("html")).toHaveCSS("--otk-scale", "1");
+    await state.product("layout.patch", { rightCollapsed: false });
+    await expect(page.locator(".otk-app")).toHaveAttribute(
+      "data-right-collapsed",
+      "false",
+    );
   }
 
   await expect(notice).toHaveCount(0);
@@ -195,6 +251,13 @@ test("composer.notice-row-aligns-pointer-and-retained-failure", {
     .toBe("none");
   await reference.click();
   await expect(record.locator("xpath=ancestor::article")).toBeFocused();
+
+  // End 1.19.3's still-busy native run without withdrawing the test prompt.
+  if (info.project.name === "oc-1.19.3") {
+    await state.product("session.abort", { sessionID: session.id });
+    await expect(page.locator(`[data-session="${session.id}"]`))
+      .toHaveAttribute("data-status", "idle");
+  }
 
   const bubble = page.getByText(sent, { exact: true }).locator(
     "xpath=ancestor::article",
