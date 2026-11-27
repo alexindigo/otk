@@ -3,12 +3,13 @@ import {
   type CommandHub,
   type FileFacts,
   folderCommand,
+  imageReason,
   type PathMention,
   RequestFailure,
   type SidecarConnection,
   terminalBoxFor,
 } from "@otk/client";
-import { type FileFactFound, OperationFailure } from "@otk/protocol";
+import { type FileFactFound, OperationFailure, randomID } from "@otk/protocol";
 import { copyText } from "../clipboard.ts";
 import { solidState } from "../state/binding.ts";
 
@@ -74,6 +75,20 @@ export function registerFileCommands(
         await commands.run("dialog.open", {
           id: "file-preview",
           input: { preview, line: mention.line, target },
+        });
+      } else if (preview.kind === "unavailable") {
+        throw new RequestFailure({
+          code: preview.reason,
+          diagnosticID: randomID(),
+          retry: "none",
+          facts: {
+            actionLabel: "Open preview",
+            reason: imageReason({
+              path: mention.path,
+              status: "unavailable",
+              reason: preview.reason,
+            }),
+          },
         });
       } else {
         invalidate();

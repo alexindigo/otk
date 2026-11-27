@@ -4,7 +4,6 @@ import type { InlineImageReason } from "@otk/protocol";
 import { allowedOrigin } from "../auth/middleware.ts";
 import type { ServiceConfig } from "../config/schema.ts";
 import { sessionID } from "../ws/params.ts";
-import type { ImageRoots } from "./image-roots.ts";
 import {
   type ImageLimits,
   type LocalFiles,
@@ -38,7 +37,6 @@ export class InlineImages {
   constructor(
     private readonly options: {
       files: Pick<LocalFiles, "imageFacts" | "imageBytes">;
-      roots: Pick<ImageRoots, "roots">;
       limits: ImageLimits;
       concurrency: number;
       directory(sessionID: string, signal: AbortSignal): Promise<string>;
@@ -54,10 +52,8 @@ export class InlineImages {
     paths: readonly string[],
     signal?: AbortSignal,
   ) {
-    const root = await directory;
     return await this.options.files.imageFacts(
-      this.options.roots.roots(root),
-      root,
+      await directory,
       paths,
       this.options.limits,
       signal,
@@ -102,7 +98,6 @@ export class InlineImages {
     const release = await this.#reads.acquire(signal, true);
     try {
       const image = await this.options.files.imageBytes(
-        this.options.roots.roots(directory),
         directory,
         path,
         this.options.limits,

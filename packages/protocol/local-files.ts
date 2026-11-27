@@ -56,12 +56,13 @@ export type FileFact = FileFactFound | {
 };
 type PreviewFile = { name: string; resolved: string; size: number };
 export type FilePreview =
-  & PreviewFile
-  & (
-    | { kind: "image"; mime: string; dataBase64: string }
-    | { kind: "text"; text: string; truncated: boolean; lang?: string }
-    | { kind: "none"; reason: "directory" | "binary" | "too-large" }
-  );
+  | { kind: "unavailable"; reason: Extract<InlineImageReason, "outside"> }
+  | PreviewFile
+    & (
+      | { kind: "image"; mime: string; dataBase64: string }
+      | { kind: "text"; text: string; truncated: boolean; lang?: string }
+      | { kind: "none"; reason: "directory" | "binary" | "too-large" }
+    );
 
 export const localFileRequestMetadata = {
   "file.stat": { kind: "read", pending: "Checking files" },
