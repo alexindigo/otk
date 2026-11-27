@@ -47,6 +47,8 @@ export const profiles = {
   "contract-attention-remote": "v1",
   "revert-native": "v1",
   "sessions-tasks": "v1",
+  "attention-failed-helper": "v1",
+  "attention-orphaned-jobs": "v1",
   "sessions-discovery": "v1",
   "contract-sessions-inbox": "neutral",
   "contract-sessions-panel": "neutral",
@@ -172,6 +174,7 @@ export interface Commands {
   queueScript: {
     lease: string;
     chunks: string[];
+    failHelper?: true;
     reasoning?: string[];
     gate?: "held" | "stepped";
     delay?: number;
@@ -210,6 +213,7 @@ export interface Commands {
   scenario: {
     lease: string;
     action:
+      | "seed-orphaned-job"
       | "hold"
       | "release"
       | "freeze"
@@ -293,6 +297,7 @@ export function request(value: unknown): ControlRequest {
     queueScript: [
       "lease",
       "chunks",
+      "failHelper",
       "reasoning",
       "gate",
       "delay",
@@ -352,6 +357,11 @@ export function request(value: unknown): ControlRequest {
       break;
     case "queueScript":
       if (
+        p.failHelper !== undefined && (p.failHelper !== true || p.tool ||
+          p.gate !== "held" || p.target || !Array.isArray(p.chunks) ||
+          p.chunks.length)
+      ) throw new Error("Invalid failed-helper provider script");
+      if (
         p.reasoning !== undefined &&
         (!Array.isArray(p.reasoning) ||
           !p.reasoning.every((s) => typeof s === "string"))
@@ -398,7 +408,11 @@ export function request(value: unknown): ControlRequest {
       text(p.path);
       if (
         !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|model|command|experimental\/tool\/ids)$/
-          .test(new URL(String(p.path), "http://fixture").pathname)
+          .test(new URL(String(p.path), "http://fixture").pathname) &&
+        !((p.method === undefined || p.method === "GET") &&
+          /^(?:\/shell|\/experimental\/job\?sessionID=ses_[a-zA-Z0-9]+)$/.test(
+            String(p.path),
+          ))
       ) {
         throw new Error("Native path outside fixture vocabulary");
       }
@@ -461,6 +475,7 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "hold",
+          "seed-orphaned-job",
           "release",
           "freeze",
           "thaw",
