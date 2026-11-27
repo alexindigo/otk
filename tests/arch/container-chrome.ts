@@ -137,10 +137,7 @@ export function containerChromeErrors(
   const sources = new Map<string, t.File>();
   const views: NonNullable<ReturnType<typeof defaultView>>[] = [];
   for (const [path, text] of files) {
-    if (
-      !path.endsWith(".tsx") &&
-      !/\b(?:retainedWorkDisclosure|workDisclosure)\b/.test(text)
-    ) continue;
+    if (!path.endsWith(".tsx")) continue;
     const tree = parse(text, path);
     sources.set(path, tree);
     if (path.startsWith("packages/ui/") && path.endsWith(".tsx")) {
@@ -194,19 +191,6 @@ export function containerChromeErrors(
         const name = property(node.key);
         if (name && chrome.has(name)) {
           errors.push(`${path}: tab props must not declare ${name}`);
-        }
-      }
-      if (
-        node.type === "CallExpression" || node.type === "OptionalCallExpression"
-      ) {
-        const name = property(node.callee);
-        if (
-          (name === "workDisclosure" && node.arguments.length > 1) ||
-          (name === "retainedWorkDisclosure" && node.arguments.length > 3)
-        ) {
-          errors.push(
-            `${path}:${node.loc?.start.line}: ${name} must not take members`,
-          );
         }
       }
     }

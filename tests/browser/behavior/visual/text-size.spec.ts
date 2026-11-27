@@ -3,7 +3,7 @@ import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { independentPage } from "../../pages/visual.ts";
 import {
-  openWorkLogs,
+  openLatestWork,
   prompt,
   revealAcquired,
   toolScript,
@@ -222,7 +222,6 @@ toolTest.use({ profile: "messages-forms" });
 toolTest("visual.text-size-native-tool-control-geometry", {
   tag: ["@visual", "@messages", "@text-size"],
 }, async ({ isolatedState: state, page, browser }) => {
-  await state.product("prefs.set", { key: "expandWork", value: true });
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Scaled native tool controls",
   });
@@ -232,11 +231,11 @@ toolTest("visual.text-size-native-tool-control-geometry", {
     description: "Measured failing tool",
   });
   await prompt(page, "Run the measured tool");
-  const row = page.locator("[data-tool=bash]");
   await expect(page.locator(".otk-message-flow")).toContainText(
     "Tool finished.",
   );
-  await openWorkLogs(page);
+  const work = await openLatestWork(page);
+  const row = work.locator("[data-tool=bash]");
   await revealAcquired(page, "[data-tool=bash] .otk-tool-toggle");
   const { page: settings, errors } = await independentPage(state, browser);
   await settings.goto(state.url);
@@ -253,7 +252,7 @@ toolTest("visual.text-size-native-tool-control-geometry", {
     const tool = (await row.locator(".otk-tool-toggle").boundingBox())!;
     expect(tool.height).toBeGreaterThanOrEqual(26 * size / 100 - 1);
     const icon = (await row.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot > svg",
+      ":scope > .otk-tree-node > .otk-tree-heading > .otk-tool-toggle > .otk-disclosure-lead > svg",
     ).boundingBox())!;
     expect(icon.width).toBeCloseTo(13 * size / 100, 1);
     expect(icon.height).toBeCloseTo(13 * size / 100, 1);

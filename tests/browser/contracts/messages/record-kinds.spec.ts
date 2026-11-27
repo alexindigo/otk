@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { recordToggle } from "../../pages/transcript.ts";
+import { openLatestWork, recordToggle } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-messages-disclosures" });
 test(
@@ -41,19 +41,21 @@ test(
       lease: state.lease.lease,
       action: "hold",
     });
-    await state.product("prefs.set", { key: "expandWork", value: true });
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
-    const work = page.locator(".otk-work-log");
+    const work = await openLatestWork(page);
     const steps = work.locator('[data-native-record^="opencode-v1/step-"]');
     const snapshots = work.locator(
       '[data-native-record="opencode-v1/snapshot"]',
     );
     const count = work.locator('[data-record-kind="stepMarkers"]');
     await expect(count).toHaveText("4 step markers");
-    await expect(count.and(work.getByRole("button"))).toHaveCount(0);
-    await expect(steps).toHaveCount(0);
+    await expect(count.and(work.getByRole("button"))).toHaveCount(1);
     await expect(snapshots).toHaveCount(0);
+    await count.click();
+    await expect(steps).toHaveCount(4);
+    await count.click();
+    await expect(steps).toHaveCount(0);
     await expect(work.locator("[data-tool=write]")).toHaveCount(2);
     await work.locator('[data-record-kind="snapshots"]').click();
     await expect(snapshots).toHaveCount(1);
@@ -66,12 +68,14 @@ test(
       await state.product("prefs.set", { key: "expandRecords", value });
       await expect(record).toHaveAttribute("aria-expanded", "false");
     }
-    // The preference still applies to background intervals, not reply Work logs.
+    // Bookkeeping remains independently inspectable in the Work log panel.
     await state.product("prefs.set", { key: "expandStepMarkers", value: true });
+    // The explicit close stays authoritative until the tab's choices retire.
     await expect(steps).toHaveCount(0);
     await page.reload();
+    await openLatestWork(page);
     await expect(count).toHaveText("4 step markers");
-    await expect(steps).toHaveCount(0);
+    await expect(steps).toHaveCount(4);
     await expect(snapshots).toHaveCount(0);
   },
 );

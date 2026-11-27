@@ -2,13 +2,12 @@
 import { expect } from "../fixtures/evidence.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { openSession } from "../fixtures/wire.ts";
-import { prompt } from "../pages/transcript.ts";
+import { openLatestWork, prompt } from "../pages/transcript.ts";
 
 test.use({ profile: "sessions-tasks" });
 test("sessions.native-helper-current-tool-uses-shared-name", {
   tag: ["@sessions"],
 }, async ({ isolatedState: state, page }, info) => {
-  await state.product("prefs.set", { key: "expandWork", value: true });
   await state.product("prefs.set", { key: "expandDelegation", value: true });
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Shared helper tool identity",
@@ -40,6 +39,7 @@ test("sessions.native-helper-current-tool-uses-shared-name", {
   await state.queue(["Child finished."]);
   await state.queue(["Parent finished."]);
   await prompt(page, "Delegate the controlled helper");
+  await openLatestWork(page);
   const card = page.locator("[data-tool=task] .otk-task-card");
   await expect(card).toContainText("bash");
   await expect(page.locator(".otk-permission-dock")).toBeVisible();

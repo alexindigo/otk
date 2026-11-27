@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { copySelection, wheelTranscript } from "../../pages/transcript.ts";
+import {
+  copySelection,
+  wheelTranscript,
+  wheelViewport,
+} from "../../pages/transcript.ts";
 import { acquireOlderHistory } from "../../pages/history.ts";
 
 test.describe("acquired transcript", () => {
@@ -305,13 +310,13 @@ test.describe("diff window", () => {
     tag: ["@messages", "@contracts"],
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
-    await page.locator(".otk-work-fold").click();
+    const work = await openLatestWork(page);
     await page.context().grantPermissions([
       "clipboard-read",
       "clipboard-write",
     ]);
-    await page.locator(".otk-messages").hover();
-    await page.mouse.wheel(0, -100);
+    const list = work.locator(".otk-work-list");
+    await wheelViewport(list, -100);
     await page.locator(".otk-tool-toggle").click();
     await expect(page.locator(".otk-diff-text").first()).toHaveText(
       "source_line_0000 = 0;",
@@ -330,7 +335,7 @@ test.describe("diff window", () => {
         diffSource: selection.toString(),
       });
     });
-    await wheelTranscript(page, 900);
+    await wheelViewport(list, 900);
     await expect.poll(() =>
       page.evaluate(() => {
         const g = globalThis as typeof globalThis & {
@@ -355,7 +360,7 @@ test.describe("diff window", () => {
     });
     await expect.poll(() =>
       page.locator(".otk-diff-unified").evaluateAll((rows) => {
-        const v = document.querySelector(".otk-messages")!
+        const v = document.querySelector(".otk-work-list")!
           .getBoundingClientRect();
         return rows.length > 0 && rows.every((e) => {
           const r = e.getBoundingClientRect();
@@ -365,7 +370,7 @@ test.describe("diff window", () => {
     ).toBe(true);
     const anchor = await page.locator(".otk-diff-unified").evaluateAll(
       (rows) => {
-        const v = document.querySelector(".otk-messages")!
+        const v = document.querySelector(".otk-work-list")!
             .getBoundingClientRect(),
           r = rows.find((e) => e.getBoundingClientRect().bottom > v.top)!;
         return {
@@ -374,17 +379,16 @@ test.describe("diff window", () => {
         };
       },
     );
-    await page.setViewportSize({ width: 800, height: 700 });
-    for (const label of ["Collapse projects", "Collapse right panel"]) {
-      if (
-        await page.getByRole("button", { name: label, exact: true }).count()
-      ) await page.getByRole("button", { name: label, exact: true }).click();
-    }
+    const width = (await list.boundingBox())!.width;
+    await state.product("layout.patch", { rightWidth: 440 });
+    await expect.poll(async () => (await list.boundingBox())?.width).not.toBe(
+      width,
+    );
     await expect.poll(() =>
       page.evaluate(({ line, top }) => {
         // Query and measure in one task: resize can recycle a row between a
         // locator's handle acquisition and its evaluate callback.
-        const pane = document.querySelector(".otk-messages");
+        const pane = document.querySelector(".otk-work-list");
         const row = pane?.querySelector(
           `.otk-diff-unified[data-new-line="${line}"]`,
         );

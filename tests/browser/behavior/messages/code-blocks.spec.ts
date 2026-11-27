@@ -11,6 +11,7 @@ import {
   prompt,
   revealAcquired,
   runNativeTool,
+  sessionStatus,
 } from "../../pages/transcript.ts";
 
 const block = (page: Page, kind: string) =>
@@ -223,10 +224,7 @@ test(
     const source = "printf 'archived\\n'";
     await reply(state, page, fence("bash", source));
     await expect(block(page, "fence")).toBeVisible();
-    await expect(page.locator(`[data-session="${id}"]`)).toHaveAttribute(
-      "data-status",
-      "idle",
-    );
+    await sessionStatus(page, id, "idle");
     await page.locator('[data-message-command="prompt.revert"]').click();
     await page.getByRole("button", { name: "Confirm revert", exact: true })
       .click();

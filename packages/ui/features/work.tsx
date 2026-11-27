@@ -106,7 +106,10 @@ export function registerWorkCommands(ports: CommandPorts, input: {
         const selected = input.selection();
         if (!selected || scopeOf(selected) !== selection.scope) return;
       }
-      await ports.commands.run("transcript.reveal", { messageID });
+      await ports.commands.run("transcript.reveal", {
+        messageID,
+        replyOnly: true,
+      });
     },
   });
 }

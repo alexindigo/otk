@@ -108,8 +108,12 @@
   padding: var(--space-2);
 }
 .otk-work-recorded-meta {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) max-content;
   align-items: center;
   gap: var(--space-2);
   white-space: nowrap;
+}
+.otk-work-panel-reply {
+  display: contents;
 }

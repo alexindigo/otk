@@ -182,11 +182,24 @@ export function createShellState(
     let model = workModels.get(transcript);
     if (!model) {
       const prefs = () => toggles.state.prefs;
+      const context = () => ({
+        directory: entry(target.sidecarId, target.sessionID)?.directory,
+        paths: session.directoryCatalog?.state.catalog?.paths,
+      });
+      let revision = { prefs: prefs(), ...context() };
       model = createWorkModel({
         reply: (key) => transcript.state.repliesByID[key],
         replyKeys: () => transcript.state.replyIDs,
-        presentation: (part) => o.parts.presentation(part, prefs()),
-        presentationRevision: prefs,
+        presentation: (part) => o.parts.presentation(part, prefs(), context()),
+        presentationRevision: () => {
+          const next = { prefs: prefs(), ...context() };
+          if (
+            next.prefs !== revision.prefs ||
+            next.directory !== revision.directory ||
+            next.paths !== revision.paths
+          ) revision = next;
+          return revision;
+        },
         now: Date.now,
       });
       workModels.set(transcript, model);

@@ -271,8 +271,7 @@ Deno.test("reply copy carries only producer-declared content; row records join t
     replyParts.map((part) => present(part).text).filter(Boolean),
     ["Reply text"],
   );
-  // Inside a reply a row record is work in the reply's own flow; a boundary
-  // still stands in the transcript.
+  // D74: reply work leaves the frames; a boundary still stands in the transcript.
   const reply = createMessageLayout().update(
     "reply",
     "assistant",
@@ -283,11 +282,12 @@ Deno.test("reply copy carries only producer-declared content; row records join t
   assertEquals(reply.frames.map((frame) => frame.transcript), [
     false,
     true,
-    false,
   ]);
   assertEquals(
-    reply.frames[2].groups.map((group) => group.parts.map((part) => part.id)),
-    [["start", "finish"]],
+    reply.frames.flatMap((frame) =>
+      frame.groups.flatMap((group) => group.parts.map((part) => part.id))
+    ),
+    ["text", "interrupted"],
   );
   assertEquals(reply.copyable, true);
   // Outside replies, records keep their transcript frame and no work log.

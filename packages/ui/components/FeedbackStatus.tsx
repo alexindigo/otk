@@ -20,6 +20,7 @@ export default function FeedbackStatus(props: {
   inactive?: boolean;
   singleLine?: boolean;
   compact?: boolean;
+  summaryOnly?: boolean;
   fullReason?: boolean;
   time?: number;
   placement?: "record" | "field";
@@ -65,6 +66,7 @@ export default function FeedbackStatus(props: {
               failure={feedback()!.failure!}
               inline={props.singleLine}
               compact={props.compact}
+              summaryOnly={props.summaryOnly}
               fullReason={props.fullReason}
               focusHome={() => frame?.focus({ preventScroll: true })}
               time={props.time}

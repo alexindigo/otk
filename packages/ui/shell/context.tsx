@@ -18,6 +18,7 @@ import type { IndexEntry, Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
 import { ReloadProvider } from "../state/reload.tsx";
 import { DisclosuresProvider } from "../components/Disclosure.tsx";
+import { TranscriptActions } from "../features/transcript-context.tsx";
 import type { ShellWork } from "../state/shell.ts";
 import {
   type FilePathPorts,
@@ -37,7 +38,7 @@ export interface ShellPorts {
     records?():
       | Pick<
         import("@otk/client").TranscriptOwner,
-        "state" | "interaction" | "nativeSource"
+        "state" | "interaction" | "nativeSource" | "projection" | "source"
       >
       | undefined;
     exhausted(): boolean;
@@ -85,7 +86,7 @@ export function ShellProvider(
       <FilePathServices value={props.ports.filePaths ?? null}>
         <Context value={props.ports}>
           <DisclosuresProvider owner={props.ports.disclosures}>
-            {props.children}
+            <TranscriptActions>{props.children}</TranscriptActions>
           </DisclosuresProvider>
         </Context>
       </FilePathServices>

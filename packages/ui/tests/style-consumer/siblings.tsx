@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import WorkLog from "../../components/WorkLog.tsx";
+import WorkStrip from "../../components/WorkStrip.tsx";
+import { workRuns } from "../../components/work-log.ts";
 import Settings from "../../components/Settings.tsx";
 import RevertGroup from "../../components/RevertGroup.tsx";
 import { DEFAULT_PREFS } from "@otk/protocol";
@@ -9,9 +10,22 @@ export default function Scene() {
     <div class="style-columns">
       <section class="style-panel" id="work">
         <h2>Independent work log</h2>
-        <WorkLog
-          owner="style-siblings"
-          body={() => <p>Owned work content</p>}
+        <WorkStrip
+          runs={workRuns({
+            parts: [{ kind: "meta", id: "check" }],
+            terminal: true,
+            now: 2000,
+            presentation: () => ({
+              work: { start: 1000, end: 2000 },
+              run: { label: "Check output" },
+            }),
+          })}
+          shown={false}
+          action={() => ({
+            availability: () => ({ available: true }),
+            subscribe: () => () => {},
+            run: () => Promise.resolve({ kind: "shown" }),
+          })}
         />
         <RevertGroup
           group={{

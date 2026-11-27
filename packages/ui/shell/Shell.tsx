@@ -1130,6 +1130,7 @@ export default function Shell(
                                   })}
                                 >
                                   <SessionView
+                                    work={work}
                                     mountTranscriptLayer={mountTranscriptLayer}
                                     sidecarId={target.sidecarId}
                                     revert={session.state.content.revert}

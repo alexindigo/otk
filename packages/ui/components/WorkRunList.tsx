@@ -3,6 +3,8 @@ import {
   type ActionControl,
   elapsed,
   metaList,
+  permissionTool,
+  toolWaitingForPermission,
   type TranscriptReply,
   unknownTime,
   workLogBookkeeping,
@@ -18,7 +20,6 @@ import {
   createMemo,
   createSignal,
   type Element,
-  For,
   onCleanup,
   Show,
 } from "solid-js";
@@ -32,11 +33,11 @@ import ChromeMeta from "./ChromeMeta.tsx";
 import Disclosure from "./Disclosure.tsx";
 import PartsView from "./PartsView.tsx";
 import RecordKinds, { useRecordKindsRegion } from "./RecordKinds.tsx";
-import ScrollRegion from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import TimeText from "./TimeText.tsx";
 import TimeValue from "./TimeValue.tsx";
 import { TreeNode } from "./Tree.tsx";
+import VirtualList from "./VirtualList.tsx";
 import type { WorkRun, WorkRuns } from "./work-log.ts";
 
 function WorkTimeBar(
@@ -81,7 +82,7 @@ function WorkTimeBar(
 }
 
 function RecordedParts(props: { children: Element }): Element {
-  return <div id={useRecordKindsRegion()}>{props.children}</div>;
+  return <div role="group" id={useRecordKindsRegion()}>{props.children}</div>;
 }
 
 export default function WorkRunList(props: {
@@ -131,11 +132,12 @@ export default function WorkRunList(props: {
     }
     return { start, end };
   });
-  const partView = (items: Part[], row?: PartRowSlots, after?: boolean) => (
+  // Keep the renderer mounted while a record's disclosure changes. Its keyed
+  // children, not the array returned by the fold projection, own row identity.
+  const partView = (items: () => Part[], row?: PartRowSlots) => (
     <PartsView
-      parts={items}
+      parts={items()}
       row={row}
-      after={after}
       tree
       user={false}
       streaming={props.streaming}
@@ -148,8 +150,8 @@ export default function WorkRunList(props: {
   );
   const bookkeeping = (part: Part): Activity | undefined => {
     const kind = workLogBookkeeping(part);
-    if (!kind) return;
     const original = parts.presentation(part, props.prefs).activity;
+    if (!kind) return original;
     return {
       ...original,
       kindLabel: "Record",
@@ -167,10 +169,17 @@ export default function WorkRunList(props: {
   function WorkRow(input: { run: WorkRun }): Element {
     const records = () => resolve(input.run.partIDs);
     const thoughts = () => resolve(input.run.thinkingIDs);
+    const waiting = () =>
+      records().some((part) =>
+        part.kind === "tool" &&
+        toolWaitingForPermission(part.call, props.permissions)
+      );
     const toolsFor = () =>
       records().flatMap((part) =>
         part.kind === "tool"
-          ? [tools.presentation(part.call, { directory: props.directory })]
+          ? [tools.presentation(permissionTool(part.call, props.permissions), {
+            directory: props.directory,
+          })]
           : []
       );
     const preview = createMemo(() => {
@@ -181,13 +190,14 @@ export default function WorkRunList(props: {
           text: command ??
             tools.map((tool) => tool.target).filter(Boolean).join(", "),
           mono: !!command,
+          summary: tools.length === 1 ? tools[0].summary : undefined,
         };
       }
       const facts = records().flatMap((part) => {
         const activity = parts.presentation(part, props.prefs).activity;
         return [activity?.state?.label, activity?.detail].filter(Boolean);
       });
-      return { text: metaList(facts), mono: false };
+      return { text: metaList(facts), mono: false, summary: undefined };
     });
     const duration = () => {
       const end = input.run.live ? now() : input.run.end;
@@ -197,9 +207,16 @@ export default function WorkRunList(props: {
     };
     const trail = () => (
       <ChromeMeta class="otk-work-run-fact">
-        <Show when={input.run.live}>
-          <ActivityIndicator small label="Running" />
-          {" Running - "}
+        <Show
+          when={waiting()}
+          fallback={input.run.live && (
+            <>
+              <ActivityIndicator small label="Running" />
+              {" Running - "}
+            </>
+          )}
+        >
+          Awaiting permission
         </Show>
         <Show
           when={toolsFor().length === 1 && toolsFor()[0].changes}
@@ -231,6 +248,17 @@ export default function WorkRunList(props: {
           >
             {preview().text}
           </ChromeMeta>
+          <Show when={preview().summary}>
+            {(summary) => (
+              <ChromeMeta
+                class="otk-work-tool-summary"
+                truncate
+                title={summary()}
+              >
+                {summary()}
+              </ChromeMeta>
+            )}
+          </Show>
           <Show when={input.run.child}>
             {(child) => (
               <ActionButton
@@ -268,12 +296,12 @@ export default function WorkRunList(props: {
           }).class,
           { "is-failed": input.run.failed, "is-running": input.run.live },
         ]}
-        role="listitem"
         data-work-run={input.run.key}
+        data-work-source={sourceIDs().get(input.run.key)}
       >
         <Show
           when={input.run.partIDs.length > 1}
-          fallback={partView(records(), {
+          fallback={partView(records, {
             get label() {
               return input.run.label;
             },
@@ -284,7 +312,7 @@ export default function WorkRunList(props: {
             trail,
             detail,
             get extra() {
-              return thoughts().length ? () => partView(thoughts()) : undefined;
+              return thoughts().length ? () => partView(thoughts) : undefined;
             },
           })}
         >
@@ -308,41 +336,62 @@ export default function WorkRunList(props: {
               />
             )}
           >
-            {() => partView([...records(), ...thoughts()])}
+            {() => partView(() => [...records(), ...thoughts()])}
           </Disclosure>
         </Show>
       </div>
     );
   }
 
+  // Descendant source, code and diff windows borrow this measured viewport.
+  const runKey = (id: string) => `run:${id}`;
+  const runs = createMemo(() =>
+    new Map(props.work.runs.map((run) => [runKey(run.key), run]))
+  );
+  const keys = () => [
+    ...runs().keys(),
+    ...(props.work.trailingThoughts.length ? ["thoughts"] : []),
+    ...(props.work.bookkeeping.length ? ["bookkeeping"] : []),
+  ];
   return (
-    <ScrollRegion
-      axis="y"
-      frameClass="otk-work-list-frame"
+    <VirtualList
+      keys={keys()}
+      label="Work runs"
       class="otk-work-list"
-    >
-      <div role="list" aria-label="Work runs">
-        <For each={props.work.runs} keyed={(run) => run.key}>
-          {(run) => <WorkRow run={run()} />}
-        </For>
-      </div>
-      <Show when={props.work.bookkeeping.length}>
-        <RecordKinds
-          items={props.work.bookkeeping}
-          activity={bookkeeping}
-          identity={props.reply.key}
-          prefs={props.prefs}
-          render={(visible, meta) => (
-            <div class="otk-work-recorded">
-              <div class="otk-work-recorded-meta">
-                <ChromeMeta>Also recorded</ChromeMeta>
-                {meta()}
-              </div>
-              <RecordedParts>{partView(visible())}</RecordedParts>
-            </div>
-          )}
-        />
-      </Show>
-    </ScrollRegion>
+      samples={[{ role: "row", class: "otk-window-content-estimate" }]}
+      pinned={props.selected ? [runKey(props.selected)] : []}
+      revision={props.work}
+      render={(key) => {
+        if (key === "thoughts") {
+          return partView(() => resolve(props.work.trailingThoughts));
+        }
+        if (key === "bookkeeping") {
+          return (
+            <RecordKinds
+              items={props.work.bookkeeping}
+              activity={bookkeeping}
+              identity={props.reply.key}
+              prefs={props.prefs}
+              render={(visible, meta) => (
+                <div class="otk-work-recorded">
+                  <div class="otk-work-recorded-meta">
+                    <ChromeMeta truncate title="Also recorded">
+                      Also recorded
+                    </ChromeMeta>
+                    {meta()}
+                  </div>
+                  <RecordedParts>{partView(visible)}</RecordedParts>
+                </div>
+              )}
+            />
+          );
+        }
+        return (
+          <Show when={runs().get(key)}>
+            {(run) => <WorkRow run={run()} />}
+          </Show>
+        );
+      }}
+    />
   );
 }

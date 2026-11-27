@@ -46,3 +46,9 @@
   justify-self: end;
   inline-size: fit-content;
 }
+
+.otk-reply-end {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}

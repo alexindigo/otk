@@ -16,6 +16,8 @@ import type { location, selection } from "./selection.ts";
 /** Availability and execution are one input; callers cannot replace the handler. */
 export default function ActionButton(props: {
   action: ActionControl;
+  /** A composite hit target may choose among the same owner's actions. */
+  hitAction?(event: MouseEvent | KeyboardEvent): ActionControl;
   class?: string;
   label?: string;
   title?: string;
@@ -55,7 +57,10 @@ export default function ActionButton(props: {
     return value.available ? undefined : value;
   };
   const busy = () => pending() || !!props.busy;
-  const disabled = () => busy() || !availability().available;
+  // Reject repeated activation without blurring the invoking control while
+  // the action opens a panel or dialog that needs to remember focus.
+  const unavailableOrBusy = () => !!props.busy || !availability().available;
+  const disabled = () => pending() || unavailableOrBusy();
   const described = () =>
     !props.onFeedback && (!!unavailable() || busy() || !!feedback());
   const activate = (event: MouseEvent | KeyboardEvent) => {
@@ -78,7 +83,9 @@ export default function ActionButton(props: {
     event.stopPropagation();
     setPending(true);
     setFeedback(undefined);
-    void props.action.run().then((result) => {
+    const action = props.hitAction?.(event);
+    const result = action ? action.run() : props.action.run();
+    void result.then((result) => {
       if (result.kind === "shown") props.onShown?.();
       else if (props.onFeedback) props.onFeedback(result);
       else setFeedback(result.feedback);
@@ -129,9 +136,11 @@ export default function ActionButton(props: {
           : "false"}
         title={unavailable()?.reason ?? props.title}
         disabled={!props.inline && props.href === undefined
-          ? disabled()
+          ? unavailableOrBusy()
           : undefined}
-        aria-disabled={(props.inline || props.href !== undefined) && disabled()
+        aria-disabled={(props.inline || props.href !== undefined ||
+            pending()) &&
+            disabled()
           ? "true"
           : undefined}
         aria-busy={busy() ? "true" : "false"}

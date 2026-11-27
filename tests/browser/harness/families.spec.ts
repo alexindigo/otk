@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../fixtures/evidence.ts";
 import { openSession } from "../fixtures/wire.ts";
-import { openWorkLogs } from "../pages/transcript.ts";
+import { openLatestWork, sessionStatus } from "../pages/transcript.ts";
 
 test.describe("fixture family retirement", {
   tag: ["@fixture-acceptance", "@harness"],
@@ -36,14 +36,13 @@ test.describe("fixture family retirement", {
       await input.press("Enter");
       await expect(page.locator("[data-role=assistant] .otk-text").last())
         .toHaveText(name + " parent completed.");
-      await openWorkLogs(page);
+      await openLatestWork(page);
       await expect(
         page.locator("[data-tool=task][data-tool-status=completed]").filter({
           hasText: name,
         }),
       ).toHaveCount(1);
-      await expect(page.locator(`[data-session="${parent.id}"]`))
-        .toHaveAttribute("data-status", "idle");
+      await sessionStatus(page, parent.id, "idle");
     }
     const children = await state.native<{ id: string }[]>(
       `/session/${parent.id}/children`,

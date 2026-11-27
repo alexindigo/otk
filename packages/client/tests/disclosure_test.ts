@@ -132,16 +132,16 @@ Deno.test("task and session disclosures isolate kind, server and id", async () =
 
 Deno.test("defaults follow Settings and required work unless a reader chose otherwise", async () => {
   const owner = createDisclosures({});
-  let prefs = { expandWork: false }, required = false;
-  const work = owner.bind("work", repo, {
-    category: "work",
+  let prefs = { expandSystem: false }, required = false;
+  const work = owner.bind("activity", repo, {
+    category: "system",
     prefs: () => prefs,
     required: () => required,
   });
   assertEquals(work.open(), false);
-  prefs = { expandWork: true };
+  prefs = { expandSystem: true };
   assertEquals(work.open(), true);
-  prefs = { expandWork: false };
+  prefs = { expandSystem: false };
   required = true;
   assertEquals(work.open(), true);
   await work.set(false);
@@ -156,8 +156,8 @@ Deno.test("defaults follow Settings and required work unless a reader chose othe
   );
   assertEquals(
     owner.defaultFor("revert", {
-      category: "work",
-      prefs: () => ({ expandWork: true }),
+      category: "system",
+      prefs: () => ({ expandSystem: true }),
     }),
     false,
   );

@@ -6,6 +6,7 @@ import {
   oldestPermission,
   permissionTool,
   reduce,
+  toolWaitingForPermission,
 } from "@otk/client";
 const nodes: Record<string, { parentID?: string }> = {
   root: {},
@@ -76,6 +77,24 @@ const request = (
   patterns: ["echo otk"],
   alwaysPatterns: ["echo *"],
   detail: { kind: "bash", command: "echo otk" },
+});
+Deno.test("tool waiting follows its call or delegated child, not an unrelated request", () => {
+  const tool = {
+    tool: "bash" as const,
+    callID: "run",
+    status: "running" as const,
+    time: {},
+    command: "echo otk",
+    output: "",
+  };
+  const child = request("child", "child", 1);
+  const direct = { ...request("direct", "root", 2), toolCall: "run" };
+  assertEquals(toolWaitingForPermission(tool, [child]), false);
+  assertEquals(toolWaitingForPermission(tool, [direct]), true);
+  assertEquals(
+    toolWaitingForPermission({ ...tool, childSessionID: "child" }, [child]),
+    true,
+  );
 });
 Deno.test("permission selector shows oldest descendant and ignores an earlier unrelated request", () => {
   const old = request("old", "grandchild", 2),

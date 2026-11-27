@@ -436,6 +436,23 @@ export function placeFailure(
   return shipped.place(failure, placement, occupant);
 }
 
+/** D74: a run has a short inline witness; the panel owns its full record. */
+export function workFailureFeedback(
+  run: { label: string; failure?: PublicFailure; failureReason?: string },
+  show: () => void,
+): Feedback {
+  const heading = `${run.label} failed`;
+  const feedback = (run.failure && placeFailure(run.failure, "record")) ??
+    errorFeedback(run.failureReason ?? heading)!;
+  const reason = feedback.failure?.reason ?? feedback.text;
+  return {
+    ...feedback,
+    text: reason === heading ? heading : `${heading}: ${reason}`,
+    failure: { ...feedback.failure!, heading },
+    action: { label: "Show in Work log", run: show },
+  };
+}
+
 /** A failed local send with a published request record keeps its identity,
  * not a second rendering of the record. Unlinked, local-only failures still
  * own their reason and recovery (for example, an unconfirmed send). */

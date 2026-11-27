@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, type Page } from "@playwright/test";
+import { sessionStatus } from "./transcript.ts";
 import type { TestState } from "../fixtures/test-state.ts";
 import type { Json } from "../../support/fixture-control.ts";
 
@@ -52,10 +53,7 @@ export async function prompt(page: Page, text: string) {
 export async function reply(page: Page, id: string, text: string) {
   await expect(page.locator("[data-role=assistant] .otk-text").last())
     .toHaveText(text);
-  await expect(page.locator(`[data-session="${id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, id, "idle");
 }
 export async function file(
   state: TestState,

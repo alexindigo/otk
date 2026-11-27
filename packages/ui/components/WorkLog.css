@@ -1,6 +1,0 @@
-/* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-work-log {
-  --tree-height: var(--control-size);
-  color: var(--otk-fg-3);
-  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
-}

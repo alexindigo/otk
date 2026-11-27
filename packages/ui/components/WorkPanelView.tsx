@@ -15,8 +15,10 @@ import { useUiRegistries } from "../registries/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import {
   ContentIdentityProvider,
+  replySourceIncomplete,
   TranscriptRecords,
 } from "../features/transcript-context.tsx";
+import { contextTarget } from "./context-target.ts";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import ActionButton from "./ActionButton.tsx";
 import ChromeMeta, { MetaItem, MetaRow } from "./ChromeMeta.tsx";
@@ -67,7 +69,7 @@ function WorkTurnHeader(props: {
         <span class="otk-work-turn-title otk-control-label" title={props.title}>
           {props.title}
         </span>
-        <MetaRow>
+        <MetaRow whole>
           <MetaItem rank={1} required>
             <ChromeMeta>
               {countLabel(props.work.actions, "action")}
@@ -177,8 +179,50 @@ export default function WorkPanelView(): Element {
       shell.transcript.answered?.() === true,
       Number(!!(reply() && work() && records())),
     );
+  const identity = () => ({
+    ...session(),
+    ownerID: reply()?.key,
+    messageID: reply()?.message.id,
+    directory: entry()?.directory,
+  });
+  const replyTarget = contextTarget(() => {
+    const value = reply()!;
+    const owner = records()!;
+    const preferences = prefs();
+    const copyable =
+      replySourceIncomplete(owner, value, shell.transcript.exhausted()) ||
+      value.message.parts.some((part) => {
+        const facts = parts.presentation(part, preferences);
+        return facts.copyable ?? !!facts.text;
+      });
+    return {
+      kind: "reply",
+      data: {
+        ...identity(),
+        source: copyable
+          ? () =>
+            owner.source(
+              value.message.id,
+              (part) => parts.presentation(part, preferences).text,
+            )
+          : undefined,
+      },
+    };
+  });
   return (
-    <div class="otk-work-panel">
+    <div
+      class="otk-work-panel"
+      ref={contextTarget(() => ({
+        kind: "session",
+        area: true,
+        data: session() && entry() &&
+          {
+            ...session(),
+            title: entry()!.title,
+            directory: entry()!.directory,
+          },
+      }))}
+    >
       <Show
         when={reply() && work() && records()}
         fallback={
@@ -198,7 +242,7 @@ export default function WorkPanelView(): Element {
         }
       >
         {(owner) => (
-          <>
+          <div class="otk-work-panel-reply" ref={replyTarget}>
             <WorkTurnHeader
               title={title(reply()!)}
               work={work()!}
@@ -222,12 +266,7 @@ export default function WorkPanelView(): Element {
                   nativeSource={owner().nativeSource}
                 >
                   <ContentIdentityProvider
-                    value={{
-                      ...session(),
-                      ownerID: reply()!.key,
-                      messageID: reply()!.firstID,
-                      directory: entry()?.directory,
-                    }}
+                    value={identity()}
                   >
                     <WorkRunList
                       work={work()!}
@@ -235,7 +274,14 @@ export default function WorkPanelView(): Element {
                       selected={shown()?.run}
                       prefs={prefs()}
                       directory={entry()?.directory}
-                      permissions={owner().state.content.permissions}
+                      permissions={session()
+                        ? shell.connection(session()!.sidecarId).attention
+                          .permissions(
+                            session()!.sessionID,
+                            (id) => shell.entry(session()!.sidecarId, id),
+                            true,
+                          )
+                        : []}
                       streaming={!!display()?.streaming}
                       onOpenChild={(id) => run("session.child", id)}
                       childAction={child}
@@ -245,7 +291,7 @@ export default function WorkPanelView(): Element {
                 </TranscriptRecords>
               )}
             </Show>
-          </>
+          </div>
         )}
       </Show>
     </div>

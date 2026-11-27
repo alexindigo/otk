@@ -17,6 +17,8 @@ export interface PartRowSlots {
 export interface WorkRunFacts {
   lane?: "thinking" | "delegation";
   label: string;
+  agent?: string;
+  failureReason?: string;
   merge?: {
     key: string;
     verb: string;
@@ -198,21 +200,33 @@ export class PartRegistry {
   #fallbackPresentation?: (part: Part, prefs: Preferences) => PartPresentation;
   #presentations = new Map<
     string,
-    (part: Part, prefs: Preferences) => PartPresentation
+    (
+      part: Part,
+      prefs: Preferences,
+      context: PresentationContext,
+    ) => PartPresentation
   >();
   registerTyped<K extends keyof PartKinds>(
     kind: K,
     component: (
       props: Omit<PartProps, "part"> & { part: PartKinds[K] },
     ) => Element,
-    presentation?: (part: PartKinds[K], prefs: Preferences) => PartPresentation,
+    presentation?: (
+      part: PartKinds[K],
+      prefs: Preferences,
+      context: PresentationContext,
+    ) => PartPresentation,
   ): void {
     if (this.#typed.has(kind)) throw new Error(`Duplicate part: ${kind}`);
     this.#typed.set(kind, component as PartRenderer);
     if (presentation) {
       this.#presentations.set(
         `typed:${kind}`,
-        presentation as (part: Part, prefs: Preferences) => PartPresentation,
+        presentation as (
+          part: Part,
+          prefs: Preferences,
+          context: PresentationContext,
+        ) => PartPresentation,
       );
     }
   }
@@ -245,14 +259,18 @@ export class PartRegistry {
       ? this.#external.get(part.name)
       : this.#typed.get(part.kind)) ?? this.#fallback;
   }
-  presentation(part: Part, prefs: Preferences): PartPresentation {
+  presentation(
+    part: Part,
+    prefs: Preferences,
+    context: PresentationContext = {},
+  ): PartPresentation {
     const external = part.kind === "external";
     const registered = external
       ? this.#external.has(part.name)
       : this.#typed.has(part.kind);
     return this.#presentations.get(
       external ? `external:${part.name}` : `typed:${part.kind}`,
-    )?.(part, prefs) ??
+    )?.(part, prefs, context) ??
       (!registered ? this.#fallbackPresentation?.(part, prefs) : undefined) ??
       {};
   }

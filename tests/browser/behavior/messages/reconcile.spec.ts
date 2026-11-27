@@ -91,7 +91,7 @@ for (
       await openSession(state, page, session.id);
       const article =
         `[data-virtual-key="reply:${historical}"] [data-role="assistant"]`;
-      const selector = `${article} .otk-work-fold`;
+      const selector = `${article} .otk-work-strip`;
       const button = page.locator(selector);
       const count = () =>
         page.locator(".otk-message-flow").getAttribute("data-message-count")
@@ -118,9 +118,9 @@ for (
       }, { timeout: 30_000 }).toBe(true);
       await revealAcquired(page, selector);
       await wheelTranscript(page, -1, button);
-      await expect(button).toHaveAttribute("aria-expanded", "false");
-      await button.click();
-      await expect(button).toHaveAttribute("aria-expanded", "true");
+      await expect(button).not.toHaveAttribute("aria-current", "true");
+      await button.getByText("Work log", { exact: true }).click();
+      await expect(button).toHaveAttribute("aria-current", "true");
       await expect.poll(() =>
         socket.sent.filter(({ frame }) =>
           frame.method === "session.messages" && frame.params?.before
@@ -148,7 +148,7 @@ for (
           )
             .find((e) => e.textContent === "Historical tool reply");
           const text = body?.firstChild;
-          const fold = candidate?.querySelector(".otk-work-fold");
+          const fold = candidate?.querySelector(".otk-work-strip");
           const memory = globalThis as typeof globalThis & {
             reconcileNodes?: {
               anchor?: Element;
@@ -167,7 +167,7 @@ for (
               anchor.isConnected,
             sameText: !!text && text === saved.text && text.isConnected,
             sameFold: !!fold && fold === saved.fold && fold.isConnected,
-            expanded: fold?.getAttribute("aria-expanded"),
+            expanded: fold?.getAttribute("aria-current"),
             offBottom:
               pane.scrollHeight - pane.clientHeight - pane.scrollTop > 1,
           };

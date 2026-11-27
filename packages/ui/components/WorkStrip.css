@@ -1,0 +1,68 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+:root {
+  --work-strip-size: calc(240 * var(--otk-unit));
+  --work-strip-floor: calc(80 * var(--otk-unit));
+  --work-strip-min: calc(3 * var(--otk-unit));
+}
+.otk-work-strip {
+  display: inline-grid;
+  /* The grid owns the chart bounds; its flex children only divide that space. */
+  grid-template-columns: auto max-content minmax(var(--work-strip-floor),
+    var(--work-strip-size)) minmax(0, max-content);
+  justify-self: start;
+  align-items: center;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: var(--control-size);
+  padding: var(--space-1) var(--space-2);
+  gap: var(--space-2);
+  border-radius: var(--radius-control);
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
+  color: var(--otk-fg-3);
+}
+.otk-work-strip > svg {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
+.otk-work-strip-track {
+  display: flex;
+  gap: var(--otk-unit);
+  block-size: calc(16 * var(--otk-unit));
+  padding: calc(2 * var(--otk-unit));
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-control);
+  contain: inline-size;
+  overflow: clip;
+}
+.otk-work-strip.is-current .otk-work-strip-track {
+  border-color: var(--otk-accent-text);
+}
+.otk-work-strip-segment {
+  flex-basis: 0;
+  flex-grow: var(--work-weight, 0);
+  min-inline-size: min(var(--work-strip-min), calc((100% + var(--otk-unit)) /
+    var(--work-segments, 1) - var(--otk-unit)));
+  border-radius: var(--otk-unit);
+  background: color-mix(in srgb, var(--otk-fg-2) 70%, transparent);
+}
+.otk-work-strip-segment.is-thinking {
+  background: repeating-linear-gradient(135deg, var(--otk-fg-3) 0
+    var(--otk-unit), transparent var(--otk-unit) calc(3 * var(--otk-unit)));
+}
+.otk-work-strip-segment.is-delegation {
+  background: var(--work-agent-color, var(--otk-agent-1));
+}
+.otk-work-strip-segment.is-live {
+  background: repeating-linear-gradient(90deg, var(--otk-accent-text) 0
+    var(--space-1), transparent var(--space-1) calc(6 * var(--otk-unit)));
+}
+.otk-work-strip-segment.is-failed {
+  background: var(--otk-danger);
+}
+.otk-work-strip-summary {
+  --meta-row-gap: var(--space-2);
+  min-inline-size: 0;
+}
+.otk-work-strip-failed {
+  color: var(--otk-danger);
+}

@@ -31,7 +31,7 @@ export default function ToolFrame(props: {
   waiting: boolean;
   body(): Element;
   hasContent?(): boolean;
-  nested?(): Element;
+  nested?(after: boolean): Element;
   presentation?: ToolPresentation;
   prefs?: Preferences;
   onOpenChild?(id: string): void;
@@ -183,22 +183,25 @@ export default function ToolFrame(props: {
                   />
                 )
                 : undefined}
-              trail={props.row?.trail ?? (props.presentation?.entity
+              trail={props.presentation?.entity || props.row?.trail
                 ? () => (
-                  <Show when={props.presentation?.entity}>
-                    {(entity) => (
-                      <EntityPill
-                        label={entity().label}
-                        facts={scopedEntityFacts(session, {
-                          ...entity(),
-                          tool: props.call,
-                        })}
-                        onOpenChild={props.onOpenChild}
-                      />
-                    )}
-                  </Show>
+                  <>
+                    <Show when={props.presentation?.entity}>
+                      {(entity) => (
+                        <EntityPill
+                          label={entity().label}
+                          facts={scopedEntityFacts(session, {
+                            ...entity(),
+                            tool: props.call,
+                          })}
+                          onOpenChild={props.onOpenChild}
+                        />
+                      )}
+                    </Show>
+                    {props.row?.trail?.()}
+                  </>
                 )
-                : undefined)}
+                : undefined}
               region={region}
             />
           )}
@@ -210,7 +213,7 @@ export default function ToolFrame(props: {
                   header={() => <div class="otk-tool-body">{props.body()}</div>}
                 />
               </TreeItem>
-              {props.nested?.()}
+              {props.nested?.(!!props.row?.extra)}
               {props.row?.extra?.()}
             </>
           )}
