@@ -22,6 +22,7 @@ import {
   createTranscriptScopes,
   type CurrentClient,
   type Disclosures,
+  type DraftRecovery,
   type Drafts,
   type DurableStore,
   type ForkNotes,
@@ -69,6 +70,7 @@ export interface ShellState {
   resources: ServerResources;
   session: ClientSession;
   drafts: Drafts;
+  deletedRecoveries(target: Selection): readonly DraftRecovery[];
   branchHistory: BranchHistory;
   current: CurrentClient;
   actions: SessionActions;
@@ -392,6 +394,15 @@ export function createShellState(
         (id) => resources.entry(target.sidecarId, id),
       );
     },
+    transferDeleted: (park) => {
+      const target = session.state.selection;
+      if (!target) return;
+      sidecars.connection(target.sidecarId).attention.transferDeleted(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+        park,
+      );
+    },
     confirm: o.confirm,
   });
   // One presence owner: navigation reads it to gate finish acknowledgement,
@@ -485,6 +496,10 @@ export function createShellState(
     resources,
     session,
     drafts,
+    deletedRecoveries: (target) =>
+      drafts.recoveries(sessionKey(target.sidecarId, target.sessionID)).filter(
+        (recovery) => recovery.cause === "deleted-close",
+      ),
     branchHistory,
     current,
     actions,

@@ -10,6 +10,7 @@ import {
   type SessionLookup,
 } from "@otk/protocol";
 import { type EntryChanges, permissionRouting } from "./entry-observations.ts";
+import type { ParkDeletedInput } from "./input-guard.ts";
 
 export type RequestKind = "permission" | "question" | "form";
 export interface RequestLifetime extends InputPhase {
@@ -27,6 +28,21 @@ export interface RequestLifetime extends InputPhase {
 }
 const key = (kind: RequestKind, id: string) =>
   `${kind === "permission" ? "permission" : "input"}:${id}`;
+type DeletionLookup = (
+  id: string,
+) =>
+  | (NonNullable<ReturnType<SessionLookup>> & { deleted?: unknown })
+  | undefined;
+
+function retainedText(draft: unknown): string {
+  if (typeof draft === "string") return draft;
+  const form = draft as import("./forms.ts").FormState | undefined;
+  return form?.drafts &&
+      Object.values(form.drafts).some((draft) => draft.touched)
+    ? JSON.stringify(form.drafts) ?? ""
+    : "";
+}
+
 type PermissionOp = Extract<ContentOp, {
   op: "permission.upsert" | "permission.remove";
 }>;
@@ -350,7 +366,7 @@ export class RequestLifetimes {
   settlement(kind: RequestKind, id: string): () => void {
     const row = this.get(kind, id), draft = row?.draft;
     return () => {
-      if (!row || this.get(kind, id) !== row) return;
+      if (!row || this.get(kind, id) !== row || this.#consumed.has(row)) return;
       this.#atomic(() => {
         if (row.draft === draft) {
           row.draft = undefined;
@@ -422,14 +438,8 @@ export class RequestLifetimes {
     );
     const captured = rows.map((row) => ({ row, draft: row.draft }));
     const inputs = new Map<string, string[]>();
-    for (const row of rows) {
-      const form = typeof row.draft === "object" && row.draft !== null
-        ? row.draft as import("./forms.ts").FormState
-        : undefined;
-      const value = typeof row.draft === "string" ? row.draft : form?.drafts &&
-          Object.values(form.drafts).some((draft) => draft.touched)
-        ? JSON.stringify(form.drafts)
-        : "";
+    for (const { row, draft } of captured) {
+      const value = retainedText(draft);
       if (!value) continue;
       const owner = row.permission
         ? "permissions"
@@ -452,6 +462,41 @@ export class RequestLifetimes {
         }
       },
     };
+  }
+  /** Transfer individual values, not the grouped display (which can include
+   * active helpers). A claimed descendant requires deletion and ancestry proof. */
+  transferDeleted(
+    scope: string,
+    entry: DeletionLookup,
+    park: ParkDeletedInput,
+  ): void {
+    if (!entry(scope)?.deleted) return;
+    const capture = [...this.#records].filter(([, row]) =>
+      row.sessionID && entry(row.sessionID)?.deleted &&
+      belongsToSession(row.sessionID, scope, entry) && !this.#consumed.has(row)
+    ).map(([id, row]) => ({ id, row, draft: row.draft }));
+    const inputs = capture.map(({ draft }) => retainedText(draft)).filter(
+      (text) => text !== "",
+    );
+    this.#atomic(() => {
+      park(inputs, () => {
+        for (const { id, row, draft } of capture) {
+          if (
+            this.#records.get(id) !== row || row.draft !== draft ||
+            this.#consumed.has(row)
+          ) continue;
+          row.draft = undefined;
+          this.#consumed.add(row);
+          this.#retire(
+            row.kind === "permission" ? "permission" : "form",
+            row.id,
+            "retired",
+            "session deleted",
+          );
+          this.#changed();
+        }
+      });
+    });
   }
   retireSessions(deleted: (id: string) => boolean): void {
     this.#deleted = deleted;

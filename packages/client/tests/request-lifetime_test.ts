@@ -155,6 +155,47 @@ Deno.test("draft retention waits for a deferred framework commit", () => {
   );
 });
 
+Deno.test("deleted request transfer keeps separate exact values and fences empty rows, late writes and settlement", () => {
+  const owner = new RequestLifetimes();
+  const lookup = (id: string) => ({
+    parentID: ["child", "live"].includes(id) ? "parent" : undefined,
+    deleted: ["parent", "child", "foreign"].includes(id),
+  });
+  const rows = [
+    ["exact", "parent", "  same\nvalue\n"],
+    ["descendant", "child", "  same\nvalue\n"],
+    ["empty", "parent", ""],
+    ["live", "live", "Leave the live helper alone"],
+    ["foreign", "foreign", "Leave unrelated deletion alone"],
+  ];
+  for (const [id, sessionID, value] of rows) {
+    owner.receive({
+      op: "permission.upsert",
+      request: { ...permission, id, sessionID },
+    });
+    owner.draft("permission", id, value);
+  }
+  owner.retireSessions((id) => lookup(id).deleted);
+  const settle = owner.settlement("permission", "exact");
+  owner.transferDeleted("parent", lookup, (values, release) => {
+    assertEquals(values, [rows[0][2], rows[1][2]]);
+    assertEquals(owner.draft("permission", "exact"), rows[0][2]);
+    release();
+  });
+  settle();
+  for (const id of ["exact", "descendant", "empty"]) {
+    owner.draft("permission", id, "Stale view save");
+    assertEquals(owner.draft("permission", id), undefined);
+  }
+  assertEquals(owner.get("permission", "exact")?.state, "retired");
+  assertEquals(owner.draft("permission", "live"), rows[3][2]);
+  assertEquals(owner.draft("permission", "foreign"), rows[4][2]);
+  owner.transferDeleted("parent", lookup, (values, release) => {
+    assertEquals(values, []);
+    release();
+  });
+});
+
 Deno.test("captured local settlement consumes submitted input across native delivery order without consuming newer input", () => {
   for (const kind of ["permission", "question", "form"] as const) {
     for (const nativeFirst of [false, true]) {
