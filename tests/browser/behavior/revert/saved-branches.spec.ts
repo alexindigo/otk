@@ -64,13 +64,11 @@ async function noClippedRecovery(page: Page) {
 }
 
 function copyRecoveryActions(page: Page) {
-  // The failure's Details may have its own More. Find the recovery actions
-  // by their specific offer, which is also mounted when folded into More.
-  return page.locator(".otk-composer-notice .otk-fitted-actions").and(
-    page.locator(":not(.otk-failure-content *)"),
-  ).filter({
-    has: page.locator('button[aria-label="Keep without a saved copy"]'),
-  });
+  // 2.164: a folded action no longer keeps a live button in the row. The
+  // recovery row is notice content, separate from the failure's Details.
+  return page.locator(
+    ".otk-composer-notice .otk-composer-notice-content > .otk-fitted-actions",
+  );
 }
 
 test.use({
@@ -709,6 +707,13 @@ test(
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Keep this narrow draft");
     await page.setViewportSize({ width: 760, height: 1000 });
+    // D74 / WL3: leave the foreground sheet before using conversation actions.
+    await page.getByRole("button", {
+      name: "Back to conversation",
+      exact: true,
+    })
+      .click();
+    await expect(input).toBeEditable();
     const header = group.locator(".otk-record-group-heading");
     const fit = () =>
       header.locator(".otk-fitted-actions button:visible").evaluateAll((
@@ -745,6 +750,20 @@ test(
       "Earlier conversation retained.",
     );
     await expect(input).toHaveValue("Keep this narrow draft");
+    // D74 / WL3: a closed sheet returns the conversation's width. Shrink the
+    // exposed lane further to force the recovery action into the overflow.
+    await state.product("layout.patch", { leftWidth: 360 });
+    await page.setViewportSize({ width: 620, height: 1000 });
+    await expect(page.locator(".otk-project-inbox")).toHaveCSS(
+      "width",
+      "360px",
+    );
+    await expect(
+      copyRecoveryActions(page).getByRole("button", {
+        name: "More actions",
+        exact: true,
+      }),
+    ).toBeVisible();
     await noClippedRecovery(page);
     const notice = page.locator(".otk-composer-notice");
     await copyRecoveryActions(page).getByRole("button", {

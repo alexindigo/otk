@@ -94,9 +94,12 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
       animations: "disabled",
     });
   }
+  // D74 / WL3: the open right panel becomes a sheet instead of constraining
+  // the conversation. Constrain the exposed conversation with the left pane.
+  await state.product("layout.patch", { leftWidth: 360, rightCollapsed: true });
   await page.setViewportSize({ width: 800, height: 800 });
-  await state.product("layout.patch", { leftWidth: 200, rightWidth: 280 });
-  await expect(page.locator(".otk-project-inbox")).toHaveCSS("width", "200px");
+  await expect(page.locator(".otk-project-inbox")).toHaveCSS("width", "360px");
+  await expect(page.locator(".otk-right-rail")).toBeVisible();
   expect((await geometry(true)).truncated).toBe(true);
   await activity(state, "tstv1-urgent-child", "release");
   // Ending execution is not delivery. The finished helper remains until its

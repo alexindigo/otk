@@ -49,7 +49,7 @@ test(
       await page.locator(".otk-right-rail [data-panel-view]").evaluateAll(
         (es) => es.map((e) => (e as HTMLElement).dataset.panelView),
       ),
-    ).toEqual(["sessions", "timeline", "external-view"]);
+    ).toEqual(["sessions", "timeline", "work", "external-view"]); // D74 / WL4
     await page.locator('.otk-right-rail [data-panel-view="sessions"]').click();
     await expect(panel).toBeVisible();
     await expect(page.locator(".otk-panel-content")).toHaveAttribute(

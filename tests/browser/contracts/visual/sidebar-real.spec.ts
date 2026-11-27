@@ -184,6 +184,16 @@ test.describe("composer", () => {
     for (const [vw, scale] of [[1280, "100"], [900, "125"]] as const) {
       await page.setViewportSize({ width: vw, height: 800 });
       await state.product("prefs.set", { key: "textSize", value: scale });
+      if (vw === 900) {
+        // D74 / WL3: inspect live composer controls, not ones left inert
+        // underneath the right-panel sheet.
+        await page.getByRole("button", {
+          name: "Back to conversation",
+          exact: true,
+        })
+          .click();
+        await expect(page.locator(".otk-main")).not.toHaveAttribute("inert");
+      }
       await expect(page.locator(".otk-composer-target")).toBeVisible();
       for (const [theme, label] of THEMES) {
         await state.product("prefs.set", { key: "theme", value: theme });
