@@ -6,9 +6,11 @@
 }
 .otk-menu-items button {
   text-align: left;
+}
+.otk-menu-items button:not(:where(.otk-icon-button)) {
   min-height: var(--menu-row-height);
 }
-.otk-menu-items button:not(:where(.otk-pill-surface)) {
+.otk-menu-items button:not(:where(.otk-pill-surface, .otk-icon-button)) {
   padding: var(--menu-block-inset) var(--menu-item-inset);
 }
 .otk-menu-items [role="group"] {

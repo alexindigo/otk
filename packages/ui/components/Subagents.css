@@ -22,13 +22,9 @@
   grid-column: 1 / -1;
   font-weight: 600;
 }
-.otk-subagent-stop {
+.otk-subagent-terminate {
   grid-column: 3;
   min-inline-size: 0;
-}
-.otk-subagent-stop .otk-subagent-stop-button {
-  min-block-size: var(--control-size);
-  padding: 0;
 }
 .otk-subagent-time {
   white-space: nowrap;

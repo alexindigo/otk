@@ -26,6 +26,55 @@ import {
 
 const popoverCSS = "packages/ui/components/surface/Popover.css";
 
+function stopGlyphErrors(files: ReadonlyMap<string, string>): string[] {
+  return [...files].flatMap(([path, text]) => {
+    if (
+      !path.startsWith("packages/ui/") ||
+      path === "packages/ui/components/Prompt.tsx" ||
+      path === "packages/ui/components/ChromeIcons.tsx" ||
+      !text.includes("StopIcon")
+    ) return [];
+    const source = new Source(text, path);
+    return source.all.some((node) =>
+        node.type === "ImportSpecifier" &&
+          property(node.imported) === "StopIcon" ||
+        (node.type === "MemberExpression" ||
+            node.type === "OptionalMemberExpression" ||
+            node.type === "JSXMemberExpression") &&
+          property(node.property) === "StopIcon"
+      )
+      ? [
+        `${path}: the stop square belongs to the composer; use TerminateButton for individual work`,
+      ]
+      : [];
+  });
+}
+
+Deno.test("UI convention: only the composer uses the stop square", async () => {
+  const square = 'import { StopIcon as Square } from "./ChromeIcons.tsx";';
+  assertEquals(
+    stopGlyphErrors(
+      new Map([
+        ["packages/ui/components/Prompt.tsx", square],
+        ["packages/ui/components/RunningCommand.tsx", square],
+        [
+          "packages/ui/components/RunningShell.tsx",
+          'import * as Icons from "./ChromeIcons.tsx"; <Icons.StopIcon />;',
+        ],
+        [
+          "packages/ui/components/TerminateButton.tsx",
+          'import { CloseIcon } from "./ChromeIcons.tsx"; <CloseIcon />;',
+        ],
+      ]),
+    ).map((error) => error.split(":")[0]),
+    [
+      "packages/ui/components/RunningCommand.tsx",
+      "packages/ui/components/RunningShell.tsx",
+    ],
+  );
+  assertEquals(stopGlyphErrors(await productionSources()), []);
+});
+
 Deno.test("UI convention: one terminal run path", async () => {
   const surface = "packages/ui/terminal/ghostty/surface.ts";
   assertEquals(
@@ -122,7 +171,7 @@ Deno.test("UI convention: container chrome is not gated on item counts", async (
     view,
     `<Surface title={<h2>T</h2>} titleAction={<A/>}>
     <Show when={list().length} fallback={<Empty/>}>{rows}</Show>
-    <For each={rows()}>{(r) => <ActionButton action={stop(r())}><StopIcon/></ActionButton>}</For>
+    <For each={rows()}>{(r) => <TerminateButton name={r().title} action={stop(r())} />}</For>
     {list.length && <Rows />}
   </Surface>;
   <Show when={presence.mounted}><Menu label="S">x</Menu></Show>;`,
