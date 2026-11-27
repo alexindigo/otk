@@ -156,9 +156,9 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
         let active = true;
         const requests = (async () => {
           while (active) {
-            const response = await context.request.get(
-              `${state.url}/manifest.json`,
-            );
+            // Issue 2.131 makes unknown assets 404. Use the real shell to
+            // exercise the same HTTP ingress without relying on that fallback.
+            const response = await context.request.get(`${state.url}/`);
             expect(response.ok()).toBe(true);
             await new Promise((resolve) => setTimeout(resolve, 100));
           }
