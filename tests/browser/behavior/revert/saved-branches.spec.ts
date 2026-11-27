@@ -100,6 +100,10 @@ test("revert.saved-branch-survives-send-and-reload", {
     "data-status",
     "idle",
   );
+  const outcome = "[data-role=assistant] .otk-message-details > " +
+    ".otk-chrome-meta > time[title]";
+  await expect(page.locator(outcome)).toHaveAttribute("datetime", /^\d{4}-/);
+  const completedAt = (await page.locator(outcome).getAttribute("datetime"))!;
   const oldPrompt = (await messages(state, source.id)).find((m) =>
     m.info.role === "user"
   )!;
@@ -175,14 +179,9 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("The saved earlier reply.");
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
-  // Saved replies borrow the same sole footer clock as live replies.
-  await expect(
-    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
-  )
-    .toHaveAttribute(
-      "datetime",
-      /\d{4}-/,
-    );
+  // WP6 moves the separate agent disclosure into the footer; only the
+  // persistent outcome clock must retain the live reply's captured instant.
+  await expect(saved.locator(outcome)).toHaveAttribute("datetime", completedAt);
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -215,13 +214,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   // metadata window through the saved pane, not the live transcript.
   await saved.locator(".otk-saved-messages").hover();
   await page.mouse.wheel(0, 2_000);
-  await expect(
-    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
-  )
-    .toHaveAttribute(
-      "datetime",
-      /\d{4}-/,
-    );
+  await expect(saved.locator(outcome)).toHaveAttribute("datetime", completedAt);
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
