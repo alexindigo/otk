@@ -19,6 +19,34 @@ export async function nativeIdle(state: TestState, id: string) {
   ).toBe(true);
 }
 
+/** Join the exact terminal reply, not a transient idle state between calls. */
+export async function settledNativeReply(
+  state: TestState,
+  id: string,
+  answer: string,
+) {
+  let messageID: string | undefined;
+  await expect.poll(async () => {
+    const history = await state.native<{
+      info: {
+        id: string;
+        role: string;
+        finish?: string;
+        time: { completed?: number };
+      };
+      parts: { type: string; text?: string }[];
+    }[]>(`/session/${id}/message`);
+    messageID = history.find(({ info, parts }) =>
+      info.role === "assistant" && info.finish === "stop" &&
+      !!info.time.completed &&
+      parts.some((part) => part.type === "text" && part.text === answer)
+    )?.info.id;
+    return messageID;
+  }, { timeout: 60_000, message: `native terminal reply: ${answer}` })
+    .toBeTruthy();
+  return messageID!;
+}
+
 /** Native idle can precede the final transcript footer layout. */
 export async function hoverCompletedUsage(page: Page) {
   await expect(page.locator(".otk-turn-time").last()).toHaveText(

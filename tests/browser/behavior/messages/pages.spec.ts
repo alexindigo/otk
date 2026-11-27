@@ -2,7 +2,12 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { prompt, revealAcquired } from "../../pages/transcript.ts";
+import {
+  prompt,
+  revealAcquired,
+  scrollTranscript,
+  settledNativeReply,
+} from "../../pages/transcript.ts";
 import type { MessagePage } from "@otk/protocol";
 test.use({ profile: "messages-tools" });
 test("messages.native-newest10-offpage-undo-cursors-live-reload", {
@@ -25,12 +30,16 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
       },
     });
   }
-  await state.queue(["The cursor keeps every earlier step."]);
-  await state.native(`/session/${session.id}/message`, "POST", {
+  const answer = "The cursor keeps every earlier step.";
+  const input = "Boundary prompt outside newest ten";
+  await state.queue([answer]);
+  // Admission is bounded by one native request; the eleven tool calls are not.
+  await state.native(`/session/${session.id}/prompt_async`, "POST", {
     agent: "build",
     model: { providerID: "fake", modelID: "scripted" },
-    parts: [{ type: "text", text: "Boundary prompt outside newest ten" }],
+    parts: [{ type: "text", text: input }],
   });
+  await settledNativeReply(state, session.id, answer);
   await page.setViewportSize({ width: 1280, height: 900 });
   const capture = await wire(page);
   await openSession(state, page, session.id);
@@ -87,6 +96,9 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
     );
   await page.locator(".otk-revert-restore").click();
   await expect(page.locator(".otk-revert-group")).toHaveCount(0);
+  // Opening the revert group leaves reader-follow off. Acquire the restored
+  // tail through the same scroll input a reader uses before inspecting it.
+  await scrollTranscript(page, true);
   await expect(page.locator(".otk-message-flow")).toContainText(
     "The cursor keeps every earlier step.",
   );
@@ -109,6 +121,12 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
     delay: 100,
   });
   await prompt(page, "Continue with a short reply");
+  const fresh = await settledNativeReply(
+    state,
+    session.id,
+    "A fresh stream remains aligned.",
+  );
+  await revealAcquired(page, `[data-message="${fresh}"]`);
   await expect(page.locator(".otk-message-flow")).toContainText(
     "A fresh stream remains aligned.",
   );
