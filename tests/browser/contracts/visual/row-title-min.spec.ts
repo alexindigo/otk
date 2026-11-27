@@ -153,7 +153,7 @@ async function inspect(page: Page, id: string, context: string) {
             ...meta.map((el) => el.getBoundingClientRect().right),
           );
           const start =
-            row.querySelector(".otk-sidebar-lamp .otk-status-light") ??
+            row.querySelector(".otk-tree-node-slot .otk-status-light") ??
               titles[0];
           if (frame.right - last < measure(row, "var(--space-2)") - .5) {
             issues.push(`trailing padding: ${frame.right - last}`);

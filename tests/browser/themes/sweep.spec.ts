@@ -814,7 +814,7 @@ test(
           );
         }
         await expect(
-          page.locator(".otk-session-tree .otk-tree-own").first(),
+          page.locator(".otk-session-tree .otk-tree-junction").first(),
         ).toHaveText(
           "",
         );
@@ -902,13 +902,13 @@ test(
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-sidebar-lamp",
+                ".otk-tree-node-lane",
                 ".otk-sidebar-label",
               );
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-sidebar-lamp",
+                ".otk-tree-node-lane",
                 ".otk-sidebar-meta",
               );
               expect(

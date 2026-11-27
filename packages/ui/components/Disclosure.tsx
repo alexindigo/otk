@@ -18,6 +18,7 @@ import {
   useContext,
 } from "solid-js";
 import { discloseInViewport } from "./viewport.ts";
+import "./Tree.css" with { type: "text" };
 import "./Disclosure.css" with { type: "text" };
 
 export const DisclosuresContext: ReturnType<

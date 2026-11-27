@@ -13,6 +13,7 @@ export function DisclosureLabel(
   return (
     <label
       class="otk-disclosure-toggle otk-tree-toggle"
+      data-disclosure-variant="tree"
       for={props.for}
       aria-label={props.label}
       aria-hidden="true"
@@ -39,6 +40,7 @@ export default function DisclosureToggle(props: {
         "otk-tree-toggle": props.variant === "tree",
         "otk-meta-toggle": props.variant === "meta",
       }]}
+      data-disclosure-variant={props.variant}
       data-record-kind={props["data-record-kind"]}
       aria-label={props.label}
       aria-expanded={props.open ? "true" : "false"}

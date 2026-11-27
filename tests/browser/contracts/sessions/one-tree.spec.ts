@@ -33,9 +33,9 @@ async function geometry(locator: Locator) {
       box = token("--tree-box-size"),
       unit = token("--otk-unit");
     probe.remove();
-    const own = rect(":scope > .otk-tree-own")!,
-      toggle = rect(":scope > .otk-tree-own .otk-tree-toggle"),
-      lamp = rect(".otk-tree-icon .otk-status-light"),
+    const own = rect(":scope > .otk-tree-junction")!,
+      toggle = rect(":scope > .otk-tree-trigger-slot .otk-tree-toggle"),
+      lamp = rect(".otk-tree-node-slot .otk-status-light"),
       label = rect(
         "[data-row-title]",
       )!;

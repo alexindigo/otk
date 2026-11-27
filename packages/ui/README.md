@@ -54,25 +54,27 @@ including an explicit empty body. Tabs is an item collection without chrome
 slots. The terminal frame uses Surface's `panel` density, independent of the
 shells its tab strip and panels render.
 
-Projects, Sessions and their section headers borrow `SidebarRow`: scaled
-lamp/artwork tracks, a shrinkable single-line title and ranked whole metadata.
-Availability and visit facts yield independently, in the same line as the title.
-Missing artwork retains its slot. `Tree` owns the junction and compact
-flattening; its selected heading paints the mark outside the row highlight in
-both column and rail. The real-app geometry contract uses the removed/sidebar/
-catalog profiles at 200/298px and 100/125% text in all three themes. It measures
-painted SVGs and lamp bodies, full section names and at least 6ch of project
-names, in addition to the same shared contract on the style scene. The composer
-destination port returns task/session facts separately; the view borrows
-ChevronIcon and ChromeMeta, yielding the task name before the destination
-session. Per-kind offsets, absolute row positioning and replacement row tracks
-are rejected. Conventions are executable owner contracts, not a one-time grep
-sweep: Clock owns instants, the client duration formatter owns elapsed text,
-icon slots take components, FailurePresenter owns targets and outcome tone, and
-shared controls own their geometry. Include reject and accept fixtures so a gate
-catches the problem class without banning legitimate numeric formatting or
-intrinsic layout. Style scenes build failures through the same production
-presenters as the app.
+Projects, Sessions and their section headers pass lamps, labels and feedback to
+`TreeNode`. `Tree` owns the flat row grid and all lane paint; `--tree-indent` is
+both the lane width and the depth step. The client derives lane states from the
+row path even when other rows are unmounted. A row surface borrows both grid
+axes, so hover, focus and selection still include the lamp without owning a
+track. The selection mark remains outside that surface. `SidebarRow` owns the
+artwork slot, shrinkable single-line title and ranked whole metadata. Missing
+artwork retains its slot; availability and visit facts yield independently. The
+real-app geometry contract uses the removed/sidebar/ catalog profiles at
+200/298px and 100/125% text in all three themes. It measures painted SVGs and
+lamp bodies, full section names and at least 6ch of project names, in addition
+to the same shared contract on the style scene. The composer destination port
+returns task/session facts separately; the view borrows ChevronIcon and
+ChromeMeta, yielding the task name before the destination session. Per-kind
+offsets, absolute row positioning and replacement row tracks are rejected.
+Conventions are executable owner contracts, not a one-time grep sweep: Clock
+owns instants, the client duration formatter owns elapsed text, icon slots take
+components, FailurePresenter owns targets and outcome tone, and shared controls
+own their geometry. Include reject and accept fixtures so a gate catches the
+problem class without banning legitimate numeric formatting or intrinsic layout.
+Style scenes build failures through the same production presenters as the app.
 
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
