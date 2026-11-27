@@ -96,17 +96,25 @@ for (
       const count = () =>
         page.locator(".otk-message-flow").getAttribute("data-message-count")
           .then(Number);
-      const older = page.getByRole("button", {
-        name: "Load older messages",
-        exact: true,
-      });
+      const historyPublished = () =>
+        page.evaluate((promptID) => {
+          const messages = (globalThis as typeof globalThis & {
+            transcriptPublication: Map<string, import("@otk/protocol").Message>;
+          }).transcriptPublication;
+          return [...messages.values()].some((message) =>
+            message.role === "assistant" && message.replyTo === promptID &&
+            message.parts.some((part) =>
+              part.kind === "tool" && part.call.tool === "bash"
+            )
+          );
+        }, historical);
+      // The viewport already drives older-page admission. Keep reaching its
+      // moving start until the exact tool arrives, without racing a button
+      // that paging removes. Bookkeeping also counts towards page size.
       await expect.poll(async () => {
-        if (await button.count() || await count() >= 30) return true;
+        if (await historyPublished()) return true;
         await scrollTranscript(page, false);
-        if (await older.isVisible()) {
-          await older.click({ timeout: 2500 }).catch(() => {});
-        }
-        return !!await button.count() || await count() >= 30;
+        return await historyPublished();
       }, { timeout: 30_000 }).toBe(true);
       await revealAcquired(page, selector);
       await wheelTranscript(page, -1, button);

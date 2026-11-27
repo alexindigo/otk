@@ -141,11 +141,14 @@ test.describe("V1 records", () => {
     const permission = page.locator('[data-message="permission:retained"]');
     const question = page.locator('[data-message="question:retained"]');
     for (
-      const [row, title] of [[permission, /Permission rejected/], [
-        question,
+      const [id, title] of [["permission:retained", /Permission rejected/], [
+        "question:retained",
         /Question cancelled/,
       ]] as const
     ) {
+      const selector = `[data-message="${id}"]`;
+      await revealAcquired(page, selector);
+      const row = page.locator(selector);
       await row.getByRole("button", { name: title }).click();
       await expect(row.getByRole("button", { name: "Source", exact: true }))
         .toHaveAttribute("aria-expanded", "false");
@@ -179,11 +182,14 @@ test.describe("V1 records", () => {
     await expect(questionSource).toHaveAttribute("aria-expanded", "true");
     await page.reload();
     for (
-      const [row, title] of [[permission, /Permission rejected/], [
-        question,
+      const [id, title] of [["permission:retained", /Permission rejected/], [
+        "question:retained",
         /Question cancelled/,
       ]] as const
     ) {
+      const selector = `[data-message="${id}"]`;
+      await revealAcquired(page, selector);
+      const row = page.locator(selector);
       await row.getByRole("button", { name: title }).click();
       await expect(row.getByRole("button", { name: "Source", exact: true }))
         .toHaveAttribute("aria-expanded", "true");

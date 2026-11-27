@@ -16,11 +16,12 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   await expect(patch.locator(".otk-tool-toggle")).not.toContainText(
     "apply_patch",
   );
-  await expect(
-    patch.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-node-slot",
-    ),
-  ).not.toHaveText("\u25c7");
+  // 2.114/dx-2 moved the tool art into the disclosure, not the tree's node slot.
+  const art = patch.locator(
+    ":scope > .otk-tree-node > .otk-tree-heading > .otk-tool-toggle > .otk-disclosure-lead",
+  );
+  await expect(art.locator("svg")).toBeVisible();
+  await expect(art).not.toHaveText("\u25c7");
   const read = page.locator("[data-tool=read]").filter({ hasText: "beta.ts" });
   await expect(read).toContainText("190");
   await expect(read).toContainText("50");

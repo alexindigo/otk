@@ -509,6 +509,8 @@ function Consumer(): Element {
     output: "Reusable output",
     childSessionID: "child-probe",
   });
+  // These are independent consumers presenting the same native call ID.
+  const isolatedDisclosures = createDisclosures({});
   return (
     <CommandProvider commands={commands}>
       <UiProvider registries={ui}>
@@ -743,17 +745,19 @@ function Consumer(): Element {
         </section>
       </UiProvider>
       <UiProvider registries={isolated}>
-        <section id="isolated" style={{ padding: "1rem" }}>
-          <h2>Separate consumer fallback</h2>
-          <ToolLine
-            call={call()}
-            prefs={DEFAULT_PREFS}
-            paneWidth={800}
-            genericOutput
-            waiting={false}
-            onOpenChild={setOpened}
-          />
-        </section>
+        <DisclosuresProvider owner={isolatedDisclosures}>
+          <section id="isolated" style={{ padding: "1rem" }}>
+            <h2>Separate consumer fallback</h2>
+            <ToolLine
+              call={call()}
+              prefs={DEFAULT_PREFS}
+              paneWidth={800}
+              genericOutput
+              waiting={false}
+              onOpenChild={setOpened}
+            />
+          </section>
+        </DisclosuresProvider>
       </UiProvider>
     </CommandProvider>
   );

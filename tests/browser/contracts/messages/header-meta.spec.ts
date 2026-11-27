@@ -4,10 +4,16 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 
 function headerGeometry(root: Element) {
+  // 2.114/dx-2: Tree owns the title/trail boundary; MetaRow owns the gaps
+  // between the category controls, not a primary slot wrapping the title.
+  const caption = root.querySelector(
+    ":scope > .otk-tree-node > .otk-tree-heading > .otk-tree-trigger > .otk-disclosure-caption",
+  )!;
   const label = root.querySelector(
-    ".otk-work-label, .otk-record-group-toggle",
+    ".otk-work-label, .otk-record-group-toggle .otk-disclosure-label",
   )!;
   const counts = Array.from(root.querySelectorAll("[data-record-kind]"));
+  const meta = counts[0].closest(".otk-meta-row")!;
   const controls = counts.map((element) => {
     const r = element.getBoundingClientRect();
     let left = 0, right = innerWidth;
@@ -30,20 +36,19 @@ function headerGeometry(root: Element) {
       textFits: element.scrollWidth <= element.clientWidth + 1,
     };
   });
-  const elements = [
-    label,
-    ...counts.filter((_, index) => !controls[index].absent),
-  ];
+  const visible = counts.filter((_, index) => !controls[index].absent);
+  const elements = [label, ...visible];
   const rects = elements.map((element) => element.getBoundingClientRect());
-  // The record heading owns its icon and label tracks. MetaRow owns the
-  // spacing between the primary slot and the whole category controls.
-  const primary = label.closest(".otk-meta-primary")!;
-  const slots = [primary.getBoundingClientRect(), ...rects.slice(1)];
+  const slots = rects.slice(1);
+  const titleEnd = caption.getBoundingClientRect().right;
   return {
     controls,
     centres: rects.map((r) => r.y + r.height / 2),
+    trailGap: slots.length ? slots[0].left - rects[0].right : null,
+    captionSpace: titleEnd - rects[0].right,
+    captionPadding: parseFloat(getComputedStyle(caption).paddingInlineEnd),
     gaps: slots.slice(1).map((r, i) => r.left - slots[i].right),
-    slotGap: parseFloat(getComputedStyle(primary.parentElement!).columnGap),
+    slotGap: parseFloat(getComputedStyle(meta).columnGap),
     weights: elements.map((element) => getComputedStyle(element).fontWeight),
     pads: counts.map((element) => getComputedStyle(element).paddingInline),
   };
@@ -90,6 +95,13 @@ for (const surface of ["work", "interval"] as const) {
       const geometry = await header.evaluate(headerGeometry);
       expect.soft(Math.max(...geometry.centres) - Math.min(...geometry.centres))
         .toBeLessThan(1);
+      expect.soft(geometry.captionSpace + 0.5).toBeGreaterThanOrEqual(
+        geometry.captionPadding,
+      );
+      if (geometry.trailGap !== null) {
+        expect.soft(Math.abs(geometry.trailGap - geometry.captionSpace))
+          .toBeLessThan(1);
+      }
       for (const gap of geometry.gaps) {
         expect.soft(Math.abs(gap - geometry.slotGap)).toBeLessThan(1);
       }

@@ -272,7 +272,9 @@ for (const witness of ["visible", "load", "failed"] as const) {
       await action(name).click();
       await expect.poll(count).toBeGreaterThan(acquired);
       await expect.poll(async () =>
-        await gap.count() ? await gap.getAttribute("aria-busy") : null
+        // The terminal batch removes the gap. Observe absence and busy state
+        // in one snapshot rather than blocking on a row that just retired.
+        await gap.evaluateAll((rows) => rows[0]?.getAttribute("aria-busy"))
       ).not.toBe("true");
     };
     if (witness === "failed") {
@@ -337,17 +339,51 @@ for (const witness of ["visible", "load", "failed"] as const) {
     if (witness === "load") await shots("bridged");
     // Native selection uses the shared VirtualList's complete acquired range.
     await fold.focus();
+    await page.evaluate((expected) => {
+      const probe = globalThis as typeof globalThis & {
+        gapSelection?: Promise<{ lines: string[]; complete: boolean }>;
+      };
+      // Time the browser's selection, not Playwright's DOM trace snapshots.
+      // Arm before input so an early selectionchange cannot be lost.
+      probe.gapSelection = new Promise((resolve) => {
+        const listeners = new AbortController();
+        document.addEventListener("keydown", (event) => {
+          if (
+            !event.isTrusted || event.key.toLowerCase() !== "a" ||
+            !(event.ctrlKey || event.metaKey)
+          ) return;
+          const deadline = performance.now() + 10_000;
+          let lines: string[] = [];
+          const finish = (complete: boolean) => {
+            clearTimeout(timer);
+            listeners.abort();
+            resolve({ lines, complete });
+          };
+          const timer = setTimeout(() => finish(false), 10_000);
+          document.addEventListener("selectionchange", () => {
+            lines = (document.getSelection()?.toString() ?? "").split("\n")
+              .map((line) => line.trim()).filter((line) =>
+                /^(Earlier prompt|New (prompt|reply)) \d+$/.test(line) ||
+                line === "Check the current build" ||
+                line === "The build passed. The earlier records are still here."
+              );
+            if (performance.now() >= deadline) finish(false);
+            else if (
+              lines.length === expected.length &&
+              lines.every((line, index) => line === expected[index])
+            ) finish(true);
+          }, { signal: listeners.signal });
+        }, { capture: true, signal: listeners.signal });
+      });
+    }, expected);
     await page.keyboard.press("ControlOrMeta+a");
-    await expect.poll(() =>
-      page.evaluate(() => {
-        const lines = document.getSelection()?.toString().split("\n") ?? [];
-        return lines.map((line) => line.trim()).filter((line) =>
-          /^(Earlier prompt|New (prompt|reply)) \d+$/.test(line) ||
-          line === "Check the current build" ||
-          line === "The build passed. The earlier records are still here."
-        );
-      })
-    ).toEqual(expected);
+    expect(
+      await page.evaluate(() =>
+        (globalThis as typeof globalThis & {
+          gapSelection?: Promise<{ lines: string[]; complete: boolean }>;
+        }).gapSelection
+      ),
+    ).toEqual({ lines: expected, complete: true });
     await info.attach("gap-anchor", {
       body: JSON.stringify({ before, after: await sample(), height }),
       contentType: "application/json",

@@ -365,6 +365,7 @@ export async function highlightedRange(
 
 export interface NativeToolPart {
   id: string;
+  callID?: string;
   messageID: string;
   type: string;
   state: {
@@ -433,6 +434,23 @@ export async function runNativeTool(
     "idle",
     { timeout: 60_000 },
   );
+  // Native idle and the reply shell can precede publication of the tool part.
+  // Join the exact part that supplies the Work log before looking for its fold.
+  await expect.poll(() => {
+    return page.evaluate(({ messageID, callID }) => {
+      const { transcriptPublication } = globalThis as typeof globalThis & {
+        transcriptPublication: Map<string, import("@otk/protocol").Message>;
+      };
+      return transcriptPublication.get(messageID)?.parts.some((part) =>
+        part.kind === "tool" && part.call.callID === callID &&
+        part.call.status === "completed"
+      );
+    }, {
+      messageID: result!.messageID,
+      // V1 exposes a part ID and a call ID; V2 identifies the tool by call ID.
+      callID: result!.callID ?? result!.id,
+    });
+  }, { message: `Browser publication of completed ${name} tool` }).toBe(true);
   const message = `[data-message="${result!.messageID}"]`;
   // Issue 2.115 / decision 74: bookkeeping no longer supplies rows in a
   // reply's Work log. Acquire the action's disclosure, not the reply shell:
