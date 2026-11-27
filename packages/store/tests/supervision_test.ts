@@ -22,6 +22,7 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
     assertEquals(seen.tokens().map((row) => row.time), [0]);
     assertEquals(finishes.tokens(), {});
     finishes.observe("s", 100);
+    seen.setOpened("alice", "s", true);
     seen.acknowledge("alice", "s", 100);
     finishes.observe("s", 200);
     // Delayed viewing of the old terminal cannot acknowledge the new one.
@@ -47,7 +48,19 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
       busyms: 5000,
     });
     assertEquals(new Finishes(db).tokens(), { s: 200 });
-    assertEquals(new Seen(db).tokens().map((row) => row.time), [100]);
+    const restored = new Seen(db);
+    assertEquals(restored.tokens(), [{
+      user: "alice",
+      session: "s",
+      time: 100,
+      opened: true,
+    }]);
+    restored.setOpened("alice", "s", false);
+    assertEquals(restored.tokens(), [{
+      user: "alice",
+      session: "s",
+      time: 100,
+    }]);
   } finally {
     db.close();
   }

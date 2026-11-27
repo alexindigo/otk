@@ -3,6 +3,7 @@ import {
   type AcknowledgeScope,
   entityKey,
   entityRequiresVisibility,
+  entityRetainsVisibility,
   type EntityState,
   errorMessage,
   type InboxBaseline,
@@ -53,6 +54,7 @@ import {
 import {
   acknowledgeReceipt,
   closedReceipt,
+  openedReceipt,
   projectReceipt,
   projectSessionReceipt,
   seenReceipt,
@@ -236,7 +238,7 @@ export class InboxFeature implements FrameSource {
         const entry = this.index.getMetadata(id);
         if (
           id !== view.selected && !entry?.deleted &&
-          entityRequiresVisibility(this.states.get(entityKey("session", id)))
+          entityRetainsVisibility(this.states.get(entityKey("session", id)))
         ) ids.add(id);
       }
     }
@@ -257,7 +259,7 @@ export class InboxFeature implements FrameSource {
     ) {
       if (entry.deleted) continue;
       if (
-        entityRequiresVisibility(
+        entityRetainsVisibility(
           this.states.get(entityKey("session", entry.id)),
         )
       ) {
@@ -625,6 +627,7 @@ export class InboxFeature implements FrameSource {
   #scanVersion = 0;
   #policies: ReturnType<Projects["policies"]> = [];
   #seen = new Map<string, Map<string, number>>();
+  #opened = new Map<string, Set<string>>();
   #finishes = new Map<string, number>();
   readonly supervision = new SessionSupervision();
   #terminalSource?: Pick<TerminalTracking, "counts" | "listen" | "owners">;
@@ -792,6 +795,7 @@ export class InboxFeature implements FrameSource {
         this.#observe(entry);
         this.summaries.mark(id);
       },
+      (id) => !!this.#opened.get(this.user)?.has(id),
     );
     const identityOwner = new ProjectIdentity(stores.checkouts);
     this.projectOrder = new ProjectOrder(
@@ -803,10 +807,11 @@ export class InboxFeature implements FrameSource {
     this.#templates = stores.templates.list();
     this.#policies = stores.projects.policies();
     this.#finishes = new Map(Object.entries(stores.finishes.tokens()));
-    for (const { user, session, time } of stores.seen.tokens()) {
+    for (const { user, session, time, opened } of stores.seen.tokens()) {
       const marks = this.#seen.get(user) ?? new Map<string, number>();
       marks.set(session, time);
       this.#seen.set(user, marks);
+      if (opened) this.#recordOpened(user, session, true);
     }
     this.summaries = new ProjectSummaries(
       (id) => ({
@@ -945,12 +950,13 @@ export class InboxFeature implements FrameSource {
           time,
         }, { sessionID: session });
       }),
-      stores.seen.listen(({ user, session, time, terminal }) => {
+      stores.seen.listen(({ user, session, time, terminal, opened }) => {
         if (terminal === undefined) return;
         this.#identity();
         const marks = this.#seen.get(user) ?? new Map<string, number>();
         marks.set(session, time);
         this.#seen.set(user, marks);
+        if (opened !== undefined) this.#recordOpened(user, session, opened);
         if (user === this.user) {
           this.summaries.mark(session);
           this.#capture("seen", session);
@@ -1057,6 +1063,12 @@ export class InboxFeature implements FrameSource {
   }
   #summaryDirectories(): void {
     this.summaries.retain([...this.#projects.keys(), ...this.#discovered]);
+  }
+  #recordOpened(user: string, session: string, opened: boolean): void {
+    const ids = this.#opened.get(user) ?? new Set<string>();
+    if (opened) ids.add(session);
+    else ids.delete(session);
+    this.#opened.set(user, ids);
   }
   #identity(): void {
     const user = this.user;
@@ -1839,6 +1851,28 @@ export class InboxFeature implements FrameSource {
         );
       },
     });
+    rpc.register("sessions.opened", {
+      execution: {
+        ...preparedLocalExecution(
+          (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+          openedReceipt,
+        ),
+        ordering: "target",
+      },
+      params: (p) => {
+        if (typeof p.opened !== "boolean") {
+          throw new HarnessError("params", "Expected opened boolean");
+        }
+        return { sessionID: sessionID(p)!, opened: p.opened };
+      },
+      handler: async (ctx, { sessionID, opened }) => {
+        await ctx.sessionDirectory(sessionID);
+        return localWrite(ctx, (tx) => {
+          s.seen.setOpened(user(), sessionID, opened, tx);
+          return opened;
+        }, openedReceipt);
+      },
+    });
     rpc.register("sessions.acknowledge", {
       execution: preparedLocalExecution(
         (p: AcknowledgeScope) =>
@@ -1872,10 +1906,13 @@ export class InboxFeature implements FrameSource {
           session: sessionID,
           terminal,
         }));
+        const opened = this.#opened.get(user());
+        const closed = ids.filter((id) => opened?.has(id));
         await this.#validateAcknowledgement(ctx, entries);
         return localWrite(ctx, (tx) => {
           this.#acknowledge(entries, tx);
-          return { sessions };
+          for (const id of closed) s.seen.setOpened(user(), id, false, tx);
+          return { sessions, ...(closed.length ? { closed } : {}) };
         }, acknowledgeReceipt);
       },
     });

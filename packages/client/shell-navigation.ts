@@ -341,10 +341,28 @@ export function createShellNavigation(o: {
       draft.history = history;
     });
   });
-  const navigate = (input: Selection, mode?: "push" | "replace"): boolean => {
+  const setOpened = (target: Selection, opened: boolean) =>
+    resources.sidecars.connection(target.sidecarId).rpc.call(
+      "sessions.opened",
+      {
+        sessionID: target.sessionID,
+        opened,
+      },
+    );
+  const navigate = (
+    input: Selection,
+    mode?: "push" | "replace",
+    explicit = false,
+  ): boolean => {
     const selection = actions.family(input), previous = session.state.selection;
     if (!navigation.open(hashFor(selection), mode)) return false;
     closeSettings();
+    if (
+      explicit &&
+      !resources.entry(selection.sidecarId, selection.sessionID)?.deleted
+    ) {
+      void setOpened(selection, true).catch(fail);
+    }
     if (
       previous?.sidecarId === selection.sidecarId &&
       previous.sessionID === selection.sessionID && !session.state.loading
@@ -518,6 +536,9 @@ export function createShellNavigation(o: {
     } else if (task) {
       await resources.taskActions(p).remove(task, target.sessionID);
     }
+    if (disposition === "kept" && !entry.deleted) {
+      await setOpened(target, false);
+    }
     if (ids.includes(lastLocation(p)?.sessionID ?? "")) remember(p);
     if (intent === revision && shown()) {
       // This captured release was already accepted, and its metadata mutation
@@ -534,7 +555,7 @@ export function createShellNavigation(o: {
   return {
     state: store.state,
     subscribe: store.subscribe,
-    navigate,
+    navigate: (target) => navigate(target, undefined, true),
     back: () => navigation.go(-1),
     forward: () => navigation.go(1),
     traverse: (direction) => navigation.traverse(direction === "back" ? -1 : 1),
@@ -568,12 +589,12 @@ export function createShellNavigation(o: {
         resolveProject(target);
       }
     },
-    openChild: (id) => navigate(actions.child(id)),
+    openChild: (id) => navigate(actions.child(id), undefined, true),
     projectHome: () =>
       !!store.state.project &&
       projectPage(store.state.project),
     preview(target) {
-      if (!navigate(target)) return false;
+      if (!navigate(target, undefined, true)) return false;
       const directory = resources.entry(target.sidecarId, target.sessionID)
         ?.directory;
       if (directory) {
@@ -585,7 +606,7 @@ export function createShellNavigation(o: {
     },
     async pin(target) {
       if (!actions.eligibility(target).live) return false;
-      if (!navigate(target)) return false;
+      if (!navigate(target, undefined, true)) return false;
       const directory = resources.entry(target.sidecarId, target.sessionID)
         ?.directory;
       if (!directory) return false;

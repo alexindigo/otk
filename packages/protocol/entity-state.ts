@@ -29,18 +29,22 @@ export interface EntityRequestEvidence {
   id: string;
   arrivedAt?: number;
 }
-export type HelperDisposition = "running" | "needsYou" | "finished";
+export type HelperDisposition = "running" | "needsYou" | "finished" | "opened";
 export type ComposerLinkState = "none" | "idle" | "running";
 export interface EntityLamp {
   state: ProjectStatus;
 }
 export interface TaskHelpers {
-  counts: Record<HelperDisposition, number>;
+  counts: Record<Exclude<HelperDisposition, "opened">, number> & {
+    opened?: number;
+  };
   ids: string[];
   /** The counted helpers only, not the entire ancestry task. */
   lamps?: {
     all: EntityLamp;
-    groups: Record<HelperDisposition, EntityLamp>;
+    groups: Record<Exclude<HelperDisposition, "opened">, EntityLamp> & {
+      opened?: EntityLamp;
+    };
   };
 }
 /** The session's own currently running shells. No session verdict on a row. */
@@ -94,6 +98,8 @@ export interface EntityState {
   cause?: BlockedCause;
   previous: ProjectStatus;
   counts: EntityCounts;
+  /** D76: explicit open retains the view without affecting the attention lamp. */
+  opened?: true;
   /** Running PTYs; separate from the session's own native activity. */
   dependencies?: number;
   terminal?: number;
@@ -120,7 +126,15 @@ export function entityRequiresVisibility(
 ): boolean {
   return !!value && (value.state !== "none" ||
     (value.dependencies ?? 0) > 0 ||
-    value.evidence?.helper !== undefined);
+    (value.evidence?.helper !== undefined &&
+      value.evidence.helper !== "opened"));
+}
+
+/** A view keeps both mandatory sessions and sessions explicitly opened (D76). */
+export function entityRetainsVisibility(
+  value: EntityState | undefined,
+): boolean {
+  return value?.opened === true || entityRequiresVisibility(value);
 }
 
 /** D69/D70: a task's identity is independent of checkout and view. */

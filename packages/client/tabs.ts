@@ -8,7 +8,7 @@ import type {
 } from "@otk/protocol";
 import {
   entityKey,
-  entityRequiresVisibility,
+  entityRetainsVisibility,
   type SessionHierarchyNode,
   taskEntityID,
 } from "@otk/protocol";
@@ -209,7 +209,7 @@ export function createTabs(
       context.filter((entry) =>
         !entry.deleted &&
         (nodes.get(entry.id)?.mandatory ||
-          !entities().isStale && entityRequiresVisibility(
+          !entities().isStale && entityRetainsVisibility(
               entities().get(entityKey("session", entry.id)),
             ))
       ).map((entry) => entry.id),

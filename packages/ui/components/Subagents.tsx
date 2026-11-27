@@ -76,6 +76,7 @@ export default function Subagents(
       running: [],
       needsYou: [],
       finished: [],
+      opened: [],
     };
     const store = entities();
     if (store) {
@@ -104,7 +105,7 @@ export default function Subagents(
   const task = () => props.task ? entities()?.get(props.task)?.id : undefined;
   const canClear = () =>
     !!task() && !!session?.clearFinished &&
-    (helpers()?.counts.finished ?? 0) > 0;
+    ((counts()?.finished ?? 0) > 0 || (counts()?.opened ?? 0) > 0);
   ownedCommand(ports, {
     id: clearCommand,
     title: "Clear finished subagents",
