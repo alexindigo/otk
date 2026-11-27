@@ -15,6 +15,8 @@ export function connectionPublication(
     projectSeeds: (values) => {
       if (!signal.aborted) sink.projectSeeds?.(values);
     },
+    projectMetadata: (project, source) =>
+      !signal.aborted && (sink.projectMetadata?.(project, source) ?? false),
     projectAuthority: (activity) => {
       if (!signal.aborted) sink.projectAuthority?.(activity);
     },

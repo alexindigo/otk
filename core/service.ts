@@ -68,6 +68,8 @@ function startBackend(
       index.projectAuthority(value);
     },
     projectSeeds: (values) => index.projectSeeds(values),
+    projectMetadata: (project, source) =>
+      index.projectMetadata(project, source),
     indexReset: (entries) => index.resetMetadata(entries),
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),

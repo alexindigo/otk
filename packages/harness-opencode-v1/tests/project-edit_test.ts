@@ -24,7 +24,7 @@ Deno.test("WP9 V1 advertises only installed native schema fields", () => {
     ["name", "icon", "color"],
   );
 });
-Deno.test("WP9 V1 writes and rereads every supported field without crossing project identity", async () => {
+Deno.test("V1 confirms every supported field from PATCH without crossing project identity", async () => {
   let current = {
     id: "fixture",
     name: "",
@@ -93,18 +93,15 @@ Deno.test("WP9 V1 writes and rereads every supported field without crossing proj
     })
   ) {
     calls.length = 0;
-    const result = await editor.update(initial, { [field]: value });
+    const result = await (await editor.prepare(initial, { [field]: value }))();
     assertEquals(result.values[field as keyof typeof result.values], value);
     assertEquals(calls, [
       "GET:/project/current",
-      "GET:/project",
       "PATCH:/project/fixture",
-      "GET:/project/current",
-      "GET:/project",
     ]);
   }
   assertEquals(changes, 4);
   await assertRejects(() =>
-    editor.update({ ...initial, projectID: "foreign" }, { name: "No" })
+    editor.prepare({ ...initial, projectID: "foreign" }, { name: "No" })
   );
 });
