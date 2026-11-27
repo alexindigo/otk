@@ -141,6 +141,22 @@ function browserStorage(server: string): RequestTrackerOptions["storage"] {
 export class SidecarConnection {
   readonly base: URL;
   readonly attention: RequestLifetimes = new RequestLifetimes();
+  readPermissions(
+    scope: string,
+    entry: import("@otk/protocol").SessionLookup,
+    signal?: AbortSignal,
+  ): Promise<import("@otk/protocol").PermissionRequest[]> {
+    return this.attention.readPermissions(
+      scope,
+      entry,
+      (owned) =>
+        this.supports("permissions")
+          ? this.rpc.call("permission.list", { sessionID: scope }, owned)
+          : Promise.resolve([]),
+      this.messages,
+      signal,
+    );
+  }
   readonly rpc: Rpc;
   readonly requests: RequestTracker;
   readonly http: HttpRequests;
@@ -511,6 +527,9 @@ export class SidecarConnection {
           frame.t === "index.patch"
         ) return;
         this.rpc.receive(frame);
+        if (frame.t === "harness" && frame.state !== "connected") {
+          this.attention.resetPermissionScopes();
+        }
         const accepted = this.sink.frame(frame);
         if (!current() || socket !== this.#socket) return;
         if (
@@ -610,6 +629,7 @@ export class SidecarConnection {
     clearTimeout(this.#silence);
     this.#retry = undefined;
     this.#welcomed = false;
+    this.attention.resetPermissionScopes();
     this.requests.disconnect();
     const socket = this.#socket;
     this.#socket = undefined;

@@ -9,6 +9,31 @@ import type {
   PermissionRequest,
   QuestionRequest,
 } from "@otk/protocol";
+
+Deno.test("notification and dock acquire the same scoped permission inventory", async () => {
+  const owner = new RequestLifetimes();
+  const entry = () => undefined;
+  const budget = { replayops: 8, replaybytes: 8192 };
+  let reads = 0;
+  const load = () => {
+    reads++;
+    return Promise.resolve([permission]);
+  };
+  const scope = permission.sessionID;
+  const background = owner.readPermissions(scope, entry, load, budget);
+  const dock = owner.readPermissions(scope, entry, load, budget);
+  assertEquals(await background, [permission]);
+  assertEquals(await dock, [permission]);
+  assertEquals(await owner.readPermissions(scope, entry, load, budget), [
+    permission,
+  ]);
+  assertEquals(reads, 1);
+  owner.resetPermissionScopes();
+  assertEquals(await owner.readPermissions(scope, entry, load, budget), [
+    permission,
+  ]);
+  assertEquals(reads, 2);
+});
 const question: QuestionRequest = {
   id: "q",
   sessionID: "child",

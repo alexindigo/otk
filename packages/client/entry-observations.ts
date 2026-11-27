@@ -24,6 +24,11 @@ export interface EntryChanges {
   baseline: boolean;
   changes: readonly EntryChange[];
 }
+/** Permission routing for inventory consumers of an accepted projection. */
+export const permissionRouting = (entry?: IndexEntry): {
+  keys: readonly string[];
+  fresh: boolean;
+} | undefined => entry?.activity?.permissions;
 export interface AttentionProjection {
   get(id: string): IndexEntry | undefined;
   update(ids: readonly string[], baseline?: boolean): void;

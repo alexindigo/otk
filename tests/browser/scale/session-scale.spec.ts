@@ -786,7 +786,10 @@ test(
       await page.evaluate(
         `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"] .otk-session-open');pinnedScale.focus()`,
       );
-      await expect(page.locator(`[data-session="${last.id}"]`)).toBeFocused();
+      await expect(
+        page.locator(`[data-session="${last.id}"] .otk-session-open`),
+      )
+        .toBeFocused();
       await page.evaluate(framesAhead);
       await wheel(-100000);
       await expect.poll(() =>

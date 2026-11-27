@@ -23,7 +23,7 @@ import {
   feedbackError,
 } from "./failure-features.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
-import { isAttentionOp } from "@otk/protocol";
+import { isAttentionOp, isCancellation } from "@otk/protocol";
 import {
   createNativeSources,
   type NativeSourceOwner,
@@ -512,7 +512,6 @@ export function createTranscript(
     events: Map<string, ContentOp>;
     bytes: number;
     count: number;
-    pending: Set<"permission" | "question">;
   } | undefined;
   let controller: AbortController | undefined;
   let attentionController: AbortController | undefined;
@@ -613,33 +612,15 @@ export function createTranscript(
       events: new Map<string, ContentOp>(),
       bytes: 0,
       count: 0,
-      pending: new Set<"permission" | "question">(["permission", "question"]),
     };
     const optional = async (kind: "permission" | "question") => {
       try {
         if (kind === "permission") {
-          const permissions = sidecar.supports("permissions")
-            ? await sidecar.rpc.call("permission.list", {
-              sessionID: target.sessionID,
-            }, abort.signal)
-            : [];
-          if (!valid()) return;
-          setState((draft) => {
-            requests.replace(
-              "permission",
-              permissions,
-              target.sessionID,
-              requestEntry,
-              [...attention.events.values()],
-            );
-            let content = attach(contentMetadata(draft.content));
-            for (const op of attention.events.values()) {
-              if (
-                op.op === "permission.upsert" || op.op === "permission.remove"
-              ) content = apply(content, op);
-            }
-            draft.content = content;
-          });
+          await sidecar.readPermissions(
+            target.sessionID,
+            requestEntry,
+            abort.signal,
+          );
         } else {
           const questions = sidecar.supports("questions")
             ? await sidecar.rpc.call("question.list", {
@@ -665,14 +646,13 @@ export function createTranscript(
           });
         }
       } catch (error) {
-        if (valid()) {
+        if (valid() && !isCancellation(error)) {
           setState((draft) => {
             draft.error = failureValue(error);
           });
         }
       } finally {
-        attention.pending.delete(kind);
-        if (!attention.pending.size && attentionReads === attention) {
+        if (kind === "question" && attentionReads === attention) {
           attentionReads = undefined;
         }
       }
@@ -1431,21 +1411,12 @@ export function createTranscript(
         }
         if (isAttentionOp(frame.event) && attentionReads) {
           const event = frame.event;
-          const key = event.op === "permission.upsert"
-            ? `permission:${event.request.id}`
-            : event.op === "permission.remove"
-            ? `permission:${event.requestID}`
-            : event.op === "question.upsert"
-            ? `question:${event.request.id}`
+          const key = event.op === "question.upsert"
+            ? event.request.id
             : event.op === "question.remove"
-            ? `question:${event.requestID}`
+            ? event.requestID
             : undefined;
-          if (
-            key &&
-            attentionReads.pending.has(
-              key.startsWith("permission:") ? "permission" : "question",
-            )
-          ) {
+          if (key) {
             const settings = policy()!;
             const bytes =
               new TextEncoder().encode(JSON.stringify(event)).byteLength;
