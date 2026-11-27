@@ -290,18 +290,20 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   await dismiss(page);
   expect(await page.evaluate(() => !!getSelection()!.toString())).toBe(true);
   for (
-    const [trigger, menu, arrow, last] of [
+    const [trigger, menu, arrow, last, titleAction] of [
       [
         '[data-project$="/projects/otk"] .otk-project-menu > button',
         ".otk-project-menu :popover-open [role=menu]",
         "ArrowDown",
         false,
+        undefined,
       ],
       [
         ".otk-subagents > button",
         ".otk-subagents :popover-open [role=menu]",
         "ArrowUp",
         true,
+        "Clear finished",
       ],
     ] as const
   ) {
@@ -314,7 +316,19 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
     await page.keyboard.press("Escape");
     await expect(page.locator(":popover-open")).toHaveCount(0);
     await page.keyboard.press("Enter");
-    await keyboardItem(panel.getByRole("menuitem").first());
+    const first = panel.getByRole("menuitem").first();
+    await keyboardItem(first);
+    // Issue 2.101 adds a title-band action, not a different entry point.
+    if (titleAction) {
+      const clear = page.locator(".otk-subagents :popover-open").getByRole(
+        "button",
+        { name: titleAction, exact: true },
+      );
+      await page.keyboard.press("Tab");
+      await expect(clear).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await keyboardItem(first);
+    }
     await page.keyboard.press("Escape");
     await expect(page.locator(":popover-open")).toHaveCount(0);
   }

@@ -1420,8 +1420,10 @@ area/app actions appear once. Built-in selection outside fields, link and image
 targets require no binding.
 
 Menu owns role/menuitem semantics, roving focus with arrows/Home/End, type-ahead
-and Enter/Space activation for all consumers. Tab closes and restores origin
-focus; Popover alone owns Escape and its focus return. `CommandMenu` shares hub
+and Enter/Space activation for all consumers. Tab reaches an optional title
+action after the active item; Shift+Tab returns from the title action to that
+item. Leaving these stops closes and restores origin focus; Popover alone owns
+Escape and its focus return. `CommandMenu` shares hub
 projection, registration-change subscription, invocation-time reprojection and
 owner-bound execution between pointer and visible-trigger menus. Failed actions
 use a sibling alert described by the corresponding item, outside `role=menu`,

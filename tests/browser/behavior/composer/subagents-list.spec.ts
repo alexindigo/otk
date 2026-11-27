@@ -118,9 +118,11 @@ test.describe("last subagent leaves the roster", () => {
       await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
       await pill.focus();
       await page.keyboard.press("Enter");
+      await expect(menu.getByRole("menuitem").first()).toBeFocused();
+      await page.keyboard.press("Tab");
       await expect(page.getByRole("button", { name: "Clear finished" }))
         .toBeFocused();
-      await page.keyboard.press("Tab");
+      await page.keyboard.press("Shift+Tab");
       await expect(menu.getByRole("menuitem").first()).toBeFocused();
       await header.evaluate((region, panel) => {
         region.addEventListener("focus", () => {
@@ -169,6 +171,8 @@ test.describe("last subagent leaves the roster", () => {
       await pill.focus();
       await page.keyboard.press("Enter");
       await expect(menu).toBeVisible();
+      await expect(menu.getByRole("menuitem").first()).toBeFocused();
+      await page.keyboard.press("Tab");
       await expect(clear).toBeFocused();
       await page.keyboard.press("Enter");
       await expect(menu).toHaveCount(0);
