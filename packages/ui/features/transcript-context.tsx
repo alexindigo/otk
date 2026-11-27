@@ -20,7 +20,10 @@ import {
 } from "@otk/client";
 import type { DisclosureCategory, Preferences } from "@otk/protocol";
 import { copyText } from "../clipboard.ts";
-import { DisclosuresContext } from "../components/Disclosure.tsx";
+import {
+  DisclosuresProvider,
+  useDisclosures,
+} from "../components/Disclosure.tsx";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
@@ -80,9 +83,9 @@ export function TranscriptSnapshot(props: { children: Element }): Element {
       <Actions value={null}>
         <Visibility value={null}>
           <Interaction value={interaction}>
-            <DisclosuresContext value={interaction.disclosures}>
+            <DisclosuresProvider owner={interaction.disclosures}>
               {props.children}
-            </DisclosuresContext>
+            </DisclosuresProvider>
           </Interaction>
         </Visibility>
       </Actions>
@@ -242,7 +245,7 @@ export function TranscriptContext(
   },
 ): Element {
   const ports = useCommandPorts();
-  const shared = useContext(DisclosuresContext);
+  const shared = useDisclosures();
   const interaction = props.interaction ??
     createTranscriptInteraction(shared ?? undefined);
   const owners = new Map<string, ContentOwner>();
@@ -333,9 +336,9 @@ export function TranscriptContext(
               },
             }}
           >
-            <DisclosuresContext value={shared ?? interaction.disclosures}>
+            <DisclosuresProvider owner={shared ?? interaction.disclosures}>
               {props.children}
-            </DisclosuresContext>
+            </DisclosuresProvider>
           </Actions>
         </Interaction>
       </Sources>

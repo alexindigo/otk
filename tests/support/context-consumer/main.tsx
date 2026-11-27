@@ -17,6 +17,7 @@ import {
   contextTarget,
   createUiRegistries,
   DialogHost,
+  DisclosuresProvider,
   DisplayMenu,
   Message,
   ownedCommand,
@@ -33,6 +34,7 @@ import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 const themes = new ThemeRegistry();
+const disclosures = createDisclosures({ factory: solidState });
 registerOtkThemes(themes);
 const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
 theme.start();
@@ -131,7 +133,6 @@ function TranscriptProbe() {
   );
 }
 function ProjectProbe() {
-  const tree = createDisclosures({ factory: solidState });
   const [ready, setReady] = createSignal(true);
   return (
     <section id="project-probe">
@@ -143,7 +144,7 @@ function ProjectProbe() {
         Disconnect project
       </button>
       <ProjectInbox
-        disclosure={tree}
+        disclosure={disclosures}
         projects={[{
           directory: "/probe",
           sidecarId: "probe-sidecar",
@@ -402,7 +403,9 @@ function Consumer() {
 render(() => (
   <UiProvider registries={ui}>
     <CommandProvider commands={commands}>
-      <Consumer />
+      <DisclosuresProvider owner={disclosures}>
+        <Consumer />
+      </DisclosuresProvider>
     </CommandProvider>
   </UiProvider>
 ), document.getElementById("app")!);
