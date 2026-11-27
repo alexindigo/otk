@@ -712,6 +712,10 @@ export default function Shell(
             projectRename,
             transcript: {
               messages: () => session.state.content.messages,
+              records: () => {
+                void session.state.content;
+                return session.transcript;
+              },
               exhausted: () => session.state.exhausted,
               paging: () => session.state.paging || session.state.loading,
               older: () => session.older(),
@@ -737,6 +741,7 @@ export default function Shell(
             connection: (id) => sidecars.connection(id),
             inbox,
             approvals,
+            reportFailure: fail,
             openProject,
             addToPrompt: (text, label) => {
               const write = drafts.writer(draftKey());

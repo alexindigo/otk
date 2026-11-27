@@ -15,7 +15,7 @@ import { createMemo, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
 import WorkLog from "./WorkLog.tsx";
 import RecordKinds from "./RecordKinds.tsx";
-import { TreeItem, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 import TimeValue from "./TimeValue.tsx";
@@ -39,94 +39,12 @@ import type {
 } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { Preferences } from "@otk/protocol";
-import type { PartProps } from "../registries/renderers.ts";
+import PartsView from "./PartsView.tsx";
 import {
-  contentGeneration,
   ContentIdentityProvider,
   contentOwner,
   sourceRegion,
-  useContentIdentity,
 } from "../features/transcript-context.tsx";
-function PartView(
-  props: {
-    part: Part;
-    prefs: Preferences;
-    streaming: boolean;
-    directory?: string;
-    permissions: PermissionRequest[];
-    paneWidth?: number;
-    onOpenChild(id: string): void;
-    user: boolean;
-    pending?: boolean;
-    sourceID?: string;
-    recordTime?: number;
-    failureTime?: number;
-  },
-) {
-  const { parts } = useUiRegistries();
-  const identity = useContentIdentity();
-  return (
-    <Show when={parts.resolve(props.part)} keyed>
-      {(renderer) => {
-        const Component = renderer;
-        return (
-          <ContentIdentityProvider
-            value={{ ...identity, partID: props.part.id }}
-          >
-            <div
-              ref={sourceRegion(() => props.sourceID ?? identity.messageID!)}
-            >
-              <Component {...props} />
-            </div>
-          </ContentIdentityProvider>
-        );
-      }}
-    </Show>
-  );
-}
-/** A stable keyed component boundary preserves source nodes during part updates. */
-function PartsView(
-  props: Omit<PartProps, "part" | "recordTime" | "failureTime"> & {
-    parts: Part[];
-    sourceID?(part: Part): string;
-    recordTime?(part: Part): number | undefined;
-    failureTime?(part: Part): number | undefined;
-    tree?: boolean;
-  },
-) {
-  const generation = contentGeneration();
-  return (
-    <ContentWindow
-      items={props.parts}
-      key={(part) => generation(part.id)}
-      label="Reply parts"
-      render={(part) => {
-        const content = () => (
-          <PartView
-            part={part()}
-            prefs={props.prefs}
-            directory={props.directory}
-            permissions={props.permissions}
-            onOpenChild={props.onOpenChild}
-            user={props.user}
-            streaming={props.streaming}
-            pending={props.pending}
-            sourceID={props.sourceID?.(part())}
-            recordTime={props.recordTime?.(part())}
-            failureTime={props.failureTime?.(part())}
-          />
-        );
-        return (
-          <Show when={props.tree} fallback={content()}>
-            <TreeItem last={part().id === props.parts.at(-1)?.id}>
-              {content()}
-            </TreeItem>
-          </Show>
-        );
-      }}
-    />
-  );
-}
 export interface MessageControl {
   reveal(): void;
   revealWork(): Promise<void>;

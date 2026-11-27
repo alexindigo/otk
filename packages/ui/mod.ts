@@ -56,6 +56,7 @@ export { default as ListRow } from "./components/ListRow.tsx";
 export { default as RightPanel } from "./components/RightPanel.tsx";
 export { registerSessionsPanel } from "./features/sessions.tsx";
 export { registerTimelinePanel } from "./features/timeline.tsx";
+export { registerWorkPanel } from "./features/work.tsx";
 export { default as Timeline } from "./components/Timeline.tsx";
 export { registerActivityPanel } from "./features/approvals.tsx";
 export {

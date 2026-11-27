@@ -124,6 +124,7 @@ export interface DisclosureProps {
   identity: DisclosureIdentity;
   input?: DisclosureContextInput;
   variant: "label" | "meta" | "compact";
+  tone?: "danger";
   label: string;
   accessibleLabel?: string;
   labelContent?: () => Element;
@@ -234,6 +235,7 @@ export default function Disclosure(props: DisclosureProps): Element {
           "is-track-aligned": props.trackAligned,
           "is-meta": props.variant === "meta",
           "is-compact": props.variant === "compact",
+          "is-danger": props.tone === "danger",
         }]}
         ref={(el) => trigger = el}
         aria-expanded={visible() ? "true" : "false"}
@@ -258,7 +260,11 @@ export default function Disclosure(props: DisclosureProps): Element {
   function Leaf() {
     const slot = treeTriggerClass();
     return (
-      <span class={["otk-disclosure-leaf", props.class, slot]}>
+      <span
+        class={["otk-disclosure-leaf", props.class, slot, {
+          "is-danger": props.tone === "danger",
+        }]}
+      >
         <span />
         {caption(slot)}
       </span>
