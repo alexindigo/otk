@@ -12,6 +12,10 @@ test("attention.failure-toast-burst-grouping-and-mixed-overflow", {
     .click();
   const failure = page.locator(".otk-toast[data-kind=error]");
   await expect(failure).toHaveCount(1);
+  await expect(page.locator("[data-note-count]")).toHaveAttribute(
+    "data-note-count",
+    "1",
+  );
   await badge(page, 0);
   await expect(failure).toContainText("22 identical failures");
   await expect(failure).toContainText("Loading permission requests failed");
@@ -68,6 +72,7 @@ test("attention.failure-toast-burst-grouping-and-mixed-overflow", {
     "data-note-count",
     "7",
   );
+  await badge(page, 2);
 });
 
 test("attention.oversized-failure-keeps-complete-reason-reachable", {
