@@ -318,7 +318,7 @@ export async function remainder(
     const replyMessage = '[data-message="reading"]';
     await revealAcquired(page, replyMessage);
     await page.locator(
-      "[data-role=assistant] .otk-reply-agent .otk-entity-pill",
+      "[data-role=assistant] [data-reply-source] .otk-entity-pill",
     ).first()
       .scrollIntoViewIfNeeded();
     await revealAcquired(page, replyMessage + " .otk-message-footer");
@@ -426,11 +426,10 @@ export async function remainder(
         ].forEach((key) => (el as HTMLElement).style.removeProperty(key))
       );
       expect(await read()).toEqual(baseline);
-      await revealAcquired(
-        page,
-        replyMessage + " .otk-message-footer time[title]",
-      );
-      const clock = reply.locator(".otk-message-footer time[title]").first();
+      const footerClock =
+        ".otk-message-details > .otk-chrome-meta > time[title]";
+      await revealAcquired(page, `${replyMessage} ${footerClock}`);
+      const clock = footer.locator(footerClock);
       await clock.scrollIntoViewIfNeeded();
       await page.mouse.move(1, 1);
       await expect(clock).toHaveCSS("visibility", "visible");
@@ -459,15 +458,9 @@ export async function remainder(
       expect(Math.abs(g.width - rect!.width)).toBeLessThan(.5);
       await shot(`timestamps-hover-${theme.id}`);
       for (const role of ["user", "assistant"]) {
-        await revealAcquired(
-          page,
-          (role === "user" ? promptMessage : replyMessage) +
-            " .otk-message-footer time[title]",
-        );
-        const created = page.locator(
-          `[data-role=${role}] .otk-message-footer time[title]`,
-        )
-          .first();
+        const message = role === "user" ? promptMessage : replyMessage;
+        await revealAcquired(page, `${message} ${footerClock}`);
+        const created = page.locator(`${message} ${footerClock}`);
         await created.scrollIntoViewIfNeeded();
         await created.hover();
         await expect(created).toHaveCSS("visibility", "visible");
@@ -521,9 +514,7 @@ export async function remainder(
         if (action === "hover") await control.hover();
         if (action === "leave") await page.mouse.move(1, 1);
         await expect.poll(() =>
-          reply.locator(".otk-message-footer time[title]").evaluate((el) =>
-            getComputedStyle(el).visibility === "visible"
-          )
+          clock.evaluate((el) => getComputedStyle(el).visibility === "visible")
         ).toBe(true);
         expect(await ownedBounds(fork, ".otk-message-footer")).toEqual(forkBox);
       }

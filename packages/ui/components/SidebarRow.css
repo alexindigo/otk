@@ -65,6 +65,11 @@
 .otk-sidebar-meta > * {
   grid-area: 1 / 1;
 }
+.otk-sidebar-meta-track {
+  /* Whole facts can yield without shrinking the intrinsic track. Keep the
+     remaining facts at its trailing edge, aligned with the other rows. */
+  justify-content: safe flex-end;
+}
 .otk-sidebar-meta:has(> :not(:empty)) {
   margin-inline-start: var(--space-1);
 }

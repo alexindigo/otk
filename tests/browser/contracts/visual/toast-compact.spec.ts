@@ -49,21 +49,23 @@ test("visual.toast-compact-geometry-dismiss-and-lamp", {
   const assertBottom = async (key: string, count: number) => {
     await expect(cards).toHaveCount(count);
     const gutter = await cssLength(stage, "--overlay-gutter");
-    const geometry = await stage.evaluate((element) => {
-      const box = (el: Element) => el.getBoundingClientRect();
-      const stack = element.querySelector(".otk-toasts")!;
-      return {
-        stage: box(element).bottom,
-        dock: box(element.parentElement!.querySelector(".otk-composer-dock")!)
-          .top,
-        transcript: box(element.querySelector('[aria-label="Transcript"]')!)
-          .bottom,
-        toast: box(Array.from(stack.querySelectorAll(".otk-toast")).at(-1)!)
-          .bottom,
-        stack: box(stack).toJSON(),
-        parent: box(stack.parentElement!).toJSON(),
-      };
-    });
+    const [stageGeometry, dockTop] = await Promise.all([
+      stage.evaluate((element) => {
+        const box = (el: Element) => el.getBoundingClientRect();
+        const stack = element.querySelector(".otk-toasts")!;
+        return {
+          stage: box(element).bottom,
+          transcript: box(element.querySelector('[aria-label="Transcript"]')!)
+            .bottom,
+          toast: box(Array.from(stack.querySelectorAll(".otk-toast")).at(-1)!)
+            .bottom,
+          stack: box(stack).toJSON(),
+          parent: box(stack.parentElement!).toJSON(),
+        };
+      }),
+      dock.evaluate((element) => element.getBoundingClientRect().top),
+    ]);
+    const geometry = { ...stageGeometry, dock: dockTop };
     const label = `${key}: ${JSON.stringify({ ...geometry, gutter })}`;
     expect.soft(Math.abs(geometry.stage - geometry.dock), label)
       .toBeLessThanOrEqual(0.5);
