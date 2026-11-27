@@ -18,6 +18,7 @@ const deferred = <T>() => {
 const welcome: ServerFrame = {
   requests: fixtureRequests(),
   messages: {
+    bridgepages: 4,
     coolms: 300000,
     recoveryconcurrency: 2,
     recoverypending: 128,

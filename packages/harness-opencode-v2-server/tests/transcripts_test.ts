@@ -22,6 +22,7 @@ import {
 } from "@otk/protocol";
 const id = ids.encode("ses_fixture");
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,

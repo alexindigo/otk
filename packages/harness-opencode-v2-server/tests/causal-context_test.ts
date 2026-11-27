@@ -14,6 +14,7 @@ const promptID = "msg_1df75333f001iPxLDqjf1F59iI";
 const finalID = "msg_1df75504a001AoEU85efrkGkHO";
 const previousID = "msg_1df754ff7001cKMpXJHkrXytA5";
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,

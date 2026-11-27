@@ -8,6 +8,7 @@ import type { V2Client } from "../client.ts";
 import type { ContentOp, HelperSummary, MessagePolicy } from "@otk/protocol";
 
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 0,
   prefetchbytes: 0,
   coolms: 1,

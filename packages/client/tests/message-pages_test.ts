@@ -14,6 +14,7 @@ import type {
 } from "@otk/protocol";
 
 const policy = {
+  bridgepages: 4,
   coolms: 300000,
   recoveryconcurrency: 2,
   recoverypending: 128,

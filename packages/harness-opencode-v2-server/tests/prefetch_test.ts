@@ -10,6 +10,7 @@ import { opencodeV2SessionID as ids } from "../ids.ts";
 import { requestFailureFacts } from "../request-failure.ts";
 const id = ids.encode("ses_prefetch");
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 10000,
   prefetchbytes: 100000,
   coolms: 1000,
