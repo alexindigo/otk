@@ -212,9 +212,10 @@ test.describe("project catalog", () => {
         path: info.outputPath(`q1-${name}-column.png`),
         fullPage: true,
       });
+      // Issue 2.116 moved the lamp into the shared sidebar row control.
       const markers = () =>
         positions(
-          ".otk-project-row:not([data-inactive=true]) .otk-project-marker",
+          ".otk-project-row:not([data-inactive=true]) .otk-sidebar-lamp-action",
         );
       const column = await markers();
       expect(column.length).toBeGreaterThan(0);
