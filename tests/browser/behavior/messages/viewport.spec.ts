@@ -79,7 +79,12 @@ test(
     await expect(crumb).toBeVisible();
     await expect(crumb).toHaveAttribute("aria-current", "page");
     await expect(crumb).toHaveAccessibleName(first.title);
-    await expect(page.locator(".otk-prompt")).toHaveCount(0);
+    // D17: navigation opens the child, but does not join its conversation.
+    await expect(page.getByRole("button", {
+      name: "Join the conversation",
+      exact: true,
+    })).toBeVisible();
+    await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   },
 );
 

@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { focusNotifications } from "../../pages/notifications.ts";
+import { sessionContext } from "../../pages/sessions.ts";
 
 test.use({ profile: "isolated" });
 test("attention.native-failure-toast-identifies-the-background-session", {
@@ -13,10 +14,13 @@ test("attention.native-failure-toast-identifies-the-background-session", {
   const failed = await state.native<{ id: string }>("/session", "POST", {
     title: "Background failure fixture",
   });
-  await openSession(state, page, failed.id);
   const other = await state.native<{ id: string }>("/session", "POST", {
     title: "Current conversation",
   });
+  // Seed both rows before the first directory acquisition and wait for its
+  // actual publication before selecting the second conversation.
+  await openSession(state, page, failed.id);
+  await expect(page.locator(`[data-session="${other.id}"]`)).toBeVisible();
   await openSession(state, page, other.id);
   await focusNotifications(page);
   if (info.project.name === "oc-2.2.6") {
@@ -101,6 +105,12 @@ test("attention.native-failure-toast-identifies-the-background-session", {
     await openSession(state, page, other.id);
     await expect(project).toHaveAttribute("data-state", "none");
     await expect(session).toHaveAttribute("data-state", "none");
+    // D76: acknowledgement retires the failed attention, not the explicit open.
+    await expect(tab.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "none",
+    );
+    await sessionContext(page, `[data-tab="${failed.id}"]`, "session.close");
     await expect(tab).toHaveCount(0);
   }
 });

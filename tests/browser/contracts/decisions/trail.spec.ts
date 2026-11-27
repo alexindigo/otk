@@ -191,11 +191,15 @@ test("decisions.D67-D66-D3-ancestry-only-and-one-composer-subagent-inventory", {
       await expect(control).toHaveAccessibleName(
         id === child || id === "tstv1-trail-blocked"
           ? "Subagents: 1 needs you, 2 running, 1 finished"
-          : "Subagents: 1 needs you, 2 running",
+          : "Subagents: 1 needs you, 2 running, 1 opened",
       );
       await control.click();
       if (id === "tstv1-trail-cont-1") {
-        await expect(menu.locator(`[data-subagent="${id}"]`)).toHaveCount(0);
+        // D76 supersedes D72 for an explicitly opened finish: keep its row,
+        // without counting it as unfinished or unseen work.
+        const opened = menu.getByRole("group", { name: "Opened 1" });
+        await expect(opened.locator(`[data-subagent="${id}"]`)).toBeVisible();
+        await expect(menu.locator("[data-subagent]")).toHaveCount(4);
       }
     }
     await menu.locator(`[data-subagent="${child}"] .otk-subagent-name`).click();
