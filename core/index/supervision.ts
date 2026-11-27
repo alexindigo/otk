@@ -6,23 +6,13 @@ import type {
   TerminalOutcome,
 } from "@otk/protocol";
 
-/** A parent receiving an error is not a human acknowledging the failure.
- * Awaiting user ruling C1 (decisions-coherence section 6); do not change
- * without it. */
-export function failedHelperNeedsAck(
-  entry: Pick<IndexMetadata, "parentID">,
-  outcome: TerminalOutcome | undefined,
-): boolean {
-  return !!entry.parentID && outcome === "failed";
-}
 /** WP11's run-correlated parent receipt, independently of human acknowledgement. */
-export function deliveredTerminal(entry: IndexMetadata): number {
+function deliveredTerminal(entry: IndexMetadata, terminal: number): boolean {
   const receipt = entry.activity?.delivered;
-  return receipt && receipt.parentID === entry.parentID &&
+  return !!receipt && receipt.parentID === entry.parentID &&
       receipt.receipt.length > 0 &&
-      Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0
-    ? receipt.terminal
-    : 0;
+      Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0 &&
+      receipt.terminal === terminal;
 }
 /** Fresh positive evidence as the interpreter counts it; absence is zero. */
 export interface SessionInputs {
@@ -67,9 +57,9 @@ export class SessionSupervision {
           : {}),
       }
       : {};
-    const helperFailed = failedHelperNeedsAck(entry, outcome);
-    const delivered = helperFailed ? 0 : deliveredTerminal(entry);
-    const unseen = terminal > Math.max(acknowledged, delivered);
+    // D81: the same exact receipt covers success and failure, without replacing
+    // the outcome or creating a human acknowledgement.
+    const unseen = terminal > acknowledged && !deliveredTerminal(entry, terminal);
     if (entry.deleted) {
       return {
         state: "none",
@@ -80,10 +70,7 @@ export class SessionSupervision {
       };
     }
     const needsInput = inputs.questions > 0 || inputs.permissions > 0;
-    // A failed top-level run needs acknowledgement, not a successful-finish
-    // lamp (2.72). Delivered-helper treatment remains the isolated C1 rule.
-    const failedRun = unseen &&
-      (helperFailed || !entry.parentID && outcome === "failed");
+    const failedRun = unseen && outcome === "failed";
     const state = needsInput || failedRun
       ? "needsYou"
       : inputs.work

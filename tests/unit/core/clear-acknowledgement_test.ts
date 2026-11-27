@@ -54,7 +54,11 @@ function row(
   };
 }
 
-function open(directory: string, rows: IndexMetadata[]) {
+function open(
+  directory: string,
+  rows: IndexMetadata[],
+  beforeIdentities: () => Promise<void> | void = () => {},
+) {
   const db = new OtkDb(directory, [
     projectsMigrations,
     tasksMigrations,
@@ -85,8 +89,10 @@ function open(directory: string, rows: IndexMetadata[]) {
   );
   const rpc = new RpcRegistry({
     core: {
-      identities: (ids: readonly string[]) =>
-        Promise.resolve(rows.filter(({ id }) => ids.includes(id))),
+      identities: async (ids: readonly string[]) => {
+        await beforeIdentities();
+        return rows.filter(({ id }) => ids.includes(id));
+      },
     },
   } as unknown as Harness, db);
   feature.register(rpc);
@@ -115,6 +121,41 @@ const deliveredFailure = row(failure, {
   },
 });
 
+test("a newer explicit Open survives older Clear and a newer run remains unseen", async () => {
+  const entered = Promise.withResolvers<void>();
+  const validate = Promise.withResolvers<void>();
+  let holdNext = false;
+  const helper = row(success, { parentID: root, activity: run(20) });
+  const f = open(await fixture(), [row(root), helper], () => {
+    if (!holdNext) return;
+    holdNext = false;
+    entered.resolve();
+    return validate.promise;
+  });
+  try {
+    const opened = { sessionID: success, opened: true };
+    await f.rpc.dispatch("sessions.opened", opened);
+    holdNext = true;
+    const oldClear = f.rpc.dispatch("sessions.acknowledge", {
+      scope: "helpers",
+      task,
+    });
+    try {
+      await entered.promise;
+      await f.rpc.dispatch("sessions.opened", opened);
+      f.index.upsert({ ...helper, activity: run(21) });
+    } finally {
+      validate.resolve();
+      await oldClear;
+    }
+    assertEquals(f.state(success)?.terminal, 21);
+    assertEquals(f.state(success)?.counts.unseen, 1);
+    assertEquals(f.state(success)?.opened, true);
+  } finally {
+    f.close();
+  }
+});
+
 test("D72 helpers acknowledge the published roster once and a newer run returns after restart", async () => {
   const directory = await fixture();
   const completed = row(success, { parentID: root, activity: run(20) });
@@ -137,11 +178,10 @@ test("D72 helpers acknowledge the published roster once and a newer run returns 
     assertEquals<unknown>(f.helpers()?.counts, {
       running: 1,
       needsYou: 1,
-      finished: 2,
+      finished: 1,
     });
     assertEquals(await f.rpc.dispatch("sessions.acknowledge", params), {
       sessions: [
-        { sessionID: failure, terminal: 22 },
         { sessionID: success, terminal: 20 },
       ],
     });
@@ -206,7 +246,7 @@ test("subtree acknowledgement covers its own run and all checkouts without settl
     }) as { sessions: { sessionID: string; terminal: number }[] };
     assertEquals(
       new Map(result.sessions.map((e) => [e.sessionID, e.terminal])),
-      new Map([[root, 10], [failure, 22], [nested, 24]]),
+      new Map([[root, 10], [nested, 24]]),
     );
     assertEquals(f.state(root)?.counts.unseen, 0);
     assertEquals(f.state(root)?.evidence?.descendants.unseen, 0);

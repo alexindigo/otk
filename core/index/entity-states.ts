@@ -20,11 +20,7 @@ import {
   taskEntityID,
   type TaskHelpers,
 } from "@otk/protocol";
-import {
-  failedHelperNeedsAck,
-  type SessionInputs,
-  type SessionSupervision,
-} from "./supervision.ts";
+import type { SessionInputs, SessionSupervision } from "./supervision.ts";
 
 const PERMISSION_GRACE_MS = 500;
 const noShells: RunningShells = { items: [], count: 0, state: "none" };
@@ -885,8 +881,6 @@ export class EntityStates {
         (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
       a.id.localeCompare(b.id);
     const { running, needsYou, finished, opened } = groups;
-    // Group lamps describe the counted disposition, not the member's own
-    // session lamp (an unseen failure may still have a red session lamp).
     const lamps: NonNullable<TaskHelpers["lamps"]>["groups"] = {
       running: { state: running.length ? HELPER_LAMP_STATE.running : "none" },
       needsYou: {
@@ -1026,10 +1020,8 @@ export class EntityStates {
       ? "question"
       : operation === "blocked"
       ? "operation"
-      : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
-      ? "failedHelper"
       : verdict.outcome === "failed" && verdict.unseen
-      ? "failure"
+      ? entry.parentID ? "failedHelper" : "failure"
       : inputs.permissions > 0
       ? "permission"
       : undefined;
@@ -1054,22 +1046,9 @@ export class EntityStates {
       ? starts.length ? Math.min(...starts) : undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
-    // Live input and work take priority over a prior unseen run. Roster
-    // membership is independent of lamp policy and permission animation.
     const work = inputs.work || operation === "working";
     const opened = this.openedByUser(entry.id);
-    const helper = !entry.parentID
-      ? undefined
-      : inputs.questions > 0 || inputs.permissions > 0 ||
-          operation === "blocked"
-      ? "needsYou"
-      : work
-      ? "running"
-      : verdict.unseen
-      ? "finished"
-      : opened
-      ? "opened"
-      : undefined;
+    const helper = entry.parentID ? helperGroup(state, opened) : undefined;
     const evidence: SessionEvidence = {
       ...(verdict.settlement ? { settlement: verdict.settlement } : {}),
       ...(inputs.continuation ? { continuation: true as const } : {}),
@@ -1153,5 +1132,17 @@ export class EntityStates {
     }
     this.#states.set(key, value);
     return true;
+  }
+}
+
+/** D72/D76: retain a seen, explicitly opened helper in its neutral group. */
+function helperGroup(state: ProjectStatus, opened: boolean): HelperDisposition | undefined {
+  switch (state) {
+    case "blocked": return "needsYou";
+    case "working": return "running";
+    case "finished": return "finished";
+    case "none":
+    case "dependencies":
+      return opened ? "opened" : undefined;
   }
 }

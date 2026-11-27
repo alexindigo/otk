@@ -15,6 +15,10 @@ export const seenMigrations: FeatureMigrations = {
     version: 3,
     sql:
       "ALTER TABLE session_seen ADD COLUMN opened INTEGER NOT NULL DEFAULT 0;",
+  }, {
+    version: 4,
+    sql:
+      "ALTER TABLE session_seen ADD COLUMN open_generation INTEGER NOT NULL DEFAULT 0;",
   }],
 };
 export interface SeenChange {
@@ -89,11 +93,31 @@ export class Seen extends MetadataChanges<SeenChange> {
   ): void {
     this.db.write((scope) => {
       const row = this.db.connection.prepare(
-        "INSERT INTO session_seen(user,session,time,opened) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET opened=excluded.opened WHERE opened<>excluded.opened RETURNING terminal",
+        "INSERT INTO session_seen(user,session,time,opened,open_generation) VALUES(?,?,0,?,1) ON CONFLICT(user,session) DO UPDATE SET opened=excluded.opened,open_generation=open_generation+1 RETURNING terminal",
       ).get(key(user), key(session), Number(opened));
       if (!row) return;
       const time = Number(row.terminal);
       this.changed({ user, session, time, terminal: time, opened }, scope);
+    }, tx);
+  }
+  /** Capture retention independently of any run acknowledgement. Legacy opens
+   * at generation zero remain real opens. An explicit re-open advances the
+   * generation even if the flag was already set. */
+  openGeneration(user: string, session: string): number | undefined {
+    const row = this.db.connection.prepare(
+      "SELECT open_generation FROM session_seen WHERE user=? AND session=? AND opened=1",
+    ).get(key(user), key(session));
+    return row ? Number(row.open_generation) : undefined;
+  }
+  releaseOpened(user: string, session: string, generation: number, tx?: StoreWrite): boolean {
+    return this.db.write((scope) => {
+      const row = this.db.connection.prepare(
+        "UPDATE session_seen SET opened=0,open_generation=open_generation+1 WHERE user=? AND session=? AND opened=1 AND open_generation=? RETURNING terminal",
+      ).get(key(user), key(session), generation);
+      if (!row) return false;
+      const terminal = Number(row.terminal);
+      this.changed({ user, session, time: terminal, terminal, opened: false }, scope);
+      return true;
     }, tx);
   }
   acknowledgeMany(

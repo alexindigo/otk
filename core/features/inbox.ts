@@ -1920,12 +1920,19 @@ export class InboxFeature implements FrameSource {
           session: sessionID,
           terminal,
         }));
-        const opened = this.#opened.get(user());
-        const closed = ids.filter((id) => opened?.has(id));
+        const principal = user();
+        const opened = this.#opened.get(principal);
+        const retained = ids.flatMap((id) => {
+          if (!opened?.has(id)) return [];
+          const generation = s.seen.openGeneration(principal, id);
+          return generation === undefined ? [] : [{ id, generation }];
+        });
         await this.#validateAcknowledgement(ctx, entries);
         return localWrite(ctx, (tx) => {
           this.#acknowledge(entries, tx);
-          for (const id of closed) s.seen.setOpened(user(), id, false, tx);
+          const closed = retained.filter(({ id, generation }) =>
+            s.seen.releaseOpened(principal, id, generation, tx)
+          ).map(({ id }) => id);
           return { sessions, ...(closed.length ? { closed } : {}) };
         }, acknowledgeReceipt);
       },
