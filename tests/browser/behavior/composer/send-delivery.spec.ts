@@ -195,7 +195,7 @@ test(
     const start = performance.now();
     await send(page).click();
     const entry = page.locator('[data-send-state="pending"]');
-    await expect(entry).toContainText("Show this prompt right away");
+    await expect(entry).toContainText("Show this prompt **right away**");
     const sendLatency = performance.now() - start;
     await info.attach("send-boundary-marks", {
       body: JSON.stringify({ sendLatencyMs: sendLatency }),

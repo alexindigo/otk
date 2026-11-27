@@ -92,7 +92,6 @@ export function createSessionActions(o: {
     & Pick<ClientSession, "state">
     & Partial<Pick<ClientSession, "transcripts">>;
   factory?: StateFactory;
-  promptBlocks?(text: string): import("@otk/protocol").Block[];
   promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   current: CurrentClient;
   revertReady?(target: Selection): Promise<void> | undefined;
@@ -528,7 +527,6 @@ export function createSessionActions(o: {
           messageID,
           target.sessionID,
           parts,
-          o.promptBlocks,
         );
         const send = async (
           captured: IntentGroup,
@@ -554,7 +552,6 @@ export function createSessionActions(o: {
                         messageID,
                         target.sessionID,
                         prepared,
-                        o.promptBlocks,
                       ).parts,
                     },
                   });

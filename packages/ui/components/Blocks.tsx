@@ -200,11 +200,20 @@ function InlineView(props: { item: Inline }) {
     </Switch>
   );
 }
-function Paragraph(props: { block: Block & { b: "paragraph" } }) {
-  return (
+function Paragraph(
+  props: { block: Block & { b: "paragraph" }; compact?: boolean },
+) {
+  const paragraph = () => (
     <p class="otk-prose-paragraph">
       <Inlines items={props.block.inline} />
     </p>
+  );
+  return (
+    <Show when={props.compact} fallback={paragraph()}>
+      <ScrollRegion axis="x" horizontalTrack="in-flow">
+        {paragraph()}
+      </ScrollRegion>
+    </Show>
   );
 }
 function Heading(props: { block: Block & { b: "heading" } }) {
@@ -312,12 +321,17 @@ function Rule() {
   return <hr class="otk-prose-rule" />;
 }
 function BlockView(
-  props: { block: Block; streaming?: boolean; conceal?: boolean },
+  props: {
+    block: Block;
+    streaming?: boolean;
+    conceal?: boolean;
+    compact?: boolean;
+  },
 ) {
   return (
     <Switch>
       <Match when={blockOf(props.block, "paragraph")}>
-        {(block) => <Paragraph block={block()} />}
+        {(block) => <Paragraph block={block()} compact={props.compact} />}
       </Match>
       <Match when={blockOf(props.block, "heading")}>
         {(block) => <Heading block={block()} />}
@@ -406,6 +420,7 @@ export default function Blocks(props: {
                   block={row().block}
                   streaming={streaming()}
                   conceal={props.conceal}
+                  compact={props.compact}
                 />
               </PathContext>
             </div>

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   ascendingID,
-  type Block,
   type Part,
   type PromptPart,
+  promptTextBlocks,
   type UserMessage,
 } from "@otk/protocol";
 import type { Feedback } from "./failures.ts";
@@ -29,7 +29,6 @@ export function pendingMessage(
   id: string,
   sessionID: string,
   parts: readonly PromptPart[],
-  textBlocks?: (text: string) => Block[],
 ): UserMessage {
   return {
     id,
@@ -43,13 +42,7 @@ export function pendingMessage(
           id: key,
           kind: "text",
           synthetic: false,
-          blocks: textBlocks?.(part.text) ?? [{
-            b: "paragraph",
-            inline: part.text.split("\n").flatMap((text, n) => [
-              ...(n ? [{ i: "break" as const }] : []),
-              { i: "text" as const, text },
-            ]),
-          }],
+          blocks: promptTextBlocks(part.text),
         };
       }
       if (part.kind === "agent") {

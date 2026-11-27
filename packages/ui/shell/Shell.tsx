@@ -89,7 +89,6 @@ export default function Shell(
     api: URL;
     policy?: import("@otk/protocol").ClientRequestPolicy;
     build?: string;
-    promptBlocks?(text: string): import("@otk/protocol").Block[];
   },
 ): import("solid-js").Element {
   const { parts, panels } = useUiRegistries();
@@ -117,7 +116,6 @@ export default function Shell(
     parts,
     policy: props.policy,
     build: props.build,
-    promptBlocks: props.promptBlocks,
     promptCommitted: (message) => recentModel(message),
   });
   const {
