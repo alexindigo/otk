@@ -230,9 +230,8 @@ export default function CommandMenu(props: {
                       <ActionSlot
                         class="otk-command-menu-row"
                         pending={!!pending()}
-                        feedback={pending() === action().key
-                          ? { kind: "pending", text: "Working..." }
-                          : undefined}
+                        pendingLabel="Working..."
+                        showStatus={pending() === action().key}
                         control={({ focus }) => focusStatus = focus}
                         focusAction={focusAction}
                       >

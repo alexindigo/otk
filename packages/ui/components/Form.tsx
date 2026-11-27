@@ -103,13 +103,11 @@ export default function Form(
           class="otk-form-action"
           align="end"
           pending={pending()}
+          pendingLabel={props.pendingLabel ?? "Working..."}
           control={(control) => status = control}
           focusAction={() => {
             if (button.isConnected) button.focus();
           }}
-          feedback={pending()
-            ? { kind: "pending", text: props.pendingLabel ?? "Working..." }
-            : undefined}
         >
           <button
             class="otk-primary"
