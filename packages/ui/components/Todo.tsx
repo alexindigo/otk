@@ -11,6 +11,7 @@ export function registerTodoTool(tools: ToolRegistry): void {
     (call) => ({
       icon: TasksIcon,
       verb: "Update tasks",
+      runs: { noun: "update", plural: "updates", keep: "latest" },
       summary: `${
         call.items.filter((item) => item.status === "completed").length
       }/${countLabel(call.items.length, "task")} completed`,

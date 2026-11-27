@@ -74,7 +74,7 @@ export function applicationUi(): UiRegistries {
   registerQuestionTool(ui.tools);
   registerTextPart(ui.parts);
   registerReasoningPart(ui.parts);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   registerFilePart(ui.parts);
   registerImageDialog(ui.dialogs);
   registerFilePreviewDialog(ui.dialogs);

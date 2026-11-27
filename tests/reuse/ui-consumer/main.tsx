@@ -378,7 +378,7 @@ function Consumer(): Element {
   const ui = createUiRegistries(), isolated = createUiRegistries();
   registerGenericTool(ui.tools);
   registerGenericTool(isolated.tools);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   registerUnknownPart(ui.parts);
   ui.tools.register(
     "external-probe",
