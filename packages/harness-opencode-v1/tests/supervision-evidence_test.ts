@@ -122,6 +122,7 @@ Deno.test("V1 later intermediate or unfinished calls cannot erase an earlier pro
     assertEquals(terminalSessions(db, "", 1)[0]?.activity, {
       terminal: 70,
       runID: "failed",
+      legacyAcknowledgement: { terminal: 70, runID: "failed" },
       outcome: "failed",
       terminalOrigin: "historical",
     });

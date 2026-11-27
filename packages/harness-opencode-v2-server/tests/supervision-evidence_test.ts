@@ -42,9 +42,13 @@ Deno.test("V2 helper execution survives a later shell exit without borrowing its
       ...common,
       time: { created: 1, updated: 200, idle: 100 },
       outcome: "succeeded",
+      runID: "idle-100",
+      legacyAcknowledgement: { terminal: 100, runID: "idle-100" },
     }).activity,
     {
       terminal: 100,
+      runID: "idle-100",
+      legacyAcknowledgement: { terminal: 100, runID: "idle-100" },
       outcome: "succeeded",
       terminalOrigin: "historical",
     },

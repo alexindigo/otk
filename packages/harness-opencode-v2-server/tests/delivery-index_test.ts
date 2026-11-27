@@ -14,6 +14,7 @@ deliveryContract(
 
 Deno.test("a delayed synthetic promotion cannot cover a successor execution", () => {
   const db = new DatabaseSync(":memory:");
+  const digest = new DatabaseSync(":memory:");
   try {
     db.exec(`CREATE TABLE session_v2(id TEXT PRIMARY KEY, parent_id TEXT);
       CREATE TABLE session_message(id TEXT PRIMARY KEY, session_id TEXT, seq INTEGER, type TEXT, time_created INTEGER, data TEXT);
@@ -23,18 +24,67 @@ Deno.test("a delayed synthetic promotion cannot cover a successor execution", ()
         ('run-1','child',2,'idle',20,'{"outcome":"succeeded"}'),
         ('run-2','child',4,'idle',30,'{"outcome":"succeeded"}'),
         ('receipt-1','parent',5,'synthetic',40,'{"metadata":{"source":"subagent","childID":"child","state":"completed"}}');
-      INSERT INTO event VALUES ('enqueue-1','parent',3,'session.inbox.enqueued',21,'{"inboxID":"receipt-1"}');`);
-    assertEquals(scanDeliveries(db, "opcv2-parent", "", 10).updates, [{
+      INSERT INTO event VALUES ('enqueue-1','parent',3,'session.inbox.enqueued.1',21,'{"inboxID":"receipt-1"}');`);
+    const parentID = "opcv2-parent", childID = "opcv2-child";
+    const expected = [{
       id: "opcv2-child",
       delivered: {
-        parentID: "opcv2-parent",
+        parentID,
         receipt: "receipt-1",
         terminal: 20,
         runID: "run-1",
       },
-    }]);
+    }];
+    assertEquals(scanDeliveries(db, parentID, "", 10).updates, expected);
+    const migrations = opencodeV2DigestMigrations.migrations;
+    for (const { sql } of migrations.slice(0, -1)) {
+      digest.exec(Deno.readTextFileSync(sql));
+    }
+    digest.prepare(
+      "INSERT INTO opcv2_delivery_scan(parent_id,source,revision,cursor,complete) VALUES(?,?,?, ?,1)",
+    )
+      .run(parentID, "source", 1, "[5,9007199254740991]");
+    digest.prepare(
+      "INSERT INTO opcv2_delivery(parent_id,receipt,child_id,terminal,run_id) VALUES(?,?,?,?,?)",
+    )
+      .run(parentID, "receipt-1", childID, 30, "run-2");
+    digest.exec(Deno.readTextFileSync(migrations.at(-1)!.sql));
+    const index = new DeliveryIndex(
+      digest,
+      "opcv2_delivery",
+      (run) => run(),
+      10,
+    );
+    index.step(
+      { parentID },
+      "source",
+      1,
+      (cursor) => scanDeliveries(db, parentID, cursor, 10),
+    );
+    assertEquals(index.facts([childID]), expected);
+    assertEquals(
+      index.facts([childID], { [childID]: { parentID, runID: "run-2" } }),
+      [],
+    );
+    // Stronger evidence can disprove the old join without proving a new one.
+    db.exec(`INSERT INTO session_message VALUES
+      ('same-clock','child',3,'idle',20,'{"outcome":"failed"}');`);
+    digest.exec("UPDATE opcv2_delivery_scan SET cursor='',complete=0");
+    const ambiguous = index.step(
+      { parentID },
+      "source",
+      1,
+      (cursor) => scanDeliveries(db, parentID, cursor, 10),
+    );
+    assertEquals(ambiguous.invalidated, [childID]);
+    assertEquals(index.facts([childID]), []);
+    assertEquals(
+      digest.prepare("SELECT receipt FROM opcv2_delivery").get()?.receipt,
+      "receipt-1",
+    );
   } finally {
     db.close();
+    digest.close();
   }
 });
 

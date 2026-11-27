@@ -21,6 +21,9 @@ export interface TerminalEvidence {
   outcome?: TerminalOutcome;
   /** Acquired history/backfill is state, never a new live terminal edge. */
   terminalOrigin?: "live" | "historical";
+  /** Native scalar history proves exactly one terminal record at this token.
+   * Null revokes an earlier proof when history is ambiguous or the edge is live. */
+  legacyAcknowledgement?: { terminal: number; runID: string } | null;
   /** Public native failure facts for this exact terminal, independent of bodies. */
   terminalFailure?: import("./requests.ts").PublicFailure;
 }
@@ -39,10 +42,10 @@ export function latestTerminal(
   let result: TerminalEvidence = {};
   for (const value of values) {
     if (!value?.terminal || value.terminal < (result.terminal ?? 0)) continue;
-    if (
-      value.terminal > (result.terminal ?? 0) ||
-      (value.runID && result.runID && value.runID !== result.runID)
-    ) {
+    const prior = result;
+    const replaces = value.terminal > (result.terminal ?? 0) ||
+      !!(value.runID && result.runID && value.runID !== result.runID);
+    if (replaces) {
       result = {
         terminal: value.terminal,
         ...(value.runID ? { runID: value.runID } : {}),
@@ -67,6 +70,19 @@ export function latestTerminal(
           ? { terminalFailure: value.terminalFailure }
           : {}),
       };
+    }
+    const proof = value.legacyAcknowledgement !== undefined
+      ? value.legacyAcknowledgement
+      : replaces
+      ? undefined
+      : prior.legacyAcknowledgement;
+    if (proof !== undefined || prior.legacyAcknowledgement !== undefined) {
+      // Also overwrite stale proof when composed over other activity fields.
+      result.legacyAcknowledgement = proof?.terminal === result.terminal &&
+          proof?.runID === result.runID && value.terminalOrigin !== "live" &&
+          (replaces || prior.terminalOrigin !== "live")
+        ? proof
+        : null;
     }
   }
   return result;

@@ -155,6 +155,35 @@ export class Seen extends MetadataChanges<SeenChange> {
       tx,
     );
   }
+  /** Bridge a native-proven terminal token without creating a new Seen event.
+   * A token already accounted for by any run cannot acknowledge another run. */
+  bindLegacyTerminal(
+    session: string,
+    terminal: number,
+    runID: string,
+    tx?: StoreWrite,
+  ): void {
+    if (!Number.isSafeInteger(terminal) || terminal <= 0) return;
+    const args = [key(session), terminal, key(runID)] as const;
+    const candidates = `FROM session_seen AS legacy
+      WHERE legacy.session=? AND legacy.terminal=?
+      AND NOT EXISTS (
+        SELECT 1 FROM session_run_seen AS bound
+        WHERE bound.user=legacy.user AND bound.session=legacy.session
+        AND (bound.terminal=legacy.terminal OR bound.run=?)
+      )`;
+    if (
+      !this.db.connection.prepare(`SELECT 1 ${candidates} LIMIT 1`).get(
+        ...args,
+      )
+    ) return;
+    this.db.write(() => {
+      this.db.connection.prepare(
+        `INSERT INTO session_run_seen(user,session,run,terminal)
+         SELECT legacy.user,legacy.session,?,legacy.terminal ${candidates}`,
+      ).run(args[2], ...args);
+    }, tx);
+  }
   runTerminal(user: string, session: string, runID: string): number {
     return Number(
       this.db.connection.prepare(

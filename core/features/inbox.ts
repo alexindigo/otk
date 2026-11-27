@@ -858,6 +858,7 @@ export class InboxFeature implements FrameSource {
     }
     for (const entry of index.snapshotEntries()) {
       const { digest: _digest, ...metadata } = entry;
+      this.#bindLegacyTerminal(metadata);
       this.summaries.entry(metadata);
     }
     this.projectOrder.admit(
@@ -1383,6 +1384,7 @@ export class InboxFeature implements FrameSource {
     tx?: StoreWrite,
   ): void {
     const s = this.stores;
+    this.#bindLegacyTerminal(entry, tx);
     const terminal = entry.activity?.terminal;
     if (
       !entry.deleted && terminal &&
@@ -1425,6 +1427,26 @@ export class InboxFeature implements FrameSource {
       ) {
         s.projects.reactivate(project.user, project.directory, tx);
       }
+    }
+  }
+  #bindLegacyTerminal(entry: IndexMetadata, tx?: StoreWrite): void {
+    const evidence = entry.activity, proof = evidence?.legacyAcknowledgement;
+    if (
+      entry.deleted || !proof || evidence?.terminalOrigin !== "historical" ||
+      proof.terminal !== evidence.terminal || proof.runID !== evidence.runID
+    ) return;
+    if (
+      tx ||
+      [...this.#seen.values()].some((marks) =>
+        marks.get(entry.id) === proof.terminal
+      )
+    ) {
+      this.stores.seen.bindLegacyTerminal(
+        entry.id,
+        proof.terminal,
+        proof.runID,
+        tx,
+      );
     }
   }
   /** Creation and successful action bookkeeping share the persisted project owner. */
