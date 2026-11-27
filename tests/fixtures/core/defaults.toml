@@ -27,6 +27,12 @@ db = ""
 heartbeattimeout = 25
 reconnectmax = 30
 requestms = 60000
+[images]
+roots = ["{checkouts}", "~/Documents/{project}", "~/TemporaryFiles/{project}"]
+maxbytes = 10485760
+maxpixels = 40000000
+concurrency = 4
+
 [index]
 days = 30
 [catalogs]

@@ -64,6 +64,19 @@ function matches(value: unknown, type: LeafType): boolean {
   return typeof value === "number" && Number.isFinite(value) &&
     (type === "float" || Number.isSafeInteger(value));
 }
+function imageRoot(value: string): boolean {
+  if (value === "{checkouts}") return true;
+  const path = value.startsWith("~/")
+    ? value.slice(2)
+    : value.startsWith("/")
+    ? value.slice(1)
+    : undefined;
+  return path !== undefined &&
+    path.split("/").every((part) =>
+      part && part !== "." && part !== ".." &&
+      (part === "{project}" || !/[{}\\\p{Cc}]/u.test(part))
+    );
+}
 export function parseEnvValue(
   raw: string,
   type: LeafType,
@@ -240,6 +253,7 @@ export function loadServiceConfig(
       "connection",
       "catalogs",
       "attachments",
+      "images",
     ] as const
   ) {
     const values = tree[section];
@@ -253,6 +267,17 @@ export function loadServiceConfig(
           `${section}.${key} (${
             envName(`${section}.${key}`)
           }): expected positive safe integer`,
+        );
+      }
+    }
+  }
+  if (isObject(tree.images) && Array.isArray(tree.images.roots)) {
+    for (const value of tree.images.roots) {
+      if (!imageRoot(value)) {
+        errors.push(
+          `images.roots (OTK_IMAGES_ROOTS): invalid root template ${
+            JSON.stringify(value)
+          }`,
         );
       }
     }
@@ -346,5 +371,12 @@ export function config(sources: Omit<LoadSources, "authState">): ServiceConfig {
       `config: env overrides ${result.envOverridden.join(", ")}`,
     );
   }
+  const roots = result.config.images.roots;
+  diagnostic(
+    "info",
+    roots.length
+      ? `inline images: allowed roots ${JSON.stringify(roots)}`
+      : "inline images: no allowed roots",
+  );
   return result.config;
 }
