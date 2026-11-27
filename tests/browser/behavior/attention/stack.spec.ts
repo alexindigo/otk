@@ -112,18 +112,25 @@ test("attention.notification-stack-dismissal-age-and-viewport", {
   for (const width of [600, 1280]) {
     await page.setViewportSize({ width, height: 800 });
     await expect(page.locator(".otk-toast")).toHaveCount(3);
-    const geometry = await page.locator(".otk-toasts").evaluate((stack) => {
+    const newestCard = page.locator(toast(sessions[7].id));
+    const allowOnce = newestCard.getByRole("button", {
+      name: "Allow once",
+      exact: true,
+    });
+    await expect(allowOnce).toBeVisible();
+    const geometry = await allowOnce.evaluate((control) => {
+      const stack = control.closest(".otk-toasts")!;
       const box = stack.getBoundingClientRect();
-      const close = stack.querySelector(".otk-toast-close")!;
+      const close = control.closest(".otk-toast")!.querySelector(
+        ".otk-toast-close",
+      )!;
       const icon = close.firstElementChild!.getBoundingClientRect();
       const c = close.getBoundingClientRect();
-      const allow = stack.querySelector(".otk-toast-action")!
-        .getBoundingClientRect();
+      const allow = control.getBoundingClientRect();
       const label = document.createRange();
-      label.selectNodeContents(stack.querySelector(".otk-toast-action")!);
+      label.selectNodeContents(control);
       const text = label.getBoundingClientRect();
-      const foot = stack.querySelector(".otk-toast-foot")!
-        .getBoundingClientRect();
+      const foot = control.closest(".otk-toast-foot")!.getBoundingClientRect();
       return {
         cardBottom: Array.from(stack.querySelectorAll(".otk-toast")).at(-1)!
           .getBoundingClientRect().bottom,
