@@ -38,6 +38,8 @@ export { sessionReferenceMigrations } from "./features/session-references.ts";
 export {
   type CheckoutAuthority,
   type CheckoutRecord,
+  type CheckoutRemote,
+  type CheckoutRemoteAnchor,
   Checkouts,
   checkoutsMigrations,
 } from "./features/checkouts.ts";
