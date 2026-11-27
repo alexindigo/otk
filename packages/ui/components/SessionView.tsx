@@ -210,14 +210,15 @@ export default function SessionView(props: {
     revertRecords(projection(), rollbackState())
   );
   const recordGroups = () => displayedRecords();
-  const logCompletion = (key: string) => {
+  const footerCompletion = (key: string) => {
     const group = recordGroups().groups[recordGroups().completions[key]];
     return group?.silent ? group : undefined;
   };
   const transcriptKeys = createMemo(() =>
     recordGroups().keys.filter((key) => {
       const group = recordGroups().groups[key];
-      return !(group?.silent && group.completionOf);
+      return !group?.completionOf ||
+        footerCompletion(group.completionOf)?.key !== key;
     })
   );
   const isRevert = (key: string) => {
@@ -265,6 +266,14 @@ export default function SessionView(props: {
         ))}
     />
   );
+  const completionPort = (key: string, one: (key: string) => Element) => {
+    const completion = footerCompletion(key);
+    if (!completion) return;
+    return {
+      key: completion.key,
+      body: () => renderRecords(() => footerCompletion(key)!, one),
+    };
+  };
   const gapKey = (key: string) => key.startsWith("gap:");
   const gaps = () => props.transcript?.state.gaps;
   const renderGroup = (key: string, one: (key: string) => Element) =>
@@ -560,16 +569,10 @@ export default function SessionView(props: {
       const part = message.parts[0];
       const recordOwner = recordGroups().owners[key];
       const interval = recordGroups().groups[recordOwner];
-      const completionOf = interval?.silent ? interval.completionOf : undefined;
-      if (completionOf) {
-        const replyID = projection().repliesByID[completionOf]?.message.id;
-        await window?.reveal(completionOf, {
-          align: "center",
-          intent: "user",
-          focus: replyID ? () => controls.get(replyID)?.reveal() : undefined,
-        });
-        return;
-      }
+      const completionOf = interval?.completionOf &&
+          footerCompletion(interval.completionOf)?.key === recordOwner
+        ? interval.completionOf
+        : undefined;
       if (recordOwner && part?.kind === "external" && part.activity?.fold) {
         recordKindDisclosure(interaction, recordOwner, part.activity.category)
           .set(true);
@@ -590,11 +593,15 @@ export default function SessionView(props: {
         }
         control.reveal();
       };
-      await window?.reveal(recordOwner ?? key, {
+      await window?.reveal(completionOf ?? recordOwner ?? key, {
         align: "center",
         intent: "user",
         focus: ancestors.length ? undefined : focus,
       });
+      if (completionOf) {
+        const replyID = projection().repliesByID[completionOf]?.message.id;
+        if (replyID) await controls.get(replyID)?.revealFooter();
+      }
       for (let n = 0; n < ancestors.length; n++) {
         const control = recordWindows.get(ancestors[n]);
         if (!control) {
@@ -936,6 +943,8 @@ export default function SessionView(props: {
                                         ? key
                                         : `${key}:${
                                           recordGroups().revisions[key] ?? 0
+                                        }:${
+                                          footerCompletion(key)?.revision ?? 0
                                         }`}
                                     label="Transcript messages"
                                     viewport={() => list}
@@ -990,7 +999,8 @@ export default function SessionView(props: {
                                               ?.members ??
                                             [
                                               key,
-                                              ...(logCompletion(key)?.members ??
+                                              ...(footerCompletion(key)
+                                                ?.members ??
                                                 []),
                                             ])
                                             .flatMap((member) =>
@@ -1052,6 +1062,10 @@ export default function SessionView(props: {
                                                       }}
                                                       lastID={reply().lastID}
                                                       pending={reply().pending}
+                                                      completion={completionPort(
+                                                        key,
+                                                        renderReply,
+                                                      )}
                                                       recovery={props.transcript
                                                         ?.state
                                                         .content
