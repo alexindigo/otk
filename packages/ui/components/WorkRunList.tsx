@@ -375,7 +375,9 @@ export default function WorkRunList(props: {
               render={(visible, meta) => (
                 <div class="otk-work-recorded">
                   <div class="otk-work-recorded-meta">
-                    <ChromeMeta>Also recorded</ChromeMeta>
+                    <ChromeMeta truncate title="Also recorded">
+                      Also recorded
+                    </ChromeMeta>
                     {meta()}
                   </div>
                   <RecordedParts>{partView(visible)}</RecordedParts>
