@@ -12,6 +12,7 @@ import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import EntityPill from "./EntityPill.tsx";
 import ChromeMeta from "./ChromeMeta.tsx";
+import { TerminalIcon } from "./ChromeIcons.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import TerminateButton, { bindWorkTermination } from "./TerminateButton.tsx";
@@ -65,6 +66,7 @@ export default function LiveWork(
         }}
         trigger={
           <LiveCount
+            icon={TerminalIcon}
             parts={[{
               id: "shells",
               count: count(),
