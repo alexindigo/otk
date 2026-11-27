@@ -18,6 +18,7 @@ import type { IndexEntry, Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
 import { ReloadProvider } from "../state/reload.tsx";
 import { DisclosuresContext } from "../components/Disclosure.tsx";
+import type { ShellWork } from "../state/shell.ts";
 import {
   type FilePathPorts,
   FilePathServices,
@@ -61,6 +62,7 @@ export interface ShellPorts {
   projectProgress: import("@otk/client").ServerResources["projectProgress"];
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   disclosures: Disclosures;
+  work: ShellWork;
   selection(): Selection | undefined;
 }
 const Context = createContext<ShellPorts>();

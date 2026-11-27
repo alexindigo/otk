@@ -75,6 +75,7 @@ import type {
 import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
 import { prompt } from "./prompt.ts";
+import { submissionID } from "./submission-id.ts";
 import { files } from "./files.ts";
 import { mapQuestion, questions } from "./questions.ts";
 import { sessions } from "./sessions.ts";
@@ -630,6 +631,11 @@ export class OpencodeV1Adapter implements Harness {
           },
           cfg.attachments,
           (sessionID, messageID, origin) => {
+            const pending = this.#pendingPrompts.get(sessionID) ??
+              new Set<string>();
+            pending.add(messageID);
+            this.#pendingPrompts.set(sessionID, pending);
+            this.#completionChanged(sessionID);
             this.#retention.observe(sessionID, `submission:${messageID}`, {
               ...(origin ? { origin } : {}),
             }, Date.now());
@@ -640,10 +646,32 @@ export class OpencodeV1Adapter implements Harness {
         );
         return {
           ...capability,
+          abort: async (id, operation) => {
+            const pending = [...this.#pendingPrompts.get(id) ?? []];
+            await capability.abort(id, operation);
+            for (const message of pending) {
+              this.#consumePrompt(id, message, false);
+            }
+            this.#completionChanged(id);
+            this.#confirmCompletion(id);
+          },
+          withdraw: async (id, messageID, operation) => {
+            const receipt = await capability.withdraw!(
+              id,
+              messageID,
+              operation,
+            );
+            if (receipt.state === "withdrawn" || receipt.state === "absent") {
+              this.#consumePrompt(id, messageID, false);
+              this.#confirmCompletion(id);
+            }
+            return receipt;
+          },
           prompt: async (
             input: Parameters<typeof capability.prompt>[0],
             operation?: Parameters<typeof capability.prompt>[1],
           ) => {
+            const messageID = input.messageID ?? submissionID();
             this.#admitFailureTurn(input.sessionID);
             const token = this.#errors.begin(
               input.sessionID,
@@ -651,8 +679,19 @@ export class OpencodeV1Adapter implements Harness {
               operation?.key.key,
             );
             try {
-              return await capability.prompt(input, operation);
+              return await capability.prompt(
+                { ...input, messageID },
+                operation,
+              );
             } catch (error) {
+              if (
+                error instanceof OperationFailure &&
+                error.outcome === "rejected"
+              ) {
+                this.#consumePrompt(input.sessionID, messageID, false);
+                this.#completionChanged(input.sessionID);
+                this.#confirmCompletion(input.sessionID);
+              }
               if (!operation?.signal.aborted) {
                 this.#requestFailure(
                   input.sessionID,
@@ -671,6 +710,8 @@ export class OpencodeV1Adapter implements Harness {
         };
       })(),
     );
+    // V1 shell tools run inside a turn, outside the native PTY registry.
+    // V1 can run a shell command, but cannot advertise shell.terminate.
     registry.register("shell", shell(this.client, directory, launch));
     registry.register(
       "commands",
@@ -1006,6 +1047,10 @@ export class OpencodeV1Adapter implements Harness {
         ...entry,
         activity: {
           ...terminal,
+          completion: !signal.aborted && this.#controller &&
+              !this.#controller.signal.aborted
+            ? this.#completionEvidence(entry.id)
+            : undefined,
           ...(terminal?.terminal !== undefined &&
               entry.activity?.terminal === terminal.terminal &&
               entry.activity.terminalOrigin === "historical"
@@ -1045,6 +1090,78 @@ export class OpencodeV1Adapter implements Harness {
     }, signal);
   }
   #liveWork = new Map<string, { key: string; generation: number }>();
+  #pendingPrompts = new Map<string, Set<string>>();
+  #completionReads = new Map<string, object>();
+  #confirmedIdle = new Map<string, number>();
+  #completionEvidence(
+    id: string,
+  ): NonNullable<IndexEntry["activity"]>["completion"] {
+    const pending = [...this.#pendingPrompts.get(id) ?? []];
+    if (this.#completionReads.has(id)) pending.push("native-confirmation");
+    const confirmed = this.#confirmedIdle.get(id);
+    return pending.length || confirmed !== undefined
+      ? { pending, confirmed }
+      : undefined;
+  }
+  #completionChanged(id: string): void {
+    this.#completionReads.delete(id);
+    this.#confirmedIdle.delete(id);
+    const entry = this.#index.getMetadata(id);
+    if (entry) this.#sink.indexUpsert(entry);
+  }
+  #consumePrompt(id: string, message: string, causal: boolean): void {
+    const pending = this.#pendingPrompts.get(id);
+    if (!pending) return;
+    // V1's native message identities are ascending. The assistant's parent
+    // is the last user message in that pass, including earlier queued input.
+    for (const key of pending) {
+      if (key === message || causal && key < message) pending.delete(key);
+    }
+    if (!pending.size) this.#pendingPrompts.delete(id);
+  }
+  #confirmCompletion(id: string): void {
+    const controller = this.#controller, generation = this.#connection;
+    const entry = this.#index.getMetadata(id);
+    const terminal = entry?.activity?.terminal;
+    if (
+      !controller || !this.#current(controller) ||
+      this.#idle.get(id) !== generation ||
+      !terminal || entry?.activity?.outcome !== "succeeded" ||
+      this.#terminalCandidates.get(id)?.terminal !== terminal ||
+      this.#pendingPrompts.get(id)?.size ||
+      this.#confirmedIdle.get(id) === terminal || this.#completionReads.has(id)
+    ) return;
+    const read = {};
+    this.#completionReads.set(id, read);
+    this.#sink.indexUpsert(entry);
+    const current = () =>
+      this.#current(controller) && this.#connection === generation &&
+      this.#completionReads.get(id) === read;
+    // V1 tasks and model shell results join the native prompt loop. Its idle
+    // inventory plus the delivered input identities above form the barrier.
+    void this.client.json<Record<string, { type: string }>>("/session/status", {
+      query: { directory: entry.directory },
+      signal: controller.signal,
+    }).then((rows) => {
+      if (!current()) return;
+      const status = rows[ids.decode(id)];
+      if (
+        (!status || status.type === "idle") &&
+        this.#terminals.get(id)?.terminal === terminal
+      ) {
+        this.#confirmedIdle.set(id, terminal);
+      }
+    }).catch((error) => {
+      if (current()) {
+        this.diagnostic("warn", "native completion confirmation", error);
+      }
+    }).finally(() => {
+      if (!current()) return;
+      this.#completionReads.delete(id);
+      const entry = this.#index.getMetadata(id);
+      if (entry) this.#sink.indexUpsert(entry);
+    });
+  }
   #terminals = new Map<string, TerminalEvidence>();
   #deliveries?: DeliveryBackfill;
   #deliveryJoin?: DeliveryJoin;
@@ -1092,6 +1209,9 @@ export class OpencodeV1Adapter implements Harness {
     this.#questionFresh.clear();
     this.#permissionInventories.clear();
     this.#liveWork.clear();
+    this.#pendingPrompts.clear();
+    this.#completionReads.clear();
+    this.#confirmedIdle.clear();
     this.#terminals.clear();
     this.#terminalCandidates.clear();
     this.#idle.clear();
@@ -1649,6 +1769,9 @@ export class OpencodeV1Adapter implements Harness {
       }
     };
     const connection = ++this.#connection;
+    this.#completionReads.clear();
+    this.#confirmedIdle.clear();
+    this.#pendingPrompts.clear();
     await this.#deliveries?.stop();
     this.#deliveries = undefined;
     const seeds = await this.digest?.projects?.(
@@ -2087,6 +2210,9 @@ export class OpencodeV1Adapter implements Harness {
   }
   #disposeSession(id: string): Promise<void> {
     const sink = this.#sink;
+    this.#pendingPrompts.delete(id);
+    this.#completionReads.delete(id);
+    this.#confirmedIdle.delete(id);
     this.#liveWork.delete(id);
     this.#terminals.delete(id);
     this.#terminalCandidates.delete(id);
@@ -2332,7 +2458,10 @@ export class OpencodeV1Adapter implements Harness {
       if (
         type === "message.updated" && info?.role === "assistant" &&
         info.parentID
-      ) turn.prompt = info.parentID;
+      ) {
+        turn.prompt = info.parentID;
+        this.#consumePrompt(sessionID, info.parentID, true);
+      }
       if (raw && raw.messageID === turn.candidate && isPromptPart(raw)) {
         turn.prompt = raw.messageID;
       }
@@ -2508,7 +2637,11 @@ export class OpencodeV1Adapter implements Harness {
       }
       if (entry) {
         if (status.type === "idle") this.#idle.set(sessionID, this.#connection);
-        else this.#idle.delete(sessionID);
+        else {
+          this.#idle.delete(sessionID);
+          this.#completionReads.delete(sessionID);
+          this.#confirmedIdle.delete(sessionID);
+        }
         if (status.type === "idle") this.#liveWork.delete(sessionID);
         else if (
           this.#liveWork.get(sessionID)?.generation !== this.#connection
@@ -2535,7 +2668,10 @@ export class OpencodeV1Adapter implements Harness {
       // publishes its independent clear observation against that same record.
       if (entry) sink.indexUpsert(entry);
       if (status.type === "busy") this.#errors.clear(sessionID);
-      if (status.type === "idle") this.#recovery.terminal(sessionID);
+      if (status.type === "idle") {
+        this.#recovery.terminal(sessionID);
+        this.#confirmCompletion(sessionID);
+      }
       return;
     }
     if (type === "session.error") {
@@ -2839,6 +2975,7 @@ export class OpencodeV1Adapter implements Harness {
           terminalToken(info),
         );
         sink.indexUpsert(current);
+        this.#confirmCompletion(sessionID);
       }
     }
     if (type === "message.removed") {

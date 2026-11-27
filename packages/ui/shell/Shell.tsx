@@ -43,6 +43,7 @@ import { registerApprovalCommands } from "./commands/approvals.ts";
 import { registerSessionActionCommands } from "./commands/session-actions.ts";
 import { registerCodeBlockCommands } from "../features/code-blocks.tsx";
 import { registerFileCommands } from "../features/file-paths.tsx";
+import { registerWorkCommands } from "../features/work.tsx";
 import { applicationNotifications } from "./notifications.ts";
 import { registerServerCommands } from "./commands/server.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
@@ -69,6 +70,7 @@ import ProjectTabs from "../components/ProjectTabs.tsx";
 import ProjectLocation from "../features/project-chip.tsx";
 import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
 import { SessionProvider } from "../registries/session.tsx";
+import { useUiRegistries } from "../registries/context.tsx";
 import { sessionPorts } from "./session-ports.ts";
 import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
@@ -90,6 +92,7 @@ export default function Shell(
     promptBlocks?(text: string): import("@otk/protocol").Block[];
   },
 ): import("solid-js").Element {
+  const { parts, panels } = useUiRegistries();
   const {
     reload,
     resources,
@@ -105,11 +108,13 @@ export default function Shell(
     navigation,
     listInteraction,
     disclosures,
+    work,
     toggles,
     interact,
     confirmCommand,
   } = createShellState({
     api: props.api,
+    parts,
     policy: props.policy,
     build: props.build,
     promptBlocks: props.promptBlocks,
@@ -623,6 +628,18 @@ export default function Shell(
         ),
     }));
   }
+  registerWorkCommands({ commands }, {
+    work,
+    panels,
+    selection: () => session.state.selection,
+    ready: () =>
+      toggles.state.ready && !settings() && !branchHistory.state.opened &&
+      session.state.view !== "deleted",
+    lastMessageID: (turn) =>
+      session.transcript?.state.repliesByID[turn]?.lastID,
+    layout,
+    saveLayout,
+  });
   return (
     <>
       <CommandProvider
@@ -651,6 +668,7 @@ export default function Shell(
               facts: resources.fileFacts,
               api: (id) => sidecars.connection(id).base,
               entry: resources.entry,
+              retainSessionReference: resources.retainSessionReference,
               entities: resources.entities,
               openMenu: (element) => openFileMenu?.(element),
               fail,
@@ -688,6 +706,7 @@ export default function Shell(
             projectProgress: resources.projectProgress,
             listInteraction,
             disclosures,
+            work,
             selection: () => session.state.selection,
           }}
         >

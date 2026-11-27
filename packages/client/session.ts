@@ -117,6 +117,7 @@ export function createSession(
     | undefined,
   entities?: (server: string) => import("./entity-state.ts").EntityStateStore,
   disclosures?: import("./disclosure.ts").Disclosures,
+  retireTranscriptScope?: (scope: string) => void,
 ): ClientSession {
   const store = factory<SessionState>({
     content: emptyContent(),
@@ -139,6 +140,7 @@ export function createSession(
     changes: metadataChanges,
     entities,
     disclosures,
+    retireScope: retireTranscriptScope,
   });
   let selected: Selection | undefined, resource: TranscriptOwner | undefined;
   let release: (() => void) | undefined,

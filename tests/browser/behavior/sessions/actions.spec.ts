@@ -433,6 +433,10 @@ test(
       await page.keyboard.insertText(`Renamed from ${origin}`);
       await page.keyboard.press("Enter");
       await expect(editor).toHaveCount(0);
+      // Issue 2.122 closes the editor on submit, not on rename settlement.
+      // For a phantom tab, settlement also includes durable task promotion.
+      await expect(page.locator(selector).locator(".otk-rename-pending"))
+        .toHaveCount(0);
       await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
         .toHaveText(`Renamed from ${origin}`);
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
@@ -471,11 +475,13 @@ test(
     await page.locator(".otk-title-editor input").fill("Committed on blur");
     await page.locator("textarea[name=prompt]").click();
     await expect(page.locator(".otk-title-editor")).toHaveCount(0);
-    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
-      .toHaveText("Committed on blur");
+    const rowTitle = page.locator(
+      `[data-session="${s.id}"] .otk-session-title`,
+    );
+    await expect(rowTitle.locator(".otk-rename-pending")).toHaveCount(0);
+    await expect(rowTitle).toHaveText("Committed on blur");
     await page.reload();
-    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
-      .toHaveText("Committed on blur");
+    await expect(rowTitle).toHaveText("Committed on blur");
   },
 );
 

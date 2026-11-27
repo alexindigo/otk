@@ -16,8 +16,8 @@ import {
   type InlineMention,
   type PathMention,
   pathTooltip,
-  resolveSessionMention,
   type ServerResources,
+  sessionMentionID,
 } from "@otk/client";
 import type { PathSemantics } from "@otk/protocol";
 import { useContentIdentity } from "../features/transcript-context.tsx";
@@ -38,6 +38,7 @@ export interface FilePathPorts {
   facts(id: string): FileFacts;
   api?(id: string): URL;
   entry?: ServerResources["entry"];
+  retainSessionReference?: ServerResources["retainSessionReference"];
   entities?(id: string): EntityStateStore;
   openMenu(element: HTMLElement): void;
   fail(cause: unknown): void;
@@ -55,13 +56,19 @@ export default function PathLink(
     if (!("sessionID" in props.mention) || paths?.streaming) return;
     return props.mention.sessionID;
   };
-  const entry = () => {
+  const canonical = () => {
     const id = session();
-    if (!id) return;
-    return resolveSessionMention(id, identity.sessionID, (canonical) => {
-      const value = services?.entry?.(sidecarId(), canonical);
-      return value && !value.deleted ? value : undefined;
-    });
+    return id ? sessionMentionID(id, identity.sessionID) : undefined;
+  };
+  createEffect(
+    () => [sidecarId(), canonical()] as const,
+    ([server, id]) =>
+      id ? services?.retainSessionReference?.(server, id) : undefined,
+  );
+  const entry = () => {
+    const id = canonical();
+    const value = id ? services?.entry?.(sidecarId(), id) : undefined;
+    return value && !value.deleted ? value : undefined;
   };
   return (
     <Show

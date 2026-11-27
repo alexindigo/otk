@@ -108,9 +108,11 @@ Deno.test("equal-terminal acknowledgement retracts helper notification without a
     terminal: 100,
     outcome: "succeeded",
     terminalOrigin: "live",
+    completion: { pending: [], confirmed: 100 },
   };
-  let revision = 0;
-  const publish = () =>
+  let revision = 0, settlementRevision = 0;
+  const publish = () => {
+    const supervision = owner.session(helper, 0);
     f.resources.receive("local", {
       t: "inbox.patch",
       generation: "delivery",
@@ -120,7 +122,7 @@ Deno.test("equal-terminal acknowledgement retracts helper notification without a
         op: "entity.upsert",
         value: {
           ...entitySnapshot({
-            supervision: { helper: owner.session(helper, 0) },
+            supervision: { helper: supervision },
           }, [helper])["session:helper"],
           terminal: 100,
           outcome: "succeeded",
@@ -128,6 +130,13 @@ Deno.test("equal-terminal acknowledgement retracts helper notification without a
         },
       }, { op: "finish", sessionID: "helper", time: 100 }],
     });
+    f.resources.receive("local", {
+      t: "inbox.settlement",
+      generation: "delivery",
+      revision: ++settlementRevision,
+      values: [{ sessionID: "helper", value: supervision.settlement ?? null }],
+    });
+  };
   publish();
   assertEquals(notes, ["done"]);
   helper.activity!.delivered = {

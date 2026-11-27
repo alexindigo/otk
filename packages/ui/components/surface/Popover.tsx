@@ -250,12 +250,19 @@ export default function Popover(props: {
     }`;
   const Trigger = dynamic(() => props.href ? "a" : "button");
   let pointerDown: { x: number; y: number } | undefined;
+  let pointerMoved = false;
   const triggerNative = nativeAttributes(() => ({
     ...props.triggerAttributes,
     onClick: activate,
     onPointerDown: (event: PointerEvent) => {
       openedBy = "pointer";
       pointerDown = { x: event.clientX, y: event.clientY };
+      pointerMoved = false;
+    },
+    onPointerUp: (event: PointerEvent) => {
+      // Click rounds coordinates; compare the two pointer events instead.
+      pointerMoved = !!pointerDown &&
+        (event.clientX !== pointerDown.x || event.clientY !== pointerDown.y);
     },
     onKeyDown: () => {
       openedBy = "keyboard";
@@ -268,9 +275,7 @@ export default function Popover(props: {
       }
       const selected = document.getSelection();
       if (
-        event.detail && pointerDown &&
-        (event.clientX !== pointerDown.x || event.clientY !== pointerDown.y) &&
-        !selected?.isCollapsed &&
+        event.detail && pointerMoved && !selected?.isCollapsed &&
         selected?.containsNode(trigger, true)
       ) {
         event.preventDefault();

@@ -3,9 +3,30 @@ import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { nativeEffect, nativeExecution } from "../requests/policies.ts";
-import { submissionReceipt } from "./session-receipts.ts";
+import { completionReceipt, submissionReceipt } from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
+  const termination = harness.capabilities["shell.terminate"];
+  if (termination) {
+    const receipt = completionReceipt("shell-terminated");
+    rpc.register("shell.terminate", {
+      execution: {
+        ...nativeExecution((p: { sessionID: string }) => ({
+          sessionID: p.sessionID,
+        }), receipt),
+        priority: "interrupt",
+      },
+      params: (p) => ({
+        sessionID: sessionID(p)!,
+        shellID: text(p, "shellID")!,
+      }),
+      handler: (ctx, { sessionID, shellID }) =>
+        nativeEffect(ctx, async (operation) => {
+          await termination.terminate(sessionID, shellID, operation);
+          return null;
+        }, receipt),
+    });
+  }
   const capability = harness.capabilities.shell;
   if (!capability) return;
   const receipt = submissionReceipt("shell-settled");

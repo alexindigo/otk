@@ -4,12 +4,26 @@ export interface WorkTime {
   start?: number;
   end?: number;
 }
+/** Feature-declared facts for the Work log strip and panel (D74). */
+export interface WorkRunFacts {
+  lane?: "thinking" | "delegation";
+  label: string;
+  merge?: {
+    key: string;
+    verb: string;
+    noun: string;
+    plural: string;
+    keep?: "latest";
+  };
+  child?: string;
+}
 export interface PartPresentation {
   /** Neutral record facts supplied by the part owner for enclosing-frame folds. */
   activity?: import("@otk/protocol").Activity;
   /** Ordinary answer prose, eligible for its source's reply-start boundary. */
   prose?: boolean;
   work?: WorkTime;
+  run?: WorkRunFacts;
   /** Recorded busy/wait evidence, separate from work-log membership. */
   timing?: import("@otk/protocol").SegmentTimingEvidence;
   text?: string;
@@ -57,6 +71,7 @@ export interface ToolPresentation {
   summary?: string;
   changes?: { additions: number; deletions: number };
   category?: DisclosureCategory;
+  runs?: { noun: string; plural: string; keep?: "latest" };
   /** Feature-owned copy sources; the frame never dispatches concrete tools. */
   copy?: { command?: string; path?: string; paths?: string };
 }

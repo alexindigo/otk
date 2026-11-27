@@ -28,11 +28,22 @@ function fixture(finishes: Record<string, number> = {}) {
     revision: 0,
     inbox: { projects: [], tasks: [], seen: {}, finishes, pathTemplates: [] },
   });
-  let revision = 0;
+  let revision = 0, settlementRevision = 0;
   return {
     ...f,
     notes,
     replacements,
+    settle(id: string, time: number) {
+      f.resources.receive("local", {
+        t: "inbox.settlement",
+        generation: "fixture",
+        revision: ++settlementRevision,
+        values: [{
+          sessionID: id,
+          value: { id: time, outcome: "succeeded", live: true, unseen: true },
+        }],
+      });
+    },
     finish(
       id: string,
       time: number,
@@ -84,24 +95,26 @@ Deno.test("same-terminal failure enriches a live outcome but does not revive ack
   }
 });
 
-Deno.test("authoritative finish clocks notify when scoped publication skipped the busy frame", () => {
+Deno.test("authoritative settlement notifies when scoped publication skipped the busy frame", () => {
   const f = fixture();
   try {
     f.finish("root", 10);
+    assertEquals(f.notes, []);
+    f.settle("root", 10);
     assertEquals(f.notes, ["done"]);
-    f.finish("root", 10);
+    f.settle("root", 10);
     assertEquals(f.notes, ["done"]);
-    f.finish("root", 20);
+    f.settle("root", 20);
     assertEquals(f.notes, ["done", "done"]);
   } finally {
     f.resources.stop();
   }
 });
 
-Deno.test("a finish before routing metadata waits for that identity and survives eviction without repeating", () => {
+Deno.test("a settlement before routing metadata waits for that identity and survives eviction without repeating", () => {
   const f = fixture();
   try {
-    f.finish("later", 10);
+    f.settle("later", 10);
     assertEquals(f.notes, []);
     f.resources.receive("local", {
       t: "index.patch",
@@ -131,7 +144,7 @@ Deno.test("a finish before routing metadata waits for that identity and survives
   }
 });
 
-Deno.test("historical finishes stay silent and a live finish is not duplicated by its idle frame", () => {
+Deno.test("historical finishes and index idle stay silent until live settlement", () => {
   const f = fixture({ root: 5 });
   try {
     assertEquals(f.notes, []);
@@ -147,6 +160,8 @@ Deno.test("historical finishes stay silent and a live finish is not duplicated b
       rev: 2,
       ops: [{ op: "upsert", entry: { ...shellEntry("root"), status: "idle" } }],
     });
+    assertEquals(f.notes, []);
+    f.settle("root", 10);
     assertEquals(f.notes, ["done"]);
     f.finish("root", 10);
     assertEquals(f.notes, ["done"]);
@@ -212,7 +227,7 @@ Deno.test("a helper completion notifies once and reparenting cannot notify it ag
         entry: { ...shellEntry("helper", "/p", "root"), status: "idle" },
       }],
     });
-    f.finish("helper", 10);
+    f.settle("helper", 10);
     assertEquals(f.notes, ["done"]);
     f.resources.receive("local", {
       t: "index.patch",

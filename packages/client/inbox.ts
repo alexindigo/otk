@@ -360,6 +360,7 @@ export interface InboxState {
   inbox: InboxSnapshot;
 }
 export interface InboxChanges {
+  settlements?: readonly import("@otk/protocol").SettlementChange[];
   baseline: boolean;
   /** Changed single-state keys; no client re-aggregation. */
   entities?: readonly string[];
@@ -439,6 +440,7 @@ export function createInbox(
   };
   let generation: string | undefined, revision = -1, epoch = 0, alive = true;
   let summaryRevision = 0;
+  let settlementRevision = 0;
   let observedSummary: { generation: string; revision: number } | undefined;
   let recoveryController: AbortController | undefined;
   let recovering: Promise<void> | undefined;
@@ -454,6 +456,7 @@ export function createInbox(
       value.generation === generation && (value.revision < revision ||
         (value.summaryRevision ?? 0) < summaryRevision)
     ) return;
+    if (generation !== value.generation) settlementRevision = 0;
     generation = value.generation;
     revision = value.revision;
     summaryRevision = value.summaryRevision ?? 0;
@@ -619,6 +622,7 @@ export function createInbox(
         generation = undefined;
         revision = -1;
         summaryRevision = 0;
+        settlementRevision = 0;
         recovering = undefined;
         observed = undefined;
         observedSummary = undefined;
@@ -631,6 +635,20 @@ export function createInbox(
           observed = undefined;
           recoveryController?.abort();
         }
+      } else if (frame.t === "inbox.settlement") {
+        if (
+          frame.generation !== generation ||
+          frame.revision <= settlementRevision
+        ) return;
+        settlementRevision = frame.revision;
+        publish({
+          baseline: false,
+          settlements: frame.values,
+          projects: [],
+          sessions: [],
+          tasks: false,
+          discovery: false,
+        });
       } else if (frame.t === "inbox.summaries") {
         if (
           frame.generation === generation && frame.revision <= summaryRevision

@@ -64,6 +64,10 @@ export function latestTerminal(
   return result;
 }
 export interface SupervisionEvidence extends TerminalEvidence {
+  /** Native completion inputs: positive pending work or an idle/empty read
+   * fenced to this exact live terminal. Historical enrichment cannot confirm
+   * a run or erase a run's already observed live edge. */
+  completion?: { pending: readonly string[]; confirmed?: number };
   delivered?: DeliveredEvidence;
   work?: EvidenceInventory;
   inputs?: EvidenceInventory;
@@ -71,9 +75,21 @@ export interface SupervisionEvidence extends TerminalEvidence {
   /** Monotone provider completion watermark, never an OTK observation clock. */
   terminal?: number;
 }
+/** The entity owner's verdict, not a second interpretation of a run end. */
+export interface SessionSettlement {
+  id: number;
+  outcome: TerminalOutcome;
+  live: boolean;
+  unseen: boolean;
+}
+export interface SettlementChange {
+  sessionID: string;
+  value: SessionSettlement | null;
+}
 export interface Supervision extends TerminalEvidence {
   state: "needsYou" | "working" | "finishedUnseen" | "none";
   terminal: number;
   /** Independent of the winning activity state. Missing on older peers is false. */
   unseen?: boolean;
+  settlement?: SessionSettlement;
 }

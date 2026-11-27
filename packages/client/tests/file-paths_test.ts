@@ -4,7 +4,7 @@ import {
   folderCommand,
   hrefPath,
   pathSegments,
-  resolveSessionMention,
+  sessionMentionID,
   textRuns,
 } from "../file-paths.ts";
 import { formatBytes } from "../format.ts";
@@ -32,16 +32,9 @@ Deno.test("the shared linkifier recognizes native session IDs without changing t
   // carries the exact text the presenter must fall back to.
   const unknown = "ses_000000000000UnknownSession";
   assertEquals(pathSegments(unknown, "code")[0].text, unknown);
-  const lookup = (canonical: string) =>
-    canonical === `opcv2-${id}` ? "Review release notes" : undefined;
-  assertEquals(
-    resolveSessionMention(id, `opcv2-${id}`, lookup),
-    "Review release notes",
-  );
-  assertEquals(
-    resolveSessionMention(unknown, `opcv2-${id}`, lookup),
-    undefined,
-  );
+  assertEquals(sessionMentionID(id, `opcv2-${id}`), `opcv2-${id}`);
+  assertEquals(sessionMentionID(`opcv2-${id}`, `opcv1-${id}`), `opcv2-${id}`);
+  assertEquals(sessionMentionID(unknown), undefined);
 });
 
 Deno.test("path recognition is conservative in prose and whole-span code", () => {
