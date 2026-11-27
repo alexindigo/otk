@@ -10,7 +10,11 @@ import {
   subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
-import { openLatestWork, sessionStatus, showSessions } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  sessionStatus,
+  showSessions,
+} from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
