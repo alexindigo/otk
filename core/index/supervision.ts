@@ -45,7 +45,9 @@ export class SessionSupervision {
     inputs = this.inputs(entry),
     operation?: "working" | "blocked",
     opened = false,
-  ): Supervision & ReturnType<typeof sessionTransition> {
+  ): Supervision & ReturnType<typeof sessionTransition> & {
+    nativeActive: boolean;
+  } {
     const evidence = entry.activity;
     const terminal = Math.max(retainedTerminal, evidence?.terminal ?? 0);
     const outcome = terminal === evidence?.terminal
@@ -79,6 +81,10 @@ export class SessionSupervision {
         unseen,
         confirmed: evidence?.completion?.confirmed,
       }),
+      // Durable checkout policy tracks native activity, not received OTK
+      // operations that temporarily color the same entity.
+      nativeActive: !entry.deleted &&
+        (inputs.work || inputs.permissions > 0 || inputs.questions > 0),
       terminal,
       ...detail,
       ...(outcome ? { outcome } : {}),

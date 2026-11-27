@@ -17,7 +17,6 @@ import {
   type RunningShells,
   type SessionEvidence,
   shellTransition,
-  type Supervision,
   taskEntityID,
   type TaskHelpers,
 } from "@otk/protocol";
@@ -446,7 +445,7 @@ export class EntityStates {
     entry: IndexMetadata,
     acknowledged: number,
     retainedTerminal = 0,
-  ): Supervision {
+  ): ReturnType<SessionSupervision["session"]> {
     const native = this.supervision.inputs(entry);
     const permissions = this.#permissionKeys(entry, native.permissions, () => {
       if (this.onPermissionDeadline) this.onPermissionDeadline(entry.id);
