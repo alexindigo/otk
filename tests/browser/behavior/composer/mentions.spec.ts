@@ -5,6 +5,43 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { chips, prompt, reply, sendPrompt } from "../../pages/composer.ts";
 
 test.use({ profile: "composer-mentions" });
+
+test("composer.mention-releases-file-watch-and-finds-new-file", {
+  tag: ["@composer", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const session = await state.native<{ id: string }>("/session", "POST", {
+    title: "File mention lifetime",
+  });
+  const frames = await wire(page);
+  await openSession(state, page, session.id);
+  const fileLease = () =>
+    frames.sent.find(({ frame }) =>
+      frame.method === "catalogs.watch" && frame.params?.files === true
+    )?.frame.ref?.key;
+  expect(fileLease()).toBeUndefined();
+  await prompt(page).fill("@README");
+  await expect(page.locator(".otk-autocomplete")).toContainText("README.md");
+  await prompt(page).press("Escape");
+  await expect(page.locator(".otk-autocomplete")).toHaveCount(0);
+  await expect.poll(() =>
+    frames.sent.some(({ frame }) =>
+      frame.t === "request.release" && !!fileLease() &&
+      (frame.refs as { key: string }[]).some(({ key }) => key === fileLease())
+    )
+  ).toBe(true);
+
+  await state.controller.call("writeProjectFiles", {
+    lease: state.lease.lease,
+    files: { "docs/fresh-mention.ts": "// new\n" },
+  });
+  await prompt(page).fill("@fresh-mention");
+  await expect(page.locator(".otk-autocomplete")).toContainText(
+    "fresh-mention.ts",
+  );
+  await prompt(page).press("Enter");
+  await expect(chips(page)).toContainText("@docs/fresh-mention.ts");
+});
+
 test("composer.empty-completion-preserves-enter-native-up-and-escape", {
   tag: ["@composer", "@isolated"],
 }, async ({ isolatedState: state, page }) => {

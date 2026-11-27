@@ -240,7 +240,11 @@ export class V2Catalogs {
     directory: string,
     listener: (value: DirectoryCatalog) => void,
     signal: AbortSignal,
+    files?: true,
   ): Promise<DirectoryCatalog> {
+    if (files) {
+      return Promise.resolve(this.catalogs.retainFiles(directory, signal));
+    }
     signal.throwIfAborted();
     const lease = this.catalogs.acquire(directory, true);
     const release = () => {
@@ -270,7 +274,7 @@ export class V2Catalogs {
     kinds?: readonly (keyof DirectoryCatalogKinds)[],
   ): Promise<void> {
     signal?.throwIfAborted();
-    const lease = this.catalogs.acquire(directory);
+    const lease = this.catalogs.acquire(directory, false, "read");
     try {
       await lease.refresh(signal, kinds);
       signal?.throwIfAborted();

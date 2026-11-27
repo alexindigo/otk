@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import { sourceInventory } from "./analysis.ts";
 import { literal, nodes, parse, property, type t } from "./syntax.ts";
 
-const gitOwner = "packages/harness-opencode-v2-server/ignored-files.ts";
+const gitOwner = "packages/harness/ignored-files.ts";
 function readOnlyGit(node: t.Node): boolean {
   if (
     node.type !== "NewExpression" || node.arguments.length !== 2 ||
@@ -86,7 +86,7 @@ Deno.test("V2 product discovery has no service ownership or native database writ
   for (const [path, text] of await sourceInventory({ tests: false })) {
     if (
       !path.startsWith("packages/harness-opencode-v2-server/") &&
-      path !== "harness-selection.ts"
+      path !== "harness-selection.ts" && path !== gitOwner
     ) continue;
     if (lifecycle(path, text)) {
       errors.push(path + ": native lifecycle ownership");

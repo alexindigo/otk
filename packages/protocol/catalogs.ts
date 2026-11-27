@@ -96,7 +96,10 @@ export interface CatalogDemand {
   intent: CatalogDemandIntent;
 }
 export interface CatalogRpcMethods {
-  "catalogs.watch": { params: { directory: string }; result: DirectoryCatalog };
+  "catalogs.watch": {
+    params: { directory: string; files?: true };
+    result: DirectoryCatalog;
+  };
   "catalogs.demand": {
     params: { directory: string } & CatalogDemand;
     result: null;
@@ -111,6 +114,7 @@ export interface CatalogsCapability {
     directory: string,
     listener: (value: DirectoryCatalog) => void,
     signal: AbortSignal,
+    files?: true,
   ): Promise<DirectoryCatalog>;
   demand(
     directory: string,

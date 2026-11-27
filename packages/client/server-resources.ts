@@ -274,6 +274,11 @@ export function createServerResources(o: {
         diagnostic: o.error,
         watch: (directory) =>
           sidecars.connection(id).rpc.start("catalogs.watch", { directory }),
+        retainFiles: (directory) =>
+          sidecars.connection(id).rpc.start("catalogs.watch", {
+            directory,
+            files: true,
+          }),
         demand: (directory, kinds, intent, signal) =>
           sidecars.connection(id).rpc.call("catalogs.demand", {
             directory,
