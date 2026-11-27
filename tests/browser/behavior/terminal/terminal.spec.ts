@@ -465,6 +465,14 @@ test(
       await expect(
         page.getByRole("region", { name: "Terminal", exact: true }),
       ).toBeVisible();
+      // The wire observer sees Escape leave Chromium, not the PTY consume it.
+      // Join the shell's input stream before closing it on the control socket.
+      await page.keyboard.press("Control+c");
+      await command(page, "printf 'input-%s\\n' settled");
+      await expect(viewport(page)).toHaveAttribute(
+        "aria-label",
+        /input-settled/,
+      );
     } finally {
       await cleanup(state, id);
     }
