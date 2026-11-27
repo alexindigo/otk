@@ -1035,10 +1035,15 @@ checks one input owner without consuming it. A destructive release reads
 invocation-current input through `Drafts.current(key)` without creating drafts.
 `release({draft: "dropped", keys?})` asks only if it would lose input and
 returns a captured discard callback to run after successful deletion, not on
-consent or later navigation. Native deletion retains its request-owned unsent
-attention input for the metadata-only details view. `Drafts.drop(key)` removes
-committed deletions and retires captured writers, so late uploads/sends cannot
-resurrect their deleted draft lifetime.
+consent or later navigation. It checks recoveries only for the keys that would
+be dropped. Native deletion retains request-owned input for the metadata-only
+details view. Closing that view calls `keepDeleted()` after membership succeeds
+and while the route is still current (2.159). Exact request values from proven
+deletions transfer to the selected key's existing `Drafts` recovery entries
+before request custody is released. Recover exchanges any nonempty current draft
+and X discards only the offered value (2.145); no send is created. `Drafts.drop`
+removes committed deletions and retires captured writers, so late uploads/sends
+cannot resurrect their deleted draft lifetime.
 
 `createShellNavigation({resources, actions, guard, drafts, session, presence,
 environment?, factory?})`

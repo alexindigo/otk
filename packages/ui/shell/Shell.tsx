@@ -107,6 +107,7 @@ export default function Shell(
     resources,
     session,
     drafts,
+    deletedRecoveries,
     branchHistory,
     actions,
     rename,
@@ -1080,6 +1081,8 @@ export default function Shell(
                                           clockTitle,
                                         )}
                                         retained={guard.retained()}
+                                        draft={draft()}
+                                        recoveries={deletedRecoveries(target)}
                                         draftNotice={draft().input ||
                                             draft().chips.length ||
                                             draft().editor

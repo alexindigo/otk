@@ -550,10 +550,12 @@ export function createShellNavigation(o: {
     const entries = resources.projectEntries(p);
     const entry = entries.find((entry) => entry.id === target.sessionID);
     if (!entry) return false;
+    const deleted = () =>
+      !!(resources.entry(target.sidecarId, target.sessionID) ?? entry).deleted;
     const inbox = resources.inbox(target.sidecarId).state.inbox;
     const states = resources.entities(target.sidecarId);
     if (
-      disposition === "kept" && !states.isStale &&
+      disposition === "kept" && !deleted() && !states.isStale &&
       entityRequiresVisibility(states.get(entityKey("session", entry.id))) &&
       !await o.confirm(
         `Close "${entry.title}"? Its task will stay visible while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
@@ -568,14 +570,6 @@ export function createShellNavigation(o: {
       ids.includes(session.state.selection.sessionID);
     const discard = disposition === "dropped"
       ? await guard.release({ draft: "dropped", keys })
-      : entry.deleted && shown()
-      ? await guard.release({
-        draft: "dropped",
-        keys,
-        retainedOnly: true,
-        message:
-          "Discard your unsent request input before closing this deleted session?",
-      })
       : undefined;
     if (discard === false) return false;
     if (intent !== revision) return false;
@@ -592,10 +586,13 @@ export function createShellNavigation(o: {
     } else if (task) {
       await resources.taskActions(p).remove(task, target.sessionID);
     }
-    if (disposition === "kept" && !entry.deleted) {
+    if (disposition === "kept" && !deleted()) {
       await setOpened(target, false);
     }
     if (ids.includes(lastLocation(p)?.sessionID ?? "")) remember(p);
+    if (intent === revision && shown() && disposition === "kept" && deleted()) {
+      guard.keepDeleted();
+    }
     if (intent === revision && shown()) {
       // This captured release was already accepted, and its metadata mutation
       // succeeded. Consume only that owner's marks before guarded routing.
@@ -604,7 +601,6 @@ export function createShellNavigation(o: {
       if (next) {
         navigate({ sidecarId: target.sidecarId, sessionID: next }, "replace");
       } else projectPage(p, "replace");
-      if (disposition === "kept" && discard) discard();
     }
     for (const id of ids) model.close(id);
     return true;
