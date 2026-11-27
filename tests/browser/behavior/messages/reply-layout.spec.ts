@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { Page } from "@playwright/test";
 import { expect, test } from "../../fixtures/evidence.ts";
+import type { TestState } from "../../fixtures/test-state.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt, toolScript } from "../../pages/transcript.ts";
+import {
+  prompt,
+  settledNativeReply,
+  toolScript,
+} from "../../pages/transcript.ts";
 
 const prose = "The dependencies are catalogued.";
 
-async function replyWithWork(state: Parameters<typeof toolScript>[0]) {
+async function replyWithWork(state: TestState, page: Page, sessionID: string) {
   // D74 / wl-1: step and completion bookkeeping alone do not qualify as work.
   await state.controller.call("writeProjectFiles", {
     lease: state.lease.lease,
@@ -14,6 +20,9 @@ async function replyWithWork(state: Parameters<typeof toolScript>[0]) {
   await toolScript(state, "read", {
     filePath: `${state.directory}/inventory.txt`,
   }, prose);
+  await prompt(page, "Inventory the facade dependencies.");
+  // The tool-call reply can render before the native continuation ends.
+  await settledNativeReply(state, sessionID, prose);
 }
 
 test("messages.reply-has-one-work-log-after-prose", {
@@ -23,8 +32,7 @@ test("messages.reply-has-one-work-log-after-prose", {
     title: "Work record review",
   });
   await openSession(state, page, session.id);
-  await replyWithWork(state);
-  await prompt(page, "Inventory the facade dependencies.");
+  await replyWithWork(state, page, session.id);
   const reply = page.locator("[data-role=assistant]").last();
   const text = reply.getByText(prose);
   await expect(text).toBeVisible();
@@ -44,8 +52,7 @@ test("messages.reply-footer-aligns-and-yields-whole-items", {
     title: "Reply metadata review",
   });
   await openSession(state, page, session.id);
-  await replyWithWork(state);
-  await prompt(page, "Inventory the facade dependencies.");
+  await replyWithWork(state, page, session.id);
   const reply = page.locator("[data-role=assistant]").last();
   await expect(reply.getByText(prose)).toBeVisible();
   await expect(page.locator(`[data-session="${session.id}"]`))
