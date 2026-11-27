@@ -23,6 +23,7 @@ export * from "./inbox.ts";
 export * from "./entity-state.ts";
 export * from "./project-placement.ts";
 export * from "./supervision.ts";
+export * from "./entity-transitions.ts";
 export * from "./messages.ts";
 export * from "./models.ts";
 export * from "./usage.ts";

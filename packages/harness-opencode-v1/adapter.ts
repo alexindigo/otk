@@ -997,6 +997,13 @@ export class OpencodeV1Adapter implements Harness {
         (error) =>
           this.diagnostic("warn", "delivery evidence unavailable", error),
         this.digest.publishrows ?? this.cfg.digest.publishrows,
+        (id) => {
+          const entry = this.#index.getMetadata(id);
+          const runID = entry?.activity?.runID;
+          return entry?.parentID && runID
+            ? { parentID: entry.parentID, runID }
+            : undefined;
+        },
       );
     }
     const opening = this.digest?.start() ?? Promise.resolve();
@@ -1045,7 +1052,11 @@ export class OpencodeV1Adapter implements Harness {
       const terminal = this.#terminals.get(entry.id);
       const execution = this.#liveWork.get(entry.id);
       if (
-        entry.parentID && (terminal?.terminal ?? 0) > (delivered?.terminal ?? 0)
+        entry.parentID && terminal?.terminal &&
+        (!delivered || delivered.parentID !== entry.parentID ||
+          (terminal.runID
+            ? terminal.runID !== delivered.runID
+            : terminal.terminal !== delivered.terminal))
       ) this.#deliveryJoin?.request([entry.id]);
       return ({
         ...entry,
@@ -1119,11 +1130,12 @@ export class OpencodeV1Adapter implements Harness {
   #completionEvidence(
     id: string,
   ): NonNullable<IndexEntry["activity"]>["completion"] {
-    const pending = [...this.#pendingPrompts.get(id) ?? []];
+    const continuation = [...this.#pendingPrompts.get(id) ?? []];
+    const pending = [...continuation];
     if (this.#completionReads.has(id)) pending.push("native-confirmation");
     const confirmed = this.#confirmedIdle.get(id);
     return pending.length || confirmed !== undefined
-      ? { pending, confirmed }
+      ? { pending, continuation, confirmed }
       : undefined;
   }
   #completionChanged(id: string): void {

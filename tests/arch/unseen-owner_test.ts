@@ -54,13 +54,15 @@ Deno.test("attention consumers borrow supervision unseen instead of interpreting
       new URL(`../../${path}`, import.meta.url),
     );
     assertEquals(reconstructsUnseen(source), false, path);
+    // ServerResources forwards the publication; it must not also select a
+    // scalar unseen verdict. The notification consumer reads the count below.
     assertEquals(
       new Source(source).all.some((n) =>
         (n.type === "MemberExpression" ||
           n.type === "OptionalMemberExpression") &&
         property(n.property) === "unseen"
       ),
-      true,
+      path !== "packages/client/server-resources.ts",
       path,
     );
   }

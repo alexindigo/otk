@@ -62,6 +62,7 @@ Deno.test("entity work retirement publishes final pending state without another 
         counts: { working: Number(work), blocked: 0, finished: 0, unseen: 0 },
         evidence: {
           work,
+          ...(work ? { nativeRun: true as const } : {}),
           permissions: 0,
           questions: 0,
           descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },

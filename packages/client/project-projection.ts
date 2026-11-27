@@ -379,7 +379,7 @@ export function createProjectProjection(o: {
         for (const id of repoSessions.get(repo) ?? []) ids.add(id);
       }
       if (!changes || changes.baseline) {
-        for (const field of ["seen", "finishes", "supervision"] as const) {
+        for (const field of ["seen", "finishes"] as const) {
           for (
             const id of new Set([
               ...Object.keys(inbox[field] ?? {}),
@@ -398,17 +398,12 @@ export function createProjectProjection(o: {
           ...next,
           seen: { ...next.seen },
           finishes: { ...next.finishes },
-          supervision: { ...next.supervision },
         };
       } else {for (const id of ids) {
           for (const field of ["seen", "finishes"] as const) {
             if (next[field][id] === undefined) delete inbox[field][id];
             else inbox[field][id] = next[field][id];
           }
-          inbox.supervision ??= {};
-          if (next.supervision?.[id]) {
-            inbox.supervision[id] = next.supervision[id];
-          } else delete inbox.supervision[id];
         }}
       update(ids, dirty);
     },

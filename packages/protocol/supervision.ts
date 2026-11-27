@@ -15,6 +15,8 @@ export interface EvidenceInventory {
 export type TerminalOutcome = "succeeded" | "failed" | "interrupted";
 export interface TerminalEvidence {
   terminal?: number;
+  /** Provider-owned terminal record identity, scoped to this child and source. */
+  runID?: string;
   /** Outcome belongs only to this exact terminal watermark; absent means unknown. */
   outcome?: TerminalOutcome;
   /** Acquired history/backfill is state, never a new live terminal edge. */
@@ -28,6 +30,7 @@ export interface DeliveredEvidence {
   parentID: string;
   receipt: string;
   terminal: number;
+  runID?: string;
 }
 /** Merge terminal facts as a pair. A newer unknown end never inherits old success. */
 export function latestTerminal(
@@ -36,9 +39,13 @@ export function latestTerminal(
   let result: TerminalEvidence = {};
   for (const value of values) {
     if (!value?.terminal || value.terminal < (result.terminal ?? 0)) continue;
-    if (value.terminal > (result.terminal ?? 0)) {
+    if (
+      value.terminal > (result.terminal ?? 0) ||
+      (value.runID && result.runID && value.runID !== result.runID)
+    ) {
       result = {
         terminal: value.terminal,
+        ...(value.runID ? { runID: value.runID } : {}),
         // Explicit absence clears an older outcome in composed activity objects.
         outcome: value.outcome,
         ...(value.terminalOrigin
@@ -51,6 +58,7 @@ export function latestTerminal(
     } else {
       result = {
         ...result,
+        ...(value.runID ? { runID: value.runID } : {}),
         ...(value.outcome ? { outcome: value.outcome } : {}),
         ...(value.terminalOrigin
           ? { terminalOrigin: value.terminalOrigin }
@@ -67,7 +75,13 @@ export interface SupervisionEvidence extends TerminalEvidence {
   /** Native completion inputs: positive pending work or an idle/empty read
    * fenced to this exact live terminal. Historical enrichment cannot confirm
    * a run or erase a run's already observed live edge. */
-  completion?: { pending: readonly string[]; confirmed?: number };
+  completion?: {
+    pending: readonly string[];
+    /** Current, corroborated own continuation. A pending read or an uncertain
+     * return can hold settlement without providing work evidence. */
+    continuation?: readonly string[];
+    confirmed?: number;
+  };
   delivered?: DeliveredEvidence;
   work?: EvidenceInventory;
   inputs?: EvidenceInventory;

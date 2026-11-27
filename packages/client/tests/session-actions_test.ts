@@ -569,6 +569,7 @@ Deno.test("session removal aborts a working captured target before delete and re
           counts,
           evidence: {
             work: true,
+            nativeRun: true,
             permissions: 0,
             questions: 0,
             descendants: { ...counts, working: 0 },
@@ -622,6 +623,7 @@ Deno.test("Stop interrupts a run that appears while its submission receipt is pe
           counts,
           evidence: {
             work: true,
+            nativeRun: true,
             permissions: 0,
             questions: 0,
             descendants: { ...counts, working: 0 },

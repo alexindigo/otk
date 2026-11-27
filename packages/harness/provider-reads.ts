@@ -50,7 +50,10 @@ export interface ProviderReadKinds
   };
   /** Durable child/run facts only; never scans parent history or native I/O. */
   "supervision.delivered": {
-    input: { ids: string[] };
+    input: {
+      ids: string[];
+      targets?: Record<string, { parentID: string; runID: string }>;
+    };
     result: DeliveryScalar[];
     chunk: DeliveryScalar[];
   };

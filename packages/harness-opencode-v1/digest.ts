@@ -290,9 +290,9 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.wait,
     );
     this.readers = {
-      "supervision.delivered": ({ ids }, signal) => {
+      "supervision.delivered": ({ ids, targets }, signal) => {
         signal.throwIfAborted();
-        return Promise.resolve(this.delivered(ids));
+        return Promise.resolve(this.delivered(ids, targets));
       },
       "supervision.deliveries": (input, signal) => {
         signal.throwIfAborted();
@@ -471,13 +471,16 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.storage.diagnostic(undefined, error);
     }
   }
-  delivered(keys: readonly string[]): import("@otk/harness").DeliveryScalar[] {
+  delivered(
+    keys: readonly string[],
+    targets?: Record<string, { parentID: string; runID: string }>,
+  ): import("@otk/harness").DeliveryScalar[] {
     return new DeliveryIndex(
       this.storage.sql,
       "opcv1_delivery",
       (run) => this.storage.transaction(run),
       this.policy.publishrows,
-    ).facts(keys);
+    ).facts(keys, targets);
   }
   connection(value: number): void {
     if (value < this.#connection) return;

@@ -20,7 +20,6 @@ import {
   elapsed,
   exactCount,
   type MergedEntry,
-  NotificationHub,
   type SessionDelivery,
   type SidecarState,
 } from "@otk/client";
@@ -40,6 +39,7 @@ import {
 } from "@otk/protocol";
 import {
   ActivityIndicator,
+  attentionBadge,
   CommandProvider,
   ConnectionLight,
   createUiRegistries,
@@ -61,7 +61,6 @@ import {
   ProjectTabs,
   Prompt,
   QuestionDock,
-  registerBadgeChannel,
   registerEditTool,
   registerGenericTool,
   registerPatchTool,
@@ -616,23 +615,9 @@ export function LayoutControls(props: { onTheme(id: string): void }): Element {
 
 export function MetadataPolicy(): Element {
   const commands = new CommandHub();
-  const hub = new NotificationHub(
-    () => ({ channels: ["badge"] }),
-    async () => {},
-    () => {},
-  );
-  const release = registerBadgeChannel(hub);
-  hub.publish({
-    id: "attention",
-    kind: "permission",
-    title: "Needs attention",
-    sessionRef: { sidecar: "external", session: "tstv1-external" },
-    actions: [],
-  });
-  onCleanup(() => {
-    hub.stop();
-    release();
-  });
+  const badge = attentionBadge();
+  badge.update(1);
+  onCleanup(badge.stop);
   return (
     <CommandProvider commands={commands}>
       <main>

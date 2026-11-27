@@ -76,9 +76,21 @@ export function scanDeliveries(
   const split = db.prepare("PRAGMA table_info(session_part)").all().some((r) =>
     r.name === "session_id"
   );
+  const eventColumns = new Set(
+    db.prepare("PRAGMA table_info(event)").all().map((r) => r.name),
+  );
+  // Promotion creates the parent message after enqueue, potentially after a
+  // successor child execution. The materialized message proves receipt; the
+  // exact matching enqueue bounds which child idle could have produced it.
+  const receiptBound =
+    ["created", "aggregate_id", "type", "data", "seq"].every((name) =>
+        eventColumns.has(name)
+      )
+      ? `coalesce((SELECT e.created FROM event e WHERE e.aggregate_id=m.session_id AND e.type='session.inbox.enqueued' AND e.seq<m.seq AND json_valid(e.data) AND json_extract(e.data,'$.inboxID')=m.id ORDER BY e.seq DESC LIMIT 1),m.time_created)`
+      : "m.time_created";
   const rows = db.prepare(
     `WITH bounded AS (SELECT * FROM session_message WHERE session_id=? AND seq>=? AND seq<=?), candidates AS (
-    SELECT m.seq,-1 AS ordinal,m.id AS receipt,m.time_created AS received,json_object('type','synthetic','metadata',json_extract(m.data,'$.metadata')) AS scalar
+    SELECT m.seq,-1 AS ordinal,m.id AS receipt,${receiptBound} AS received,json_object('type','synthetic','metadata',json_extract(m.data,'$.metadata')) AS scalar
     FROM bounded m WHERE m.type='synthetic' AND json_valid(m.data) AND json_extract(m.data,'$.metadata.source')='subagent'
     UNION ALL
     SELECT m.seq,CAST(p.key AS INTEGER)*2,m.id||':'||json_extract(p.value,'$.id'),m.time_created,${
@@ -116,7 +128,7 @@ export function scanDeliveries(
       SELECT wanted.key AS receipt_index,s.id,s.parent_id,
         (SELECT max(m.time_created) FROM session_message m WHERE m.session_id=s.id AND m.type='idle' AND m.time_created<=json_extract(wanted.value,'$.received') AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS terminal
       FROM json_each(?) wanted JOIN session_v2 s ON json_extract(wanted.value,'$.childID')=s.id
-    ) SELECT t.*,(SELECT count(*) FROM session_message m WHERE m.session_id=t.id AND m.type='idle' AND m.time_created=t.terminal AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS matching FROM terminals t`,
+    ) SELECT t.*,(SELECT CASE WHEN count(*)=1 THEN min(m.id) END FROM session_message m WHERE m.session_id=t.id AND m.type='idle' AND m.time_created=t.terminal AND json_valid(m.data) AND json_extract(m.data,'$.outcome') IN ('succeeded','failed','interrupted')) AS run_id FROM terminals t`,
   ).all(
     JSON.stringify(receipts),
   );
@@ -131,10 +143,15 @@ export function scanDeliveries(
     // Receipt order covers the latest proven terminal at or before receipt,
     // never a newer run. Equal-clock native terminals remain ambiguous.
     if (receipt.started !== undefined && terminal < receipt.started) continue;
-    if (Number(child.matching) !== 1) continue;
+    if (typeof child.run_id !== "string" || !child.run_id) continue;
     updates.push({
       id: ids.encode(receipt.childID),
-      delivered: { parentID, receipt: receipt.receipt, terminal },
+      delivered: {
+        parentID,
+        receipt: receipt.receipt,
+        terminal,
+        runID: child.run_id,
+      },
     });
   }
   const last = rows.at(-1);

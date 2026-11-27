@@ -552,16 +552,6 @@ export function createServerResources(o: {
     }
     return model;
   };
-  const terminalEvidence = (
-    state: import("@otk/protocol").EntityState | undefined,
-  ) =>
-    state && ({
-      terminal: state.terminal,
-      outcome: state.outcome,
-      unseen: state.counts.unseen > 0,
-      terminalOrigin: state.terminalOrigin,
-      terminalFailure: state.evidence?.failure,
-    });
   const projection = (id: string): AttentionProjection => {
     let owner = projections.get(id);
     if (!owner) {
@@ -572,7 +562,6 @@ export function createServerResources(o: {
           inbox(id).entities.isStale
             ? undefined
             : inbox(id).entities.get(entityKey("session", sessionID)),
-        completions: true,
         factory,
       });
       projections.set(id, owner);
@@ -582,21 +571,6 @@ export function createServerResources(o: {
           (session) => entry(id, session),
         );
       });
-      for (
-        const [session, time] of Object.entries(inbox(id).state.inbox.finishes)
-      ) {
-        const supervision = terminalEvidence(
-          inbox(id).entities.get(entityKey("session", session)),
-        );
-        owner.finished(
-          session,
-          time,
-          true,
-          supervision?.terminal === time ? supervision.outcome : undefined,
-          supervision?.terminal === time ? supervision.unseen : undefined,
-          supervision,
-        );
-      }
     }
     return owner;
   };
@@ -683,38 +657,7 @@ export function createServerResources(o: {
         const entitySessions = changes.entities?.filter((key) =>
           key.startsWith(prefix)
         ).map((key) => key.slice(prefix.length)) ?? [];
-        owner.update(entitySessions, changes.baseline);
-        const finishes = current.state.inbox.finishes;
-        for (
-          const session of changes.baseline
-            ? new Set([...Object.keys(finishes), ...o.index.ids(id)])
-            : new Set([...changes.sessions, ...entitySessions])
-        ) {
-          if (changes.baseline || finishes[session] !== undefined) {
-            const time = finishes[session] ?? 0;
-            const supervision = terminalEvidence(
-              current.entities.get(entityKey("session", session)),
-            );
-            const outcome = supervision?.terminal === time
-              ? supervision.outcome
-              : undefined;
-            const unseen = supervision?.terminal === time
-              ? supervision.unseen
-              : undefined;
-            if (changes.admitted) {
-              owner.admitFinished(session, time, outcome, unseen, supervision);
-            } else {
-              owner.finished(
-                session,
-                time,
-                changes.baseline,
-                outcome,
-                unseen,
-                supervision,
-              );
-            }
-          }
-        }
+        owner.update(entitySessions, changes.baseline, changes.admitted);
         if (changes.settlements) {
           owner.settled(changes.settlements);
         }

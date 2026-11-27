@@ -3,6 +3,8 @@ import {
   belongsToSession,
   type ContentOp,
   type FormRequest,
+  type InputPhase,
+  inputTransition,
   type PermissionRequest,
   type QuestionRequest,
   type SessionLookup,
@@ -10,13 +12,11 @@ import {
 import { type EntryChanges, permissionRouting } from "./entry-observations.ts";
 
 export type RequestKind = "permission" | "question" | "form";
-export interface RequestLifetime {
+export interface RequestLifetime extends InputPhase {
   id: string;
   kind: "permission" | "input";
   sessionID?: string;
-  state: "pending" | "settled-locally" | "settled-remotely" | "retired";
   reason?: string;
-  dismissed: boolean;
   permission?: PermissionRequest;
   question?: QuestionRequest;
   form?: FormRequest;
@@ -278,7 +278,8 @@ export class RequestLifetimes {
       op.op !== "form.upsert"
     ) return;
     const previous = this.get(kind, op.request.id);
-    if (previous && previous.state !== "pending") return;
+    const { phase } = inputTransition(previous, { type: "observe" });
+    if (!phase) return;
     // The typed inventory owns its presentation. A lagging question inventory
     // cannot recreate the removed compatibility projection of that same input.
     if (
@@ -289,8 +290,7 @@ export class RequestLifetimes {
       {
         id: op.request.id,
         kind: kind === "permission" ? "permission" : "input",
-        state: "pending",
-        dismissed: false,
+        ...phase,
         arrivedAt: this.now(),
       };
     if (op.op === "permission.upsert") {
@@ -328,7 +328,10 @@ export class RequestLifetimes {
       }
     }
     if (row.sessionID && this.#deleted(row.sessionID)) {
-      row.state = "retired";
+      Object.assign(
+        row,
+        inputTransition(row, { type: "settle", state: "retired" }).phase,
+      );
       row.reason = "session deleted";
     }
     this.#records.set(key(kind, row.id), row);
@@ -364,32 +367,29 @@ export class RequestLifetimes {
     state: Exclude<RequestLifetime["state"], "pending">,
     reason: string,
   ): void {
-    const row: RequestLifetime = this.get(kind, id) ??
-      {
-        id,
-        kind: kind === "permission" ? "permission" : "input",
-        state: "pending",
-        dismissed: false,
-      };
-    if (row.state !== "pending") return;
+    const previous = this.get(kind, id);
+    const { phase } = inputTransition(previous, { type: "settle", state });
+    if (!phase) return;
+    const row: RequestLifetime = previous ??
+      { id, kind: kind === "permission" ? "permission" : "input", ...phase };
     if (kind === "permission") this.#retirePermissionScopes(id);
-    row.state = state;
+    Object.assign(row, phase);
     row.reason = reason;
     this.#records.set(key(kind, id), row);
     if (row.kind === "permission") this.retireDisclosures?.(id);
     this.#changed();
   }
   dismiss(kind: RequestKind, id: string): void {
-    const row = this.get(kind, id);
-    if (row?.state === "pending") {
-      row.dismissed = true;
-      this.#changed();
-    }
+    this.#present(kind, id, "dismiss");
   }
   show(kind: RequestKind, id: string): void {
+    this.#present(kind, id, "show");
+  }
+  #present(kind: RequestKind, id: string, type: "dismiss" | "show"): void {
     const row = this.get(kind, id);
-    if (row?.state === "pending") {
-      row.dismissed = false;
+    const { phase } = inputTransition(row, { type });
+    if (row && phase) {
+      Object.assign(row, phase);
       this.#changed();
     }
   }

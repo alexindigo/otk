@@ -5,7 +5,12 @@ import {
   failureValue,
 } from "./failure-features.ts";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
-import { entityKey, entityRequiresVisibility } from "@otk/protocol";
+import {
+  entityKey,
+  entityRequiresVisibility,
+  type ProjectSelectionPhase,
+  projectSelectionTransition,
+} from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
 import type { ForkNotes } from "./fork-notes.ts";
@@ -34,6 +39,7 @@ import { LOCAL_SIDECAR } from "./sidecars.ts";
 
 export interface ShellNavigationState {
   project?: ProjectSelection;
+  projectSelection?: ProjectSelectionPhase;
   selectionNotice?: string;
   settings: boolean;
   error: FailureValue;
@@ -98,6 +104,7 @@ export interface ShellView {
   settings: boolean;
   connected: boolean;
   finish: number;
+  runID?: string;
 }
 export interface ShellNavigation {
   state: ShellNavigationState;
@@ -151,7 +158,10 @@ export function createShellNavigation(o: {
     error: "",
     history: { at: 0 },
   });
-  let revision = 0, viewed = "", viewedFinish = 0;
+  let revision = 0,
+    viewed = "",
+    viewedFinish = 0,
+    viewedRun: string | undefined;
   const pendingProject = (): ProjectSelection | undefined => {
     const entry = navigation.current();
     return entry && !entry.page ? projectRoute(entry.hash) : undefined;
@@ -272,6 +282,12 @@ export function createShellNavigation(o: {
     apply(hash, entry) {
       store.update((draft) => {
         delete draft.selectionNotice;
+        draft.projectSelection = projectSelectionTransition(
+          draft.projectSelection,
+          {
+            type: projectRoute(hash) && !entry.page ? "lookup" : "route-away",
+          },
+        );
         draft.settings = false;
       });
       const target = route(hash),
@@ -401,6 +417,18 @@ export function createShellNavigation(o: {
       outcome: "pending",
     };
     resolution = attempt;
+    if (pendingProject()) {
+      store.update((draft) => {
+        draft.projectSelection = projectSelectionTransition(
+          draft.projectSelection,
+          { type: "lookup" },
+        );
+      });
+    }
+    const current = () => revision === attempt.at && resolution === attempt;
+    const sameConnection = () =>
+      (resources.server(target.sidecarId)?.connectionVersion ?? 0) ===
+        connection;
     const preferred = lastLocation(target)?.sessionID;
     const explicitAttention = projectIntent?.attention;
     void resources.projectSession(
@@ -409,8 +437,13 @@ export function createShellNavigation(o: {
       explicitAttention,
     ).then(
       (id) => {
+        if (current() && !sameConnection()) {
+          attempt.outcome = "failed";
+          resolveProject();
+          return;
+        }
         attempt.outcome = "complete";
-        if (revision === attempt.at) {
+        if (current()) {
           clearError();
           if (id) {
             const pending = pendingProject();
@@ -428,20 +461,38 @@ export function createShellNavigation(o: {
                   : `No remembered session for this project. Selected "${title}".`;
               });
             }
-          } else if (preferred && !explicitAttention) {
+          } else {
             store.update((draft) => {
-              draft.selectionNotice =
-                "The remembered session is no longer available. Choose a session.";
+              if (pendingProject()) {
+                draft.projectSelection = projectSelectionTransition(
+                  draft.projectSelection,
+                  { type: "resolved", current: true },
+                );
+              }
+              if (preferred && !explicitAttention) {
+                draft.selectionNotice =
+                  "The remembered session is no longer available. Choose a session.";
+              }
             });
           }
         }
       },
     ).catch((error) => {
       attempt.outcome = "failed";
-      if (revision === attempt.at) {
+      if (current()) {
+        if (!sameConnection()) {
+          resolveProject();
+          return;
+        }
+        if (pendingProject()) {
+          store.update((draft) => {
+            draft.projectSelection = projectSelectionTransition(
+              draft.projectSelection,
+              { type: "rejected", current: true },
+            );
+          });
+        }
         fail(error);
-        // A reconnect may have arrived while this older lookup was pending.
-        resolveProject();
       }
     });
   };
@@ -517,6 +568,14 @@ export function createShellNavigation(o: {
       ids.includes(session.state.selection.sessionID);
     const discard = disposition === "dropped"
       ? await guard.release({ draft: "dropped", keys })
+      : entry.deleted && shown()
+      ? await guard.release({
+        draft: "dropped",
+        keys,
+        retainedOnly: true,
+        message:
+          "Discard your unsent request input before closing this deleted session?",
+      })
       : undefined;
     if (discard === false) return false;
     if (intent !== revision) return false;
@@ -545,6 +604,7 @@ export function createShellNavigation(o: {
       if (next) {
         navigate({ sidecarId: target.sidecarId, sessionID: next }, "replace");
       } else projectPage(p, "replace");
+      if (disposition === "kept" && discard) discard();
     }
     for (const id of ids) model.close(id);
     return true;
@@ -720,18 +780,26 @@ export function createShellNavigation(o: {
       if (viewed !== key) {
         viewed = key;
         viewedFinish = value.finish;
+        viewedRun = value.runID;
         void resources.inbox(target.sidecarId).openSession(
           target.sessionID,
           value.directory,
           value.finish,
         ).catch(fail);
-      } else if (value.finish > viewedFinish) {
+      } else if (
+        value.finish > viewedFinish || value.runID && value.runID !== viewedRun
+      ) {
         const presence = o.presence();
         if (presence.focused && presence.visible) {
           viewedFinish = value.finish;
+          viewedRun = value.runID;
           void resources.sidecars.connection(target.sidecarId).rpc.call(
             "sessions.seen",
-            { sessionID: target.sessionID, terminal: value.finish },
+            {
+              sessionID: target.sessionID,
+              terminal: value.finish,
+              ...(value.runID ? { runID: value.runID } : {}),
+            },
           ).catch(fail);
         }
       }

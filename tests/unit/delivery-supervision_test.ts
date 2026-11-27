@@ -54,9 +54,20 @@ Deno.test("receipt before terminal, wrong relationship, later user seen and fail
   row.activity!.terminal = undefined;
   assertEquals(owner.session(row, 0).unseen, false);
   row.activity!.terminal = 100;
-  assertEquals(owner.session(row, 0).unseen, true);
-  assertEquals(owner.session(row, 0).state, "needsYou");
+  // D81: matched delivery covers the exact failed run without losing history.
+  assertEquals(owner.session(row, 0).unseen, false);
+  assertEquals(owner.session(row, 0).state, "none");
   assertEquals(owner.session(row, 0).outcome, "failed");
   assertEquals(owner.session(row, 100).state, "none");
   assertEquals(owner.session(row, 200, 200).unseen, false);
+});
+
+Deno.test("D58: a future receipt never covers an older uncovered run", () => {
+  const owner = new SessionSupervision(), row = entry();
+  row.activity!.delivered = {
+    parentID: row.parentID!,
+    receipt: "result:2",
+    terminal: 200,
+  };
+  assertEquals(owner.session(row, 0).state, "finishedUnseen");
 });

@@ -199,6 +199,9 @@ export class InboxFeature implements FrameSource {
   }
   #unseen(id: string, user: string): boolean {
     const entry = this.index.getMetadata(id);
+    const published = user === this.user &&
+      this.states.get(entityKey("session", id));
+    if (published) return published.counts.unseen > 0;
     // Before native hydration, retained history remains conservatively unseen.
     return this.supervision.session(
       entry ?? {
@@ -217,9 +220,15 @@ export class InboxFeature implements FrameSource {
           childQuestions: 0,
         },
       },
-      this.#seen.get(user)?.get(id) ?? 0,
+      this.#seenTerminal(id, user),
       this.#finishes.get(id) ?? 0,
     ).unseen === true;
+  }
+  #seenTerminal(id: string, user: string): number {
+    const runID = this.index.getMetadata(id)?.activity?.runID;
+    return runID
+      ? this.stores.seen.runTerminal(user, id, runID)
+      : this.#seen.get(user)?.get(id) ?? 0;
   }
   #directory(view: ViewLease): string | undefined {
     return view.directory ??
@@ -815,7 +824,7 @@ export class InboxFeature implements FrameSource {
     }
     this.summaries = new ProjectSummaries(
       (id) => ({
-        seen: this.#seen.get(this.user)?.get(id) ?? 0,
+        seen: this.#seenTerminal(id, this.user),
         finish: this.#finishes.get(id) ?? 0,
       }),
       (summary) => {
@@ -950,21 +959,23 @@ export class InboxFeature implements FrameSource {
           time,
         }, { sessionID: session });
       }),
-      stores.seen.listen(({ user, session, time, terminal, opened }) => {
+      stores.seen.listen(({ user, session, time, terminal, opened, runID }) => {
         if (terminal === undefined) return;
         this.#identity();
         const marks = this.#seen.get(user) ?? new Map<string, number>();
-        marks.set(session, time);
+        if (!runID) marks.set(session, time);
         this.#seen.set(user, marks);
         if (opened !== undefined) this.#recordOpened(user, session, opened);
         if (user === this.user) {
           this.summaries.mark(session);
-          this.#capture("seen", session);
-          this.#queue(`seen:${session}`, {
-            op: "seen",
-            sessionID: session,
-            time,
-          }, { sessionID: session });
+          if (!runID) {
+            this.#capture("seen", session);
+            this.#queue(`seen:${session}`, {
+              op: "seen",
+              sessionID: session,
+              time,
+            }, { sessionID: session });
+          }
         }
       }),
       stores.tasks.listen((change) => {
@@ -1379,7 +1390,7 @@ export class InboxFeature implements FrameSource {
     ) s.finishes.observe(entry.id, terminal, tx);
     const supervision = this.states.session(
       entry,
-      this.#seen.get(this.user)?.get(entry.id) ?? 0,
+      this.#seenTerminal(entry.id, this.user),
       this.#finishes.get(entry.id),
     );
     // Persist activity policy from supervision, not the temporary entity lamp
@@ -1455,7 +1466,7 @@ export class InboxFeature implements FrameSource {
   }
   async #validateAcknowledgement(
     ctx: RpcContext,
-    entries: readonly { session: string; terminal: number }[],
+    entries: readonly { session: string; terminal: number; runID?: string }[],
   ): Promise<void> {
     await ctx.sessionDirectories(
       entries.flatMap(({ session }) =>
@@ -1463,14 +1474,15 @@ export class InboxFeature implements FrameSource {
       ),
     );
     if (
-      entries.some(({ session, terminal }) =>
-        terminal > (this.#finishes.get(session) ?? 0)
+      entries.some(({ session, terminal, runID }) =>
+        terminal > (this.#finishes.get(session) ?? 0) ||
+        (!!runID && terminal <= 0)
       )
     ) throw new HarnessError("params", "Terminal token was not published");
   }
 
   #acknowledge(
-    entries: readonly { session: string; terminal: number }[],
+    entries: readonly { session: string; terminal: number; runID?: string }[],
     tx: StoreWrite,
   ): number[] {
     return this.stores.seen.acknowledgeMany(this.user, entries, tx);
@@ -1853,14 +1865,26 @@ export class InboxFeature implements FrameSource {
         if (!Number.isSafeInteger(p.terminal) || Number(p.terminal) < 0) {
           throw new HarnessError("params", "Expected terminal token");
         }
-        return { sessionID: sessionID(p)!, terminal: Number(p.terminal) };
+        return {
+          sessionID: sessionID(p)!,
+          terminal: Number(p.terminal),
+          runID: text(p, "runID", true),
+        };
       },
-      handler: async (ctx, { sessionID: id, terminal }) => {
-        const entries = [{ session: id, terminal }];
+      handler: async (ctx, { sessionID: id, terminal, runID }) => {
+        // The request captures the exact published run before validation can
+        // suspend. A replay for a successor, guessed key, or stale view can
+        // never turn into an acknowledgement of the current execution.
+        const value = this.states.get(entityKey("session", id));
+        const matching = value?.terminal === terminal && value?.runID === runID;
+        const entries = (runID || value?.runID) && !matching
+          ? []
+          : [{ session: id, terminal, runID }];
+        if (!entries.length) await ctx.sessionDirectory(id);
         await this.#validateAcknowledgement(ctx, entries);
         return localWrite(
           ctx,
-          (tx) => this.#acknowledge(entries, tx)[0],
+          (tx) => this.#acknowledge(entries, tx)[0] ?? 0,
           seenReceipt,
         );
       },
@@ -1913,19 +1937,31 @@ export class InboxFeature implements FrameSource {
         const sessions = ids.flatMap((sessionID) => {
           const value = this.states.get(entityKey("session", sessionID));
           return value?.counts.unseen && value.terminal
-            ? [{ sessionID, terminal: value.terminal }]
+            ? [{
+              sessionID,
+              terminal: value.terminal,
+              ...(value.runID ? { runID: value.runID } : {}),
+            }]
             : [];
         });
-        const entries = sessions.map(({ sessionID, terminal }) => ({
+        const entries = sessions.map(({ sessionID, terminal, runID }) => ({
           session: sessionID,
           terminal,
+          runID,
         }));
-        const opened = this.#opened.get(user());
-        const closed = ids.filter((id) => opened?.has(id));
+        const principal = user();
+        const opened = this.#opened.get(principal);
+        const retained = ids.flatMap((id) => {
+          if (!opened?.has(id)) return [];
+          const generation = s.seen.openGeneration(principal, id);
+          return generation === undefined ? [] : [{ id, generation }];
+        });
         await this.#validateAcknowledgement(ctx, entries);
         return localWrite(ctx, (tx) => {
           this.#acknowledge(entries, tx);
-          for (const id of closed) s.seen.setOpened(user(), id, false, tx);
+          const closed = retained.filter(({ id, generation }) =>
+            s.seen.releaseOpened(principal, id, generation, tx)
+          ).map(({ id }) => id);
           return { sessions, ...(closed.length ? { closed } : {}) };
         }, acknowledgeReceipt);
       },

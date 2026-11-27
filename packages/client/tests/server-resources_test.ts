@@ -56,20 +56,30 @@ function entry(id = "session", directory = "/p"): IndexEntry {
   };
 }
 
-Deno.test("admitted finishes advance an existing clock silently while live and baseline recovery still complete", () => {
+Deno.test("observers borrow live entity outcomes, not clocks or admission replay", () => {
   const f = fixture();
   const completions: number[] = [];
   const origins: unknown[] = [];
   const stop = f.resources.observeEntries("local", (event) => {
     for (const change of event.changes) {
-      if (change.completedAt) {
-        origins.push([change.completedAt, change.completionOrigin]);
-        if (change.completionOrigin !== "historical") {
-          completions.push(change.completedAt);
+      if (change.entity?.terminal) {
+        const live = change.entity.terminalOrigin === "live" &&
+          !event.baseline && !change.admitted;
+        origins.push([change.entity.terminal, live ? "live" : "historical"]);
+        if (live) {
+          completions.push(change.entity.terminal);
         }
       }
     }
   });
+  const entity = (terminal: number) =>
+    sessionEntity("session", {
+      state: "finishedUnseen",
+      terminal,
+      outcome: "succeeded",
+      unseen: true,
+      terminalOrigin: "live",
+    });
   try {
     f.receive("local", { t: "index.snapshot", rev: 0, entries: [entry()] });
     f.receive("local", {
@@ -96,7 +106,7 @@ Deno.test("admitted finishes advance an existing clock silently while live and b
       from: 0,
       revision: 1,
       admitted: true,
-      ops: [{ op: "finish", sessionID: "session", time: 20 }],
+      ops: [{ op: "entity.upsert", value: entity(20) }],
     });
     assertEquals(completions, [], "Lease replay is not a new completion");
     f.receive("local", {
@@ -116,14 +126,18 @@ Deno.test("admitted finishes advance an existing clock silently while live and b
       generation: "finishes",
       from: 2,
       revision: 3,
-      ops: [{ op: "finish", sessionID: "session", time: 30 }],
+      ops: [{ op: "entity.upsert", value: entity(30) }],
     });
     assertEquals(completions, [30]);
     f.receive("local", {
       t: "inbox.snapshot",
       generation: "finishes",
       revision: 4,
-      inbox: { ...metadata(), finishes: { session: 40 } },
+      inbox: {
+        ...metadata(),
+        finishes: { session: 40 },
+        entities: { [entityKey("session", "session")]: entity(40) },
+      },
     });
     assertEquals(
       completions,

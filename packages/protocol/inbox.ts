@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { RequestMetadata } from "./request-metadata.ts";
-import type { EntityState, HelperDisposition } from "./entity-state.ts";
+import type {
+  BlockedCause,
+  EntityCounts,
+  EntityState,
+  HelperDisposition,
+} from "./entity-state.ts";
 import type { PublicFailure } from "./requests.ts";
 export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "inbox.get": { kind: "read", pending: "Loading projects" },
@@ -41,7 +46,7 @@ export type AcknowledgeScope = { scope: "helpers"; task: string } | {
   sessionID: string;
 };
 export interface AcknowledgedSessions {
-  sessions: { sessionID: string; terminal: number }[];
+  sessions: { sessionID: string; terminal: number; runID?: string }[];
   closed?: string[];
 }
 /** Inbox metadata is server-local; callers pair it with their connection ID. */
@@ -77,6 +82,43 @@ export function rollupStatus(
 }
 /** Navigation ranks published session states; membership and ties are its own. */
 export const urgentStatus = rollupStatus;
+
+/** Fold the entity owner's incremental counts, including direct checkout inputs. */
+export function aggregateTransition(
+  { counts, forms, graced, dependencies, operation }: {
+    counts: EntityCounts;
+    forms: number;
+    graced: number;
+    dependencies: number;
+    operation?: "working" | "blocked";
+  },
+): {
+  rule: string;
+  state: ProjectStatus;
+  cause?: BlockedCause;
+  liveWork: boolean;
+} {
+  const state = rollupStatus(
+    counts.blocked || forms ? "blocked" : undefined,
+    operation,
+    counts.working ? "working" : undefined,
+    counts.finished ? "finished" : undefined,
+    dependencies ? "dependencies" : undefined,
+  );
+  const cause: BlockedCause | undefined = state !== "blocked"
+    ? undefined
+    : !counts.blocked
+    ? forms ? "form" : "operation"
+    : !forms && operation !== "blocked" && graced === counts.blocked
+    ? "permission"
+    : undefined;
+  return {
+    rule: cause ? `aggregate.${cause}` : `aggregate.${state}`,
+    state,
+    cause,
+    liveWork: counts.working > 0 || operation === "working",
+  };
+}
 
 /** Helper group lamps describe the disposition, not each session's own lamp. */
 export const HELPER_LAMP_STATE = {
@@ -232,7 +274,7 @@ export interface InboxRpcMethods {
     result: TaskRecord;
   };
   "sessions.seen": {
-    params: { sessionID: string; terminal: number };
+    params: { sessionID: string; terminal: number; runID?: string };
     result: number;
   };
   "sessions.opened": {

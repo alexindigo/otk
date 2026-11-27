@@ -449,7 +449,7 @@ Deno.test("notification policy focus/open/hidden, unavailable OS fallback, gener
     open: { sidecar: "s", session: "b" },
   };
   const policy = notificationPolicy(() => ctx);
-  assertEquals(policy(note(), () => true, true).channels, ["toast", "badge"]);
+  assertEquals(policy(note(), () => true, true).channels, ["toast"]);
   ctx.open.session = "a";
   assertEquals(policy(note(), () => true, true).channels, []);
   ctx.visible = false;
@@ -458,14 +458,12 @@ Deno.test("notification policy focus/open/hidden, unavailable OS fallback, gener
   assertEquals(policy(note(), () => true, true).channels, [
     "os",
     "sound",
-    "badge",
   ]);
   assertEquals(policy(note(), () => false, true).channels, [
     "toast",
     "sound",
-    "badge",
   ]);
-  assertEquals(policy(note(), () => true, false).channels, ["os", "badge"]);
+  assertEquals(policy(note(), () => true, false).channels, ["os"]);
   ctx.prefs["notify.toast"] = false;
   ctx.prefs["notify.badge"] = false;
   assertEquals(
@@ -494,19 +492,16 @@ Deno.test("one presentation per request: the open view's docks own their subtree
     assertEquals(policy(at("grandchild", kind), () => true, true).channels, []);
     assertEquals(policy(at("other", kind), () => true, true).channels, [
       "toast",
-      "badge",
     ]);
   }
   // A descendant's finish is its own; viewing the parent does not present it.
   assertEquals(policy(at("child", "done"), () => true, true).channels, [
     "toast",
-    "badge",
   ]);
   ctx.open.session = "child";
   // A parent's request is not in the child's docks.
   assertEquals(policy(at("root", "permission"), () => true, true).channels, [
     "toast",
-    "badge",
   ]);
   assertEquals(policy(at("child", "done"), () => true, true).channels, []);
   assertEquals(

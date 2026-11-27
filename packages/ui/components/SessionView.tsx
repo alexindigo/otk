@@ -129,7 +129,7 @@ export default function SessionView(props: {
   exhausted: boolean;
   error?: string | FailureValue;
   sessionError?: string;
-  errorState?: SessionErrorState;
+  diagnostics?: SessionErrorState;
   draft: Draft;
   forkNote?: import("@otk/client").ForkNote;
   onDismissForkNote?(): void;
@@ -198,7 +198,7 @@ export default function SessionView(props: {
   const hasRecord = (id: string) => messageIDs().has(id);
   const feedback = createMemo(() =>
     sessionComposerFeedback(
-      props.errorState,
+      props.diagnostics,
       failureTarget(),
       rollbackPresentation().feedback,
       hasRecord,
@@ -877,7 +877,7 @@ export default function SessionView(props: {
                               />
                             </Show>
                             <SessionError
-                              state={props.errorState}
+                              state={props.diagnostics}
                               error={props.sessionError}
                               target={failureTarget()}
                               operationKey={feedback()?.identity}

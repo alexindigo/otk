@@ -73,7 +73,7 @@ export function scanDeliveries(
       SELECT wanted.key AS receipt_index,s.id,s.parent_id,
         (SELECT max(${terminal}) FROM message m WHERE m.session_id=s.id AND ${ended} AND (${terminal})<=json_extract(wanted.value,'$.received')) AS terminal
       FROM json_each(?) wanted JOIN session s ON json_extract(wanted.value,'$.childID')=s.id
-    ) SELECT t.*,(SELECT count(*) FROM message m WHERE m.session_id=t.id AND ${ended} AND (${terminal})=t.terminal) AS matching FROM terminals t`,
+    ) SELECT t.*,(SELECT CASE WHEN count(*)=1 THEN min(m.id) END FROM message m WHERE m.session_id=t.id AND ${ended} AND (${terminal})=t.terminal) AS run_id FROM terminals t`,
   ).all(JSON.stringify(receipts));
   const updates: DeliveryScan["updates"] = [];
   for (const [index, receipt] of receipts.entries()) {
@@ -83,10 +83,15 @@ export function scanDeliveries(
       !child || child.parent_id !== parent || !token || token > receipt.received
     ) continue;
     if (receipt.started !== undefined && token < receipt.started) continue;
-    if (Number(child.matching) !== 1) continue;
+    if (typeof child.run_id !== "string" || !child.run_id) continue;
     updates.push({
       id: ids.encode(receipt.childID),
-      delivered: { parentID, receipt: receipt.receipt, terminal: token },
+      delivered: {
+        parentID,
+        receipt: receipt.receipt,
+        terminal: token,
+        runID: child.run_id,
+      },
     });
   }
   return {
