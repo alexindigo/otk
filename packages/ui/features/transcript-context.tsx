@@ -12,15 +12,15 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
   type CodeBlockSource,
   createTranscriptInteraction,
-  type DisclosureKind,
+  type DisclosureContextInput,
   type NativeSourceOwner,
-  recordKindDisclosure,
   recordKindKey,
   type TranscriptInteraction,
 } from "@otk/client";
 import type { DisclosureCategory, Preferences } from "@otk/protocol";
 import { copyText } from "../clipboard.ts";
 import {
+  DisclosureFocusHome,
   DisclosuresProvider,
   useDisclosures,
 } from "../components/Disclosure.tsx";
@@ -115,63 +115,36 @@ export function sourceRegion(messageID: () => string) {
     setElement(element);
   };
 }
-/** The client resolves defaults; this binding only publishes an explicit intent. */
-export function retainedDisclosure(
-  kind: DisclosureKind,
-  category: DisclosureCategory | (() => DisclosureCategory),
-  prefs: () => Partial<Preferences> = () => ({}),
-  identity = useContentIdentity(),
-  required: () => boolean = () => false,
-  ownerKey?: string,
-) {
-  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
-  const id = identity.partID ?? identity.ownerID ?? identity.messageID ?? kind;
-  const disclosureKey = ownerKey ?? key(identity);
-  const generation = interaction.generation(ownerKey ?? id);
-  const choice = interaction.disclosure(
-    kind,
-    disclosureKey,
-    generation,
-  );
-  const [revision, setRevision] = createSignal(0);
-  onCleanup(
-    interaction.subscribe(
-      () => setRevision((value) => value + 1),
-      kind,
-      disclosureKey,
-      generation,
-    ),
-  );
-  const expanded = () => {
-    revision();
-    return choice.expanded(
-      typeof category === "function" ? category() : category,
-      prefs(),
-      required(),
-    );
+/** Reuse the transcript owner's scope and generations for each presentation. */
+export function transcriptDisclosureIdentity() {
+  const identity = useContentIdentity();
+  const interaction = useContext(Interaction);
+  return (options?: {
+    owner?: string;
+    category?: DisclosureCategory;
+    content?: ContentIdentity;
+  }) => {
+    const content = options?.content ?? identity;
+    const owner = options?.owner;
+    const id = options?.category && owner
+      ? recordKindKey(owner, options.category)
+      : owner ?? key(content);
+    const generation = owner ?? content.partID ?? content.ownerID ??
+      content.messageID ?? id;
+    return interaction?.identify(id, interaction.generation(generation)) ??
+      { scope: "standalone", id };
   };
-  return [expanded, (open: boolean) => {
-    choice.set(open);
-  }] as const;
 }
 
 /** Work membership may change without changing the reader's disclosure intent. */
 export function retainedWorkDisclosure(
-  scope: string,
+  scope: () => string,
   prefs: () => Partial<Preferences>,
   required: () => boolean,
 ) {
-  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
-  const [revision, setRevision] = createSignal(0);
-  onCleanup(interaction.subscribeWork(scope, () => setRevision((n) => n + 1)));
-  const choice = interaction.workDisclosure(scope);
-  return [
-    () => {
-      revision();
-      return choice.expanded("work", prefs(), required());
-    },
-    (open: boolean) => choice.set(open),
-  ] as const;
+  const identify = transcriptDisclosureIdentity();
+  const input: DisclosureContextInput = { category: "work", prefs, required };
+  return { identity: () => identify({ owner: scope() }), input };
 }
 
 const key = (identity: ContentIdentity) =>
@@ -182,40 +155,6 @@ const key = (identity: ContentIdentity) =>
     identity.partID,
     identity.callID,
   ]);
-/** Category choices share the transcript interaction lifetime, never the DOM. */
-export function retainedRecordKinds(owner: () => string) {
-  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
-  const [revision, setRevision] = createSignal(0);
-  const subscriptions = new Map<string, () => void>();
-  onCleanup(() => {
-    for (const release of subscriptions.values()) release();
-  });
-  const choice = (category: DisclosureCategory) => {
-    const frame = owner();
-    const id = recordKindKey(frame, category);
-    if (!subscriptions.has(id)) {
-      subscriptions.set(
-        id,
-        interaction.subscribe(
-          () => setRevision((n) => n + 1),
-          "recordKinds",
-          id,
-          interaction.generation(frame),
-        ),
-      );
-    }
-    return recordKindDisclosure(interaction, frame, category);
-  };
-  return {
-    expanded(category: DisclosureCategory, prefs: Partial<Preferences>) {
-      revision();
-      return choice(category).expanded(category, prefs);
-    },
-    set(category: DisclosureCategory, open: boolean) {
-      choice(category).set(open);
-    },
-  };
-}
 export function ContentIdentityProvider(
   props: { value: ContentIdentity; children: Element },
 ): Element {
@@ -238,6 +177,7 @@ export function TranscriptContext(
     children: Element;
     interaction?: TranscriptInteraction;
     nativeSource?: SourceReader;
+    focusHome?: () => void;
     visibility?(
       element: HTMLElement,
       messageID: string,
@@ -336,8 +276,10 @@ export function TranscriptContext(
               },
             }}
           >
-            <DisclosuresProvider owner={shared ?? interaction.disclosures}>
-              {props.children}
+            <DisclosuresProvider owner={interaction.disclosures}>
+              <DisclosureFocusHome value={props.focusHome ?? null}>
+                {props.children}
+              </DisclosureFocusHome>
             </DisclosuresProvider>
           </Actions>
         </Interaction>

@@ -25,7 +25,11 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
   await expect(page.locator('[data-message="background-1"]')).toBeVisible();
   const original = await interval.elementHandle();
   await action(state, "release");
-  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+  await expect(
+    interval.locator(
+      ".otk-record-group-toggle .otk-disclosure-label > .otk-chrome-meta",
+    ),
+  )
     .toHaveText(
       "1 permission",
     );
@@ -47,7 +51,7 @@ test("messages.background-interval-owns-one-frame-and-compact-chronology", {
     ),
   ).toBe(true);
   const summary = interval.locator(
-    ".otk-record-group-toggle > .otk-chrome-meta",
+    ".otk-record-group-toggle .otk-disclosure-label > .otk-chrome-meta",
   ).first();
   await expect(summary).toHaveText("2 permissions, 2 helpers finished");
   await expect(interval.locator(".otk-record-group-time")).toHaveCount(0);
@@ -185,7 +189,11 @@ test("messages.pending-breakout-reveal-and-settlement-retain-the-frame", {
   await expect(page.locator('[data-message="background-1"]')).toBeFocused();
   await action(state, "release");
   await expect(interval).toHaveAttribute("data-background-interval", key!);
-  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+  await expect(
+    interval.locator(
+      ".otk-record-group-toggle .otk-disclosure-label > .otk-chrome-meta",
+    ),
+  )
     .toHaveText(
       "1 permission",
     );
@@ -210,13 +218,21 @@ test("messages.failure-separates-safe-stretches-inside-one-background-frame", {
   await expect(interval.locator(".otk-native-record.is-error")).toHaveCount(1);
   // Issue 2.42 keeps one chronological frame rather than partitioning stretches;
   // UI conventions omit footer completions and count the failed breakout once.
-  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+  await expect(
+    interval.locator(
+      ".otk-record-group-toggle .otk-disclosure-label > .otk-chrome-meta",
+    ),
+  )
     .toHaveText("1 permission · 1 failed");
   const key = await interval.getAttribute("data-background-interval");
   await action(state, "stop");
   await expect(interval).toHaveAttribute("data-background-interval", key!);
   await expect(interval.locator(".otk-native-record.is-error")).toHaveCount(0);
-  await expect(interval.locator(".otk-record-group-toggle > .otk-chrome-meta"))
+  await expect(
+    interval.locator(
+      ".otk-record-group-toggle .otk-disclosure-label > .otk-chrome-meta",
+    ),
+  )
     .toHaveText(
       "2 permissions",
     );

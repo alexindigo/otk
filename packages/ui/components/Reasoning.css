@@ -2,21 +2,10 @@
 .otk-reasoning {
   color: var(--secondary);
 }
-.otk-reasoning-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: 0;
-  padding: 0;
-  color: var(--otk-fg-3);
-}
 .otk-reasoning-body {
   padding-block: var(--space-1);
 }
 .otk-reasoning-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   color: var(--otk-fg-3);
   font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
 }

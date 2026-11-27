@@ -70,7 +70,8 @@
     [junction-end node-start] var(--tree-indent)
     [node-end] var(--tree-caption-gap, 0px)
     [label-start] minmax(0, max-content)
-    [label-end trigger-end trail-start] minmax(0, 1fr) [trail-end];
+    [label-end trigger-end trail-start] minmax(var(--tree-trail-min, 0px), 1fr)
+    [trail-end];
   grid-template-rows: [line-start] var(--tree-line)
     [line-end extension-start] auto [extension-end feedback-start] auto
     [feedback-end];
@@ -181,7 +182,8 @@
   color: var(--otk-fg-3);
   font-size: var(--tree-icon-size);
 }
-.otk-tree-node-slot > svg {
+.otk-tree-node-slot > svg,
+.otk-tree-trigger > :nth-child(2) > svg {
   inline-size: var(--tree-icon-size);
   block-size: var(--tree-icon-size);
 }
@@ -253,6 +255,9 @@
   align-items: center;
   min-inline-size: 0;
   padding: 0;
+  inline-size: auto;
+  justify-self: stretch;
+  column-gap: normal;
 }
 .otk-tree-trigger > :nth-child(1) {
   grid-column: junction;
@@ -261,14 +266,27 @@
 }
 .otk-tree-trigger > :nth-child(2) {
   grid-column: node;
-  justify-self: center;
+  place-self: center;
+  display: grid;
+  place-items: center;
+  color: var(--otk-fg-3);
+  font-size: var(--tree-icon-size);
 }
 .otk-tree-trigger > :nth-child(3) {
   grid-column: label;
+  align-self: stretch;
   min-inline-size: 0;
+  padding-inline-end: var(--space-2);
+}
+.otk-tree-row.is-outgoing > .otk-tree-trigger > :nth-child(3) {
+  text-align: end;
+  padding-inline: var(--space-2) 0;
 }
 .otk-tree-row.has-span-trigger .otk-tree-node-line {
   grid-template-rows: 1fr var(--tree-icon-size) 1fr;
+}
+.otk-tree-row.has-span-trigger {
+  --tree-trail-min: min-content;
 }
 .otk-tree-frame > .otk-tree-trail-slot {
   grid-column: trail;
@@ -277,4 +295,10 @@
 }
 .otk-tree-frame:has(> .otk-tree-trail-slot) > .otk-tree-label {
   grid-column-end: label-end;
+}
+.otk-tree-row.has-span-trigger > .otk-tree-frame {
+  pointer-events: none;
+}
+.otk-tree-row.has-span-trigger :is(.otk-tree-trail-slot, .otk-tree-feedback-slot) {
+  pointer-events: auto;
 }

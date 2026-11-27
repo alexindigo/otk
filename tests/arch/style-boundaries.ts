@@ -130,7 +130,9 @@ export function styleBoundaryErrors(files: Map<string, string>): string[] {
         }
       }
       if (
-        source.imported(node.name)?.module.endsWith("/DisclosureToggle.tsx")
+        /\/Disclosure(?:Toggle)?\.tsx$/.test(
+          source.imported(node.name)?.module ?? "",
+        )
       ) classes.forEach((c) => disclosures.add(c));
       if (
         node.name.type !== "JSXIdentifier" ||
@@ -205,8 +207,8 @@ export function styleBoundaryErrors(files: Map<string, string>): string[] {
         }
       }
       if (
-        path !== "packages/ui/components/DisclosureToggle.css" &&
-        path !== "packages/ui/components/Disclosure.css" && (
+        !/^packages\/ui\/components\/Disclosure(?:Toggle)?\.css$/.test(path) &&
+        (
           /\.otk-disclosure-[\w-]+/.test(selector) ||
           targets(selector).some((name) => disclosures.has(name)) &&
             [...declarations.keys()].some((key) =>
@@ -216,7 +218,7 @@ export function styleBoundaryErrors(files: Map<string, string>): string[] {
         )
       ) {
         errors.push(
-          `${path}: ${selector}: DisclosureToggle owns all internal geometry`,
+          `${path}: ${selector}: Disclosure owns all internal geometry`,
         );
       }
     }

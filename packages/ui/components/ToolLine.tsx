@@ -10,12 +10,14 @@ import { TreeItem } from "./Tree.tsx";
 export default function ToolLine(props: ToolProps): import("solid-js").Element {
   const { tools } = useUiRegistries();
   const paths = usePathSemantics();
+  const renderer = () => tools.resolve(props.call);
   return (
     <ToolFrame
       call={props.call}
       waiting={props.waiting}
       prefs={props.prefs}
       onOpenChild={props.onOpenChild}
+      hasContent={() => !!(renderer() || props.call.children?.length)}
       presentation={tools.presentation(props.call, {
         directory: props.directory,
         paths: paths(),
@@ -23,7 +25,7 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
       })}
       body={() => (
         <>
-          <Show when={tools.resolve(props.call)} keyed>
+          <Show when={renderer()} keyed>
             {(renderer) => {
               const Component = renderer;
               return <Component {...props} />;

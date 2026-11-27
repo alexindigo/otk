@@ -12,12 +12,13 @@ import type { Preferences } from "@otk/protocol";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
 import {
-  retainedDisclosure,
+  transcriptDisclosureIdentity,
   useNativeSource,
 } from "../../features/transcript-context.tsx";
 import { TreeItem, TreeNode } from "../Tree.tsx";
 import { WorkLogIcon } from "../ChromeIcons.tsx";
 import { sourcePreview } from "./native-source-preview.ts";
+import Disclosure, { useDisclosure } from "../Disclosure.tsx";
 
 type Loaded =
   | { state: "loading" }
@@ -31,11 +32,11 @@ export default function NativeSource(props: {
   preview?: { text: string; bytes: number; truncated: boolean };
   prefs: Preferences;
 }): import("solid-js").Element {
-  const [open, setOpen] = retainedDisclosure(
-    "source",
-    "source",
-    () => props.prefs,
-  );
+  const identify = transcriptDisclosureIdentity();
+  const hasContent = () => !!(props.reference || props.preview);
+  const input = { category: "source" as const, prefs: () => props.prefs };
+  const state = useDisclosure("source", identify, input);
+  const open = () => hasContent() && state.open();
   const read = useNativeSource();
   const resource = createMemo(() =>
     open() && props.reference ? read?.(props.reference) : undefined
@@ -81,25 +82,26 @@ export default function NativeSource(props: {
   };
   return (
     <section class={["otk-tool-line otk-native-source", { "is-open": open() }]}>
-      <TreeNode
-        toggleHeader
-        class="otk-tool-row"
-        node={() => <WorkLogIcon />}
+      <Disclosure
+        kind="source"
+        identity={identify()}
+        input={input}
+        variant="label"
+        class="otk-tool-toggle"
+        lead={() => <WorkLogIcon />}
         label="Source"
-        open={open()}
-        onOpen={setOpen}
-        header={(_connected, toggleID) => (
-          <button
-            id={toggleID}
-            type="button"
-            class="otk-tool-toggle otk-tree-control"
-            aria-expanded={open() ? "true" : "false"}
-            onClick={() => setOpen(!open())}
-          >
-            <span class="otk-control-label">Source</span>
-          </button>
+        hasContent={hasContent}
+        layout={({ trigger, region, open, frame }) => (
+          <TreeNode
+            class="otk-tool-row"
+            ref={frame}
+            trigger={{ variant: "span", element: trigger, hasBox: hasContent }}
+            bodyVisible={open()}
+            region={region}
+          />
         )}
-        body={() => (
+      >
+        {() => (
           <TreeItem last>
             <TreeNode
               header={() => (
@@ -157,7 +159,7 @@ export default function NativeSource(props: {
             />
           </TreeItem>
         )}
-      />
+      </Disclosure>
     </section>
   );
 }

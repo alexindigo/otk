@@ -97,3 +97,26 @@
 .otk-disclosure-frame:has(> .otk-disclosure-button.is-track-aligned) > .otk-disclosure-region {
   grid-column: 3 / -1;
 }
+.otk-disclosure-button:hover {
+  background: var(--otk-hover);
+}
+.otk-disclosure-caption,
+.otk-disclosure-label.has-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.otk-disclosure-caption > .otk-disclosure-label {
+  min-inline-size: 0;
+}
+.otk-disclosure-button.is-meta {
+  --disclosure-gutter: var(--icon-compact);
+  font-size: var(--text-meta);
+  color: var(--otk-fg-3);
+}
+.otk-disclosure-button.is-compact {
+  inline-size: var(--control-size);
+  justify-content: center;
+  padding: 0;
+}

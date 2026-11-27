@@ -1,8 +1,4 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-record-group-toggle {
-  flex: 1 1 auto;
-  min-inline-size: 0;
-}
 .otk-record-group {
   --tree-height: var(--control-size);
 }
