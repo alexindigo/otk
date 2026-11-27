@@ -330,6 +330,8 @@ export async function remainder(
       has: page.locator('[data-message-command="reply.copy"]'),
     });
     const actions = footer.locator(".otk-message-actions");
+    // The nested source-pill clock can yield; the outcome clock owns this row.
+    const outcome = ".otk-message-details > .otk-chrome-meta > time[title]";
     await expect(actions).toHaveCSS(
       "opacity",
       "1",
@@ -339,15 +341,16 @@ export async function remainder(
     const replyBounds = () => ownedBounds(reply, ".otk-message-flow");
     const fixed = await replyBounds();
     await footer.hover();
+    await expect(footer.locator(outcome)).toBeVisible();
     expect(
-      await footer.evaluate((footer) => {
+      await footer.evaluate((footer, outcome) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
             .getBoundingClientRect(),
-          b = footer.querySelector("time[title]")!.parentElement!
+          b = footer.querySelector(outcome)!.parentElement!
             .getBoundingClientRect();
         return b.right <= a.left &&
           Math.abs(b.y + b.height / 2 - a.y - a.height / 2) < .5;
-      }),
+      }, outcome),
     ).toBe(true);
     await page.mouse.move(1, 1);
     await expect(reply).not.toHaveClass(/is-revealed/);
