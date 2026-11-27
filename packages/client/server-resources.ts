@@ -45,7 +45,7 @@ import { createSessionTree, type SessionListRow } from "./session-tree.ts";
 import {
   createCatalogCodecs,
   entityKey,
-  entityRequiresVisibility,
+  entityRetainsVisibility,
 } from "@otk/protocol";
 import {
   type ClientDirectoryCatalogs,
@@ -428,7 +428,7 @@ export function createServerResources(o: {
     for (const entry of input.entries) {
       if (
         entry.deleted ||
-        entityRequiresVisibility(
+        entityRetainsVisibility(
           input.entities?.get(entityKey("session", entry.id)),
         )
       ) {

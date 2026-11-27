@@ -86,6 +86,15 @@ export function sessionPorts(o: {
     directoryCatalog: session.directoryCatalog,
     frecencyCatalog: session.frecencyCatalog,
     approvals: resources.approvals(target.sidecarId),
+    approvalTarget: () => {
+      const family = actions.family(target);
+      const sessionID = family.rootID ?? family.sessionID;
+      return {
+        sidecarId: target.sidecarId,
+        sessionID,
+        title: resources.entry(target.sidecarId, sessionID)?.title,
+      };
+    },
     feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,
     composerTarget: () => {

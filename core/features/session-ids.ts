@@ -102,10 +102,10 @@ export function createSessionReferenceUpgrade(
       options.checkpoint?.("task_sessions");
 
       db.exec(
-        "CREATE TABLE session_ref_seen (user TEXT NOT NULL, session TEXT NOT NULL, time INTEGER NOT NULL, terminal INTEGER NOT NULL, PRIMARY KEY(user,session))",
+        "CREATE TABLE session_ref_seen (user TEXT NOT NULL, session TEXT NOT NULL, time INTEGER NOT NULL, terminal INTEGER NOT NULL, opened INTEGER NOT NULL, PRIMARY KEY(user,session))",
       );
       const seen = db.prepare(
-        "INSERT INTO session_ref_seen VALUES(?,?,?,?) ON CONFLICT(user,session) DO UPDATE SET time=MAX(time,excluded.time),terminal=MAX(terminal,excluded.terminal)",
+        "INSERT INTO session_ref_seen VALUES(?,?,?,?,?) ON CONFLICT(user,session) DO UPDATE SET time=MAX(time,excluded.time),terminal=MAX(terminal,excluded.terminal),opened=MAX(opened,excluded.opened)",
       );
       for (const row of db.prepare("SELECT * FROM session_seen").all()) {
         seen.run(
@@ -113,6 +113,7 @@ export function createSessionReferenceUpgrade(
           convert(String(row.session), "session_seen.session"),
           row.time,
           row.terminal,
+          row.opened,
         );
       }
       db.exec(

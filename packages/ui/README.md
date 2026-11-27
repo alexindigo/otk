@@ -1537,21 +1537,20 @@ behind a reply.
 
 Revert from here uses the prompt context/hover command and selected-session
 client revert owner. Root idle sessions advertise it only with `revert`; queued
-prompts and read-only helpers omit it. An in-flow confirmation under the clicked
-prompt lists the actual message identities before any native mutation.
-`RevertGroup` borrows `ActivityGroup`, RecordList, Clock and the shared failure
-presenter. It renders one boundary-anchored transcript group with the full
-retained messages, collapsed by default, and Restore. Saving and failure states
-stay in its header; failures expose the reason, Retry and Restore. Restore and
-Dismiss are absent while unavailable, rather than disabled secondary controls.
-Dismiss persists per session/boundary and leaves a muted marker with
-context-menu Restore. No revert overlay covers the transcript or composer.
-Restore requires the separately advertised `restore` capability. An
-independently advertised `revertCode` capability adds Revert code changes to the
-same prompt context menu. It uses the same owner and confirmation. Session
-targets similarly offer Archive or Unarchive only with `sessionArchive`, using
-authoritative state and the shared CommandMenu. No overlay or style is added to
-these native actions.
+prompts and helpers omit it. An in-flow confirmation under the clicked prompt
+lists the actual message identities before any native mutation. `RevertGroup`
+borrows `ActivityGroup`, RecordList, Clock and the shared failure presenter. It
+renders one boundary-anchored transcript group with the full retained messages,
+collapsed by default, and Restore. Saving and failure states stay in its header;
+failures expose the reason, Retry and Restore. Restore and Dismiss are absent
+while unavailable, rather than disabled secondary controls. Dismiss persists per
+session/boundary and leaves a muted marker with context-menu Restore. No revert
+overlay covers the transcript or composer. Restore requires the separately
+advertised `restore` capability. An independently advertised `revertCode`
+capability adds Revert code changes to the same prompt context menu. It uses the
+same owner and confirmation. Session targets similarly offer Archive or
+Unarchive only with `sessionArchive`, using authoritative state and the shared
+CommandMenu. No overlay or style is added to these native actions.
 
 The active revert offers Open copy from its own group. Dismiss hides that action
 with the rest of the header, and Restore leaves no saved-copy row in the

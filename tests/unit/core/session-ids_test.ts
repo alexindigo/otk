@@ -107,6 +107,9 @@ Deno.test("beta.1 references migrate atomically, merge only permitted collisions
   let db = new OtkDb(root, migrations, { busyms: 5000 });
   try {
     seed(db);
+    db.connection.exec(
+      "UPDATE session_seen SET opened=1 WHERE user='alice' AND session='ses_one'",
+    );
     upgrade(db);
     assertEquals(
       db.connection.prepare("SELECT * FROM task_sessions ORDER BY position")
@@ -118,11 +121,18 @@ Deno.test("beta.1 references migrate atomically, merge only permitted collisions
     );
     assertEquals(
       db.connection.prepare("SELECT * FROM session_seen ORDER BY user").all(),
-      [{ user: "alice", session: "opcv1-ses_one", time: 8, terminal: 0 }, {
+      [{
+        user: "alice",
+        session: "opcv1-ses_one",
+        time: 8,
+        terminal: 0,
+        opened: 1,
+      }, {
         user: "bob",
         session: "opcv1-ses_one",
         time: 6,
         terminal: 0,
+        opened: 0,
       }],
     );
     assertEquals(

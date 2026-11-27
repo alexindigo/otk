@@ -160,6 +160,7 @@ export class EntityStates {
     ) => void,
     readonly clock: EntityClock = systemClock,
     readonly onPermissionDeadline?: (id: string) => void,
+    readonly openedByUser: (id: string) => boolean = () => false,
   ) {}
   get(key: string): EntityState | undefined {
     return this.#states.get(key);
@@ -846,6 +847,7 @@ export class EntityStates {
       running: [],
       needsYou: [],
       finished: [],
+      opened: [],
     };
     for (const id of members) {
       const state = this.#states.get(entityKey("session", id));
@@ -858,19 +860,21 @@ export class EntityStates {
       (this.family.getMetadata(a.id)?.timeCreated ?? Infinity) -
         (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
       a.id.localeCompare(b.id);
-    const { running, needsYou, finished } = groups;
+    const { running, needsYou, finished, opened } = groups;
     // Group lamps describe the counted disposition, not the member's own
     // session lamp (an unseen failure may still have a red session lamp).
     const lamps: NonNullable<TaskHelpers["lamps"]>["groups"] = {
       running: { state: running.length ? "working" : "none" },
       needsYou: { state: needsYou.length ? "blocked" : "none" },
       finished: { state: finished.length ? "finished" : "none" },
+      ...(opened.length ? { opened: { state: "none" } } : {}),
     };
     return {
       counts: {
         running: running.length,
         needsYou: needsYou.length,
         finished: finished.length,
+        ...(opened.length ? { opened: opened.length } : {}),
       },
       lamps: {
         all: {
@@ -888,6 +892,7 @@ export class EntityStates {
         ...finished.sort((a, b) =>
           (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
         ),
+        ...opened.sort((a, b) => a.id.localeCompare(b.id)),
       ].map((value) => value.id),
     };
   }
@@ -895,9 +900,11 @@ export class EntityStates {
   finishedHelpers(task: string): string[] | undefined {
     const value = this.get(entityKey("task", task));
     return value &&
-      (value.helpers?.ids ?? []).filter((id) =>
-        this.get(entityKey("session", id))?.evidence?.helper === "finished"
-      );
+      (value.helpers?.ids ?? []).filter((id) => {
+        const disposition = this.get(entityKey("session", id))?.evidence
+          ?.helper;
+        return disposition === "finished" || disposition === "opened";
+      });
   }
   /** The full family, not the checkout's view of it (D70). */
   subtree(id: string): string[] {
@@ -1022,6 +1029,7 @@ export class EntityStates {
     // Live input and work take priority over a prior unseen run. Roster
     // membership is independent of lamp policy and permission animation.
     const work = inputs.work || operation === "working";
+    const opened = this.openedByUser(entry.id);
     const helper = !entry.parentID
       ? undefined
       : inputs.questions > 0 || inputs.permissions > 0 ||
@@ -1031,6 +1039,8 @@ export class EntityStates {
       ? "running"
       : verdict.unseen
       ? "finished"
+      : opened
+      ? "opened"
       : undefined;
     const evidence: SessionEvidence = {
       ...(verdict.settlement ? { settlement: verdict.settlement } : {}),
@@ -1095,6 +1105,7 @@ export class EntityStates {
         ? before.state
         : before.previous,
       counts,
+      ...(opened ? { opened: true as const } : {}),
       ...(dependencies ? { dependencies } : {}),
       ...(verdict.terminal ? { terminal: verdict.terminal } : {}),
       ...(verdict.outcome ? { outcome: verdict.outcome } : {}),

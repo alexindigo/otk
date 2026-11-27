@@ -39,7 +39,8 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
       let agentPicker!: ListPickerControl,
         modelPicker!: ListPickerControl,
         variantPicker: ListPickerControl | undefined;
-      const enabled = () => !ctx.props.suspended && ctx.props.connected;
+      const enabled = () =>
+        !ctx.collapsed() && !ctx.props.suspended && ctx.props.connected;
       for (
         const [id, title, delta] of [["agent.cycle", "Next agent", 1], [
           "agent.cycle.reverse",
@@ -185,7 +186,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
       const settings = (inert: boolean) => (
         <>
           <Show
-            when={owner.state.agents.available}
+            when={!ctx.collapsed() && owner.state.agents.available}
             fallback={
               <PromptSetting applied={!!applied(selection().agent)}>
                 {agentLabel()}
@@ -226,7 +227,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
               )}
           </Show>
           <Show
-            when={owner.state.models.available}
+            when={!ctx.collapsed() && owner.state.models.available}
             fallback={
               <PromptSetting applied={!!applied(selection().model)}>
                 <ModelLabel
@@ -296,7 +297,8 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
           </Show>
           <Show when={selection().applies.variant}>
             <Show
-              when={owner.catalogKnown() && selection().variantSelectable}
+              when={!ctx.collapsed() && owner.catalogKnown() &&
+                selection().variantSelectable}
             >
               {inert
                 ? (
@@ -342,11 +344,12 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 )}
             </Show>
             <Show
-              when={!owner.catalogKnown() &&
-                selection().variant.value !== undefined}
+              when={(ctx.collapsed() && selection().variantSelectable) ||
+                ((ctx.collapsed() || !owner.catalogKnown()) &&
+                  selection().variant.value !== undefined)}
             >
               <PromptSetting applied={!!applied(selection().variant)}>
-                {selectionLabel(selection().variant.value!)}
+                {variantLabel()}
               </PromptSetting>
             </Show>
           </Show>

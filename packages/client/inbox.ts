@@ -36,7 +36,7 @@ import type { IntentGroups, RequestOptions } from "./requests.ts";
 /** Wait for the consumer's authoritative replica, not merely the write receipt. */
 export function awaitAcknowledged(
   store: EntityStateStore,
-  { sessions }: AcknowledgedSessions,
+  { sessions, closed }: AcknowledgedSessions,
   signal: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -49,6 +49,9 @@ export function awaitAcknowledged(
           ),
         );
       } else if (
+        (closed ?? []).every((id) =>
+          !store.get(entityKey("session", id))?.opened
+        ) &&
         sessions.every(({ sessionID, terminal }) => {
           const value = store.get(entityKey("session", sessionID));
           // A receipt spans the whole subtree, not the socket's leased rows.

@@ -21,8 +21,6 @@ export default function ComposerTakeovers(
     children?: (active: () => boolean) => Element;
     notice?: () => Element;
     focusNotice?(): void;
-    /** Read-only transcripts still expose their registered attention actions. */
-    readOnly?: boolean;
   },
 ): Element {
   const { takeovers } = useUiRegistries(), session = useSessionPorts();
@@ -46,7 +44,7 @@ export default function ComposerTakeovers(
     available().some((item) => item.active?.(session) ?? true);
   const first = () =>
     available().find((item) => item.active?.(session) ?? true)?.id;
-  const hasComposer = () => !props.readOnly;
+  const hasComposer = () => !!props.children;
   const target = () =>
     session.composerTarget?.() ??
       {
@@ -58,10 +56,7 @@ export default function ComposerTakeovers(
       <Show
         when={hasComposer() || active() || link() !== "none"}
       >
-        <div
-          class="otk-composer-dock"
-          data-read-only={props.readOnly ? "true" : "false"}
-        >
+        <div class="otk-composer-dock">
           <div class="otk-composer-activity-slot">
             <div
               class="otk-composer-activity"
