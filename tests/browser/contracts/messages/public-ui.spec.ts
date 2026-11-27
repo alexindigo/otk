@@ -326,7 +326,7 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#registered")).toContainText(
     "Unsupported part: future.card",
   );
-  await page.locator("[data-inject]").click();
+  await page.getByRole("button", { name: "Inject draft" }).click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Injected draft",
   );
