@@ -5,20 +5,28 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 
 test.use({ profile: "contract-visual-styles" });
 
-async function expectStartAligned(row: Locator) {
+async function expectStartAligned(row: Locator, intrinsic = false) {
   await expect(row.locator(".otk-overflow-item:visible").first()).toBeVisible();
   const geometry = await row.evaluate((node) => {
     const items = node.querySelector(".otk-overflow-items")!;
-    const measure = node.querySelector(".otk-overflow-measure")!;
+    const measure = node.querySelector<HTMLElement>(".otk-overflow-measure")!;
+    const css = getComputedStyle(measure);
     return {
       offset: Math.abs(
         items.getBoundingClientRect().left - node.getBoundingClientRect().left,
       ),
-      position: getComputedStyle(measure).position,
+      position: css.position,
+      hidden: css.visibility === "hidden" && measure.inert &&
+        measure.getAttribute("aria-hidden") === "true",
+      measureHeight: measure.getBoundingClientRect().height,
     };
   });
   expect.soft(geometry.offset).toBeLessThanOrEqual(0.5);
-  expect(geometry.position).toBe("absolute");
+  expect(geometry.hidden).toBe(true);
+  // Issue 2.120: intrinsic sizing shares the live grid track without
+  // adding height. The normal overflow lane still measures out of flow.
+  expect(geometry.position).toBe(intrinsic ? "relative" : "absolute");
+  if (intrinsic) expect(geometry.measureHeight).toBe(0);
 }
 
 test("menus.intrinsic-revert-actions-start-at-the-row-edge", {
@@ -27,7 +35,10 @@ test("menus.intrinsic-revert-actions-start-at-the-row-edge", {
   await page.goto(state.url + "/?scene=notice-lifetime");
   await expect(page.locator("html")).toHaveAttribute("data-ready", "true");
   await page.evaluate("styleTest.settleNotice()");
-  await expectStartAligned(page.locator(".otk-revert-group .otk-overflow-row"));
+  await expectStartAligned(
+    page.locator(".otk-revert-group .otk-overflow-row"),
+    true,
+  );
 });
 
 test("menus.narrow-trail-items-start-at-the-row-edge", {
