@@ -6,7 +6,6 @@ import { prompt } from "../../pages/transcript.ts";
 test("sessions.sidebar-title-priority-and-flat-timeline", {
   tag: "@sessions",
 }, async ({ state, page }) => {
-  await page.setViewportSize({ width: 900, height: 800 });
   await state.product("prefs.set", { key: "textSize", value: "125" });
   await state.product("layout.patch", {
     rightCollapsed: false,
@@ -21,6 +20,9 @@ test("sessions.sidebar-title-priority-and-flat-timeline", {
     parentID: session.id,
   });
   await openSession(state, page, session.id);
+  await page.setViewportSize({ width: 900, height: 800 });
+  const back = page.getByRole("button", { name: "Back to conversation" });
+  await expect(back).toBeVisible();
   await expect(page.locator(`.otk-right-panel [data-session="${session.id}"]`))
     .toBeVisible();
   const right = page.locator(".otk-right-panel");
@@ -46,12 +48,15 @@ test("sessions.sidebar-title-priority-and-flat-timeline", {
   expect.soft(widths.filter((x) => !x.full && x.width < x.minimum - 1))
     .toEqual([]);
 
+  // D74: return to the conversation to send, then open Timeline in its sheet.
+  await back.click();
   await state.queue(["The dependencies are catalogued."]);
   await prompt(page, "Inventory the facade dependencies.");
   await expect(page.locator(".otk-messages")).toContainText(
     "The dependencies are catalogued.",
   );
-  await right.locator("[data-panel-view=timeline]").click();
+  await page.locator(".otk-right-rail [data-panel-view=timeline]").click();
+  await expect(back).toBeVisible();
   const row = right.locator("[data-timeline-prompt]");
   await expect(row).toHaveCount(1);
   const gap = await row.evaluate((el) => {

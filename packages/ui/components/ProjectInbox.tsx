@@ -94,6 +94,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   ready: boolean;
   history?: import("solid-js").Element;
   collapseToggle?: import("solid-js").Element;
+  ref?(element: HTMLElement): void;
   onOpen(project: ProjectSelection): void;
   onAttention?(project: ProjectSelection): void;
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
@@ -1015,7 +1016,10 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
   }));
   return (
     <SidebarRail
-      ref={rootContext}
+      ref={(element) => {
+        rootContext(element);
+        props.ref?.(element);
+      }}
       class={`otk-project-inbox${reorder.active() ? " is-reordering" : ""}`}
       label="Projects"
       side="left"

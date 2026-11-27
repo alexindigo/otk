@@ -87,6 +87,9 @@ test.describe("shared anchor gutters", () => {
     tags,
     async ({ isolatedState: state, page }) => {
       await openSession(state, page, "tstv1-otk");
+      // D74: keep conversation anchors exposed throughout the narrow probes.
+      await page.getByRole("button", { name: "Collapse right panel" }).click();
+      await expect(page.locator(".otk-right-rail")).toBeVisible();
       for (const [width, height] of [[300, 400], [800, 600], [1280, 900]]) {
         await page.setViewportSize({ width, height });
         for (

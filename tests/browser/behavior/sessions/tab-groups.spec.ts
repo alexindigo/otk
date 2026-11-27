@@ -44,6 +44,8 @@ test("sessions.tab-groups-disjoint-phantoms-ancestor-links-more-and-reload", {
   }
   await page.locator(`[data-session="${a}"]`).click();
   await page.setViewportSize({ width: 900, height: 800 });
+  // D74: the ancestor links are behind the sheet at this width.
+  await page.getByRole("button", { name: "Back to conversation" }).click();
   await expect(page.locator(`[data-crumb="${a}"]`)).toBeVisible();
   await expect.poll(() =>
     page.locator(`[data-crumb="${a}"]`).evaluate((element) => {
