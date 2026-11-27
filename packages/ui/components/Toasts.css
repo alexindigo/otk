@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-toasts {
-  --toast-width: calc(480 * var(--otk-unit));
   position: fixed;
   inset: var(--overlay-gutter);
   margin-inline-start: auto;
@@ -10,7 +9,8 @@
   justify-content: flex-end;
   align-items: stretch;
   gap: var(--space-2);
-  inline-size: var(--toast-width);
+  /* The widest row sizes the stack; every card stretches to that edge. */
+  inline-size: max-content;
   max-inline-size: stretch;
   pointer-events: none;
 }
@@ -83,11 +83,17 @@
   text-align: end;
   min-inline-size: 0;
 }
+.otk-toasts-pager {
+  /* The paging control borrows the cards' width; it never widens the cards. */
+  contain: inline-size;
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+}
 .otk-toasts-more {
   pointer-events: auto;
-  align-self: flex-end;
   background: var(--overlay-bg);
-  flex: none;
+  min-inline-size: 0;
 }
 .otk-toasts.is-layer {
   position: static;
@@ -100,8 +106,7 @@
 @container transcript-stage (inline-size < 28rem) {
   .otk-toasts.is-layer {
     justify-self: var(--toast-narrow-alignment, center);
-    inline-size: min(var(--toast-width), 50vi);
-    max-inline-size: none;
+    max-inline-size: 50vi;
   }
 }
 .otk-toast-location {

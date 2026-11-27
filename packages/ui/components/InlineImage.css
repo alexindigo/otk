@@ -1,10 +1,9 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-inline-image {
-  --otk-image-max: calc(560 * var(--otk-unit));
   display: block;
   box-sizing: border-box;
   inline-size: max-content;
-  max-inline-size: min(100%, var(--otk-image-max));
+  max-inline-size: 100%;
   padding: 0;
   margin-block: 0 var(--space-2);
   border: 1px solid var(--otk-border-code);
@@ -14,7 +13,7 @@
   cursor: zoom-in;
 }
 .otk-inline-image.is-pending {
-  inline-size: min(100%, var(--otk-image-max));
+  inline-size: stretch;
   aspect-ratio: 16 / 10;
   cursor: default;
 }

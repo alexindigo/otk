@@ -11,14 +11,14 @@ test.describe("unreported live usage", () => {
     await expect(trigger).toContainText("Cost unavailable");
     await trigger.hover();
     const row = page.locator(".otk-usage-breakdown tbody tr");
-    await expect(row.locator(":scope > *").nth(3)).toHaveText("Not reported");
-    await expect(row.locator(":scope > *").nth(8)).toHaveText("Not reported");
+    await expect(row.getByRole("cell").nth(2)).toHaveText("Not reported");
+    await expect(row.getByRole("cell").nth(7)).toHaveText("Not reported");
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "succeed",
     });
-    await expect(row.locator(":scope > *").nth(3)).toHaveText("0");
-    await expect(row.locator(":scope > *").nth(8)).toHaveText("$0.00");
+    await expect(row.getByRole("cell").nth(2)).toHaveText("0");
+    await expect(row.getByRole("cell").nth(7)).toHaveText("$0.00");
   });
 });
 test.describe("unknown prices", () => {

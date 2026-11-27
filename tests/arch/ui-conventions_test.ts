@@ -284,6 +284,33 @@ Deno.test("UI convention: text sizes are intrinsic and scripts do not own CSS wi
   assertEquals(textLayoutErrors(await productionSources()), []);
 });
 
+Deno.test("UI convention: scaled pixel widths cannot hide in layout or aliases", () => {
+  const css = "packages/ui/Example.css";
+  assertEquals(
+    textLayoutErrors(
+      new Map([[
+        css,
+        `
+      :root { --otk-unit: calc(1px * var(--otk-scale)); }
+      .stack { --extent: calc(480 * var(--otk-unit)); inline-size: var(--extent); }
+      .panel { --alias: var(--extent); max-width: min(100%, var(--alias)); }
+      .extra { width: calc(var(--otk-unit) * 32.5); }
+      .row { --unit-alias: var(--otk-unit); flex-basis: calc(2 * var(--unit-alias)); }
+      .drawer { min-inline-size: calc(80 * var(--otk-unit)); }
+      .some-title { inline-size: fit-content; padding: calc(4 * var(--otk-unit)); }
+    `,
+      ]]),
+    ),
+    [
+      `${css}: .stack: inline-size: var(--extent)`,
+      `${css}: .panel: max-width: min(100%,var(--alias))`,
+      `${css}: .extra: width: calc(var(--otk-unit)*32.5)`,
+      `${css}: .row: flex-basis: calc(2*var(--unit-alias))`,
+      `${css}: .drawer: min-inline-size: calc(80*var(--otk-unit))`,
+    ],
+  );
+});
+
 Deno.test("UI convention: positional offsets do not reconstruct other boxes", async () => {
   const productionCSS = new Map(
     [...await productionSources()].filter(([path]) =>
