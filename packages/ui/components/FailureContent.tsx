@@ -37,6 +37,8 @@ export default function FailureContent(
       intrinsic?: boolean;
       /** An optional trailing action shares the Details row. */
       controls?: Element;
+      /** A containing surface can supply its own target presentation. */
+      heading?: Element;
       announcement?: FailureAnnouncement;
       class?: string;
     }
@@ -190,34 +192,41 @@ export default function FailureContent(
           <>
             <Show when={props.placement !== "record"}>
               <div class="otk-failure-heading">
-                <Show when={props.placement !== "record"}>
-                  <strong
-                    class="otk-control-label"
-                    title={props.failure.heading}
-                  >
-                    {props.failure.heading}
-                  </strong>
-                  <Show when={props.failure.target.label}>
-                    <Show
-                      when={props.failure.target.href}
-                      fallback={
-                        <span
-                          class="otk-failure-target otk-control-label"
-                          title={props.failure.target.label}
-                        >
-                          {props.failure.target.label}
-                        </span>
-                      }
-                    >
-                      <a
-                        class="otk-failure-target otk-control-label"
-                        href={props.failure.target.href}
-                        title={props.failure.target.label}
+                <Show
+                  when={props.heading}
+                  fallback={
+                    <>
+                      <strong
+                        class="otk-control-label"
+                        title={props.failure.heading}
                       >
-                        {props.failure.target.label}
-                      </a>
-                    </Show>
-                  </Show>
+                        {props.failure.heading}
+                      </strong>
+                      <Show when={props.failure.target.label}>
+                        <Show
+                          when={props.failure.target.href}
+                          fallback={
+                            <span
+                              class="otk-failure-target otk-control-label"
+                              title={props.failure.target.label}
+                            >
+                              {props.failure.target.label}
+                            </span>
+                          }
+                        >
+                          <a
+                            class="otk-failure-target otk-control-label"
+                            href={props.failure.target.href}
+                            title={props.failure.target.label}
+                          >
+                            {props.failure.target.label}
+                          </a>
+                        </Show>
+                      </Show>
+                    </>
+                  }
+                >
+                  {props.heading}
                 </Show>
                 <Show when={props.time !== undefined}>
                   <Clock

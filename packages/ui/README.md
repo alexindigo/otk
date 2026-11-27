@@ -1745,13 +1745,16 @@ text. Toast's Surface body scrolls when the viewport constrains it. The stack
 shows at most three cards, newest first, and the overflow control pages through
 the remaining cards. Opening Sessions detaches the stack so it cannot cover the
 session lamps. Each card has one square top-right dismiss control. Session notes
-show the same live lamp as the sidebar and offer the session name through the
-guarded Open action; failures use their own tone and disclosure. Dismissal
-affects presentation only; action buttons use delivery-scoped public command
-IDs. Permission details use the shared summary's compact, single-line target
-with the full text in its title. Session activity labels and stale-resume
-descriptions come from the client formatter. Attention is cleared by actual
-viewing/resolution, not by dismissal or command promise completion.
+show the same live lamp as the sidebar (failures use their own tone), then the
+project badge/name, task and, when distinct, session. The shared whole-item row
+yields lower priority facts without clipping; the announcement retains the full
+location. The target offers the guarded Open action, and failures retain their
+disclosure. Dismissal affects presentation only; action buttons use
+delivery-scoped public command IDs. Permission details use the shared summary's
+compact, single-line target with the full text in its title. Session activity
+labels and stale-resume descriptions come from the client formatter. Attention
+is cleared by actual viewing/resolution, not by dismissal or command promise
+completion.
 
 The OS channel uses secure-context browser `Notification`, tag replacement,
 silent OS presentation and a focus/default-command click handler. `request`

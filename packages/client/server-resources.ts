@@ -60,6 +60,8 @@ import { createSessionLists } from "./session-lists.ts";
 import { createProjectOrder, orderProjectRows } from "./project-order.ts";
 import { createFileFacts, type FileFacts } from "./file-facts.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
+import type { NoteSession, NotificationLocation } from "./notifications.ts";
+import { sessionTitle } from "./session-title.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -147,6 +149,7 @@ export interface ServerResources {
   duplicateProjectName(name: string): boolean;
   checkoutLabel(sidecarId: string, directory: string): string;
   projectLabel(sidecarId: string, directory: string): string;
+  notificationLocation(target: NoteSession): NotificationLocation | undefined;
   updateProject(
     target: ProjectSelection & ProjectEditTarget,
     patch: ProjectPatch,
@@ -1163,6 +1166,21 @@ export function createServerResources(o: {
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     checkoutLabel: (id, directory) => projectOwner(id).label(directory),
     projectLabel: (id, directory) => projectOwner(id).projectLabel(directory),
+    notificationLocation({ sidecar, session }) {
+      const entry = o.index.getMetadata(sidecar, session);
+      if (!entry) return undefined;
+      const projects = projectOwner(sidecar);
+      const directory = projects.resolve(entry.directory, entry.projectID);
+      const project = { sidecarId: sidecar, directory };
+      const model = tabs(project);
+      model.update(tabInput(project));
+      const title = sessionTitle(session, entry.title);
+      return {
+        project: projects.projectIdentity(directory),
+        task: model.taskTitleFor(session) ?? title,
+        session: title,
+      };
+    },
     async updateProject({ sidecarId, directory, projectID }, patch) {
       await sidecars.connection(sidecarId).rpc.call("project.update", {
         directory,

@@ -12,6 +12,8 @@ import {
   createIndex,
   createServerResources,
   createState,
+  notificationBody,
+  NotificationHub,
   NotificationTriggers,
   SidecarConnection,
   type SidecarState,
@@ -22,6 +24,7 @@ import {
   type InboxOp,
   type InboxSnapshot,
   type IndexEntry,
+  projectSessionHierarchy,
   type ProjectStatus,
   type ServerFrame,
 } from "@otk/protocol";
@@ -1083,6 +1086,81 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     f.resources.projects(100).some((r) => r.directory === "/moved"),
     false,
   );
+  f.resources.stop();
+});
+
+Deno.test("notification delivery projects the target's project, task and session for every session note", () => {
+  const f = fixture();
+  const root = { ...entry("root", "/other"), title: "Search implementation" };
+  const child = {
+    ...entry("child", "/other"),
+    parentID: root.id,
+    title: "Verify index",
+  };
+  const task = {
+    id: "task",
+    directory: "/other",
+    name: "Search",
+    sessions: [root.id],
+    order: 1,
+  };
+  f.receive("local", { t: "index.snapshot", rev: 0, entries: [root, child] });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "notification-location",
+    revision: 0,
+    inbox: {
+      ...metadata(),
+      tasks: [task],
+    },
+  });
+  const hub = new NotificationHub(
+    () => ({ channels: [] }),
+    async () => {},
+    () => {},
+    f.resources.notificationLocation,
+  );
+  for (
+    const kind of ["done", "permission", "question", "error", "info"] as const
+  ) {
+    const note = hub.publish({
+      id: kind,
+      kind,
+      sessionRef: { sidecar: "local", session: child.id },
+      title: kind,
+      actions: [],
+    });
+    assertEquals(note.location, {
+      project: { name: "other" },
+      task: "Search",
+      session: "Verify index",
+    });
+    assertEquals(notificationBody(note), "other · Search · Verify index");
+  }
+  const hierarchy = projectSessionHierarchy([root, child], [task]);
+  f.receive("local", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "upsert",
+      entry: { ...child, hierarchy: hierarchy.get(child.id) },
+    }],
+  });
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "notification-location",
+    from: 0,
+    revision: 1,
+    ops: [{ op: "task.remove", id: task.id }],
+  });
+  const background = hub.publish({
+    id: "background",
+    kind: "done",
+    sessionRef: { sidecar: "local", session: child.id },
+    title: "Session done",
+    actions: [],
+  });
+  assertEquals(notificationBody(background), "other · Search · Verify index");
   f.resources.stop();
 });
 
