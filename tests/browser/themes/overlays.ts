@@ -181,7 +181,8 @@ async function allMarks(
       expect([item.w, item.h, item.start]).toEqual([
         3,
         14,
-        item.external ? item.railWidth : 3,
+        // Style7 finding 5: Tree reserves the mark before the row tracks.
+        item.external ? 0 : 3,
       ]);
       expect(item.centred).toBeLessThanOrEqual(.5);
     } else {expect([item.h, item.start, item.end, item.bottom]).toEqual([
