@@ -234,6 +234,7 @@ export async function sessionHeap(
     ) as unknown as {
       detachedNodes: { treeNode: DomNode }[];
     };
+    const detached: DomNode[] = [];
     for (const { treeNode } of detachedNodes) {
       const nodes: DomNode[] = [];
       const visit = (node: DomNode) => {
@@ -252,31 +253,43 @@ export async function sessionHeap(
           )
         )
       ) continue;
-      for (const node of nodes) {
-        const { object } = await browser.send("DOM.resolveNode", {
-          backendNodeId: node.backendNodeId,
-          objectGroup: group,
-        }) as { object: { objectId: string } };
-        const { heapSnapshotObjectId } = await browser.send(
-          "HeapProfiler.getHeapObjectId",
-          {
-            objectId: object.objectId,
-          },
+      detached.push(...nodes);
+    }
+    if (detached.length) {
+      // Resolve the same full set of detached nodes, but do not serialize two
+      // protocol round trips and a full heap walk for every descendant.
+      const byID = new Map(queue.map((i) => [field(i * ns, "id"), i]));
+      const batchSize = 64;
+      for (let start = 0; start < detached.length; start += batchSize) {
+        const results = await Promise.allSettled(
+          detached.slice(start, start + batchSize).map(async (node) => {
+            const { object } = await browser.send("DOM.resolveNode", {
+              backendNodeId: node.backendNodeId,
+              objectGroup: group,
+            }) as { object: { objectId: string } };
+            const { heapSnapshotObjectId } = await browser.send(
+              "HeapProfiler.getHeapObjectId",
+              { objectId: object.objectId },
+            );
+            return { node, heapSnapshotObjectId };
+          }),
         );
-        const index = queue.find((i) =>
-          field(i * ns, "id") === Number(heapSnapshotObjectId)
-        );
-        if (index === undefined && diagnostics) {
-          diagnostics.push(
-            `Detached ${node.nodeName}#${node.backendNodeId} lacks a sampled strong retaining path (heap ID ${heapSnapshotObjectId})`,
+        for (const result of results) {
+          if (result.status === "rejected") throw result.reason;
+          const { node, heapSnapshotObjectId } = result.value;
+          const index = byID.get(Number(heapSnapshotObjectId));
+          if (index === undefined && diagnostics) {
+            diagnostics.push(
+              `Detached ${node.nodeName}#${node.backendNodeId} lacks a sampled strong retaining path (heap ID ${heapSnapshotObjectId})`,
+            );
+            continue;
+          }
+          assert(
+            index !== undefined,
+            `Detached ${node.nodeName}#${node.backendNodeId} lacks a sampled strong retaining path`,
           );
-          continue;
+          add(index * ns, "dom");
         }
-        assert(
-          index !== undefined,
-          `Detached ${node.nodeName}#${node.backendNodeId} lacks a sampled strong retaining path`,
-        );
-        add(index * ns, "dom");
       }
     }
   } finally {
