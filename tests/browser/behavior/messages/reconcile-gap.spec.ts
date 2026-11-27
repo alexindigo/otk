@@ -272,7 +272,9 @@ for (const witness of ["visible", "load", "failed"] as const) {
       await action(name).click();
       await expect.poll(count).toBeGreaterThan(acquired);
       await expect.poll(async () =>
-        await gap.count() ? await gap.getAttribute("aria-busy") : null
+        // The terminal batch removes the gap. Observe absence and busy state
+        // in one snapshot rather than blocking on a row that just retired.
+        await gap.evaluateAll((rows) => rows[0]?.getAttribute("aria-busy"))
       ).not.toBe("true");
     };
     if (witness === "failed") {

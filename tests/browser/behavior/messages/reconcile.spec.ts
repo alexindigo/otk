@@ -100,14 +100,30 @@ for (
         name: "Load older messages",
         exact: true,
       });
-      await expect.poll(async () => {
-        if (await button.count() || await count() >= 30) return true;
+      const historyPublished = () =>
+        page.evaluate((promptID) => {
+          const messages = (globalThis as typeof globalThis & {
+            transcriptPublication: Map<string, import("@otk/protocol").Message>;
+          }).transcriptPublication;
+          return [...messages.values()].some((message) =>
+            message.role === "assistant" && message.replyTo === promptID &&
+            message.parts.some((part) =>
+              part.kind === "tool" && part.call.tool === "bash"
+            )
+          );
+        }, historical);
+      // Native bookkeeping counts towards the page size, so a row count is
+      // not evidence that the historical tool has reached the browser.
+      while (!await historyPublished()) {
         await scrollTranscript(page, false);
         if (await older.isVisible()) {
-          await older.click({ timeout: 2500 }).catch(() => {});
+          const previous = await count();
+          await older.click();
+          await expect.poll(count).toBeGreaterThan(previous);
+        } else {
+          await expect.poll(historyPublished).toBe(true);
         }
-        return !!await button.count() || await count() >= 30;
-      }, { timeout: 30_000 }).toBe(true);
+      }
       await revealAcquired(page, selector);
       await wheelTranscript(page, -1, button);
       await expect(button).toHaveAttribute("aria-expanded", "false");

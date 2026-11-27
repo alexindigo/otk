@@ -27,12 +27,17 @@ test.describe("complete-content inline footprint", () => {
     test(`messages.inline-footprint-${session}`, {
       tag: ["@messages", "@contracts"],
     }, async ({ isolatedState: state, page }, info) => {
-      await state.product("layout.patch", {
+      await page.setViewportSize({ width: 1000, height: 760 });
+      await openSession(state, page, `tstv1-${session}`, {
         leftCollapsed: true,
         rightCollapsed: true,
       });
-      await page.setViewportSize({ width: 1000, height: 760 });
-      await openSession(state, page, `tstv1-${session}`);
+      for (const side of ["left", "right"]) {
+        await expect(page.locator(`aside[data-side=${side}]`)).toHaveAttribute(
+          "data-collapsed",
+          "true",
+        );
+      }
       for (const [width, scale] of [[1000, 100], [840, 100], [1000, 125]]) {
         await page.setViewportSize({ width, height: 760 });
         await state.product("prefs.set", {
