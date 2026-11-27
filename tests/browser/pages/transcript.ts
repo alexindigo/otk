@@ -520,7 +520,7 @@ export async function runNativeTool(
 export async function revealAcquired(page: Page, selector: string) {
   const inWork = workPanel(page).locator(selector);
   if (await inWork.count()) {
-    await expect(inWork).toBeVisible();
+    await expect(inWork.first()).toBeVisible();
     return;
   }
   await revealMeasured(page, selector, true);

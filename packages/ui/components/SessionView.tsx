@@ -92,7 +92,10 @@ import {
   ownedCommand,
   useCommandPorts,
 } from "../keyboard/context.tsx";
-import { TranscriptContext } from "../features/transcript-context.tsx";
+import {
+  replySourceIncomplete,
+  TranscriptContext,
+} from "../features/transcript-context.tsx";
 import { contextTarget } from "./context-target.ts";
 import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
 import TranscriptGap from "./TranscriptGap.tsx";
@@ -1181,21 +1184,13 @@ export default function SessionView(props: {
                                                         : undefined}
                                                       activeRecord={progressRecord() ===
                                                         message().id}
-                                                      copyIncomplete={message()
-                                                            .role ===
-                                                          "assistant" &&
-                                                        !!props.transcript &&
-                                                        (!props.exhausted &&
-                                                          (!props.transcript
-                                                            .projection
-                                                            .boundary(
-                                                              turnID(),
-                                                            )
-                                                            ?.firstID ||
-                                                            !projection()
-                                                              .messagesByID[
-                                                                reply().firstID
-                                                              ]))}
+                                                      copyIncomplete={!!props
+                                                        .transcript &&
+                                                        replySourceIncomplete(
+                                                          props.transcript,
+                                                          reply(),
+                                                          props.exhausted,
+                                                        )}
                                                       prefs={props.prefs}
                                                       directory={props.info
                                                         ?.directory}

@@ -56,6 +56,12 @@ test("menus.content-targets-complete-source-code-hunks-and-feature-tools", {
   await pick(page, "Copy command");
   await copied(page, "printf context-output");
   await open("[data-tool=bash] .otk-tool-toggle");
+  await pick(page, "Copy reply");
+  await copied(
+    page,
+    "Reply source\n\nconst answer = 42;\n\n\nSecond reply step",
+  );
+  await open("[data-tool=bash] .otk-tool-toggle");
   await pick(page, "Expand");
   await expect(page.locator("[data-tool=bash] .otk-tool-toggle"))
     .toHaveAttribute("aria-expanded", "true");
