@@ -4,6 +4,48 @@ import { ProjectSummaries } from "../../../core/index/project-summaries.ts";
 import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 import type { IndexMetadata, ProjectSummary } from "@otk/protocol";
 
+Deno.test("project metadata publishes just the changed repo aliases and ignores stale duplicate replies", () => {
+  const published: string[] = [];
+  const owner = new ProjectSummaries(
+    () => ({ seen: 0, finish: 0 }),
+    (row) => published.push(row.directory),
+  );
+  const seeds = ["/one", "/alias", "/two"].map((directory) => ({
+    directory,
+    sessionCount: 1,
+    lastActivity: 10,
+    hasSessions: true,
+    authority: "current" as const,
+    presentation: { id: directory === "/two" ? "two" : "one", name: "Before" },
+    nativeProject: {
+      topology: directory === "/two" ? "/two" : "/one",
+      updated: 1,
+    },
+  }));
+  owner.seed(seeds);
+  published.length = 0;
+  const update = (name: string, updated: number, topology = "/one") => ({
+    presentation: { id: "one", name },
+    updated,
+    topology,
+  });
+  assertEquals(owner.metadata(update("After", 2), "reply"), true);
+  assertEquals(owner.metadata(update("After", 2), "event"), true);
+  assertEquals(published.splice(0), ["/one", "/alias"]);
+  assertEquals(owner.metadata(update("External", 3), "event"), true);
+  assertEquals(owner.metadata(update("After", 2), "reply"), true);
+  assertEquals(
+    owner.metadata(update("Moved", 4, "/different"), "event"),
+    false,
+  );
+  assertEquals(published.splice(0), ["/one", "/alias"]);
+  owner.seed(seeds);
+  assertEquals(published, []);
+  assertEquals(owner.values.get("/one")?.presentation?.name, "External");
+  assertEquals(owner.values.get("/alias")?.presentation?.name, "External");
+  assertEquals(owner.values.get("/two")?.presentation?.name, "Before");
+});
+
 const entry = (id = "tstv1-a"): IndexMetadata => ({
   id,
   directory: "/other",

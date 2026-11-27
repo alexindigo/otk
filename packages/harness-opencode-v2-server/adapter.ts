@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
+import { nativeProjectMetadata } from "./project-presentation.ts";
 import { DeliveryBackfill, DeliveryJoin } from "@otk/harness";
 import {
   type DigestPolicy,
@@ -318,7 +319,11 @@ export class OpencodeV2ServerAdapter implements Harness {
       revertCommit: this.transcript.revertCommit,
       projectEdit: projectEditor(
         () => this.stream.client,
-        () => this.catalogs?.catalogs.invalidateAll(["project"]),
+        (project) => {
+          this.catalogs?.catalogs.invalidateAll(["project"]);
+          const update = nativeProjectMetadata({ ...project });
+          if (update) this.#sink?.projectMetadata?.(update, "reply");
+        },
       ),
       ...digestCapabilities,
       ...catalogCapabilities,
@@ -1381,6 +1386,15 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     this.catalogs?.event(event);
+    if (event.type === "project.updated") {
+      signal.throwIfAborted();
+      if (generation !== this.#generation) return;
+      const update = nativeProjectMetadata(event.data);
+      if (!update || !this.#sink?.projectMetadata?.(update, "event")) {
+        this.#queueInventory(client, signal, generation);
+      }
+      return;
+    }
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
@@ -1502,7 +1516,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     if (
-      /^(project\.updated|worktree\.(updated|resolved)|location\.shutdown)$/
+      /^(worktree\.(updated|resolved)|location\.shutdown)$/
         .test(event.type)
     ) {
       this.#queueInventory(client, signal, generation);

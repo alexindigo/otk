@@ -53,6 +53,26 @@ export class IndexStore extends SessionIndex {
   projectSeeds(values: readonly import("@otk/harness").ProjectSeed[]): void {
     for (const listener of this.#seeds) listener(values);
   }
+  #projectMetadata?: NonNullable<
+    import("@otk/harness").HarnessSink["projectMetadata"]
+  >;
+  observeProjectMetadata(
+    listener: NonNullable<
+      import("@otk/harness").HarnessSink["projectMetadata"]
+    >,
+  ): () => void {
+    this.#projectMetadata = listener;
+    return () => {
+      this.#projectMetadata = undefined;
+    };
+  }
+  projectMetadata(
+    ...args: Parameters<
+      NonNullable<import("@otk/harness").HarnessSink["projectMetadata"]>
+    >
+  ): boolean {
+    return this.#projectMetadata?.(...args) ?? false;
+  }
   constructor(readonly diagnostics?: SectionObserver) {
     super();
   }

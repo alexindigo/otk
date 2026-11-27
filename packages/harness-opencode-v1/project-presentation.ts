@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CatalogProject, CatalogRepository } from "@otk/protocol";
 import type { Client } from "./client.ts";
-import { HarnessError } from "@otk/harness";
+import { HarnessError, projectMetadata } from "@otk/harness";
 
 export const projectColors: Readonly<Record<string, string>> = {
   orange: "#ee7330",
@@ -23,6 +23,15 @@ export interface NativeProject {
   vcs?: string;
   icon?: { override?: string; url?: string; color?: string };
   commands?: { start?: string };
+}
+export function nativeProjectMetadata(project: Record<string, unknown>) {
+  return projectMetadata(project, "worktree", (value) => {
+    const { id, name, color } = projectPresentation({
+      ...value,
+      worktree: "/",
+    });
+    return { id, name, color };
+  });
 }
 export function projectPresentation(project: NativeProject): CatalogProject {
   const color = project.icon?.color;

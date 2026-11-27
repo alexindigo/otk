@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { projectPresentation } from "./project-presentation.ts";
+import {
+  nativeProjectMetadata,
+  projectPresentation,
+} from "./project-presentation.ts";
 import { CheckoutRepositories } from "@otk/harness";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -649,7 +652,19 @@ export class OpencodeV2DigestSink implements DigestSink {
           : undefined;
         if (!owner) return row;
         const { id, name, color } = projectPresentation(owner);
-        return { ...row, presentation: { id, name, color } };
+        const native = nativeProjectMetadata({ ...owner });
+        return {
+          ...row,
+          presentation: { id, name, color },
+          ...(native
+            ? {
+              nativeProject: {
+                updated: native.updated,
+                topology: native.topology,
+              },
+            }
+            : {}),
+        };
       });
       for (const row of rows) this.#projectDirectories.add(row.directory);
       projects.push(...rows);

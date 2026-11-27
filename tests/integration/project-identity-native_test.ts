@@ -101,8 +101,22 @@ test(`native ${nativeVersion}: project names reach summaries and survive restart
     run: (
       edit: NonNullable<OpencodeV1Adapter["capabilities"]["projectEdit"]>,
       name: () => string | undefined,
+      trace: string[],
     ) => Promise<void>,
   ) {
+    const trace: string[] = [];
+    const fetcher: typeof fetch = (input, init) => {
+      const path =
+        new URL(input instanceof Request ? input.url : input).pathname;
+      if (/\/projects?(\/|$)/.test(path)) {
+        trace.push(
+          `${
+            init?.method ?? (input instanceof Request ? input.method : "GET")
+          } ${path}`,
+        );
+      }
+      return fetch(input, init);
+    };
     const bridge = new DigestBridge({
       ...nativeDigest(oc),
       statePath: oc.root + "/names-" + stage,
@@ -118,7 +132,7 @@ test(`native ${nativeVersion}: project names reach summaries and survive restart
         },
         undefined,
         () => {},
-        fetch,
+        fetcher,
         bridge,
       )
       : new OpencodeV1Adapter(
@@ -127,12 +141,12 @@ test(`native ${nativeVersion}: project names reach summaries and survive restart
           harness: { ...settings.harness, db: oc.db, url: oc.url },
         },
         undefined,
-        fetch,
+        fetcher,
         bridge,
       );
     const summaries = new ProjectSummaries(
       () => ({ seen: 0, finish: 0 }),
-      () => {},
+      (row) => trace.push(`summary ${row.directory}`),
     );
     try {
       await adapter.core.start({
@@ -144,8 +158,10 @@ test(`native ${nativeVersion}: project names reach summaries and survive restart
         invalidate() {},
         bootstrapComplete() {},
         projectSeeds(rows) {
+          trace.push("seed inventory");
           summaries.seed(rows);
         },
+        projectMetadata: (value, source) => summaries.metadata(value, source),
       });
       const name = () => summaries.values.get(oc.directory)?.presentation?.name;
       await waitFor(
@@ -154,22 +170,46 @@ test(`native ${nativeVersion}: project names reach summaries and survive restart
       );
       const edit = adapter.capabilities.projectEdit;
       assert(edit);
-      await run(edit, name);
+      await run(edit, name, trace);
     } finally {
       await adapter.core.stop();
     }
   }
 
-  await withAdapter("before", async (edit, name) => {
+  await withAdapter("before", async (edit, name, trace) => {
     assertEquals(name() || "", "");
+    trace.length = 0;
     assertEquals(
-      (await edit.update(target, { name: "Renamed fixture" })).values.name,
+      (await (await edit.prepare(target, { name: "Renamed fixture" }))()).values
+        .name,
       "Renamed fixture",
     );
     await waitFor(name, (value) => value === "Renamed fixture");
-    assertEquals((await edit.update(target, { name: "" })).values.name, "");
+    assertEquals(trace.filter((line) => line.startsWith("PATCH ")).length, 1);
+    assertEquals(trace.filter((line) => /^GET .*\/projects?$/.test(line)), []);
+    assertEquals(trace.filter((line) => line === "seed inventory"), []);
+    assertEquals(trace.filter((line) => line.startsWith("summary ")), [
+      `summary ${oc.directory}`,
+    ]);
+    if (oc instanceof OpencodeV2Test) {
+      await oc.api.project.update({ projectID, name: "External name" });
+    } else {
+      await oc.request(`/project/${projectID}`, {
+        method: "PATCH",
+        body: { name: "External name" },
+      });
+    }
+    await waitFor(name, (value) => value === "External name");
+    assertEquals(trace.filter((line) => line.startsWith("summary ")), [
+      `summary ${oc.directory}`,
+      `summary ${oc.directory}`,
+    ]);
+    assertEquals(
+      (await (await edit.prepare(target, { name: "" }))()).values.name,
+      "",
+    );
     await waitFor(name, (value) => !value);
-    await edit.update(target, { name: "Persisted fixture" });
+    await (await edit.prepare(target, { name: "Persisted fixture" }))();
     await waitFor(name, (value) => value === "Persisted fixture");
   });
   await oc.restart();

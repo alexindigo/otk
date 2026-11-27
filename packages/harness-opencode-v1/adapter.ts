@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
+import { nativeProjectMetadata } from "./project-presentation.ts";
 import { DeliveryBackfill, DeliveryJoin } from "@otk/harness";
 import {
   type DiagnosticSink,
@@ -902,7 +903,12 @@ export class OpencodeV1Adapter implements Harness {
       "projectEdit",
       projectEditor(
         this.client,
-        () => this.catalogs.invalidateAll(["project"]),
+        (project) => {
+          this.catalogs.invalidateAll(["project"]);
+          const update = nativeProjectMetadata({ ...project });
+          if (update) this.#sink?.projectMetadata?.(update, "reply");
+        },
+        () => this.#connection,
       ),
     );
     this.capabilities = registry.capabilities;
@@ -2174,6 +2180,10 @@ export class OpencodeV1Adapter implements Harness {
     if (catalogKinds) {
       if (catalogKinds.includes("agents")) this.#colors.reset();
       if (catalogKinds.includes("project") && this.digest?.projects) {
+        if (type === "project.updated" && p) {
+          const update = nativeProjectMetadata(p);
+          if (update && sink.projectMetadata?.(update, "event")) return;
+        }
         const seeds = await this.digest.projects(
           this.#connection,
           controller.signal,

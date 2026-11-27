@@ -867,6 +867,9 @@ export class InboxFeature implements FrameSource {
         this.index.hierarchy.invalidate();
         this.#taskRoots();
       }),
+      index.observeProjectMetadata((project, source) =>
+        this.summaries.metadata(project, source)
+      ),
       stores.projects.listen((change) => {
         this.#identity();
         this.projectOrder.admit(

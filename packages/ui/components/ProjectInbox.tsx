@@ -73,8 +73,7 @@ import ChromeMeta, {
 import TimeText from "./TimeText.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { connectionFeedback } from "./connection-light.ts";
-import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
-const RENAMING_PROJECT = "Renaming project...";
+import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -204,7 +203,8 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     arguments: renameArgs,
     context: { kind: "project", title: () => "Rename", order: -20 },
     enabled: (_ctx, input) =>
-      !!input && !props.projectRename?.state.pending && !!renameRow(input),
+      !!input && props.projectRename?.state.pendingTitle === undefined &&
+      !!renameRow(input),
   });
   const resetRow = (input: ProjectSelection) => {
     const row = renameRow(input);
@@ -722,10 +722,11 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
     const project = () => row.project;
-    const editing = () => {
+    const renaming = () => {
       const target = renameTarget(project());
       return !!target && !!props.projectRename?.matches(target);
     };
+    const editing = () => renaming() && props.projectRename!.editing;
     let root!: HTMLElement;
     let openButton: HTMLButtonElement | undefined;
     createEffect(editing, (active, before) => {
@@ -848,7 +849,13 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
                   class="otk-project-name"
                   data-unread={project().unread ? "true" : "false"}
                 >
-                  {name()}
+                  <TitleLabel
+                    pending={renaming()
+                      ? props.projectRename!.state.pendingTitle
+                      : undefined}
+                  >
+                    {name()}
+                  </TitleLabel>
                 </span>
                 <Show when={project().inactive && project().parentLabel}>
                   <ChromeMeta
@@ -872,7 +879,6 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
             <TitleEditor
               owner={props.projectRename!}
               label="Rename project"
-              pendingText={RENAMING_PROJECT}
               feedbackID={rowErrorID}
             />
           </Show>
@@ -921,7 +927,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
         }
         feedback={
           <Show
-            when={editing()}
+            when={renaming()}
             fallback={
               <Show when={rowError()}>
                 <div
@@ -937,14 +943,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
             }
           >
             <Show
-              when={props.projectRename!.state.pending ||
-                props.projectRename!.state.invalid ||
+              when={props.projectRename!.state.invalid ||
                 props.projectRename!.state.error}
             >
               <TitleFeedback
                 owner={props.projectRename!}
                 id={rowErrorID}
-                pendingText={RENAMING_PROJECT}
                 expanded
               />
             </Show>

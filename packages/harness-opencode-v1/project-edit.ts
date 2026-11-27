@@ -7,7 +7,11 @@ import {
   type ProjectEditSnapshot,
 } from "@otk/protocol";
 import type { Client } from "./client.ts";
-import { projectColors, readNativeProject } from "./project-presentation.ts";
+import {
+  type NativeProject,
+  projectColors,
+  readNativeProject,
+} from "./project-presentation.ts";
 /** Capabilities come from this installed server's API schema, not the V1 label. */
 export function writableProjectFields(
   doc: {
@@ -37,18 +41,26 @@ export function writableProjectFields(
 }
 export function projectEditor(
   client: Client,
-  changed: () => void,
+  changed: (project: NativeProject) => void,
+  generation: () => number = () => 0,
 ): ProjectEditCapability {
-  const read = async (
+  let schema: { generation: number; fields: ProjectEditField[] } | undefined;
+  async function fields(signal?: AbortSignal) {
+    const current = generation();
+    if (schema?.generation === current) return schema.fields;
+    const doc = await client.json<Parameters<typeof writableProjectFields>[0]>(
+      "/doc",
+      { signal },
+    );
+    const fields = writableProjectFields(doc);
+    if (current === generation()) schema = { generation: current, fields };
+    return fields;
+  }
+  function snapshot(
+    project: NativeProject,
     directory: string,
-    signal?: AbortSignal,
-  ): Promise<ProjectEditSnapshot> => {
-    const [project, doc] = await Promise.all([
-      readNativeProject(client, directory, signal),
-      client.json<Parameters<typeof writableProjectFields>[0]>("/doc", {
-        signal,
-      }),
-    ]);
+    fields: ProjectEditField[],
+  ): ProjectEditSnapshot {
     return {
       directory,
       projectID: project.id,
@@ -59,7 +71,7 @@ export function projectEditor(
         color: project.icon?.color ?? "",
         startScript: project.commands?.start ?? "",
       },
-      fields: writableProjectFields(doc),
+      fields,
       colors: Object.entries(projectColors).filter(([name]) =>
         !["mint", "lime"].includes(name)
       ).map(([value, color]) => ({
@@ -72,15 +84,28 @@ export function projectEditor(
         description: "Base worktree",
       }, { variable: "$OPENCODE_WORKTREE_PATH", description: "New worktree" }],
     };
-  };
+  }
   return {
-    read,
-    async update(target, patch, operation) {
-      const before = await read(target.directory, operation?.signal);
+    async read(directory, signal) {
+      const [project, writable] = await Promise.all([
+        readNativeProject(client, directory, signal),
+        fields(signal),
+      ]);
+      return snapshot(project, directory, writable);
+    },
+    async prepare(target, patch, signal) {
+      const current = generation();
+      const [identity, writable] = await Promise.all([
+        client.json<{ id: string }>("/project/current", {
+          query: { directory: target.directory },
+          signal,
+        }),
+        fields(signal),
+      ]);
       if (
-        before.projectID !== target.projectID ||
+        identity.id !== target.projectID ||
         Object.keys(patch).some((field) =>
-          !before.fields.includes(field as ProjectEditField)
+          !writable.includes(field as ProjectEditField)
         )
       ) {
         throw new HarnessError(
@@ -88,42 +113,52 @@ export function projectEditor(
           "The project or its writable fields changed. Reopen project settings.",
         );
       }
-      await client.json(`/project/${encodeURIComponent(target.projectID)}`, {
-        method: "PATCH",
-        query: { directory: target.directory },
-        operation,
-        body: {
-          ...(patch.name === undefined ? {} : { name: patch.name }),
-          ...(patch.icon === undefined && patch.color === undefined ? {} : {
-            icon: {
-              ...(patch.icon === undefined ? {} : { override: patch.icon }),
-              ...(patch.color === undefined ? {} : { color: patch.color }),
+      return async (operation) => {
+        if (current !== generation()) {
+          throw new OperationFailure(
+            "unavailable",
+            "native.unavailable",
+            new Error("Native connection changed"),
+          );
+        }
+        const project = await client.json<NativeProject>(
+          `/project/${encodeURIComponent(target.projectID)}`,
+          {
+            method: "PATCH",
+            query: { directory: target.directory },
+            operation,
+            body: {
+              ...(patch.name === undefined ? {} : { name: patch.name }),
+              ...(patch.icon === undefined && patch.color === undefined ? {} : {
+                icon: {
+                  ...(patch.icon === undefined ? {} : { override: patch.icon }),
+                  ...(patch.color === undefined ? {} : { color: patch.color }),
+                },
+              }),
+              ...(patch.startScript === undefined
+                ? {}
+                : { commands: { start: patch.startScript } }),
             },
-          }),
-          ...(patch.startScript === undefined
-            ? {}
-            : { commands: { start: patch.startScript } }),
-        },
-      });
-      const result = await read(target.directory, operation?.signal).catch(
-        (cause) => {
-          throw new OperationFailure("unknown", "project.readback", cause);
-        },
-      );
-      if (
-        result.projectID !== target.projectID ||
-        Object.entries(patch).some(([field, value]) =>
-          result.values[field as ProjectEditField] !== value
-        )
-      ) {
-        throw new OperationFailure(
-          "unknown",
-          "project.readback",
-          new Error("Native project readback differs"),
+          },
         );
-      }
-      changed();
-      return result;
+        const result = project?.id
+          ? snapshot(project, target.directory, writable)
+          : undefined;
+        if (
+          result?.projectID !== target.projectID ||
+          Object.entries(patch).some(([field, value]) =>
+            result.values[field as ProjectEditField] !== value
+          )
+        ) {
+          throw new OperationFailure(
+            "unknown",
+            "project.readback",
+            new Error("Native project PATCH result differs"),
+          );
+        }
+        if (current === generation()) changed(project);
+        return result;
+      };
     },
   };
 }

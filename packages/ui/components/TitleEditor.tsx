@@ -7,12 +7,23 @@ import FieldFeedback from "./FieldFeedback.tsx";
 
 type TitleOwner = InlineRenameField<{ title: string; origin?: string }>;
 
+/** The pending title is the submitted request, never a replacement index fact. */
+export function TitleLabel(props: { pending?: string; children: Element }) {
+  return (
+    <span
+      class={props.pending === undefined ? undefined : "otk-rename-pending"}
+      aria-busy={props.pending !== undefined ? "true" : undefined}
+    >
+      {props.pending ?? props.children}
+    </span>
+  );
+}
+
 /** Native input only. The injected owner owns editing, admission and failures. */
 export function TitleFeedback(
   props: {
     owner: TitleOwner;
     id: string;
-    pendingText: string;
     expanded?: boolean;
   },
 ): Element {
@@ -21,9 +32,7 @@ export function TitleFeedback(
       id={props.id}
       expanded={props.expanded}
       validation={props.owner.state.invalid}
-      feedback={props.owner.state.pending
-        ? { kind: "pending", text: props.pendingText }
-        : props.owner.state.error
+      feedback={props.owner.state.error
         ? errorFeedback(props.owner.state.error)
         : undefined}
     />
@@ -33,7 +42,6 @@ export default function TitleEditor(
   props: {
     owner: TitleOwner;
     label: string;
-    pendingText: string;
     maxLength?: number;
     feedbackID?: string;
   },
@@ -60,10 +68,8 @@ export default function TitleEditor(
         aria-invalid={props.owner.state.error || props.owner.state.invalid
           ? "true"
           : undefined}
-        aria-busy={props.owner.state.pending ? "true" : undefined}
         maxlength={props.maxLength}
         value={title()}
-        readonly={props.owner.state.pending}
         onInput={(event) => props.owner.edit(event.currentTarget.value)}
         onBlur={() => {
           const editing = props.owner.state.editing;
@@ -94,7 +100,6 @@ export default function TitleEditor(
         <TitleFeedback
           owner={props.owner}
           id={errorID}
-          pendingText={props.pendingText}
         />
       </Show>
     </span>
