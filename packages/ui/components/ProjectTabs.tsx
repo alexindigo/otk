@@ -23,7 +23,7 @@ import {
   Show,
 } from "solid-js";
 import { dynamic } from "@solidjs/web";
-import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
 import type {
   ContentSession,
   InboxSnapshot,
@@ -436,12 +436,13 @@ export default function ProjectTabs(props: {
         >
           <For each={tabRows()} keyed={(tab) => tab.key}>
             {(tab) => {
-              const editing = () =>
+              const renaming = () =>
                 tab().kind === "phantom" &&
                 props.rename?.matches({
                   sidecarId: props.project.sidecarId,
                   sessionID: tab().id,
                 }, "tab");
+              const editing = () => renaming() && props.rename!.editing;
               const Control = dynamic(() => editing() ? "div" : "button");
               const native = nativeAttributes(() => ({
                 onClick: () => {
@@ -517,12 +518,19 @@ export default function ProjectTabs(props: {
                         <span class="otk-control-label otk-tab-title">
                           <Show
                             when={editing()}
-                            fallback={tab().title || "Session"}
+                            fallback={
+                              <TitleLabel
+                                pending={renaming()
+                                  ? props.rename!.state.pendingTitle
+                                  : undefined}
+                              >
+                                {tab().title || "Session"}
+                              </TitleLabel>
+                            }
                           >
                             <TitleEditor
                               owner={props.rename!}
                               label="Rename session"
-                              pendingText="Renaming session..."
                               maxLength={MAX_SESSION_TITLE}
                             />
                           </Show>
@@ -652,6 +660,15 @@ export default function ProjectTabs(props: {
         </MetaRow>
       </div>
       <Show
+        when={props.rename?.state.editing?.origin === "tab" &&
+          props.rename.state.editing.sidecarId === props.project.sidecarId &&
+          props.rename.state.error}
+      >
+        <div class="otk-crumb-feedback">
+          <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />
+        </div>
+      </Show>
+      <Show
         when={trail().crumbs.some((crumb) =>
           props.rename?.matches({
             sidecarId: props.project.sidecarId,
@@ -663,7 +680,6 @@ export default function ProjectTabs(props: {
           <TitleFeedback
             owner={props.rename!}
             id={crumbFeedbackID}
-            pendingText="Renaming session..."
           />
         </div>
       </Show>

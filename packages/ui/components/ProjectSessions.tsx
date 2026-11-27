@@ -19,7 +19,7 @@ import {
   Show,
 } from "solid-js";
 import VirtualList from "./VirtualList.tsx";
-import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
 import type {
   InboxSnapshot,
   IndexEntry,
@@ -250,11 +250,12 @@ export default function ProjectSessions(props: {
     const selected = () =>
       props.selected?.sidecarId === props.project!.sidecarId &&
       props.selected.sessionID === key;
-    const editing = () =>
+    const renaming = () =>
       props.rename?.matches({
         sidecarId: props.project!.sidecarId,
         sessionID: key,
       }, "row");
+    const editing = () => renaming() && props.rename!.editing;
     const feedbackID = createUniqueId();
     const openRow = () => {
       const session = entry();
@@ -330,23 +331,33 @@ export default function ProjectSessions(props: {
                 : undefined}
               label={
                 <span class="otk-session-title">
-                  <Show when={editing()} fallback={title()}>
+                  <Show
+                    when={editing()}
+                    fallback={
+                      <TitleLabel
+                        pending={renaming()
+                          ? props.rename!.state.pendingTitle
+                          : undefined}
+                      >
+                        {title()}
+                      </TitleLabel>
+                    }
+                  >
                     <TitleEditor
                       owner={props.rename!}
                       feedbackID={feedbackID}
                       label="Rename session"
-                      pendingText="Renaming session..."
                       maxLength={MAX_SESSION_TITLE}
                     />
                   </Show>
                 </span>
               }
-              feedback={editing()
+              feedback={renaming() &&
+                  (props.rename!.state.invalid || props.rename!.state.error)
                 ? (
                   <TitleFeedback
                     owner={props.rename!}
                     id={feedbackID}
-                    pendingText="Renaming session..."
                   />
                 )
                 : undefined}

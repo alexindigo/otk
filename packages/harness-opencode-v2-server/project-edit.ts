@@ -6,13 +6,7 @@ import {
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import type { V2Client } from "./client.ts";
-import { projectColors } from "./project-presentation.ts";
-type NativeProject = {
-  id: string;
-  name?: string;
-  icon?: { override?: string; color?: string; url?: string };
-  commands?: { start?: string };
-};
+import { type NativeProject, projectColors } from "./project-presentation.ts";
 function snapshot(
   project: NativeProject,
   directory: string,
@@ -43,7 +37,7 @@ function snapshot(
 }
 export function projectEditor(
   client: () => V2Client,
-  changed: () => void,
+  changed: (project: NativeProject) => void,
 ): ProjectEditCapability {
   return {
     async read(directory, signal) {
@@ -67,14 +61,14 @@ export function projectEditor(
       }
       return snapshot(project, directory);
     },
-    async update(target, patch, operation) {
+    async prepare(target, patch, signal) {
       const c = client();
       const location = await c.read(
         (api) =>
           api.location.get({ location: { directory: target.directory } }, {
-            signal: operation?.signal,
+            signal,
           }),
-        operation?.signal,
+        signal,
       );
       if (location.project.id !== target.projectID) {
         throw new OperationFailure(
@@ -87,51 +81,39 @@ export function projectEditor(
           },
         );
       }
-      await c.effect((api) =>
-        api.project.update({
-          projectID: target.projectID,
-          ...(patch.name === undefined ? {} : { name: patch.name }),
-          ...(patch.icon === undefined && patch.color === undefined ? {} : {
-            icon: {
-              ...(patch.icon === undefined ? {} : { override: patch.icon }),
-              ...(patch.color === undefined ? {} : { color: patch.color }),
-            },
-          }),
-          ...(patch.startScript === undefined
-            ? {}
-            : { commands: { start: patch.startScript } }),
-        }), operation);
-      const projects = await c.read(
-        (api) =>
-          api.project.list({ archived: true }, { signal: operation?.signal }),
-        operation?.signal,
-      ).catch((cause) => {
-        throw new OperationFailure("unknown", "project.readback", cause);
-      });
-      const project = projects.find((project) =>
-        project.id === target.projectID
-      );
-      if (!project) {
-        throw new OperationFailure(
-          "unknown",
-          "project.readback",
-          new Error("Project missing after write"),
-        );
-      }
-      const result = snapshot(project, target.directory);
-      if (
-        Object.entries(patch).some(([field, value]) =>
-          result.values[field as keyof typeof result.values] !== value
-        )
-      ) {
-        throw new OperationFailure(
-          "unknown",
-          "project.readback",
-          new Error("Native project readback differs"),
-        );
-      }
-      changed();
-      return result;
+      return async (operation) => {
+        const project = await c.effect((api) =>
+          api.project.update({
+            projectID: target.projectID,
+            ...(patch.name === undefined ? {} : { name: patch.name }),
+            ...(patch.icon === undefined && patch.color === undefined ? {} : {
+              icon: {
+                ...(patch.icon === undefined ? {} : { override: patch.icon }),
+                ...(patch.color === undefined ? {} : { color: patch.color }),
+              },
+            }),
+            ...(patch.startScript === undefined
+              ? {}
+              : { commands: { start: patch.startScript } }),
+          }), operation);
+        const result = project?.id
+          ? snapshot(project, target.directory)
+          : undefined;
+        if (
+          result?.projectID !== target.projectID ||
+          Object.entries(patch).some(([field, value]) =>
+            result.values[field as keyof typeof result.values] !== value
+          )
+        ) {
+          throw new OperationFailure(
+            "unknown",
+            "project.readback",
+            new Error("Native project PATCH result differs"),
+          );
+        }
+        changed(project);
+        return result;
+      };
     },
   };
 }

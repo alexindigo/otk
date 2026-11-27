@@ -20,3 +20,7 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.otk-rename-pending {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.18em;
+}

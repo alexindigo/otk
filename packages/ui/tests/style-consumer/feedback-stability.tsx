@@ -8,8 +8,11 @@ import {
 } from "../../registries/session.tsx";
 import Form, { FormInput } from "../../components/Form.tsx";
 import Dialog from "../../components/surface/Dialog.tsx";
-import ListRow from "../../components/ListRow.tsx";
-import TitleEditor, { TitleFeedback } from "../../components/TitleEditor.tsx";
+import SidebarRow from "../../components/SidebarRow.tsx";
+import TitleEditor, {
+  TitleFeedback,
+  TitleLabel,
+} from "../../components/TitleEditor.tsx";
 import Prompt from "../../components/Prompt.tsx";
 import AuthColumn from "../../components/AuthColumn.tsx";
 import { solidState } from "../../state/binding.ts";
@@ -99,26 +102,33 @@ function InlineScene() {
   return (
     <section aria-label="Session name" class="feedback-stability-inline">
       <h2>Rename session</h2>
-      <ListRow
-        as="div"
-        selected
-        editing
+      <SidebarRow
+        frame={{ selected: true, class: "otk-session-row" }}
+        editing={owner.editing}
         feedback={
           <TitleFeedback
             owner={owner}
             id="rename-feedback"
-            pendingText="Renaming session..."
           />
         }
-        trailing={<button type="button">Session actions</button>}
-      >
-        <TitleEditor
-          owner={owner}
-          feedbackID="rename-feedback"
-          label="Rename session"
-          pendingText="Renaming session..."
-        />
-      </ListRow>
+        metaControl={<button type="button">Session actions</button>}
+        label={
+          <Show
+            when={owner.editing}
+            fallback={
+              <TitleLabel pending={owner.state.pendingTitle}>
+                Original task
+              </TitleLabel>
+            }
+          >
+            <TitleEditor
+              owner={owner}
+              feedbackID="rename-feedback"
+              label="Rename session"
+            />
+          </Show>
+        }
+      />
     </section>
   );
 }

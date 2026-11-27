@@ -115,22 +115,12 @@ export function registerProjectEdit(rpc: RpcRegistry, harness: Harness): void {
       return { ...target(p), patch: patch as ProjectPatch };
     },
     async handler(ctx, p) {
-      const ready = capability.read(
-        p.directory,
+      const ready = capability.prepare(
+        p,
+        p.patch,
         ctx.execution?.signal,
       );
-      const snapshot = await (ctx.execution?.wait?.(ready) ?? ready);
-      if (
-        snapshot.projectID !== p.projectID ||
-        Object.keys(p.patch).some((key) =>
-          !snapshot.fields.includes(key as ProjectEditField)
-        )
-      ) {
-        throw new HarnessError(
-          "project.target",
-          "The project or its writable fields changed. Reopen project settings.",
-        );
-      }
+      const update = await (ctx.execution?.wait?.(ready) ?? ready);
       await ctx.execution?.checkpoint(
         intent.kind,
         intent.encode({
@@ -145,7 +135,7 @@ export function registerProjectEdit(rpc: RpcRegistry, harness: Harness): void {
         }),
       );
       await nativeEffect(ctx, async (operation) => {
-        const result = await capability.update(p, p.patch, operation);
+        const result = await update(operation);
         if (
           result.projectID !== p.projectID ||
           Object.entries(p.patch).some(([key, value]) =>

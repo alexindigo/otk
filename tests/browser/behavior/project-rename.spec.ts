@@ -7,6 +7,7 @@ import { expect } from "../fixtures/evidence.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import type { TestState } from "../fixtures/test-state.ts";
 import { openSession, wire } from "../fixtures/wire.ts";
+import { sessionContext } from "../pages/sessions.ts";
 
 const tag = ["@sessions", "@projects", "@visual"];
 const rename = (page: Page) =>
@@ -43,6 +44,24 @@ async function save(state: TestState, page: Page, name: string) {
   await editor(page).fill(name);
   await editor(page).press("Enter");
   await expect(row(state, page).locator(".otk-project-name")).toHaveText(name);
+  await expect(row(state, page).locator(".otk-rename-pending")).toHaveCount(0);
+}
+
+async function watchSubmit(page: Page, selector: string) {
+  return await page.evaluateHandle((selector) => {
+    const result: (string | null)[] = [];
+    document.addEventListener("keydown", function enter(event) {
+      if (event.key !== "Enter") return;
+      document.removeEventListener("keydown", enter, true);
+      requestAnimationFrame(function sample() {
+        result.push(
+          document.querySelector(selector)?.textContent?.trim() ?? null,
+        );
+        if (result.length < 240) requestAnimationFrame(sample);
+      });
+    }, true);
+    return result;
+  }, selector);
 }
 
 test.use({ profile: "isolated", viewport: { width: 1440, height: 900 } });
@@ -87,27 +106,32 @@ test(
         el.value.slice(el.selectionStart!, el.selectionEnd!)
       ),
     ).toBe(folder);
+    const frames = await watchSubmit(
+      page,
+      `[data-project=${JSON.stringify(state.directory)}] .otk-project-name`,
+    );
     transport.hold((frame, request) =>
-      frame.t === "request.result" && request?.method === "project.update"
+      (frame.t === "request.result" && request?.method === "project.update") ||
+      (frame.t === "inbox.summaries" &&
+        JSON.stringify(frame).includes("Fixture app"))
     );
     try {
       await input.fill("Fixture app");
       await input.press("Enter");
-      await input.blur();
-      // Native readback and publication may arrive before the reply reaches the
-      // editor. Neither the typed name nor the publication alone closes it.
-      // The request protocol can replay a result whose acknowledgement is held.
+      await expect(label).toHaveText("Fixture app");
+      await expect(label.locator(".otk-rename-pending")).toBeVisible();
+      await expect.poll(() => frames.evaluate((samples) => samples[0]))
+        .toBe("Fixture app");
       await expect.poll(() => transport.held.length).toBeGreaterThan(0);
-      await expect(page.locator(".otk-project-chip-trigger")).toContainText(
-        "Fixture app",
-      );
-      await expect(input).toHaveAttribute("aria-busy", "true");
-      await expect(input).toHaveValue("Fixture app");
-      await input.focus();
+      await expect(input).toHaveCount(0);
     } finally {
       transport.release();
     }
     await expect(label).toHaveText("Fixture app");
+    await expect(label.locator(".otk-rename-pending")).toHaveCount(0);
+    expect(await frames.evaluate((samples) => [...new Set(samples)])).toEqual([
+      "Fixture app",
+    ]);
     expect(
       new Set(
         transport.sent.filter(({ frame }) =>
@@ -125,6 +149,99 @@ test(
     await expect(reset(page)).toBeVisible();
   },
 );
+
+test(
+  "projects.sidebar-rename-session-inline",
+  { tag },
+  async ({ isolatedState: state, page }) => {
+    const transport = await wire(page);
+    await page.reload();
+    const row = ".otk-project-sessions .otk-session-row[data-session]";
+    const selector = `${row} .otk-session-title`;
+    const label = page.locator(selector);
+    await expect(label).toHaveText("Release checklist");
+    await sessionContext(page, row, "session.rename");
+    const input = page.getByRole("textbox", {
+      name: "Rename session",
+      exact: true,
+    });
+    await input.fill("Updated checklist");
+    const frames = await watchSubmit(page, selector);
+    transport.hold((frame, request) =>
+      frame.t === "request.result" && request?.method === "session.rename"
+    );
+    try {
+      await input.press("Enter");
+      await expect(label.locator(".otk-rename-pending")).toHaveText(
+        "Updated checklist",
+      );
+      await expect.poll(() => frames.evaluate((samples) => samples[0])).toBe(
+        "Updated checklist",
+      );
+      await expect.poll(() => transport.held.length).toBeGreaterThan(0);
+    } finally {
+      transport.release();
+    }
+    await expect(label).toHaveText("Updated checklist");
+    await expect(label.locator(".otk-rename-pending")).toHaveCount(0);
+    expect(await frames.evaluate((samples) => [...new Set(samples)])).toEqual([
+      "Updated checklist",
+    ]);
+    const sessionID = (await page.locator(row).getAttribute("data-session"))!;
+    expect((await state.product("session.get", { sessionID })).title).toBe(
+      "Updated checklist",
+    );
+  },
+);
+
+for (const kind of ["project", "session"] as const) {
+  test(
+    `projects.sidebar-rename-${kind}-failure`,
+    { tag },
+    async ({ isolatedState: state, page }) => {
+      const method = kind === "project" ? "project.update" : "session.rename";
+      const transport = await wire(
+        page,
+        (frame) => frame.method === method ? { ...frame, params: {} } : frame,
+      );
+      await page.reload();
+      const sessionRow = ".otk-project-sessions .otk-session-row[data-session]";
+      const item = kind === "project"
+        ? `[data-project=${JSON.stringify(state.directory)}]`
+        : sessionRow;
+      const selector = `${item} .otk-${
+        kind === "project" ? "project-name" : "session-title"
+      }`;
+      const label = page.locator(selector);
+      const confirmed = kind === "project"
+        ? basename(state.directory)
+        : "Release checklist";
+      await expect(label).toHaveText(confirmed);
+      if (kind === "project") await begin(state, page);
+      else await sessionContext(page, sessionRow, "session.rename");
+      const input = page.getByRole("textbox", {
+        name: `Rename ${kind}`,
+        exact: true,
+      });
+      await input.fill("Rejected fixture");
+      const frames = await watchSubmit(page, selector);
+      transport.hold((_frame, request) => request?.method === method);
+      try {
+        await input.press("Enter");
+        await expect(label).toHaveText("Rejected fixture");
+        await expect(label.locator(".otk-rename-pending")).toBeVisible();
+        await expect.poll(() => frames.evaluate((samples) => samples[0]))
+          .toBe("Rejected fixture");
+        await expect.poll(() => transport.held.length).toBeGreaterThan(0);
+      } finally {
+        transport.release();
+      }
+      await expect(label).toHaveText(confirmed);
+      await expect(label.locator(".otk-rename-pending")).toHaveCount(0);
+      await expect(page.locator(item).getByRole("alert")).toBeVisible();
+    },
+  );
+}
 
 test(
   "projects.sidebar-rename-everywhere-and-restart",
@@ -236,6 +353,8 @@ test(
   { tag },
   async ({ isolatedState: state, page }, info) => {
     const project = row(state, page);
+    const transport = await wire(page);
+    await page.reload();
     for (
       const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
         "otk-light-stone",
@@ -299,7 +418,21 @@ test(
         ),
       ).toBe(true);
       await capture("invalid");
-      await save(state, page, "Fixture app");
+      transport.hold((frame, request) =>
+        frame.t === "request.result" && request?.method === "project.update"
+      );
+      try {
+        await editor(page).fill("Fixture app");
+        await editor(page).press("Enter");
+        await expect(project.locator(".otk-rename-pending")).toHaveText(
+          "Fixture app",
+        );
+        expect((await project.boundingBox())!.height).toBeCloseTo(resting, 1);
+        await capture("pending");
+      } finally {
+        transport.release();
+      }
+      await expect(project.locator(".otk-rename-pending")).toHaveCount(0);
       await expect(page.locator(".otk-project-chip-trigger")).toContainText(
         "Fixture app",
       );

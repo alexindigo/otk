@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CatalogProject, CatalogRepository } from "@otk/protocol";
 import type { V2Client } from "./client.ts";
+import { projectMetadata } from "@otk/harness";
 
 /** Native avatar variants resolved at the plugin boundary, not in shared UI. */
 export const projectColors: Readonly<Record<string, string>> = {
@@ -16,13 +17,24 @@ export const projectColors: Readonly<Record<string, string>> = {
   purple: "#623be2",
   gray: "#5c5c5c",
 };
-export function projectPresentation(project: {
+export interface NativeProject {
   id: string;
   canonical: string;
   name?: string;
   vcs?: string;
   icon?: { override?: string; url?: string; color?: string };
-}): CatalogProject {
+  commands?: { start?: string };
+}
+export function nativeProjectMetadata(project: Record<string, unknown>) {
+  return projectMetadata(project, "canonical", (value) => {
+    const { id, name, color } = projectPresentation({
+      ...value,
+      canonical: "/",
+    });
+    return { id, name, color };
+  });
+}
+export function projectPresentation(project: NativeProject): CatalogProject {
   const color = project.icon?.color;
   return {
     id: project.id,

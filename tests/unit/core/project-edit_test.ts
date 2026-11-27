@@ -32,11 +32,19 @@ test("WP9 core gates native project edits and rejects foreign targets and unsupp
     const harness = stub({
       projectEdit: {
         read: () => Promise.resolve(current),
-        update(target, patch) {
-          effects++;
-          assertEquals(target.projectID, "fixture");
-          Object.assign(current.values, patch);
-          return Promise.resolve(current);
+        prepare(target, patch) {
+          if (
+            target.projectID !== current.projectID ||
+            !Object.keys(patch).every((field) => field === "name")
+          ) {
+            return Promise.reject(new Error("Changed target"));
+          }
+          return Promise.resolve(() => {
+            effects++;
+            assertEquals(target.projectID, "fixture");
+            Object.assign(current.values, patch);
+            return Promise.resolve(current);
+          });
         },
       },
     });
@@ -92,18 +100,20 @@ test("superseded native project edit closes as unconfirmed without reading or di
         reads++;
         return Promise.resolve(structuredClone(current));
       },
-      update(_target, patch) {
-        Object.assign(current.values, patch);
-        if (++calls === 1) {
-          return Promise.reject(
-            new OperationFailure(
-              "unknown",
-              "native.unknown",
-              new Error("response lost"),
-            ),
-          );
-        }
-        return Promise.resolve(structuredClone(current));
+      prepare(_target, patch) {
+        return Promise.resolve(() => {
+          Object.assign(current.values, patch);
+          if (++calls === 1) {
+            return Promise.reject(
+              new OperationFailure(
+                "unknown",
+                "native.unknown",
+                new Error("response lost"),
+              ),
+            );
+          }
+          return Promise.resolve(structuredClone(current));
+        });
       },
     },
   });
@@ -168,7 +178,7 @@ test("superseded native project edit closes as unconfirmed without reading or di
     }
     assertEquals({ calls, reads, name: current.values.name }, {
       calls: 2,
-      reads: 2,
+      reads: 0,
       name: "New",
     });
   } finally {
@@ -192,15 +202,17 @@ test("project edit yields execution while awaiting native validation", async () 
   let active = false, writes = 0;
   const harness = stub({
     projectEdit: {
-      async read() {
+      read() {
+        return Promise.resolve(current);
+      },
+      async prepare(_target, patch) {
         readStarted.resolve();
         await permission.promise;
-        return current;
-      },
-      update(_target, patch) {
-        writes++;
-        Object.assign(current.values, patch);
-        return Promise.resolve(current);
+        return () => {
+          writes++;
+          Object.assign(current.values, patch);
+          return Promise.resolve(current);
+        };
       },
     },
   });

@@ -80,9 +80,9 @@ Deno.test("an admitted project rename retains the edit until native confirmation
   label = "After";
   owner.observe();
   assertEquals(owner.state.editing, project);
-  assertEquals(owner.state.pending, true);
+  assertEquals(owner.state.pendingTitle, "After");
   write.resolve();
   await saving;
   assertEquals(owner.state.editing, undefined);
-  assertEquals(owner.state.pending, false);
+  assertEquals(owner.state.pendingTitle, undefined);
 });
