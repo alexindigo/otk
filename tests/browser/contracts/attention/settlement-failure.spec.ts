@@ -46,8 +46,15 @@ for (const kind of ["permission", "question", "form"] as const) {
         await expect(owner).toHaveCount(1);
         const details = owner.locator(".otk-failure-detail-body");
         await expect(details).toHaveCount(0);
-        await failure.getByRole("button", { name: "Details", exact: true })
-          .click();
+        // Issue 2.114: the alert announces the headline; the notice owns
+        // the sibling Details disclosure and its recovery text.
+        const trigger = owner.getByRole("button", {
+          name: "Details",
+          exact: true,
+        });
+        await expect(trigger).toHaveAttribute("aria-expanded", "false");
+        await trigger.click();
+        await expect(trigger).toHaveAttribute("aria-expanded", "true");
         await expect(details.locator(".otk-failure-recovery")).toHaveText(
           "This one was not sent",
         );

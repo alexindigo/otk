@@ -35,6 +35,14 @@ test.describe("accepted send", () => {
     await expect(record).toHaveCount(1);
     await expect(notice.locator(".otk-failure-reference")).toHaveCount(1);
 
+    // 1.19.3 leaves the native run busy after the invalid-model error. End
+    // that run without the composer Stop action withdrawing the test prompt.
+    if (info.project.name === "oc-1.19.3") {
+      await state.product("session.abort", { sessionID: source.id });
+      await expect(page.locator(`[data-session="${source.id}"]`))
+        .toHaveAttribute("data-status", "idle");
+    }
+
     const prompt = page.getByText("Revert from this failed prompt", {
       exact: true,
     });
