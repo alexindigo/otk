@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { viewByUrl } from "../../pages/sessions.ts";
 import {
   copySelection,
   nativeIdle,
@@ -345,7 +346,17 @@ test("messages.numbered-empty-blank-terminal-geometry", {
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Natural shape " + index,
     });
-    await openSession(state, page, session.id);
+    if (index === 0) {
+      await openSession(state, page, session.id);
+    } else {
+      // D74 / wl-5: leave the previous reply's Work pane by session link.
+      // This probe measures source geometry, not catalog admission of a new row.
+      await viewByUrl(state, page, session.id);
+      await expect(
+        page.getByRole("region", { name: "Transcript", exact: true }),
+      )
+        .toHaveAttribute("aria-busy", "false");
+    }
     await page.evaluate(() =>
       document.fonts.ready
     );
