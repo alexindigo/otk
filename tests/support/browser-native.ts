@@ -488,6 +488,8 @@ export class BrowserV2Native implements BrowserNative {
       }
     } else if (path === "/session/status") {
       result = await api.session.active();
+    } else if (path === "/shell" && method === "GET") {
+      result = await api.shell.list({ location: { directory } });
     } else if (parts[0] === "session" && parts[2] === "children") {
       result =
         (await api.session.list({ parentID: sessionID, limit: 200 })).data;
