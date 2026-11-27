@@ -834,7 +834,8 @@ export async function sessionsScenario(profile: Profile) {
           }
           if (
             frame.params.target === "helper-dispositions" ||
-            frame.params.target === "helper-review"
+            frame.params.target === "helper-review" ||
+            frame.params.target === "helper-review-unseen-failure"
           ) {
             if (
               profile !== "contract-sessions-hierarchy" || action !== "hold"
@@ -912,7 +913,8 @@ export async function sessionsScenario(profile: Profile) {
                 });
               }
             }
-            if (frame.params.target === "helper-review") {
+            if (frame.params.target !== "helper-dispositions") {
+              const delivered = frame.params.target === "helper-review";
               const reviewHelpers = [
                 ["tstv1-disp-7", base.id, base.directory, "failed", now + 1],
                 [
@@ -941,7 +943,7 @@ export async function sessionsScenario(profile: Profile) {
                   activity: {
                     terminal,
                     outcome,
-                    ...(outcome === "failed"
+                    ...(outcome === "failed" && delivered
                       ? {
                         delivered: {
                           parentID,
