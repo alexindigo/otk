@@ -104,3 +104,36 @@ test.describe("sidebar", () => {
     expect(gaps.box).toBeGreaterThanOrEqual(gaps.min);
   });
 });
+
+test.describe("worktrees", () => {
+  test.use({ profile: "contract-sessions-worktrees" });
+  test("sessions.tree-worktree-elbow-follows-the-project-lamp", {
+    tag: ["@sessions", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    await openSession(state, page, "tstv1-otk");
+    const parent = page.locator(
+      `.otk-project-row[data-project=${JSON.stringify(state.directory)}]`,
+    );
+    const child = page.locator(
+      `.otk-project-row[data-project-parent=${
+        JSON.stringify(state.directory)
+      }]`,
+    ).first();
+    const heading = child.locator(
+      "xpath=ancestor::div[contains(@class,'otk-tree-heading')][1]",
+    );
+    const elbow = heading.locator(".otk-tree-incoming .otk-tree-connector");
+    await expect(elbow).toBeVisible();
+    const [lamp, junction] = await Promise.all([
+      parent.locator(".otk-status-light").boundingBox(),
+      heading.locator(".otk-tree-incoming .otk-tree-upper").boundingBox(),
+    ]);
+    expect(lamp).not.toBeNull();
+    expect(junction).not.toBeNull();
+    expect(
+      Math.abs(lamp!.x + lamp!.width / 2 - (junction!.x + junction!.width / 2)),
+    )
+      .toBeLessThanOrEqual(.5);
+    expect(junction!.y).toBeGreaterThan(lamp!.y + lamp!.height);
+  });
+});

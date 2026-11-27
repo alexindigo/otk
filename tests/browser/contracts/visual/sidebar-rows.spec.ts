@@ -44,7 +44,7 @@ test("visual.sidebar-row-tracks-align-and-never-overlap", {
       const root = page.locator(".otk-project-tree").filter({
         has: page.locator('[data-project="/projects/atmosphera"]'),
       }).first();
-      const toggle = root.locator(
+      const toggle = root.locator(":scope > .otk-tree-node").first().locator(
         ":scope > .otk-tree-heading .otk-tree-toggle",
       );
       await toggle.click();

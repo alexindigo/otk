@@ -1,17 +1,28 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-project-sessions {
-  flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  display: grid;
+  grid-template-columns: [full-start content-start] minmax(0, 1fr) [content-end
+    full-end];
+  grid-template-rows: [error] auto [heading] auto [disclosure] auto [body]
+    minmax(0, 1fr) [status] auto;
   padding-block-end: var(--space-2);
 }
+.otk-project-sessions > * {
+  grid-column: content;
+}
 .otk-project-session-heading {
+  grid-row: heading;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+.otk-project-session-error {
+  grid-row: error;
+}
+.otk-project-session-disclosure {
+  grid-row: disclosure;
 }
 .otk-session-search {
   --control-height: var(--row-compact);
@@ -52,15 +63,6 @@
 .otk-session-group {
   margin: 0;
 }
-.otk-session-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.otk-session-row.is-deleted:not(.is-editing) .otk-session-title {
-  color: var(--deleted-fg);
-  text-decoration: line-through;
-}
 .otk-session-digest-state {
   text-align: end;
 }
@@ -72,14 +74,19 @@
   clip-path: inset(50%);
 }
 .otk-project-session-content {
+  grid-column: full;
+  grid-row: body;
+  padding-block-start: var(--space-1);
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
 }
 .otk-session-loading-slot {
+  grid-row: status;
   flex: none;
   block-size: var(--row-compact);
   display: flex;
   align-items: center;
+  margin-block-start: var(--space-1);
 }

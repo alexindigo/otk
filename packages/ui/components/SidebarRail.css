@@ -1,4 +1,11 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+:root {
+  --sidebar-list-inset-start: var(--space-1);
+  --sidebar-list-inset-end: var(--space-2);
+}
+.otk-sidebar-list {
+  padding-inline: var(--sidebar-list-inset-start) var(--sidebar-list-inset-end);
+}
 .otk-sidebar-rail {
   position: relative;
   flex: none;

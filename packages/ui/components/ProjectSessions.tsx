@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { TreeIcon, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import ChromeMeta, { MetaItem, SectionHeader } from "./ChromeMeta.tsx";
 import { solidState } from "../state/binding.ts";
 import { sessionSummary } from "@otk/client";
@@ -19,7 +19,7 @@ import {
   Show,
 } from "solid-js";
 import VirtualList from "./VirtualList.tsx";
-import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 import type {
   InboxSnapshot,
   IndexEntry,
@@ -326,11 +326,9 @@ export default function ProjectSessions(props: {
               }}
               mainRef={(element) => control = element}
               lamp={
-                <TreeIcon>
-                  <Show when={entry()} fallback={<SessionsIcon />}>
-                    <StatusLight state={lamp(entities(), stateKey)} />
-                  </Show>
-                </TreeIcon>
+                <Show when={entry()} fallback={<SessionsIcon />}>
+                  <StatusLight state={lamp(entities(), stateKey)} />
+                </Show>
               }
               action={entry() && !editing()
                 ? {
@@ -339,29 +337,23 @@ export default function ProjectSessions(props: {
                   "aria-description": costDescription(key),
                 }
                 : undefined}
-              label={
-                <span class="otk-session-title">
-                  <Show
-                    when={editing()}
-                    fallback={
-                      <TitleLabel
-                        pending={renaming()
-                          ? props.rename!.state.pendingTitle
-                          : undefined}
-                      >
-                        {title()}
-                      </TitleLabel>
-                    }
-                  >
-                    <TitleEditor
-                      owner={props.rename!}
-                      feedbackID={feedbackID}
-                      label="Rename session"
-                      maxLength={MAX_SESSION_TITLE}
-                    />
-                  </Show>
-                </span>
-              }
+              title={{
+                text: title(),
+                pending: renaming()
+                  ? props.rename!.state.pendingTitle
+                  : undefined,
+                struck: !!entry()?.deleted,
+              }}
+              editor={editing()
+                ? (
+                  <TitleEditor
+                    owner={props.rename!}
+                    feedbackID={feedbackID}
+                    label="Rename session"
+                    maxLength={MAX_SESSION_TITLE}
+                  />
+                )
+                : undefined}
               feedback={renaming() &&
                   (props.rename!.state.invalid || props.rename!.state.error)
                 ? (
@@ -414,6 +406,7 @@ export default function ProjectSessions(props: {
     <nav
       ref={orderInput}
       class="otk-project-sessions"
+      data-panel-span="full"
       aria-label="Project sessions"
       data-session-project={props.project?.directory}
       aria-busy={props.ready === false || props.loading || progress().busy
@@ -433,7 +426,10 @@ export default function ProjectSessions(props: {
         </span>
       </Show>
       <Show when={error()}>
-        <FeedbackStatus feedback={errorFeedback(error())} />
+        <FeedbackStatus
+          class="otk-project-session-error"
+          feedback={errorFeedback(error())}
+        />
       </Show>
       <Show
         when={props.project}
@@ -477,11 +473,12 @@ export default function ProjectSessions(props: {
         <DisclosureFeedback
           disclosure={tree().failure}
           actionLabel="Saving session tree"
+          class="otk-project-session-disclosure"
         />
         <div class="otk-project-session-content">
           <Show when={props.ready !== false}>
             <VirtualList
-              class="otk-project-session-tree"
+              class="otk-project-session-tree otk-sidebar-list"
               label="Task groups and sessions"
               keys={keys()}
               onRange={(keys) => {
@@ -532,19 +529,17 @@ export default function ProjectSessions(props: {
                         open={disclosure()?.open() ?? true}
                         onOpen={(value) => void disclosure()?.set(value)}
                         leading={() => (
-                          <TreeIcon>
-                            <Show when={group} fallback={<SessionsIcon />}>
-                              <StatusLight
-                                state={lamp(
-                                  entities(),
-                                  entityKey(
-                                    "task",
-                                    taskEntityID("task", group),
-                                  ),
-                                )}
-                              />
-                            </Show>
-                          </TreeIcon>
+                          <Show when={group} fallback={<SessionsIcon />}>
+                            <StatusLight
+                              state={lamp(
+                                entities(),
+                                entityKey(
+                                  "task",
+                                  taskEntityID("task", group),
+                                ),
+                              )}
+                            />
+                          </Show>
                         )}
                       />
                     </h3>

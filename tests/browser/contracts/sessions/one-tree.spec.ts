@@ -37,7 +37,7 @@ async function geometry(locator: Locator) {
       toggle = rect(":scope > .otk-tree-own .otk-tree-toggle"),
       lamp = rect(".otk-tree-icon .otk-status-light"),
       label = rect(
-        ".otk-project-name, .otk-session-title, .otk-section-row-label",
+        "[data-row-title]",
       )!;
     return {
       indent,

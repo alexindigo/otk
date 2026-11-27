@@ -84,6 +84,7 @@
   --icon-compact: calc(13 * var(--otk-unit));
   --row-compact: calc(30 * var(--otk-unit));
   --row-project: calc(32 * var(--otk-unit));
+  --avatar-compact: calc(14 * var(--otk-unit));
   --row-title-min: 12ch;
   --row-tool: calc(26 * var(--otk-unit));
   --diff-split-min: 1200px;

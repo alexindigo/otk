@@ -9,10 +9,7 @@ import {
 import Form, { FormInput } from "../../components/Form.tsx";
 import Dialog from "../../components/surface/Dialog.tsx";
 import SidebarRow from "../../components/SidebarRow.tsx";
-import TitleEditor, {
-  TitleFeedback,
-  TitleLabel,
-} from "../../components/TitleEditor.tsx";
+import TitleEditor, { TitleFeedback } from "../../components/TitleEditor.tsx";
 import Prompt from "../../components/Prompt.tsx";
 import AuthColumn from "../../components/AuthColumn.tsx";
 import { solidState } from "../../state/binding.ts";
@@ -111,23 +108,17 @@ function InlineScene() {
             id="rename-feedback"
           />
         }
-        metaControl={<button type="button">Session actions</button>}
-        label={
-          <Show
-            when={owner.editing}
-            fallback={
-              <TitleLabel pending={owner.state.pendingTitle}>
-                Original task
-              </TitleLabel>
-            }
-          >
+        control={<button type="button">Session actions</button>}
+        title={{ text: "Original task", pending: owner.state.pendingTitle }}
+        editor={owner.editing
+          ? (
             <TitleEditor
               owner={owner}
               feedbackID="rename-feedback"
               label="Rename session"
             />
-          </Show>
-        }
+          )
+          : undefined}
       />
     </section>
   );

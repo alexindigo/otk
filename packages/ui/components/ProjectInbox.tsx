@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type Disclosures,
+  type DisclosureState,
   errorFeedback,
   type FailureValue,
   failureValue,
@@ -8,6 +9,7 @@ import {
   projectBranchPresentation,
   projectGroup,
   projectTree,
+  treePaths,
 } from "@otk/client";
 import { archiveEntityID, entityKey, UNKNOWN_REPOSITORY } from "@otk/protocol";
 import { type EntityStateStore, label as stateLabel, lamp } from "@otk/client";
@@ -64,17 +66,16 @@ import {
 import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
-import { TreeIcon, TreeItem, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import ChromeMeta, {
   MetaItem,
   metaList,
-  MetaText,
   SectionHeader,
 } from "./ChromeMeta.tsx";
 import TimeText from "./TimeText.tsx";
 import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { connectionFeedback } from "./connection-light.ts";
-import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
@@ -460,163 +461,228 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       projectGroup(p) === "archived" && p.sidecarId === repo.sidecarId &&
       repository(p) === repository(repo)
     );
-  function Branches(
-    section: { projects?: ProjectRow[]; name?: Section; nested?: boolean },
-  ) {
-    const nodes = createMemo(() =>
-      section.name ? roots(section.name) : projectTree(section.projects ?? [])
+  type BranchRow =
+    & {
+      key: string;
+      depth: number;
+      intent: DisclosureState;
+    }
+    & (
+      | { kind: "archive"; repo: ProjectRow }
+      | {
+        kind: "project";
+        node: ProjectBranch<ProjectRow>;
+        hasChildren: boolean;
+        detachedArchive: boolean;
+        archived: boolean;
+      }
     );
-    const drop = () => section.name && reorder.drop(section.name);
-    const branches = (
-      <For each={nodes()} keyed={(node) => node.key}>
-        {(node) => (
-          <>
-            <Show
-              when={drop() ===
-                nodes().findIndex((item) => item.key === node().key)}
-            >
-              <div class="otk-project-drop" aria-hidden="true">
-                <span />
-              </div>
-            </Show>
-            <TreeItem
-              connected={!!section.nested}
-              last={node().key === nodes().at(-1)?.key}
-            >
-              <ProjectNode
-                node={node()}
-                section={section.name}
-                archive={section.name === "Active" &&
-                  archiveOwners().get(repositoryKey(node().project))?.key ===
-                    node().key}
-              />
-            </TreeItem>
-          </>
-        )}
-      </For>
-    );
-    return section.name
-      ? (
-        <div
-          data-project-section={section.name}
-          class="otk-project-order-section"
-        >
-          {branches}
-          <Show when={drop() === nodes().length}>
-            <div class="otk-project-drop" aria-hidden="true">
-              <span />
-            </div>
-          </Show>
-        </div>
-      )
-      : branches;
+  function groupRows(root?: ProjectBranch<ProjectRow>, repo?: ProjectRow) {
+    const rows: BranchRow[] = [];
+    const appendArchive = (repo: ProjectRow, depth: number) => {
+      const intent = disclosure.bind("archive", {
+        scope: repo.sidecarId,
+        id: repository(repo),
+      });
+      rows.push({
+        kind: "archive",
+        key: `archive:${repositoryKey(repo)}`,
+        repo,
+        depth,
+        intent,
+      });
+      if (intent.open() && !collapsed()) {
+        for (const child of projectTree(archivedRows(repo))) {
+          appendProject(child, depth + 1, undefined, true);
+        }
+      }
+    };
+    const appendProject = (
+      node: ProjectBranch<ProjectRow>,
+      depth: number,
+      archive?: ProjectRow,
+      archived = false,
+    ) => {
+      const intent = disclosure.bind("projectBranch", {
+        scope: node.project.sidecarId,
+        id: node.project.directory,
+      });
+      const nested = archive?.directory === repository(node.project);
+      const archiveCount = archive ? archivedRows(archive).length : 0;
+      const presentation = projectBranchPresentation(
+        node,
+        intent.open(),
+        archiveCount,
+      );
+      rows.push({
+        kind: "project",
+        key: node.key,
+        depth,
+        node,
+        intent,
+        archived,
+        hasChildren: presentation.hasChildren &&
+          (nested || node.children.length > 0),
+        detachedArchive: archiveCount > 0 && !nested,
+      });
+      for (const child of presentation.children) {
+        appendProject(child, depth + 1, undefined, archived);
+      }
+      if (archive && presentation.archiveVisible) {
+        appendArchive(archive, nested ? depth + 1 : depth);
+      }
+    };
+    if (root) appendProject(root, 0, repo);
+    else if (repo) appendArchive(repo, 0);
+    const paths = treePaths(rows, (row) => row.depth);
+    return rows.map((row, index) => ({ ...row, path: paths[index] }));
   }
-  function ProjectNode(
-    item: {
-      node: ProjectBranch<ProjectRow>;
-      archive?: boolean;
+  function ProjectGroup(
+    group: {
+      root?: ProjectBranch<ProjectRow>;
+      archive?: ProjectRow;
       section?: Section;
     },
   ) {
-    const node = () => item.node;
-    const key = item.node.key;
+    const rows = createMemo(() => groupRows(group.root, group.archive));
+    return (
+      <div
+        role="group"
+        class={["otk-project-tree otk-sidebar-tree", {
+          "is-lifted": !!group.root && reorder.lifted(group.root.key),
+          "otk-surface-lifted": !!group.root && reorder.lifted(group.root.key),
+        }]}
+        data-project-root={group.root?.key}
+      >
+        <For each={rows()} keyed={(row) => row.key}>
+          {(row) => {
+            const project = () => {
+              const entry = row();
+              return entry.kind === "project" ? entry : undefined;
+            };
+            const archive = () => {
+              const entry = row();
+              return entry.kind === "archive" ? entry : undefined;
+            };
+            return (
+              <>
+                <Show when={project()}>
+                  {(entry) => (
+                    <ProjectNode
+                      item={entry()}
+                      section={entry().key === group.root?.key
+                        ? group.section
+                        : undefined}
+                    />
+                  )}
+                </Show>
+                <Show when={archive()}>
+                  {(entry) => (
+                    <Archive
+                      repo={entry().repo}
+                      path={entry().path}
+                      intent={entry().intent}
+                    />
+                  )}
+                </Show>
+              </>
+            );
+          }}
+        </For>
+      </div>
+    );
+  }
+  function DropMarker() {
+    return (
+      <div class="otk-project-drop" aria-hidden="true">
+        <span />
+      </div>
+    );
+  }
+  function Branches(section: { name: Section }) {
+    const nodes = () => roots(section.name);
+    const drop = () => reorder.drop(section.name);
+    return (
+      <div
+        data-project-section={section.name}
+        class="otk-project-order-section"
+      >
+        <For each={nodes()} keyed={(node) => node.key}>
+          {(node) => (
+            <>
+              <Show
+                when={drop() ===
+                  nodes().findIndex((item) => item.key === node().key)}
+              >
+                <DropMarker />
+              </Show>
+              <ProjectGroup
+                root={node()}
+                section={section.name}
+                archive={section.name === "Active" &&
+                    archiveOwners().get(repositoryKey(node().project))?.key ===
+                      node().key
+                  ? node().project
+                  : undefined}
+              />
+            </>
+          )}
+        </For>
+        <Show when={drop() === nodes().length}>
+          <DropMarker />
+        </Show>
+      </div>
+    );
+  }
+  function ProjectNode(
+    item: {
+      item: Extract<BranchRow, { kind: "project" }> & { path: boolean[] };
+      section?: Section;
+    },
+  ) {
+    const node = () => item.item.node;
+    const key = node().key;
     const movable = () => !!item.section && reorderable(node());
     onCleanup(() => {
       headings.delete(key);
       focusButtons.delete(key);
       rowErrors.delete(key);
     });
-    const archive = () =>
-      !!item.archive && archivedRows(node().project).length > 0;
-    const ownsNestedArchive = () =>
-      archive() && node().project.directory === repository(node().project);
-    const intent = disclosure.bind("projectBranch", {
-      scope: node().project.sidecarId,
-      id: node().project.directory,
-    });
-    const expanded = intent.open;
-    const presentation = () =>
-      projectBranchPresentation(
-        node(),
-        expanded(),
-        archive() ? archivedRows(node().project).length : 0,
-      );
-    const children = () => presentation().children;
-    const nestedArchive = () =>
-      ownsNestedArchive() && presentation().archiveVisible;
-    const save = (value: boolean) => {
-      void intent.set(value);
-    };
     return (
-      <>
-        <TreeNode
-          heading={movable()
-            ? {
-              "data-project-root": key,
-              "data-defer-touch-menu": reorder.defersTouchMenu(key)
-                ? ""
-                : undefined,
-              ref: (element: HTMLDivElement) => {
-                headings.set(key, element);
-              },
-              ...(props.onMove && props.ready
-                ? reorder.handlers(item.section!, key)
-                : {}),
-            }
-            : undefined}
-          compact={collapsed()}
-          selected={props.selected?.sidecarId === node().project.sidecarId &&
-            props.selected?.directory === node().project.directory}
-          class={`otk-project-tree otk-sidebar-tree${
-            reorder.lifted(key) ? " is-lifted otk-surface-lifted" : ""
-          }`}
-          label={`Worktrees in ${node().project.displayName}`}
-          open={expanded()}
-          hasChildren={presentation().hasChildren}
-          showEmptyToggle={false}
-          bodyVisible={children().length > 0 || nestedArchive()}
-          onOpen={save}
-          header={(connected) => (
-            <Row
-              project={node().project}
-              reorderKey={movable() ? key : undefined}
-              connected={connected}
-            />
-          )}
-          feedback={() => (
-            <DisclosureFeedback
-              disclosure={intent}
-              actionLabel="Saving project tree"
-              class="otk-project-disclosure-error"
-            />
-          )}
-          body={() => (
-            <>
-              <For each={children()} keyed={(child) => child.key}>
-                {(child) => (
-                  <TreeItem
-                    last={!nestedArchive() &&
-                      child().key === children().at(-1)?.key}
-                  >
-                    <ProjectNode node={child()} />
-                  </TreeItem>
-                )}
-              </For>
-              <Show when={nestedArchive()}>
-                <TreeItem last>
-                  <Archive repo={node().project} />
-                </TreeItem>
-              </Show>
-            </>
-          )}
-        />
-        <Show
-          when={archive() && !ownsNestedArchive() &&
-            presentation().archiveVisible}
-        >
-          <Archive repo={node().project} />
-        </Show>
-      </>
+      <TreeNode
+        path={item.item.path}
+        class={item.item.archived ? "otk-project-archive" : undefined}
+        heading={movable()
+          ? {
+            "data-project-root": key,
+            "data-defer-touch-menu": reorder.defersTouchMenu(key)
+              ? ""
+              : undefined,
+            ref: (element: HTMLDivElement) => {
+              headings.set(key, element);
+            },
+            ...(props.onMove && props.ready
+              ? reorder.handlers(item.section!, key)
+              : {}),
+          }
+          : undefined}
+        compact={collapsed()}
+        selected={props.selected?.sidecarId === node().project.sidecarId &&
+          props.selected?.directory === node().project.directory}
+        label={`Worktrees in ${node().project.displayName}`}
+        open={item.item.intent.open()}
+        hasChildren={item.item.hasChildren}
+        showEmptyToggle={item.item.detachedArchive}
+        onOpen={(open) => void item.item.intent.set(open)}
+        header={(connected) => (
+          <Row
+            project={node().project}
+            reorderKey={movable() ? key : undefined}
+            connected={connected}
+            disclosure={item.item.intent}
+          />
+        )}
+      />
     );
   }
   const orphanArchives = createMemo(() => {
@@ -632,14 +698,16 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     }
     return [...repos.values()];
   });
-  function Archive(section: { repo: ProjectRow }) {
-    const intent = disclosure.bind("archive", {
-      scope: section.repo.sidecarId,
-      id: repository(section.repo),
-    });
-    const expanded = intent.open;
+  function Archive(
+    section: {
+      repo: ProjectRow;
+      path: readonly boolean[];
+      intent: DisclosureState;
+    },
+  ) {
+    const expanded = () => section.intent.open();
     const setExpanded = (value: boolean) => {
-      void intent.set(value);
+      void section.intent.set(value);
     };
     const projects = () => archivedRows(section.repo);
     const unknown = () => repository(section.repo) === UNKNOWN_REPOSITORY;
@@ -680,39 +748,25 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       }
     };
     return (
-      <Show when={projects().length}>
-        <section
-          class="otk-project-archive"
-          data-project-parent={repository(section.repo)}
-        >
-          <SectionHeader
-            sidebar
-            class="otk-project-tree otk-archive-tree"
-            headerClass="otk-archived-toggle"
-            metaClass="otk-archived-count"
-            label={unknown() ? "Unknown repository" : "Archived"}
-            description={description()}
-            count={projects().length}
-            compact={collapsed()}
-            open={expanded() && !collapsed()}
-            onOpen={change}
-            attributes={{
-              "data-rollup": status(),
-              "data-unseen-count": unseenCount(),
-            }}
-            leading={() => (
-              <TreeIcon>
-                <StatusLight state={status()} />
-              </TreeIcon>
-            )}
-            body={() => (
-              <section aria-label={label()} class="otk-archived-projects">
-                <Branches projects={projects()} nested />
-              </section>
-            )}
-          />
-        </section>
-      </Show>
+      <SectionHeader
+        sidebar
+        path={section.path}
+        hasChildren={!!projects().length}
+        class="otk-project-archive otk-archive-tree"
+        headerClass="otk-archived-toggle"
+        metaClass="otk-archived-count"
+        label={unknown() ? "Unknown repository" : "Archived"}
+        description={description()}
+        count={projects().length}
+        compact={collapsed()}
+        open={expanded() && !collapsed()}
+        onOpen={change}
+        attributes={{
+          "data-rollup": status(),
+          "data-unseen-count": unseenCount(),
+        }}
+        leading={() => <StatusLight state={status()} />}
+      />
     );
   }
   const discoveredDisclosure = disclosure.bind("discovered", {
@@ -728,7 +782,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     { arguments: { type: "boolean" } },
   );
   function Row(
-    row: { project: ProjectRow; connected?: boolean; reorderKey?: string },
+    row: {
+      project: ProjectRow;
+      connected?: boolean;
+      reorderKey?: string;
+      disclosure: DisclosureState;
+    },
   ) {
     const [rowError, setRowError] = createSignal<FailureValue>("");
     const rowErrorID = `project-error-${createUniqueId()}`;
@@ -808,31 +867,21 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           if (row.reorderKey) focusButtons.set(row.reorderKey, element);
         }}
         compact={collapsed()}
-        detailedMeta={!!project().annotation ||
-          (project().visit?.parts.length ?? 0) > 1}
         lamp={
-          <TreeIcon class="otk-project-marker">
-            <button
-              type="button"
-              class="otk-project-attention"
-              aria-label={status() === "none"
-                ? `Open project ${name()}`
-                : `${lampLabel()}: open session in ${name()}`}
-              title={status() === "none"
-                ? `Open project ${project().directory}`
-                : `${lampLabel()}: open session in ${project().directory}`}
-              onClick={() =>
-                void (status() === "none"
-                  ? open(project())
-                  : openAttention(project()))}
-            >
-              <StatusLight
-                state={status()}
-                dependencies={project().dependencies}
-              />
-            </button>
-          </TreeIcon>
+          <StatusLight state={status()} dependencies={project().dependencies} />
         }
+        lampAction={{
+          "aria-label": status() === "none"
+            ? `Open project ${name()}`
+            : `${lampLabel()}: open session in ${name()}`,
+          title: status() === "none"
+            ? `Open project ${project().directory}`
+            : `${lampLabel()}: open session in ${project().directory}`,
+          onClick: () =>
+            void (status() === "none"
+              ? open(project())
+              : openAttention(project())),
+        }}
         action={{
           class: "otk-project-open",
           "aria-label": `Open project ${name()}${
@@ -850,79 +899,64 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
               project().summary?.presentation?.color)
           ? { name: name(), color: project().summary?.presentation?.color }
           : undefined}
-        label={
-          <Show
-            when={editing()}
-            fallback={
-              <span class="otk-project-name-line">
-                <span
-                  class="otk-project-name"
-                  data-unread={project().unread ? "true" : "false"}
-                >
-                  <TitleLabel
-                    pending={renaming()
-                      ? props.projectRename!.state.pendingTitle
-                      : undefined}
-                  >
-                    {name()}
-                  </TitleLabel>
-                </span>
-                <Show when={project().inactive && project().parentLabel}>
-                  <ChromeMeta
-                    class="otk-project-parent otk-control-label otk-control-grow"
-                    title={project().topology?.canonicalRoot}
-                  >
-                    {project().parentLabel}
-                  </ChromeMeta>
-                </Show>
-                <Show when={duplicate()}>
-                  <ChromeMeta
-                    class="otk-project-machine otk-control-label otk-control-grow"
-                    title={project().label}
-                  >
-                    {project().label}
-                  </ChromeMeta>
-                </Show>
-              </span>
-            }
-          >
+        title={{
+          text: name(),
+          pending: renaming()
+            ? props.projectRename!.state.pendingTitle
+            : undefined,
+          emphasis: !!project().unread,
+          qualifiers: [
+            ...(project().inactive && project().parentLabel
+              ? [{
+                text: project().parentLabel!,
+                title: project().topology?.canonicalRoot,
+              }]
+              : []),
+            ...(duplicate()
+              ? [{ text: project().label, title: project().label }]
+              : []),
+          ],
+        }}
+        editor={editing()
+          ? (
             <TitleEditor
               owner={props.projectRename!}
               label="Rename project"
               feedbackID={rowErrorID}
             />
-          </Show>
-        }
-        metaClass="otk-project-trailing"
+          )
+          : undefined}
         meta={
-          <Show when={!collapsed() && !editing()}>
-            <Show when={(project().source ?? "tracked") === "tracked"}>
+          <Show
+            when={!collapsed() && !editing() &&
+              (project().source ?? "tracked") === "tracked"}
+          >
+            <Show when={project().annotation}>
               <MetaItem rank={1}>
                 <ChromeMeta
-                  class="otk-project-visit"
-                  title="Availability and time since last visit"
+                  class="otk-project-availability"
+                  title="Availability"
                 >
-                  <Show
-                    when={project().annotation}
-                    fallback={
-                      <Show when={project().visit}>
-                        {(visit) => <TimeText time={visit()} />}
-                      </Show>
-                    }
-                  >
-                    <span class="otk-project-availability">
-                      <MetaText
-                        items={[project().annotation, project().visit]}
-                      />
-                    </span>
-                  </Show>
+                  {project().annotation}
                 </ChromeMeta>
               </MetaItem>
             </Show>
+            <Show when={project().visit}>
+              {(visit) => (
+                <MetaItem rank={2}>
+                  <ChromeMeta
+                    class="otk-project-visit"
+                    title="Time since last visit"
+                  >
+                    <TimeText time={visit()} />
+                  </ChromeMeta>
+                </MetaItem>
+              )}
+            </Show>
           </Show>
         }
-        metaControl={
-          <Show when={!collapsed() && !editing()}>
+        control={!collapsed() && !editing()
+          ? (
             <CommandMenu
               class="otk-project-menu"
               triggerClass="otk-project-menu-trigger"
@@ -933,36 +967,43 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
               onError={setRowError}
               feedbackID={rowErrorID}
             />
-          </Show>
-        }
+          )
+          : undefined}
         feedback={
-          <Show
-            when={renaming()}
-            fallback={
-              <Show when={rowError()}>
-                <div
-                  id={rowErrorID}
-                  class="otk-project-error"
-                >
-                  <FeedbackStatus
-                    compact
-                    feedback={errorFeedback(rowError())}
-                  />
-                </div>
-              </Show>
-            }
-          >
+          <>
             <Show
-              when={props.projectRename!.state.invalid ||
-                props.projectRename!.state.error}
+              when={renaming()}
+              fallback={
+                <Show when={rowError()}>
+                  <div
+                    id={rowErrorID}
+                    class="otk-project-error"
+                  >
+                    <FeedbackStatus
+                      compact
+                      feedback={errorFeedback(rowError())}
+                    />
+                  </div>
+                </Show>
+              }
             >
-              <TitleFeedback
-                owner={props.projectRename!}
-                id={rowErrorID}
-                expanded
-              />
+              <Show
+                when={props.projectRename!.state.invalid ||
+                  props.projectRename!.state.error}
+              >
+                <TitleFeedback
+                  owner={props.projectRename!}
+                  id={rowErrorID}
+                  expanded
+                />
+              </Show>
             </Show>
-          </Show>
+            <DisclosureFeedback
+              disclosure={row.disclosure}
+              actionLabel="Saving project tree"
+              class="otk-project-disclosure-error"
+            />
+          </>
         }
       />
     );
@@ -980,7 +1021,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       side="left"
       collapsed={collapsed()}
       width={width()}
-      bodyClass="otk-inbox-scroll"
+      bodyClass="otk-inbox-scroll otk-sidebar-list"
       viewport={(element) => {
         scrollLease?.release();
         scroller = element;
@@ -1103,11 +1144,12 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       </span>
       <Branches name="Active" />
       <For each={orphanArchives()} keyed={repositoryKey}>
-        {(repo) => <Archive repo={repo()} />}
+        {(repo) => <ProjectGroup archive={repo()} />}
       </For>
       <Show when={discovered().length}>
         <SectionHeader
           sidebar
+          path={[]}
           class="otk-discovered-section"
           headerClass="otk-discovered-toggle"
           label="Discovered"
@@ -1137,6 +1179,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       <Show when={!collapsed() && inactiveRows().length}>
         <SectionHeader
           sidebar
+          path={[]}
           class="otk-inactive-section"
           headerClass="otk-inactive-toggle"
           label="Inactive"

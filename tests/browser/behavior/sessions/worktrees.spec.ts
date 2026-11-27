@@ -57,12 +57,13 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
   await page.locator(".otk-inactive-toggle").click();
   await expect(row(archived)).toHaveAttribute("data-inactive", "true");
   // 6ca4d662: the checkout inherits the native project label, not its basename.
-  await expect(row(canonical).locator(".otk-project-name")).toHaveText(
+  await expect(row(canonical).locator(".otk-sidebar-title-text")).toHaveText(
     "Fixture project",
   );
-  await expect(row(archived).locator(".otk-project-parent")).toHaveText(
-    "Fixture project",
-  );
+  await expect(row(archived).locator(".otk-sidebar-title-qualifier"))
+    .toHaveText(
+      "Fixture project",
+    );
   for (
     const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
       "otk-light-stone",
@@ -82,7 +83,7 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
       .evaluateAll((rows) =>
         rows.map((row) => {
           const box = row.getBoundingClientRect();
-          const name = row.querySelector(".otk-project-name")!
+          const name = row.querySelector(".otk-sidebar-title-text")!
             .getBoundingClientRect();
           const light = row.querySelector(".otk-status-light")!
             .getBoundingClientRect();
