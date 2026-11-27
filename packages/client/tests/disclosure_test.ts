@@ -163,6 +163,39 @@ Deno.test("defaults follow Settings and required work unless a reader chose othe
   );
 });
 
+Deno.test("record choices are separate by placement and retire with the session", async () => {
+  const owner = createDisclosures({});
+  for (
+    const [kind, category] of [
+      ["reasoning", "reasoning"],
+      ["tool", "toolOutput"],
+      ["tool", "fileChanges"],
+      ["record", "record"],
+      ["record", "compaction"],
+      ["activity", "work"],
+      ["silent", "record"],
+      ["recordKinds", "stepMarkers"],
+      ["source", "source"],
+    ] as const
+  ) {
+    const id = { ...repo, id: category + kind, generation: "one" };
+    const transcript = owner.bind(kind, { ...id, placement: "transcript" }, {
+      category,
+    });
+    const panel = owner.bind(kind, { ...id, placement: "workPanel" }, {
+      category,
+    });
+    assertEquals([transcript.open(), panel.open()], [false, false]);
+    await panel.set(true);
+    assertEquals([transcript.open(), panel.open()], [false, true]);
+    await panel.set(false);
+    owner.reveal(kind, [id]);
+    assertEquals([transcript.open(), panel.open()], [true, false]);
+    owner.retire({ scope: id.scope, generation: id.generation });
+    assertEquals([transcript.chosen(), panel.chosen()], [false, false]);
+  }
+});
+
 Deno.test("scope retirement drops only that scope and a new generation starts from its default", async () => {
   const owner = createDisclosures({});
   const old = { ...repo, generation: "before" };
