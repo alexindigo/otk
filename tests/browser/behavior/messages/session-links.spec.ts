@@ -3,6 +3,51 @@ import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
 
+for (const activation of ["click", "hover-click", "enter"] as const) {
+  test(`messages.restored-session-pill-first-${activation}`, {
+    tag: "@messages",
+  }, async ({ state, page }) => {
+    const parent = await state.native<{ id: string }>("/session", "POST", {
+      title: "Parent conversation",
+    });
+    const title = "Settings design with the user";
+    const child = await state.native<{ id: string }>("/session", "POST", {
+      parentID: parent.id,
+      title,
+    });
+    const raw = child.id.slice(child.id.indexOf("-") + 1);
+    await openSession(state, page, parent.id);
+    await state.product("layout.patch", { rightCollapsed: true });
+    await state.queue([`Follow up with \`${raw}\` when ready.`]);
+    await prompt(page, "Which helper handled settings?");
+    await expect(page.locator(".otk-turn-time")).toHaveText(/^Worked for /);
+
+    await page.reload();
+    const pill = page.locator('[data-role="assistant"]').getByRole("link", {
+      name: title,
+    });
+    await expect(pill).toBeVisible();
+    if (activation === "enter") {
+      await pill.focus();
+      await expect(page.getByRole("tooltip")).toContainText(title);
+      await page.keyboard.press("Enter");
+    } else {
+      const { x, y, width, height } = (await pill.boundingBox())!;
+      const center = { x: x + width / 2, y: y + height / 2 };
+      await page.mouse.move(center.x, center.y);
+      if (activation === "hover-click") {
+        await expect(page.getByRole("tooltip")).toContainText(raw);
+      }
+      await page.mouse.down();
+      // One CSS pixel of ordinary pointer drift while pressing the same pill.
+      await page.mouse.move(center.x + 1, center.y);
+      await page.mouse.up();
+    }
+    await expect(page).toHaveURL(new RegExp(`/${child.id}$`));
+    await expect(page.locator(`[data-crumb="${child.id}"]`)).toBeVisible();
+  });
+}
+
 test("messages.session-link-restored-without-sidebar-row", {
   tag: "@messages",
 }, async ({ state, page }) => {
