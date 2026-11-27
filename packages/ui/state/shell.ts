@@ -74,7 +74,6 @@ export function createShellState(
     api: URL;
     build?: string;
     policy?: import("@otk/protocol").ClientRequestPolicy;
-    promptBlocks?(text: string): import("@otk/protocol").Block[];
     promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   },
 ): ShellState {
@@ -215,7 +214,6 @@ export function createShellState(
     attachments: (parts, origin) => actions.attachments(parts, origin),
   });
   const actions = createSessionActions({
-    promptBlocks: o.promptBlocks,
     promptCommitted: o.promptCommitted,
     resources,
     session,

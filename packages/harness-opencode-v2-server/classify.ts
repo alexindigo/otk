@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { outcomeTime } from "@otk/protocol";
+import { outcomeTime, promptTextBlocks } from "@otk/protocol";
 import { markdown } from "@otk/content";
 import type {
   Activity,
@@ -192,13 +192,6 @@ function deriveMessage(
     time: { created: millis(raw.time.created) },
     source: nativeSource(raw.type, raw, "text" in raw ? raw.text : undefined),
   };
-  const prose = (value: string, synthetic = false): Part => ({
-    kind: "text",
-    id: partID(raw.id, "text", 0),
-    blocks: markdown(value),
-    synthetic,
-    source: nativeSource("text", { text: value }, value),
-  });
   if (raw.type === "assistant") {
     const ordinals = { text: 0, reasoning: 0 };
     const parts: Part[] = [
@@ -349,7 +342,13 @@ function deriveMessage(
         : undefined,
       variant: context.model?.variant,
       parts: [
-        prose(raw.text),
+        {
+          kind: "text",
+          id: partID(raw.id, "text", 0),
+          blocks: promptTextBlocks(raw.text),
+          synthetic: false,
+          source: nativeSource("text", { text: raw.text }, raw.text),
+        },
         ...(raw.files ?? []).map((f, i): Part => ({
           kind: "file",
           id: `${raw.id}:file:${i}`,

@@ -56,6 +56,12 @@ export type Block =
     rows: Inline[][][];
   }
   | { b: "rule" };
+
+/** Prompt text is literal in every transcript; never reparse it as Markdown. */
+export function promptTextBlocks(text: string): Block[] {
+  return text ? [{ b: "paragraph", inline: [{ i: "text", text }] }] : [];
+}
+
 export interface Hunk {
   oldStart: number;
   oldLines: number;

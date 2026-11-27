@@ -11,6 +11,15 @@
 .otk-prose-paragraph {
   margin: 0 0 var(--space-3);
 }
+.otk-prose-compact .otk-prose-paragraph {
+  margin: 0;
+  white-space: break-spaces;
+  overflow-wrap: normal;
+}
+.otk-prose-compact .otk-prose-paragraph::after {
+  /* Give a final empty source line a line box, without adding copyable text. */
+  content: "\200b";
+}
 .otk-prose-code {
   font-family: var(--font-mono);
   background: var(--otk-bg-inline-code);
