@@ -1743,6 +1743,20 @@ export class InboxFeature implements FrameSource {
       params: (p) => text(p, "id")!,
       handler: (ctx, id) => {
         localWrite(ctx, (tx) => {
+          const owner = user();
+          const opened = this.#opened.get(owner);
+          if (opened?.size) {
+            const task = s.tasks.get(id);
+            for (const root of task.sessions) {
+              // D70: a legacy child reference does not own its parent's family.
+              if (this.index.hierarchy.ancestors(root).length) continue;
+              for (const member of this.index.descendants(root)) {
+                if (opened.has(member)) {
+                  s.seen.setOpened(owner, member, false, tx);
+                }
+              }
+            }
+          }
           s.tasks.close(id, tx);
           return { taskID: id, closed: true as const };
         }, closedReceipt);

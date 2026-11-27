@@ -217,3 +217,50 @@ test("subtree acknowledgement covers its own run and all checkouts without settl
     f.close();
   }
 });
+
+test("closing a task clears explicit opens for all its members without acknowledging finishes", async () => {
+  const directory = await fixture();
+  const second = "tstv1-second", other = "tstv1-other-root";
+  const rows = [
+    row(root, { activity: run(10) }),
+    deliveredFailure,
+    row(nested, { parentID: failure, directory: "/p-checkout" }),
+    row(second, { activity: run(21) }),
+    row(other),
+  ];
+  const members = [root, failure, nested, second];
+  let f = open(directory, rows);
+  try {
+    const task = await f.rpc.dispatch("tasks.create", {
+      directory: "/p",
+      name: "Close this task",
+      sessions: [root, second],
+    }) as { id: string };
+    await f.rpc.dispatch("sessions.seen", { sessionID: root, terminal: 10 });
+    for (const sessionID of [...members, other]) {
+      await f.rpc.dispatch("sessions.opened", { sessionID, opened: true });
+      assertEquals(f.state(sessionID)?.opened, true, sessionID);
+    }
+    f.seen.setOpened("bob", nested, true);
+    await f.rpc.dispatch("tasks.close", { id: task.id });
+    for (const id of members) assertEquals(f.state(id)?.opened, undefined, id);
+    assertEquals(f.state(other)?.opened, true);
+    assertEquals(f.state(second)?.counts.unseen, 1);
+    f.close();
+    f = open(directory, rows);
+    assertEquals(
+      f.seen.tokens().filter((record) => record.opened).map(
+        ({ user, session }) => [user, session],
+      ),
+      [["alice", other], ["bob", nested]],
+    );
+    assertEquals(
+      f.seen.tokens().find(({ user, session }) =>
+        user === "alice" && session === root
+      )?.time,
+      10,
+    );
+  } finally {
+    f.close();
+  }
+});
