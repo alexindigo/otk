@@ -86,6 +86,7 @@ export interface ServerResources {
     query?: string,
   ): void;
   historyNeighbors(neighbors: readonly Selection[]): void;
+  retainSessionReference(sidecarId: string, sessionID: string): () => void;
   projectSession(
     project: ProjectSelection,
     preferred?: string,
@@ -355,6 +356,8 @@ export function createServerResources(o: {
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
   let selected: Selection | undefined, crumbs: string[] = [];
   let historyNeighbors: readonly Selection[] = [];
+  const sessionReferences = new Map<string, Map<string, number>>();
+  let referenceViewPending = false;
   let rowDemand:
     | { project: ProjectSelection; rows: string[]; query: string }
     | undefined;
@@ -471,6 +474,8 @@ export function createServerResources(o: {
           : undefined,
         crumbs: active ? crumbs : [],
         rows: rows?.rows ?? [],
+        references: [...(sessionReferences.get(sidecar.id)?.keys() ?? [])]
+          .sort(),
         historyNeighbors: historyNeighbors.length
           ? historyNeighbors.filter((target) => target.sidecarId === sidecar.id)
             .map((target) => target.sessionID)
@@ -479,6 +484,14 @@ export function createServerResources(o: {
         tasksFollowParent,
       });
     }
+  };
+  const scheduleReferenceView = () => {
+    if (referenceViewPending || stopped) return;
+    referenceViewPending = true;
+    queueMicrotask(() => {
+      referenceViewPending = false;
+      if (!stopped) sendView();
+    });
   };
   const sendScope = (
     id: string,
@@ -978,6 +991,28 @@ export function createServerResources(o: {
       historyNeighbors = neighbors;
       sendView();
     },
+    retainSessionReference(sidecarId, sessionID) {
+      let ids = sessionReferences.get(sidecarId);
+      if (!ids) sessionReferences.set(sidecarId, ids = new Map());
+      const refs = ids;
+      const count = refs.get(sessionID) ?? 0;
+      refs.set(sessionID, count + 1);
+      if (!count) scheduleReferenceView();
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        const next = (refs.get(sessionID) ?? 1) - 1;
+        if (next > 0) refs.set(sessionID, next);
+        else {
+          refs.delete(sessionID);
+          if (!refs.size && sessionReferences.get(sidecarId) === refs) {
+            sessionReferences.delete(sidecarId);
+          }
+          scheduleReferenceView();
+        }
+      };
+    },
     visibleRows(project, rows, query = "") {
       const next = {
         project,
@@ -1289,6 +1324,7 @@ export function createServerResources(o: {
       requestSubscriptions.clear();
       if (stopped) return;
       stopped = true;
+      sessionReferences.clear();
       for (const owner of listOwners.values()) owner.stop();
       listOwners.clear();
       for (const owner of progressOwners.values()) owner.stop();
