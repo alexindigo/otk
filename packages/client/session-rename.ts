@@ -40,6 +40,9 @@ export function createSessionRename(o: {
   });
   return {
     ...owner,
+    get editing() {
+      return owner.editing;
+    },
     start: (target, origin) => owner.start({ ...target, origin }),
     matches: (target, origin) =>
       owner.matches({ ...target, title: "", origin }),

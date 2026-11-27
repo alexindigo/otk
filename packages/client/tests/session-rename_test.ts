@@ -58,7 +58,7 @@ Deno.test("rename keeps editing until the authoritative index title arrives", as
   });
   owner.start({ sidecarId: "a", sessionID: "s", title }, "row");
   await owner.commit("New");
-  assertEquals(owner.state.pending, true);
+  assertEquals(owner.state.pendingTitle, "New");
   assertEquals(owner.state.editing?.title, "Old");
   owner.observe();
   assert(owner.state.editing);

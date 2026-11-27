@@ -44,13 +44,16 @@ export function createProjectRename(o: {
   });
   return {
     ...owner,
+    get editing() {
+      return owner.editing;
+    },
     // Once submitted, Escape or a second row's Rename cannot dismiss an
     // outcome that may still be in flight. Only an unsent draft can cancel.
     start(target) {
-      if (!owner.state.pending) owner.start(target);
+      if (owner.state.pendingTitle === undefined) owner.start(target);
     },
     cancel() {
-      if (!owner.state.pending) owner.cancel();
+      if (owner.state.pendingTitle === undefined) owner.cancel();
     },
     async reset(target) {
       await o.update(target, "");

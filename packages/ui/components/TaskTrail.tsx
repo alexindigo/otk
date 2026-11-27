@@ -11,7 +11,7 @@ import {
 import type { SessionContextTarget } from "../features/session-context.ts";
 import OverflowRow from "./OverflowRow.tsx";
 import StatusLight from "./StatusLight.tsx";
-import TitleEditor from "./TitleEditor.tsx";
+import TitleEditor, { TitleLabel } from "./TitleEditor.tsx";
 import { MAX_SESSION_TITLE } from "@otk/protocol";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { location } from "./selection.ts";
@@ -84,16 +84,24 @@ export default function TaskTrail(props: {
     crumbContent(
       row,
       <span class="otk-trail-title otk-crumb-title otk-control-label">
-        <Show when={compact()} fallback={props.title(row().id)}>
-          <Show
-            when={row().id === props.selected}
-            fallback={compactTitle(props.title(row().id), measure)}
-          >
-            <Show when={measure} fallback={props.title(row().id)}>
-              <span class="otk-trail-title-floor">{props.title(row().id)}</span>
+        <TitleLabel
+          pending={editing(row().id)
+            ? props.rename!.state.pendingTitle
+            : undefined}
+        >
+          <Show when={compact()} fallback={props.title(row().id)}>
+            <Show
+              when={row().id === props.selected}
+              fallback={compactTitle(props.title(row().id), measure)}
+            >
+              <Show when={measure} fallback={props.title(row().id)}>
+                <span class="otk-trail-title-floor">
+                  {props.title(row().id)}
+                </span>
+              </Show>
             </Show>
           </Show>
-        </Show>
+        </TitleLabel>
       </span>,
     );
   const measure = (row: TrailCrumb & { first: boolean }, compact: boolean) => {
@@ -138,7 +146,7 @@ export default function TaskTrail(props: {
             <span class={["otk-trail-link", { "is-paged": scrolling() }]}>
               {separator(row().first)}
               <Show
-                when={editing(row().id)}
+                when={editing(row().id) && props.rename!.editing}
                 fallback={
                   <ActionButton
                     action={props.openAction(row().id)}
@@ -166,7 +174,6 @@ export default function TaskTrail(props: {
                     row,
                     <TitleEditor
                       label="Rename session"
-                      pendingText="Renaming session..."
                       maxLength={MAX_SESSION_TITLE}
                       owner={props.rename!}
                       feedbackID={props.feedbackID}
