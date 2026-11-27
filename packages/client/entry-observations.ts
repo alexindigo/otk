@@ -3,6 +3,7 @@ import { latestTerminal, randomID } from "@otk/protocol";
 import type {
   EntityState,
   IndexEntry,
+  SettlementChange,
   TerminalEvidence,
   TerminalOutcome,
 } from "@otk/protocol";
@@ -23,6 +24,7 @@ export interface EntryChanges {
   revision: number;
   baseline: boolean;
   changes: readonly EntryChange[];
+  settlements?: readonly SettlementChange[];
 }
 /** Permission routing for inventory consumers of an accepted projection. */
 export const permissionRouting = (entry?: IndexEntry): {
@@ -49,6 +51,7 @@ export interface AttentionProjection {
     evidence?: TerminalEvidence,
   ): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
+  settled(values: NonNullable<EntryChanges["settlements"]>): void;
   reset(): void;
   stop(): void;
 }
@@ -210,6 +213,17 @@ export function createAttentionProjection(o: {
       return () => {
         listeners.delete(listener);
       };
+    },
+    settled(settlements) {
+      if (stopped || !initialized) return;
+      const event = {
+        generation,
+        revision: ++revision,
+        baseline: false,
+        changes: [],
+        settlements,
+      };
+      for (const listener of listeners) listener(event);
     },
     reset() {
       initialized = false;

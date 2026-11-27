@@ -418,6 +418,7 @@ export class InboxFeature implements FrameSource {
     };
     this.#views.set(id, baseline);
     const stop = this.listen((frame) => {
+      if (frame.t === "inbox.settlement" && !delivered) return;
       if (frame.t !== "inbox.patch") emit(frame);
     });
     const publish = (changes: readonly InboxPublication[]) => {
@@ -716,13 +717,31 @@ export class InboxFeature implements FrameSource {
       ? "dependencies"
       : "none";
   }
-  /** Session entities follow the view lease like the facts they replace. */
+  #settlements = new Map<string, import("@otk/protocol").SessionSettlement>();
+  #settlementPending = new Map<
+    string,
+    import("@otk/protocol").SessionSettlement | null
+  >();
+  #settlementRevision = 0;
+  #settlement(id: string, value?: import("@otk/protocol").SessionSettlement) {
+    const before = this.#settlements.get(id);
+    if (JSON.stringify(before) === JSON.stringify(value)) return;
+    if (value) this.#settlements.set(id, value);
+    else this.#settlements.delete(id);
+    this.#settlementPending.set(id, value ?? null);
+    this.#schedule();
+  }
+  /** Session rows follow the view lease. Its scalar settlement edge also
+   * drives connection-wide notification channels without acquiring a row. */
   #entities(
     upserts: readonly EntityState[],
     removals: readonly string[],
   ): void {
     for (const value of upserts) {
       const key = entityKey(value.kind, value.id);
+      if (value.kind === "session") {
+        this.#settlement(value.id, value.evidence?.settlement);
+      }
       this.#capture("entities", key);
       this.#queue(
         `entity:${key}`,
@@ -732,6 +751,7 @@ export class InboxFeature implements FrameSource {
     }
     const session = entityKey("session", "");
     for (const key of removals) {
+      if (key.startsWith(session)) this.#settlement(key.slice(session.length));
       this.#capture("entities", key);
       this.#queue(
         `entity:${key}`,
@@ -1057,6 +1077,9 @@ export class InboxFeature implements FrameSource {
     this.#revision = 0;
     this.#pending.clear();
     this.#summaryPending.clear();
+    this.#settlements.clear();
+    this.#settlementPending.clear();
+    this.#settlementRevision = 0;
     this.#summaryRevision = 0;
     // A new generation re-baselines every client: no transition spans users.
     this.states.reset();
@@ -1296,7 +1319,11 @@ export class InboxFeature implements FrameSource {
       };
       for (const listener of this.#listeners) listener(structuredClone(frame));
     }
-    if (!this.#pending.size || this.#closed) return;
+    if (this.#closed) return;
+    if (!this.#pending.size) {
+      this.#flushSettlements();
+      return;
+    }
     const changes = [...this.#pending.values()],
       ops = changes.map((change) => change.value);
     this.#pending.clear();
@@ -1311,6 +1338,21 @@ export class InboxFeature implements FrameSource {
     };
     for (const listener of this.#listeners) listener(structuredClone(frame));
     for (const listener of this.#publications) listener(changes);
+    this.#flushSettlements();
+  }
+  #flushSettlements(): void {
+    if (!this.#settlementPending.size || this.#closed) return;
+    const frame: ServerFrame = {
+      t: "inbox.settlement",
+      generation: this.#generation,
+      revision: ++this.#settlementRevision,
+      values: [...this.#settlementPending].map(([sessionID, value]) => ({
+        sessionID,
+        value,
+      })),
+    };
+    this.#settlementPending.clear();
+    for (const listener of this.#listeners) listener(structuredClone(frame));
   }
   #observe(
     entry: IndexMetadata,
