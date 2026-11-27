@@ -87,6 +87,7 @@ import { entityKey } from "@otk/protocol";
 import { contextTarget } from "../components/context-target.ts";
 import { insertChip } from "../components/prompt/model.ts";
 import { createTerminalConnectionOwner } from "../terminal/connections.ts";
+import { confirmAction } from "../features/dialogs.tsx";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
@@ -98,6 +99,8 @@ export default function Shell(
   },
 ): import("solid-js").Element {
   const { parts, panels } = useUiRegistries();
+  const confirmCommand = (message: string): Promise<boolean> =>
+    confirmAction(commands, message);
   const {
     reload,
     resources,
@@ -116,12 +119,12 @@ export default function Shell(
     work,
     toggles,
     interact,
-    confirmCommand,
   } = createShellState({
     api: props.api,
     parts,
     policy: props.policy,
     build: props.build,
+    confirm: confirmCommand,
     promptCommitted: (message) => recentModel(message),
   });
   const {

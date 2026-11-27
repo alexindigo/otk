@@ -54,6 +54,18 @@ export function capabilityErrors(path: string, text: string): string[] {
     ) {
       errors.add("use the UI clipboard owner");
     }
+    if (
+      node.type === "CallExpression" || node.type === "OptionalCallExpression"
+    ) {
+      const authority = source.name(node.callee);
+      if (
+        /^(?:(?:globalThis|window|self)\.|document\.defaultView\.)+(?:confirm|alert|prompt)(?:\.(?:call|apply|bind))?$/
+          .test(authority ?? "") ||
+        (node.callee.type === "Identifier" &&
+          /^(?:confirm|alert|prompt)$/.test(authority ?? "") &&
+          !source.binding(authority!, node.callee))
+      ) errors.add("use OTK Dialog, not a browser-native modal");
+    }
   }
   return [...errors];
 }
@@ -69,6 +81,27 @@ Deno.test("browser capabilities cannot bypass their plain HTTP owners", async ()
     capabilityErrors(path, files.get(path)!).map((error) => `${path}: ${error}`)
   );
   assertEquals(errors, []);
+});
+
+Deno.test("D54 bans browser-native modal functions without banning product commands", () => {
+  for (
+    const code of [
+      "confirm('Proceed?')",
+      "window.alert('Notice')",
+      "globalThis['prompt']?.('Name')",
+      "const { confirm: ask } = self; ask('Proceed?')",
+      "const page = window; page.alert.call(page, 'Notice')",
+      "document.defaultView?.confirm('Proceed?')",
+    ]
+  ) assert(capabilityErrors("web/src/dialogs.ts", code).length > 0, code);
+  for (
+    const code of [
+      "function confirm() {} confirm()",
+      "function act(prompt) { prompt() }",
+      "client.prompt(parts)",
+      "owner.confirm()",
+    ]
+  ) assertEquals(capabilityErrors("web/src/dialogs.ts", code), [], code);
 });
 
 Deno.test("capability gate follows aliases, computed access, barrels and workers", () => {

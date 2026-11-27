@@ -10,7 +10,7 @@ export interface ApprovalCommandTarget {
 /** Capture the invocation target once; a late RPC never toggles another session. */
 export function registerApprovalCommands(commands: CommandHub, ports: {
   current(input?: SessionContextTarget): ApprovalCommandTarget | undefined;
-  beforeEnable(target: ApprovalCommandTarget): boolean;
+  beforeEnable(target: ApprovalCommandTarget): boolean | Promise<boolean>;
 }): () => void {
   return commands.register({
     id: "permission.auto",
@@ -37,7 +37,7 @@ export function registerApprovalCommands(commands: CommandHub, ports: {
         throw new Error("Session approvals are unavailable");
       }
       const enabled = !target.model.owner(target.sessionID);
-      if (enabled && !ports.beforeEnable(target)) return;
+      if (enabled && !await ports.beforeEnable(target)) return;
       await target.model.setAuto(target.sessionID, enabled);
     },
   });

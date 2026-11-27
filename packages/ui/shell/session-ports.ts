@@ -136,6 +136,16 @@ export function sessionPorts(o: {
         task,
       }),
     requests: connection.attention,
+    questionResponse: (id) =>
+      connection.rpc.questionResponse(id, connection.attention),
+    observeQuestionResponse(listener) {
+      const operation = connection.requests.subscribe(listener);
+      const native = connection.attention.subscribe(listener);
+      return () => {
+        operation();
+        native();
+      };
+    },
     permissions: () => {
       void session.state.content;
       return connection.attention.permissions(

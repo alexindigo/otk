@@ -15,13 +15,23 @@ for (const kind of ["permission", "question", "form"] as const) {
       const primary = page.locator("[data-primary-action]");
       await expect(primary).toBeVisible();
       const original = await primary.elementHandle();
+      if (kind === "question") {
+        await expect(primary).toBeDisabled();
+        await expect(page.getByText("Sending answer", { exact: true }))
+          .toHaveCount(1);
+        await expect(page.locator(".otk-question-dock dd")).toHaveText("A");
+        await expect(page.getByRole("button", { name: "B", exact: true }))
+          .toHaveCount(0);
+        await primary.dispatchEvent("click");
+        await expect(page.getByRole("alert")).toHaveCount(0);
+        await expect(page.locator("[data-settlement-frames]")).toHaveAttribute(
+          "data-settlement-frames",
+          "1",
+        );
+        return;
+      }
       if (kind === "permission") {
         await page.getByRole("button", { name: "Reject", exact: true }).click();
-      } else if (kind === "question") {
-        await page.getByRole("button", { name: "B", exact: true }).click();
-        await primary.click();
-        await expect(page.getByRole("tab", { name: "Confirm", exact: true }))
-          .toHaveAttribute("aria-selected", "true");
       } else {
         await page.locator('[data-field="choice"] input').fill("B");
         await primary.click();

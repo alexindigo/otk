@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import FeedbackStatus from "./FeedbackStatus.tsx";
-import { bindFeedback } from "../state/feedback.ts";
-import {
-  createPrimaryAction,
-  errorFeedback,
-  type FailureValue,
-  failureValue,
-} from "@otk/client";
+import OperationFeedback from "./OperationFeedback.tsx";
+import ComposerNotice from "./ComposerNotice.tsx";
+import { createPrimaryAction } from "@otk/client";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
 import "./QuestionDock.css" with { type: "text" };
@@ -24,7 +19,7 @@ export function registerQuestionDock(docks: DockRegistry): void {
 }
 import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import type { QuestionRequest } from "@otk/protocol";
-import { createQuestionForm, forgetQuestionForm } from "@otk/client";
+import { createQuestionForm, type QuestionResponse } from "@otk/client";
 import { solidState } from "../state/binding.ts";
 import TakeoverHeader from "./TakeoverHeader.tsx";
 import RequestDismiss from "./RequestDismiss.tsx";
@@ -80,7 +75,7 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 /**
  * View of one question request. All answer logic lives in `createQuestionForm`;
  * this renders its state and forwards intents. View-only state: collapse,
- * reply progress, keyboard focus movement.
+ * keyboard focus movement.
  */
 function Request(
   props: {
@@ -102,14 +97,30 @@ function Request(
     ),
     text: form.answers().map((answer) => answer.join(", ")).join("\n"),
   }), (dirty, text) => props.onDirty(dirty, text));
-  const feedback = session?.feedback;
-  const operation = bindFeedback(() => feedback);
-  const [collapsed, setCollapsed] = createSignal(false),
-    [pending, setPending] = createSignal(false),
-    [error, setError] = createSignal<FailureValue>("");
+  const [collapsed, setCollapsed] = createSignal(false);
+  const [response, setResponse] = createSignal<QuestionResponse>();
+  createEffect(() => props.request.id, (id) => {
+    const update = () => setResponse(session.questionResponse?.(id));
+    update();
+    return session.observeQuestionResponse?.(update);
+  });
+  const pending = () => response()?.state === "sending";
+  const feedback = () => {
+    const state = response();
+    if (!state?.feedback) return;
+    return state.state === "failed" && state.canResend
+      ? {
+        ...state.feedback,
+        action: {
+          label: "Retry response",
+          run: () => void reply(state.answers?.map((answer) => [...answer])),
+        },
+      }
+      : state.feedback;
+  };
   let card!: HTMLElement,
     advance!: HTMLButtonElement,
-    pendingStatus!: HTMLDivElement,
+    noticeControl: { focus(): void } | undefined,
     alive = true;
   const rowRefs: HTMLElement[][] = form.questions.map(() => []);
   const ownFields: HTMLTextAreaElement[] = [];
@@ -118,40 +129,24 @@ function Request(
   const answers = () =>
     form.questions.map((question, index) => ({
       question: question.header || question.text,
-      answer: form.answers()[index].join(", ") || "(not answered)",
+      answer:
+        ((pending() ? response()?.answers : form.answers())?.[index]?.join(
+          ", ",
+        )) || "(not answered)",
     }));
   createEffect(
-    () => ({ pending: pending(), feedback: operation() }),
-    (value) => {
-      if (value.pending) {
-        onSettled(() => {
-          if (props.focusNotice && value.feedback) props.focusNotice();
-          else pendingStatus?.focus();
-        });
+    () => pending(),
+    (value, previous) => {
+      if (previous === false && value) {
+        onSettled(() => noticeControl?.focus());
       }
     },
   );
   const reply = async (answers?: string[][]) => {
     if (pending() || !primary.permitted()) return;
-    setPending(true);
-    feedback?.clear();
-    setError("");
-    const settled = session?.requests?.settlement("question", props.request.id);
-    try {
-      await props.onReply(props.request.id, answers);
-      settled?.();
-      forgetQuestionForm(props.request.id);
-      if (alive) props.onDirty(false);
-    } catch (failure) {
-      if (feedback) feedback.fail(failure);
-      else if (alive) {
-        setError(
-          failureValue(failure, { actionLabel: "Sending question response" }),
-        );
-      }
-    } finally {
-      if (alive) setPending(false);
-    }
+    await props.onReply(props.request.id, answers).catch(() => {
+      // The request owns its failure. Never publish a mounted copy.
+    });
   };
   const submit = () => primary.invoke("submit");
   const ports = useCommandPorts();
@@ -322,7 +317,20 @@ function Request(
       onKeyDown={onKey}
     >
       <Takeover
-        notice={props.notice}
+        notice={feedback()
+          ? () => (
+            <ComposerNotice>
+              <Show when={feedback()}>
+                {(value) => (
+                  <OperationFeedback
+                    feedback={value()}
+                    control={(control) => noticeControl = control}
+                  />
+                )}
+              </Show>
+            </ComposerNotice>
+          )
+          : props.notice}
         collapsed={collapsed()}
         title={
           <TakeoverHeader
@@ -345,13 +353,6 @@ function Request(
               onInvoke={() => void answer()}
               title={onReview() ? "Send the answers" : "Next step"}
             />
-            <Show when={pending() && !(props.focusNotice && operation())}>
-              <FeedbackStatus
-                ref={(element) => pendingStatus = element}
-                focusable
-                feedback={{ kind: "pending", text: "Sending answer..." }}
-              />
-            </Show>
             <button
               type="button"
               class="otk-pill"
@@ -404,9 +405,6 @@ function Request(
               onSelect={goTo}
             />
           </Show>
-        </Show>
-        <Show when={error()}>
-          <FeedbackStatus feedback={errorFeedback(error())} />
         </Show>
       </Takeover>
     </section>

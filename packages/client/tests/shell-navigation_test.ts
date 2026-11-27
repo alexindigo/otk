@@ -845,7 +845,7 @@ for (const superseded of [false, true]) {
   }
 }
 
-Deno.test("a resolved project intent cannot replay a declined navigation guard on later frames", async () => {
+Deno.test("a resolved project intent does not interrupt kept input or repeat on later frames", async () => {
   const f = fixture();
   let reads = 0;
   f.resources.projectSession = () => {
@@ -858,13 +858,12 @@ Deno.test("a resolved project intent cannot replay a declined navigation guard o
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
     assertEquals(reads, 1);
-    assertEquals(f.messages.length, 1);
+    assertEquals(f.messages.length, 0);
     f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
     await settled();
     assertEquals(reads, 1, "a completed lookup consumes the captured intent");
-    assertEquals(f.messages.length, 1, "declining is not an automatic retry");
-    assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
-    assertEquals(f.guard.dirty("permissions"), true);
+    assertEquals(f.messages.length, 0);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
     f.consent(true);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
@@ -875,11 +874,11 @@ Deno.test("a resolved project intent cannot replay a declined navigation guard o
   }
 });
 
-Deno.test("removing a direct-route server detaches even while its project metadata is unknown", () => {
+Deno.test("removing a direct-route server detaches even while its project metadata is unknown", async () => {
   const f = fixture("#/remote/tstv1-loading");
   try {
     assertEquals(f.navigation.state.project, undefined);
-    assertEquals(f.navigation.removeServer("remote"), true);
+    assertEquals(await f.navigation.removeServer("remote"), true);
     assertEquals(
       f.session.state.selection,
       undefined,
@@ -1130,7 +1129,7 @@ Deno.test("project-only routes defer visits until connected and retain view-only
     f.stop();
   }
 });
-Deno.test("shell navigation confirms and clears dirty owners only on selection change", () => {
+Deno.test("shell navigation clears transient view marks, not draft custody, on selection change", () => {
   const f = fixture();
   f.guard.mark("permissions", true);
   f.consent(false);
@@ -1146,18 +1145,13 @@ Deno.test("shell navigation confirms and clears dirty owners only on selection c
   assertEquals(f.guard.dirty("permissions"), true);
   assertEquals(
     f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" }),
-    false,
-  );
-  assertEquals(f.guard.dirty("permissions"), true);
-  f.consent(true);
-  assertEquals(
-    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" }),
     true,
   );
   assertEquals(f.guard.dirty("permissions"), false);
+  assertEquals(f.messages, []);
   f.stop();
 });
-Deno.test("child navigation reports a declined guard instead of settling silently", () => {
+Deno.test("child navigation accepts the route without prompting for kept input", () => {
   const f = fixture();
   f.entries("local", [shellEntry("tstv1-selected"), shellEntry("tstv1-other")]);
   assert(
@@ -1165,11 +1159,9 @@ Deno.test("child navigation reports a declined guard instead of settling silentl
   );
   f.guard.mark("permissions", true);
   f.consent(false);
-  assertEquals(f.navigation.openChild("tstv1-other"), false);
-  assertEquals(f.location.hash, "#/local/tstv1-selected");
-  f.consent(true);
   assertEquals(f.navigation.openChild("tstv1-other"), true);
   assertEquals(f.location.hash, "#/local/tstv1-other");
+  assertEquals(f.messages, []);
   f.stop();
 });
 Deno.test("shell navigation normalizes roots and same-session reselection visits without another push", async () => {
@@ -1260,11 +1252,8 @@ Deno.test("project memory restores exact helpers through guarded navigation and 
     f.consent(false);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
-    assertEquals(f.location.hash, "#/local/tstv1-away");
-    f.consent(true);
-    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
-    await settled();
     assertEquals(f.location.hash, "#/local/tstv1-selected/tstv1-helper");
+    assertEquals(f.messages, []);
   } finally {
     f.stop();
   }
@@ -1300,19 +1289,28 @@ Deno.test("pending location writes bridge fast switches without accepting older 
     f.stop();
   }
 });
-Deno.test("shell navigation refuses create and removal when input release is cancelled", async () => {
+Deno.test("creating preserves the previous draft; removing its server asks first", async () => {
   const f = fixture();
   f.drafts.writer(f.actions.key())({
     ...client.emptyDraft(),
     editor: { text: "keep" },
   });
   f.consent(false);
+  const key = f.actions.key();
+  f.reply((_id, method) =>
+    Promise.resolve(
+      method === "session.create" ? shellInfo("tstv1-created") : null,
+    )
+  );
   await f.navigation.createIn("local", "/p");
-  assertEquals(f.calls, []);
-  assertEquals(f.navigation.removeServer("local"), false);
-  assertEquals(f.calls, []);
+  assertEquals(f.calls.some((row) => row[1] === "session.create"), true);
+  assertEquals(f.drafts.current(key).editor, { text: "keep" });
+  assertEquals(f.messages, []);
+  f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-selected" });
+  assertEquals(await f.navigation.removeServer("local"), false);
+  assertEquals(f.drafts.current(key).editor, { text: "keep" });
   f.consent(true);
-  assertEquals(f.navigation.removeServer("local"), true);
+  assertEquals(await f.navigation.removeServer("local"), true);
   assertEquals(f.calls.at(-1), ["remove", "local"]);
   f.stop();
 });
@@ -1808,15 +1806,10 @@ Deno.test("navigation observes project selection without replacing the canonical
   }
 });
 
-Deno.test("close cancellation, failed membership and a later route preserve the current view and dirty input", async () => {
+Deno.test("failed close membership and a later route preserve the current view and dirty input", async () => {
   const f = fixture();
   try {
     f.guard.mark("permissions", true);
-    f.consent(false);
-    assertEquals(await f.navigation.close(), false);
-    assertEquals(f.calls, []);
-    assertEquals(f.guard.dirty("permissions"), true);
-    f.consent(true);
     f.resources.inbox("local").state.inbox.tasks = [
       shellTask("task", ["tstv1-selected"]),
     ];
@@ -1829,6 +1822,8 @@ Deno.test("close cancellation, failed membership and a later route preserve the 
     }
     assertEquals((failure as Error).message, "membership failed");
     assertEquals(f.location.hash, "#/local/tstv1-selected");
+    assertEquals(f.guard.dirty("permissions"), true);
+    assertEquals(f.messages, []);
     const held = Promise.withResolvers<unknown>();
     f.reply(() => held.promise);
     const closing = f.navigation.close();

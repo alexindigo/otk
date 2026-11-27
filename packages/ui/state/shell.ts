@@ -61,7 +61,6 @@ export interface ShellWork {
 
 export interface ShellState {
   reload: import("@otk/client").Reload;
-  confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   disclosures: Disclosures;
   work: ShellWork;
@@ -87,6 +86,7 @@ export function createShellState(
     parts: PartRegistry;
     build?: string;
     policy?: import("@otk/protocol").ClientRequestPolicy;
+    confirm(message: string): Promise<boolean>;
     promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   },
 ): ShellState {
@@ -385,16 +385,13 @@ export function createShellState(
       session.state.view === "deleted" || !!actions.selectedEntry()?.deleted,
     retention: () => {
       const target = session.state.selection;
-      if (
-        !target ||
-        !(session.state.view === "deleted" || actions.selectedEntry()?.deleted)
-      ) return;
+      if (!target) return;
       return sidecars.connection(target.sidecarId).attention.retention(
         target.sessionID,
         (id) => resources.entry(target.sidecarId, id),
       );
     },
-    confirm: (message) => globalThis.confirm(message),
+    confirm: o.confirm,
   });
   // One presence owner: navigation reads it to gate finish acknowledgement,
   // and the view effect below tracks it, so regaining presence re-observes
@@ -419,7 +416,7 @@ export function createShellState(
     session,
     factory: solidState,
     presence: () => ({ focused: focused(), visible: visible() }),
-    confirm: (message) => globalThis.confirm(message),
+    confirm: o.confirm,
   });
   const transcriptScopes = createTranscriptScopes({ resources, session });
   createEffect(() => {
@@ -477,7 +474,6 @@ export function createShellState(
   });
   return {
     reload,
-    confirmCommand: (message: string) => globalThis.confirm(message),
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
     disclosures,

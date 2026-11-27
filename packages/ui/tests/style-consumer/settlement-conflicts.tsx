@@ -66,6 +66,8 @@ export default function SettlementConflicts() {
     entry: () => undefined,
     permissions: () => [],
     questions: () => [],
+    questionResponse: (id) => rpc.questionResponse(id),
+    observeQuestionResponse: (listener) => tracker.subscribe(listener),
     prefs: () => DEFAULT_PREFS,
     dirty() {},
     act: (action) => action(),
@@ -108,8 +110,9 @@ export default function SettlementConflicts() {
     <section data-settlement-frames={sent()}>
       <h2>Another {kind} response was already sent</h2>
       <p>
-        A fresh view attempts a different response; the first reply remains
-        pending.
+        {kind === "question"
+          ? "A fresh dock shows the response already in flight."
+          : "A fresh view attempts a different response; the first reply remains pending."}
       </p>
       <SessionProvider ports={ports}>
         {kind === "permission"

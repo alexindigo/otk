@@ -5,7 +5,12 @@ import {
   assertStrictEquals,
   assertThrows,
 } from "@std/assert";
-import { RequestFailure, RequestTracker, Rpc } from "../mod.ts";
+import {
+  RequestFailure,
+  RequestLifetimes,
+  RequestTracker,
+  Rpc,
+} from "../mod.ts";
 import type { RequestControl } from "@otk/protocol";
 
 function connection(terminal?: "succeeded" | "failed") {
@@ -327,5 +332,66 @@ Deno.test("question and form settlement share one native input identity", async 
   rpc.start("tasks.close", { id: "task" });
   rpc.start("tasks.close", { id: "task" });
   assertEquals(requests().length, 4);
+  tracker.stop();
+});
+
+Deno.test("one question projection follows its exact operation and native settlement", async () => {
+  const { rpc, tracker, requests } = connection();
+  const authority = new RequestLifetimes();
+  const request = { id: "q", sessionID: "s", questions: [] };
+  authority.receive({ op: "question.upsert", request });
+  const observed: (string | undefined)[] = [];
+  const stop = tracker.subscribe(() => {
+    observed.push(rpc.questionResponse("q", authority)?.state);
+  });
+  const first = rpc.start("question.reply", {
+    requestID: "q",
+    answers: [["A"]],
+  }, { owner: "s" });
+  assertEquals(
+    rpc.feedback("s").current(),
+    undefined,
+    "Question feedback must not appear on the session composer",
+  );
+  assertEquals(rpc.questionResponse("q", authority)?.state, "sending");
+  assertEquals(observed.at(-1), "sending");
+  assertEquals(rpc.questionResponse("q", authority)?.answers, [["A"]]);
+  assertEquals(rpc.questionResponse("unrelated", authority), undefined);
+  const failure = {
+    code: "native.failed",
+    retry: "new-intent",
+    diagnosticID: "answer-failure",
+  } as const;
+  rpc.receive({
+    t: "request.result",
+    ref: requests()[0].ref,
+    seq: 1,
+    outcome: { ok: false, error: failure },
+  });
+  await assertRejects(() => first.result, RequestFailure);
+  assertEquals(rpc.questionResponse("q", authority)?.state, "failed");
+  assertEquals(rpc.questionResponse("q", authority)?.canResend, true);
+  assertEquals(
+    rpc.questionResponse("q", authority)?.feedback?.diagnosticID,
+    failure.diagnosticID,
+  );
+  assertEquals(rpc.feedback("s").current(), undefined);
+  const retry = rpc.start("question.reply", {
+    requestID: "q",
+    answers: [["A"]],
+  }, { owner: "s" });
+  assertEquals(requests().length, 2);
+  assertEquals(rpc.questionResponse("q", authority)?.state, "sending");
+  authority.receive({ op: "question.remove", requestID: "q", sessionID: "s" });
+  assertEquals(rpc.questionResponse("q", authority), { state: "confirmed" });
+  rpc.receive({
+    t: "request.result",
+    ref: requests()[1].ref,
+    seq: 1,
+    outcome: { ok: true, result: null },
+  });
+  await retry.result;
+  assertEquals(rpc.questionResponse("q", authority), { state: "confirmed" });
+  stop();
   tracker.stop();
 });

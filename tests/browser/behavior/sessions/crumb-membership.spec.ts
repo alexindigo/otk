@@ -102,12 +102,13 @@ test(
     // Intentional edits still use the membership owner, never a navigation default.
     await page.locator(`[data-session="${child}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${child}$`));
-    page.once("dialog", (dialog) => dialog.accept());
     await sessionContext(
       page,
       `[data-session="${child}"]`,
       "session.close",
     );
+    await page.getByRole("dialog", { name: "Confirm action" })
+      .getByRole("button", { name: "Continue", exact: true }).click();
     await expect.poll(membership).toEqual(
       before.map((task) => ({
         ...task,

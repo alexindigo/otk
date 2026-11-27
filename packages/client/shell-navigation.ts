@@ -127,7 +127,7 @@ export interface ShellNavigation {
   closeSettings(): void;
   fail(error: unknown): void;
   clearError(): void;
-  removeServer(id: string): boolean;
+  removeServer(id: string): Promise<boolean>;
   observeView(view: ShellView): void;
   start(): void;
   stop(): void;
@@ -141,7 +141,7 @@ export function createShellNavigation(o: {
   forkNotes?: ForkNotes;
   session: Pick<ClientSession, "state" | "open">;
   presence(): { focused: boolean; visible: boolean };
-  confirm(message: string): boolean;
+  confirm(message: string): boolean | Promise<boolean>;
   environment?: NavigationEnvironment;
   factory?: StateFactory;
 }): ShellNavigation {
@@ -329,11 +329,7 @@ export function createShellNavigation(o: {
       }
       if (changes) guard.clear();
     },
-    accept(hash) {
-      const target = route(hash), previous = session.state.selection;
-      return (target?.sidecarId === previous?.sidecarId &&
-        target?.sessionID === previous?.sessionID) || guard.release();
-    },
+    accept: () => true,
   }, o.environment);
   const releaseHistory = navigation.subscribe(() => {
     const history = navigation.history();
@@ -466,7 +462,6 @@ export function createShellNavigation(o: {
       async (group) => {
         const create = group.options("create", directory);
         const add = group.options("add", directory);
-        if (!guard.release()) return;
         const intent = ++revision;
         const taskActions = resources.taskActions({ sidecarId, directory });
         try {
@@ -509,7 +504,7 @@ export function createShellNavigation(o: {
     if (
       disposition === "kept" && !states.isStale &&
       entityRequiresVisibility(states.get(entityKey("session", entry.id))) &&
-      !o.confirm(
+      !await o.confirm(
         `Close "${entry.title}"? Its task will stay visible while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
       )
     ) return false;
@@ -520,10 +515,11 @@ export function createShellNavigation(o: {
     const shown = () =>
       session.state.selection?.sidecarId === target.sidecarId &&
       ids.includes(session.state.selection.sessionID);
-    if (
-      (shown() || disposition === "dropped") &&
-      !guard.release({ draft: disposition, keys })
-    ) return false;
+    const discard = disposition === "dropped"
+      ? await guard.release({ draft: "dropped", keys })
+      : undefined;
+    if (discard === false) return false;
+    if (intent !== revision) return false;
     const model = resources.tabs(p);
     const task = inbox.tasks.find((task) =>
       task.directory === directory && task.sessions.includes(target.sessionID)
@@ -531,6 +527,7 @@ export function createShellNavigation(o: {
     const remaining = task?.sessions.find((id) => !ids.includes(id));
     if (disposition === "dropped") {
       await actions.remove(target);
+      if (discard) discard();
       for (const key of keys) o.drafts.drop(key);
       if (shown()) guard.clear();
     } else if (task) {
@@ -620,7 +617,6 @@ export function createShellNavigation(o: {
     remove: (target) => releaseSession(target, "dropped"),
     async fork(input, through) {
       const target = { ...input };
-      if (!guard.release({ draft: "kept" })) return;
       const intent = ++revision;
       const title = target.title ??
         resources.entry(target.sidecarId, target.sessionID)?.title ??
@@ -650,7 +646,16 @@ export function createShellNavigation(o: {
         draft.settings = true;
       });
     },
-    removeServer(id) {
+    async removeServer(id) {
+      const revisionAtInvocation = revision;
+      const selected = session.state.selection;
+      const discard = selected?.sidecarId === id
+        ? await guard.release({
+          draft: "dropped",
+          message: "Discard your unsent input before removing this server?",
+        })
+        : undefined;
+      if (discard === false || revisionAtInvocation !== revision) return false;
       if (
         (session.state.selection?.sidecarId === id ||
           store.state.project?.sidecarId === id) &&
@@ -659,6 +664,7 @@ export function createShellNavigation(o: {
         return false;
       }
       resources.remove(id);
+      if (discard) discard();
       return true;
     },
     observeView(value) {

@@ -57,12 +57,14 @@ Deno.test("deleted selection is metadata-only, aborts live content, and resurrec
     session.stop();
   }
 });
-Deno.test("deleted attention input survives view release until the normal guard is accepted", () => {
-  let deleted = false, allow = false;
+Deno.test("deleted attention input survives unmount and ordinary navigation never asks to discard", () => {
+  let deleted = false;
   const guard = createInputGuard({
     drafts: createDrafts(),
     key: () => "local/tstv1-one",
-    confirm: () => allow,
+    confirm: () => {
+      throw new Error("Unexpected confirmation");
+    },
     ...{ retain: () => deleted },
   });
   guard.mark("permissions", true, "Keep this unsent feedback");
@@ -73,10 +75,8 @@ Deno.test("deleted attention input survives view release until the normal guard 
     owner: "permissions",
     value: "Keep this unsent feedback",
   }]);
-  assertEquals(guard.release(), false);
-  assertEquals(guard.retained().length, 1);
-  allow = true;
   assertEquals(guard.release(), true);
+  assertEquals(guard.retained().length, 1);
   guard.clear();
   assertEquals(guard.retained(), []);
 });

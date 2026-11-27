@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { createDrafts, createInputGuard, emptyDraft } from "@otk/client";
 
-Deno.test("unmounted request input is projected from its owner after deletion, not a view cleanup mirror", () => {
+Deno.test("unmounted request input stays with its owner until an accepted destructive release commits", async () => {
   let deleted = false, allowed = false, discarded = 0;
   const guard = createInputGuard({
     drafts: createDrafts(),
@@ -28,17 +28,21 @@ Deno.test("unmounted request input is projected from its owner after deletion, n
     owner: "permissions",
     value: "Keep unsent feedback",
   }]);
-  assertEquals(guard.release(), false);
+  assertEquals(guard.release(), true);
+  assertEquals(await guard.release({ draft: "dropped" }), false);
   assertEquals(discarded, 0);
   allowed = true;
-  assertEquals(guard.release(), true);
-  assertEquals(discarded, 0); // Consent is not successful navigation.
-  deleted = false; // Navigation selects another owner before clear runs.
+  const discard = await guard.release({ draft: "dropped" });
+  if (!discard) throw new Error("Expected consent");
+  assertEquals(discarded, 0);
+  deleted = false;
   guard.clear();
+  assertEquals(discarded, 0); // An intervening navigation cannot consume it.
+  discard();
   assertEquals(discarded, 1);
 });
 
-Deno.test("release of another draft cannot consume current retained request input", () => {
+Deno.test("release of another draft cannot consume current retained request input", async () => {
   const drafts = createDrafts();
   drafts.writer("other")({ ...emptyDraft(), input: "Other draft" });
   let discarded = 0;
@@ -54,7 +58,9 @@ Deno.test("release of another draft cannot consume current retained request inpu
       },
     }),
   });
-  assertEquals(guard.release({ draft: "dropped", keys: ["other"] }), true);
+  const discard = await guard.release({ draft: "dropped", keys: ["other"] });
+  if (!discard) throw new Error("Expected consent");
+  discard();
   guard.clear();
   assertEquals(discarded, 0);
 });

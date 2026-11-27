@@ -96,7 +96,13 @@ for (const kind of ["permission", "question", "form"] as const) {
       assertEquals(sent.filter((frame) => frame.t === "request").length, 1);
       assertEquals(admitted.state.phase, "sending");
       owner.clear();
-      assertEquals(owner.current()?.kind, "pending");
+      if (kind === "question") {
+        assertEquals(owner.current(), undefined);
+        assertEquals(
+          rpc.questionResponse("native-request")?.feedback?.kind,
+          "pending",
+        );
+      } else assertEquals(owner.current()?.kind, "pending");
     } finally {
       tracker.stop();
     }

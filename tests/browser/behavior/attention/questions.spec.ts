@@ -14,6 +14,83 @@ import {
 } from "../../pages/attention.ts";
 
 test.use({ profile: "contract-attention-native" });
+test("attention.question-answer-survives-session-switch", {
+  tag: ["@attention", "@isolated"],
+}, async ({ isolatedState: state, page }, info) => {
+  const other = await seed(state, "Other session");
+  const asking = await seed(state, "Asking session");
+  let forward: (() => void) | undefined;
+  let releaseResult: (() => void) | undefined;
+  const dialogs: string[] = [];
+  page.on("dialog", async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
+  await page.routeWebSocket("**/ws", (browser) => {
+    const server = browser.connectToServer();
+    let key: string | undefined;
+    browser.onMessage((message) => {
+      const frame = JSON.parse(message.toString());
+      if (frame.t === "request" && frame.method === "question.reply") {
+        key = frame.ref.key;
+        forward = () => server.send(message);
+      } else server.send(message);
+    });
+    server.onMessage((message) => {
+      const frame = JSON.parse(message.toString());
+      if (key && frame.t === "request.result" && frame.ref.key === key) {
+        releaseResult = () => browser.send(message);
+      } else browser.send(message);
+    });
+  });
+  await openSession(state, page, other.id);
+  await openSession(state, page, asking.id);
+  await tool(state, "question", { questions: [questions[0]] });
+  await state.queue(["Answer received."]);
+  await prompt(page, "Ask for a choice");
+  const dock = page.getByRole("region", { name: "Pending question" });
+  await dock.getByRole("button", { name: /Typed/ }).click();
+  await dock.getByRole("tab", { name: "Confirm" }).click();
+  await dock.getByRole("button", { name: "Answer", exact: true }).click();
+  try {
+    await expect.poll(() => !!forward).toBe(true);
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(1);
+    await page.locator(`[data-session="${other.id}"]`).click();
+    expect(dialogs).toEqual([]);
+    await expect(page).toHaveURL(new RegExp(`${other.id}$`));
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(0);
+    await page.locator(`[data-session="${asking.id}"]`).click();
+    await expect(dock).toBeVisible();
+    await expect(dock.getByText("Typed", { exact: true })).toBeVisible();
+    await expect(dock.getByRole("button", { name: "Answer", exact: true }))
+      .toBeDisabled();
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(1);
+    if (info.project.name === "oc-2.2.6") {
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await info.attach(`answer-pending-${theme}`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      }
+    }
+    forward!();
+    forward = undefined;
+    await expect.poll(() => !!releaseResult).toBe(true);
+    await expect(dock).toHaveCount(0);
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(0);
+  } finally {
+    forward?.();
+    releaseResult?.();
+  }
+  await reply(page, asking.id, "Answer received.");
+  expect(dialogs).toEqual([]);
+});
+
 test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   tag: ["@attention", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
