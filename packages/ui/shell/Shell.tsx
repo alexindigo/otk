@@ -49,7 +49,6 @@ import { permissionNotificationDetail } from "../features/permission-notificatio
 import { CommandProvider } from "../keyboard/context.tsx";
 import { createShellState } from "../state/shell.ts";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
-import { createToggles } from "../components/Toggles.ts";
 import DisplayMenu from "../components/DisplayMenu.tsx";
 import Login from "../components/Login.tsx";
 import NotificationSettings from "../components/NotificationSettings.tsx";
@@ -105,7 +104,8 @@ export default function Shell(
     guard,
     navigation,
     listInteraction,
-    tree,
+    disclosures,
+    toggles,
     interact,
     confirmCommand,
   } = createShellState({
@@ -131,7 +131,6 @@ export default function Shell(
     terminalConnections.update,
   );
   onCleanup(terminalConnections.stop);
-  const toggles = createToggles(resources.setPreference);
   const recentModel = createModelRecency({
     get: () => toggles.state.prefs["models.recent"],
     set: (value) => resources.setPreference("models.recent", value),
@@ -666,8 +665,7 @@ export default function Shell(
             visibleRows: resources.visibleRows,
             projectProgress: resources.projectProgress,
             listInteraction,
-            tree,
-            treeCollapse: resources.treeCollapse,
+            disclosures,
             selection: () => session.state.selection,
           }}
         >
@@ -690,7 +688,7 @@ export default function Shell(
             data-right-collapsed={String(layout().rightCollapsed)}
           >
             <ProjectInbox
-              disclosure={tree}
+              disclosure={disclosures}
               collapseToggle={
                 <Show when={toggles.state.ready}>
                   <button
@@ -744,7 +742,6 @@ export default function Shell(
               onInactive={resources.inactive}
               onMove={resources.moveProject}
               onLayout={saveLayout}
-              onProjectCollapse={resources.projectCollapse}
             />
             <main class="otk-main">
               <Show when={navigation.state.selectionNotice}>

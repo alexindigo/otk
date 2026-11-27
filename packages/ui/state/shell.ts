@@ -6,6 +6,7 @@ import {
   type ClientSession,
   connectBranchHistory,
   createCurrentClient,
+  createDisclosures,
   createDrafts,
   createForkNotes,
   createInputGuard,
@@ -18,9 +19,10 @@ import {
   createSessionRevert,
   createShellNavigation,
   createTranscriptScopes,
-  createTreeDisclosure,
   type CurrentClient,
+  type Disclosures,
   type Drafts,
+  type DurableStore,
   type ForkNotes,
   type InputGuard,
   keyedReload,
@@ -28,13 +30,19 @@ import {
   type ProjectSelection,
   route,
   type ServerResources,
+  SESSION_TREE_DISCLOSURES,
   type SessionActions,
   sessionKey,
   type SessionRename,
   type SessionRevert,
   type ShellNavigation,
-  type TreeDisclosures,
 } from "@otk/client";
+import {
+  projectLayoutKey,
+  type SessionTreeKind,
+  treeLayoutKey,
+} from "@otk/protocol";
+import { createToggles, type Toggles } from "../components/Toggles.ts";
 import { solidState } from "./binding.ts";
 import { createIndex } from "./index.ts";
 import { createSession } from "./session.ts";
@@ -44,7 +52,8 @@ export interface ShellState {
   reload: import("@otk/client").Reload;
   confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
-  tree: TreeDisclosures;
+  disclosures: Disclosures;
+  toggles: Toggles;
   resources: ServerResources;
   session: ClientSession;
   drafts: Drafts;
@@ -90,7 +99,39 @@ export function createShellState(
   });
   const { sidecars, entry } = resources;
   const listScopes = createListScopes();
-  const tree = createTreeDisclosure(solidState);
+  const toggles = createToggles(resources.setPreference);
+  const layout = () => toggles.state.prefs.shellLayout;
+  const expanded = (collapsed: boolean | undefined) =>
+    collapsed === undefined ? undefined : !collapsed;
+  const treeStore = (kind: SessionTreeKind): DurableStore => ({
+    read: ({ scope: sidecarId, id }) =>
+      expanded(
+        layout().treeCollapsed?.[treeLayoutKey({ sidecarId, kind, id })],
+      ),
+    save: ({ scope: sidecarId, id }, open) =>
+      resources.treeCollapse({ sidecarId, kind, id }, !open),
+  });
+  const disclosures = createDisclosures({
+    factory: solidState,
+    durable: {
+      [SESSION_TREE_DISCLOSURES.session]: treeStore("session"),
+      [SESSION_TREE_DISCLOSURES.task]: treeStore("task"),
+      [SESSION_TREE_DISCLOSURES.ungrouped]: treeStore("ungrouped"),
+      projectBranch: {
+        read: ({ scope: sidecarId, id: directory }) =>
+          expanded(
+            layout().projectCollapsed
+              ?.[projectLayoutKey({ sidecarId, directory })],
+          ),
+        save: ({ scope: sidecarId, id: directory }, open) =>
+          resources.projectCollapse({ sidecarId, directory }, !open),
+      },
+      discovered: {
+        read: () => expanded(layout().discoveredCollapsed),
+        save: (_, open) => resources.layout({ discoveredCollapsed: !open }),
+      },
+    },
+  });
   resources.observe({ removed: (id) => listScopes.remove(id) });
   const session = createSession(
     (id) => sidecars.connection(id),
@@ -109,6 +150,7 @@ export function createShellState(
         }
         : undefined,
     (id) => resources.inbox(id).entities,
+    disclosures,
   );
   const drafts = createDrafts(solidState);
   const hasServer = (id: string) =>
@@ -385,7 +427,8 @@ export function createShellState(
     confirmCommand: (message: string) => globalThis.confirm(message),
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
-    tree,
+    disclosures,
+    toggles,
     resources,
     session,
     drafts,

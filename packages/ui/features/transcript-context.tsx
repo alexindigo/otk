@@ -12,6 +12,7 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
   type CodeBlockSource,
   createTranscriptInteraction,
+  type DisclosureKind,
   type NativeSourceOwner,
   recordKindDisclosure,
   recordKindKey,
@@ -108,7 +109,7 @@ export function sourceRegion(messageID: () => string) {
 }
 /** The client resolves defaults; this binding only publishes an explicit intent. */
 export function retainedDisclosure(
-  kind: string,
+  kind: DisclosureKind,
   category: DisclosureCategory | (() => DisclosureCategory),
   prefs: () => Partial<Preferences> = () => ({}),
   identity = useContentIdentity(),
@@ -117,16 +118,20 @@ export function retainedDisclosure(
 ) {
   const interaction = useContext(Interaction) ?? createTranscriptInteraction();
   const id = identity.partID ?? identity.ownerID ?? identity.messageID ?? kind;
-  const disclosureKey = ownerKey ?? key(identity) + ":" + kind;
+  const disclosureKey = ownerKey ?? key(identity);
+  const generation = interaction.generation(ownerKey ?? id);
   const choice = interaction.disclosure(
+    kind,
     disclosureKey,
-    interaction.generation(ownerKey ?? id),
+    generation,
   );
   const [revision, setRevision] = createSignal(0);
   onCleanup(
     interaction.subscribe(
       () => setRevision((value) => value + 1),
+      kind,
       disclosureKey,
+      generation,
     ),
   );
   const expanded = () => {
@@ -178,14 +183,20 @@ export function retainedRecordKinds(owner: () => string) {
     for (const release of subscriptions.values()) release();
   });
   const choice = (category: DisclosureCategory) => {
-    const id = recordKindKey(owner(), category);
+    const frame = owner();
+    const id = recordKindKey(frame, category);
     if (!subscriptions.has(id)) {
       subscriptions.set(
         id,
-        interaction.subscribe(() => setRevision((n) => n + 1), id),
+        interaction.subscribe(
+          () => setRevision((n) => n + 1),
+          "recordKinds",
+          id,
+          interaction.generation(frame),
+        ),
       );
     }
-    return recordKindDisclosure(interaction, owner(), category);
+    return recordKindDisclosure(interaction, frame, category);
   };
   return {
     expanded(category: DisclosureCategory, prefs: Partial<Preferences>) {

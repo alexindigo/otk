@@ -181,7 +181,11 @@ function Consumer() {
   const remembered = () => {
     selected();
     interactionClock();
-    return owner.get(a)?.interaction.disclosure("heap-choice", "fixture")
+    return owner.get(a)?.interaction.disclosure(
+      "record",
+      "heap-choice",
+      "fixture",
+    )
       .value() ?? false;
   };
   connection.view({
@@ -245,6 +249,7 @@ function Consumer() {
             id="heap-choice"
             onClick={() => {
               const choice = owner.get(a)!.interaction.disclosure(
+                "record",
                 "heap-choice",
                 "fixture",
               );

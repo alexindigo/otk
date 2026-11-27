@@ -87,6 +87,7 @@ export default function RevertGroup(props: {
     >
       <ActivityGroup
         group={props.group}
+        disclosureKind="revert"
         prefs={{ ...props.prefs, expandRecords: false }}
         collapsible={!props.state.dismissed}
         failed={props.failure?.tone === "error" && !props.state.dismissed}

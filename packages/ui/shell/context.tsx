@@ -2,6 +2,7 @@
 import { createContext, type Element, useContext } from "solid-js";
 import type {
   ApprovalModel,
+  Disclosures,
   InboxModel,
   ListInteraction,
   MergedEntry,
@@ -11,7 +12,6 @@ import type {
   SessionUsageOwner,
   SidecarConnection,
   SidecarState,
-  TreeDisclosures,
 } from "@otk/client";
 import type { Toggles } from "../components/Toggles.ts";
 import type { IndexEntry, Message } from "@otk/protocol";
@@ -59,8 +59,7 @@ export interface ShellPorts {
   visibleRows: import("@otk/client").ServerResources["visibleRows"];
   projectProgress: import("@otk/client").ServerResources["projectProgress"];
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
-  tree: TreeDisclosures;
-  treeCollapse: import("@otk/client").ServerResources["treeCollapse"];
+  disclosures: Disclosures;
   selection(): Selection | undefined;
 }
 const Context = createContext<ShellPorts>();

@@ -1,15 +1,50 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
+import { createDisclosures } from "../disclosure.ts";
 import { createTranscriptInteraction } from "../transcript-interaction.ts";
+
+Deno.test("binding another disclosure of the same kind does not lose an explicit choice", () => {
+  const interaction = createTranscriptInteraction();
+  const first = interaction.disclosure("record", "first", "1");
+  first.set(true);
+  const second = interaction.disclosure("record", "second", "1");
+  assertEquals(second.value(), undefined);
+  assertEquals(first.value(), true);
+});
+
+Deno.test("shell transcripts share the owner but clear only their own session scope", () => {
+  const disclosures = createDisclosures({});
+  const first = createTranscriptInteraction(disclosures, "local/first");
+  const next = createTranscriptInteraction(disclosures, "local/second");
+  first.workDisclosure("reply").set(true);
+  next.workDisclosure("reply").set(true);
+  const sidebar = disclosures.bind("archive", { scope: "local", id: "repo" });
+  void sidebar.set(true);
+  assertEquals(
+    disclosures.bind("work", {
+      scope: "local/first",
+      id: "reply",
+      generation: first.generation("reply"),
+    }).open(),
+    true,
+  );
+  first.clear();
+  assertEquals(first.workDisclosure("reply").value(), undefined);
+  assertEquals(next.workDisclosure("reply").value(), true);
+  assertEquals(sidebar.open(), true);
+});
 
 Deno.test("transcript choices retain only identity and reject retired generations", () => {
   const interaction = createTranscriptInteraction();
-  const first = interaction.disclosure("reply:a/part:b", "b:1");
+  const first = interaction.disclosure("record", "reply:a/part:b", "b:1");
   assertEquals(first.value(), undefined);
   first.set(false);
-  assertEquals(interaction.disclosure("reply:a/part:b", "b:1").value(), false);
+  assertEquals(
+    interaction.disclosure("record", "reply:a/part:b", "b:1").value(),
+    false,
+  );
   interaction.retire("reply:a/part:b");
-  const replacement = interaction.disclosure("reply:a/part:b", "b:2");
+  const replacement = interaction.disclosure("record", "reply:a/part:b", "b:2");
   first.set(true);
   assertEquals(replacement.value(), undefined);
   interaction.anchor({ key: "reply:a", offset: 7 });
@@ -21,9 +56,21 @@ Deno.test("transcript choices retain only identity and reject retired generation
 Deno.test("disclosure notifications target only changed keys and reveal ancestry", () => {
   const interaction = createTranscriptInteraction();
   const seen: string[] = [];
-  const release = interaction.subscribe(() => seen.push("a"), "a");
-  interaction.subscribe(() => seen.push("b"), "b");
-  interaction.disclosure("a", interaction.generation("a")).set(true);
+  const release = interaction.subscribe(
+    () => seen.push("a"),
+    "activity",
+    "a",
+    interaction.generation("a"),
+  );
+  interaction.subscribe(
+    () => seen.push("b"),
+    "activity",
+    "b",
+    interaction.generation("b"),
+  );
+  interaction.disclosure("activity", "a", interaction.generation("a")).set(
+    true,
+  );
   assertEquals(seen, ["a"]);
   seen.length = 0;
   interaction.reveal(["b"]);

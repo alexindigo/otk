@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, Show } from "solid-js";
-import { createTabs, createTreeDisclosure } from "@otk/client";
+import { createDisclosures, createTabs } from "@otk/client";
 import { solidState } from "../../state/binding.ts";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import ProjectTabs from "../../components/ProjectTabs.tsx";
@@ -11,7 +11,7 @@ const tabs = createTabs(() =>
   Promise.reject(new Error("No promotion expected"))
 );
 export default function Scene() {
-  const tree = createTreeDisclosure(solidState);
+  const tree = createDisclosures({ factory: solidState });
   const [reserve, setReserve] = createSignal(false),
     [collapsed, setCollapsed] = createSignal(false);
   styleTest.reserve = setReserve;

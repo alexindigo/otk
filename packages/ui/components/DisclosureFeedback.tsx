@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorFeedback, failureValue, type TreeDisclosure } from "@otk/client";
+import { type DisclosureState, errorFeedback, failureValue } from "@otk/client";
 import { createMemo, Show } from "solid-js";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 
 export default function DisclosureFeedback(props: {
-  disclosure?: TreeDisclosure;
+  disclosure?: DisclosureState;
   actionLabel: string;
   class?: string;
 }): import("solid-js").Element {
