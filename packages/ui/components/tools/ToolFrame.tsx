@@ -183,22 +183,25 @@ export default function ToolFrame(props: {
                   />
                 )
                 : undefined}
-              trail={props.row?.trail ?? (props.presentation?.entity
+              trail={props.presentation?.entity || props.row?.trail
                 ? () => (
-                  <Show when={props.presentation?.entity}>
-                    {(entity) => (
-                      <EntityPill
-                        label={entity().label}
-                        facts={scopedEntityFacts(session, {
-                          ...entity(),
-                          tool: props.call,
-                        })}
-                        onOpenChild={props.onOpenChild}
-                      />
-                    )}
-                  </Show>
+                  <>
+                    <Show when={props.presentation?.entity}>
+                      {(entity) => (
+                        <EntityPill
+                          label={entity().label}
+                          facts={scopedEntityFacts(session, {
+                            ...entity(),
+                            tool: props.call,
+                          })}
+                          onOpenChild={props.onOpenChild}
+                        />
+                      )}
+                    </Show>
+                    {props.row?.trail?.()}
+                  </>
                 )
-                : undefined)}
+                : undefined}
               region={region}
             />
           )}

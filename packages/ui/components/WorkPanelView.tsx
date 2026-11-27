@@ -235,7 +235,14 @@ export default function WorkPanelView(): Element {
                       selected={shown()?.run}
                       prefs={prefs()}
                       directory={entry()?.directory}
-                      permissions={owner().state.content.permissions}
+                      permissions={session()
+                        ? shell.connection(session()!.sidecarId).attention
+                          .permissions(
+                            session()!.sessionID,
+                            (id) => shell.entry(session()!.sidecarId, id),
+                            true,
+                          )
+                        : []}
                       streaming={!!display()?.streaming}
                       onOpenChild={(id) => run("session.child", id)}
                       childAction={child}
