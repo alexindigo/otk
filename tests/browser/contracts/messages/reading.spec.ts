@@ -236,9 +236,21 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  // D74: the strip owns one hit target and a shared centerline.
+  // D74 / wl-5: the strip owns the hit target, type and adjacent tracks.
   await revealAcquired(page, ".otk-work-strip");
   const strip = page.locator(".otk-work-strip");
+  const label = strip.locator(":scope > .otk-control-label");
+  for (
+    const property of ["font-size", "font-family", "font-weight", "line-height"]
+  ) {
+    await expect(label).toHaveCSS(
+      property,
+      await strip.evaluate(
+        (el, property) => getComputedStyle(el).getPropertyValue(property),
+        property,
+      ),
+    );
+  }
   const stripGeometry = await strip.evaluate((el) => {
     const box = el.getBoundingClientRect();
     const rects = Array.from(
@@ -251,14 +263,19 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       ),
       leading: rects[0].left - box.left,
       trailing: box.right - rects.at(-1)!.right,
+      gaps: rects.slice(1).map((rect, index) => rect.left - rects[index].right),
       whitespace: getComputedStyle(el.children[1]).whiteSpace,
     };
   });
   for (const offset of stripGeometry.center) {
-    expect(Math.abs(offset)).toBeLessThan(1);
+    expect(Math.abs(offset)).toBeLessThan(.5);
   }
-  expect(stripGeometry.leading).toBe(await cssLength(strip, "--space-2"));
+  const spacing = await cssLength(strip, "--space-2");
+  expect(stripGeometry.leading).toBe(spacing);
   expect(stripGeometry.trailing).toBe(stripGeometry.leading);
+  for (const gap of stripGeometry.gaps) {
+    expect(Math.abs(gap - spacing)).toBeLessThan(.5);
+  }
   expect(stripGeometry.whitespace).toBe("nowrap");
   for (const width of [1280, 1600, 2000]) {
     await page.setViewportSize({ width, height: 1100 });
