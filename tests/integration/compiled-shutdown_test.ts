@@ -65,7 +65,7 @@ test("compiled SIGINT exits cleanly and occupied port reports only its failure",
   await preparedBinary();
   const fixture = await nativeFixture();
   try {
-    const server = await fixture.sidecar();
+    const server = await fixture.sidecar({ images: { roots: [] } });
     const contender = await launch(fixture.oc, server.port);
     await bounded("occupied port exits", contender.closed);
     const log = contender.log;
@@ -100,6 +100,13 @@ test("compiled SIGINT exits cleanly and occupied port reports only its failure",
     await bounded("clean SIGINT exit", closed);
     assertEquals(server.process.exitCode, 0, server.log);
     assertEquals(server.process.signalCode, null, server.log);
+    const startup = server.log.split("\n").filter((line) =>
+      line.startsWith("Listening on ") || line.startsWith("inline images:")
+    );
+    assertEquals(startup, [
+      `Listening on ${server.url}/`,
+      "inline images: no allowed roots",
+    ]);
     assert(
       !/AbortError|StoppedError|warn|session digest:|\n\s+at /.test(server.log),
       server.log,

@@ -307,6 +307,13 @@ if (import.meta.main) {
     const cfg = config();
     diagnostic = diagnosticsLog(cfg.log.level);
     app = await start(cfg, undefined, lifetime.signal, diagnostic);
+    const roots = cfg.images.roots;
+    diagnostic(
+      "info",
+      roots.length
+        ? `inline images: allowed roots ${JSON.stringify(roots)}`
+        : "inline images: no allowed roots",
+    );
     if (lifetime.signal.aborted) stop();
     await app.server.finished;
     await stopping;
