@@ -2,7 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { viewing } from "../../pages/composer.ts";
-import { revealTool } from "../../pages/transcript.ts";
+import { revealTool, scrollTranscript } from "../../pages/transcript.ts";
 import type { CDPSession, Page } from "@playwright/test";
 
 const source = Array.from(
@@ -163,11 +163,6 @@ for (const cpuRate of [1, 8]) {
       await expect(
         page.locator(".otk-message-details").filter({ hasText: "streaming" }),
       ).toHaveCount(0);
-      if (numbered) {
-        await expect(
-          page.locator(".otk-text p").filter({ hasText: /^Written\.$/ }),
-        ).toHaveCount(1);
-      }
       await expect.poll(() => gap(page)).toBeLessThan(2);
       const away = await orderedWheel(page, cdp, false);
       await expect.poll(async () => Math.abs((await gap(page)) - 8))
@@ -233,6 +228,16 @@ for (const cpuRate of [1, 8]) {
       );
       expect(Math.abs(reader.before - reader.after), JSON.stringify(reader))
         .toBeLessThan(2);
+      if (numbered) {
+        // With the WP6 Work log below the reply, the tail geometry is tested
+        // in the code window. Verify the prose separately in its own window.
+        await scrollTranscript(page, false);
+        const prose = page.locator(".otk-text p").filter({
+          hasText: /^Written\.$/,
+        });
+        await expect(prose).toHaveCount(1);
+        await expect(prose).toBeInViewport();
+      }
     }
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
     await cdp.detach();
