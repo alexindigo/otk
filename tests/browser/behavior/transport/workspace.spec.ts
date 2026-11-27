@@ -4,6 +4,7 @@ import { expect, test } from "../../fixtures/evidence.ts";
 import { expectPublicSession } from "../../pages/auth.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { prompt, sendPrompt } from "../../pages/composer.ts";
 import { scrollTranscript, wheelTranscript } from "../../pages/transcript.ts";
 
 const markdown = [
@@ -197,10 +198,29 @@ isolatedTest.describe("native stream recovery", () => {
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Recovery",
     });
+    const frames = await wire(page);
     await openSession(state, page, session.id);
     const gate = await state.queue(markdown, "stepped");
-    await page.locator("textarea[name=prompt]").fill("Stream then recover");
-    await page.locator("textarea[name=prompt]").press("Enter");
+    await prompt(page).fill("Stream then recover");
+    // The shortened V1 watchdog can reconnect during startup. A ready view or
+    // an initial connected snapshot does not prove the current stream booted.
+    await expect.poll(() => {
+      let bootstrapped = false;
+      for (let i = frames.received.length - 1; i >= 0; i--) {
+        const frame = frames.received[i];
+        if (frame.t === "bootstrap.complete") bootstrapped = true;
+        if (frame.t === "harness") {
+          return frame.state === "connected" &&
+            (info.project.name !== "oc-1.19.3" || bootstrapped);
+        }
+      }
+      return false;
+    }).toBe(true);
+    await sendPrompt(page);
+    await expect.poll(() =>
+      frames.sent.filter(({ frame }) => frame.method === "session.prompt")
+        .length
+    ).toBe(1);
     await state.release(gate.gate);
     await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
       "Streaming",
