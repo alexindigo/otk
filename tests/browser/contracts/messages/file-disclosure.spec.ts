@@ -134,9 +134,10 @@ for (const picker of [false, true]) {
             : ".otk-prompt-context > span",
         ).first(),
       ).toHaveText("Default agent");
-      await expect(page.locator(".otk-composer-model-name")).toHaveText(
-        "Default model",
-      );
+      await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+        .toHaveText(
+          "Default model",
+        );
       if (picker) {
         await expect(page.locator(".otk-agent-picker > button"))
           .toHaveAttribute("aria-label", "Agent: Default agent");

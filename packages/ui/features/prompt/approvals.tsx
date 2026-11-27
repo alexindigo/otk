@@ -9,9 +9,15 @@ export function registerAutoApprovePrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "session-auto-approve",
     create(ctx) {
+      const ready = () => !!ctx.approvals?.state.ready;
       return {
+        settingsFace: () => (
+          <Show when={ready()}>
+            <span class="otk-icon-button" />
+          </Show>
+        ),
         settings: () => (
-          <Show when={ctx.approvals?.state.ready}>
+          <Show when={ready()}>
             <button
               type="button"
               {...toggle({

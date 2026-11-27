@@ -20,7 +20,8 @@ test(
       title: "Command registry",
     });
     await openSession(state, page, session.id);
-    await expect(page.locator(".otk-composer-model-name")).not.toHaveText("");
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)")).not
+      .toHaveText("");
     await page.evaluate(() => document.fonts.ready);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
@@ -56,7 +57,8 @@ test("composer.skills-picker-retains-native-identities-and-name-conflicts", {
     title: "Skill picker",
   });
   await openSession(state, page, session.id);
-  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toHaveText("scripted");
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
@@ -152,7 +154,8 @@ test("composer.skills-refresh-retains-native-button-keyboard-activation", {
     title: "Skill refresh keyboard ownership",
   });
   await openSession(state, page, session.id);
-  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toHaveText("scripted");
   await prompt(page).fill("/skills");
   await prompt(page).press("Enter");
   const search = page.getByRole("combobox", { name: "Search skills" });
@@ -192,9 +195,10 @@ test(
       messages: [{ parts: [{ type: "text", text: "Context to summarize" }] }],
     });
     await openSession(state, page, session.id);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "scripted",
-    );
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "scripted",
+      );
     await state.queue(["## Objective\n\nA registry command summary."]);
     await prompt(page).fill("/compact");
     await prompt(page).press("Enter");

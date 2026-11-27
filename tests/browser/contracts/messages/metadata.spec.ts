@@ -13,7 +13,8 @@ test.describe("neutral backend facts", () => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`${state.url}/#/local/tstv1-core`);
       await openWorkLogs(page);
-      await expect(page.locator(".otk-composer-agent")).toHaveText("Action");
+      await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+        .toHaveText("Action");
       await page.locator(".otk-agent-picker > button").click();
       await expect(
         page.locator(".otk-popover-panel:popover-open .otk-picker-name"),

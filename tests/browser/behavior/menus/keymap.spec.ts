@@ -173,7 +173,9 @@ test("menus.essential-agent-forward-reverse-newline-and-native-selection", {
   });
   const frames = await wire(page);
   await openSession(state, page, seed.id);
-  await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
+  await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+    "Build",
+  );
   await prompt(page).click();
   for (
     const [key, agent] of [["Tab", "Plan"], ["Shift+Tab", "Build"], [
@@ -182,7 +184,9 @@ test("menus.essential-agent-forward-reverse-newline-and-native-selection", {
     ]]
   ) {
     await page.keyboard.press(key);
-    await expect(page.locator(".otk-composer-agent")).toHaveText(agent);
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      agent,
+    );
   }
   await state.queue(["Selected plan replied."]);
   await prompt(page).pressSequentially("Use the selected agent");
@@ -231,7 +235,8 @@ isolatedTest.describe("configured primary order", () => {
       ]);
       const frames = await wire(page);
       await openSession(state, page, seed.id);
-      await expect(page.locator(".otk-composer-agent")).toHaveText("Plan");
+      await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+        .toHaveText("Plan");
       await state.queue(["Default plan replied."]);
       await prompt(page).fill("Keep the backend default");
       await sendPrompt(page);
@@ -248,7 +253,8 @@ isolatedTest.describe("configured primary order", () => {
         ]]
       ) {
         await page.keyboard.press(key);
-        await expect(page.locator(".otk-composer-agent")).toHaveText(agent);
+        await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+          .toHaveText(agent);
       }
       await state.queue(["Cycled build replied."]);
       await prompt(page).pressSequentially("Send the cycled agent");

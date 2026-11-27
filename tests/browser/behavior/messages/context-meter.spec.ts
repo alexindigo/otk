@@ -74,7 +74,11 @@ test("messages.native-catalog-context-window", {
       JSON.stringify(JSON.stringify(["other", "beam-free"])) +
       "] .otk-picker-option",
   ).click();
-  await expect(page.locator(".otk-model-picker .otk-composer-model-name"))
+  await expect(
+    page.locator(
+      ".otk-model-picker:not([inert] *) .otk-composer-model-name:not([inert] *)",
+    ),
+  )
     .toHaveText("Other catalog model");
   await expect(meter).toHaveAttribute("data-limit", "10000");
   await prompt(page, "Use the other catalog window");

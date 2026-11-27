@@ -76,7 +76,8 @@ test("composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover", {
   await state.product("prefs.set", { key: "animationsOff", value: true });
   const frames = await wire(page);
   await openSession(state, page, session.id);
-  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toHaveText("scripted");
   await viewing(page, frames, session.id);
   await page.evaluate(() => document.fonts.ready);
   const empty = await measure(page), growing = [];

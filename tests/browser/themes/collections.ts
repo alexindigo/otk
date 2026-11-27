@@ -403,14 +403,16 @@ export async function collections456(input: Inputs) {
         });
         expect(modelGeometry.gap).toBe(8);
         expect(modelGeometry.centre).toBeLessThanOrEqual(.5);
-        await expect(page.locator(".otk-composer-provider")).toHaveCSS(
-          "color",
-          applied,
-        );
-        await expect(page.locator(".otk-composer-model-name")).toHaveCSS(
-          "color",
-          applied,
-        );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
         const appliedBox = await variant.boundingBox();
         await variant.click();
         await page.locator(
@@ -473,15 +475,17 @@ export async function collections456(input: Inputs) {
           '.otk-model-picker [data-picker-key=\'["fake2","scripted"]\'] .otk-picker-option',
         ).click();
         await expect(model).not.toHaveClass(/is-applied/);
-        await expect(page.locator(".otk-composer-provider")).toHaveCSS(
-          "color",
-          applied,
-        );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
         expect(
-          await page.locator(".otk-composer-model-name").evaluate((el) =>
-            getComputedStyle(el).color ===
-              getComputedStyle(el.closest("button")!).color
-          ),
+          await page.locator(".otk-composer-model-name:not([inert] *)")
+            .evaluate((el) =>
+              getComputedStyle(el).color ===
+                getComputedStyle(el.closest("button")!).color
+            ),
         ).toBe(true);
         await footer(page, 8);
         await shot(`composer-chosen-${theme.id}-1280`);
@@ -489,10 +493,11 @@ export async function collections456(input: Inputs) {
         await page.locator(
           ".otk-agent-picker [data-picker-key=reviewer] .otk-picker-option",
         ).click();
-        await expect(page.locator(".otk-composer-agent")).toHaveCSS(
-          "color",
-          "rgb(18, 171, 239)",
-        );
+        await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            "rgb(18, 171, 239)",
+          );
         const chevrons = await page.locator(
           ".otk-prompt-context > .otk-popover > button",
         ).evaluateAll((els) =>
@@ -512,7 +517,9 @@ export async function collections456(input: Inputs) {
         ]);
         for (const c of chevrons) expect(c.delta).toBeLessThanOrEqual(.5);
         expect(
-          await page.locator(".otk-composer-provider,.otk-composer-model-name")
+          await page.locator(
+            ".otk-composer-provider:not([inert] *),.otk-composer-model-name:not([inert] *)",
+          )
             .evaluateAll((els) =>
               els.every((el) => el.scrollWidth <= el.clientWidth)
             ),
@@ -660,35 +667,34 @@ export async function collections456(input: Inputs) {
             `composer-responsive-geometry-${theme.id}-${width}`,
             {
               body: JSON.stringify(
-                await page.locator(".otk-composer-model-name").evaluate((
-                  el,
-                ) => ({
-                  name: el.textContent,
-                  client: el.clientWidth,
-                  source: el.scrollWidth,
-                  model: el.closest("button")!.getBoundingClientRect().width,
-                  lane: document.querySelector(".otk-composer")!
-                    .getBoundingClientRect().width,
-                  panels: [".otk-project-inbox", ".otk-right-panel"].map((
-                    selector,
-                  ) =>
-                    document.querySelector(selector)!.getBoundingClientRect()
-                      .width
-                  ),
-                })),
+                await page.locator(".otk-composer-model-name:not([inert] *)")
+                  .evaluate((
+                    el,
+                  ) => ({
+                    name: el.textContent,
+                    client: el.clientWidth,
+                    source: el.scrollWidth,
+                    model: el.closest("button")!.getBoundingClientRect().width,
+                    lane: document.querySelector(".otk-composer")!
+                      .getBoundingClientRect().width,
+                    panels: [".otk-project-inbox", ".otk-right-panel"].map((
+                      selector,
+                    ) =>
+                      document.querySelector(selector)!.getBoundingClientRect()
+                        .width
+                    ),
+                  })),
               ),
               contentType: "application/json",
             },
           );
           expect(
-            await page.locator(".otk-composer-provider").evaluate((el) =>
-              el.scrollWidth > el.clientWidth
-            ),
+            await page.locator(".otk-composer-provider:not([inert] *)")
+              .evaluate((el) => el.scrollWidth > el.clientWidth),
           ).toBe(true);
           expect(
-            await page.locator(".otk-composer-model-name").evaluate((el) =>
-              el.scrollWidth > el.clientWidth
-            ),
+            await page.locator(".otk-composer-model-name:not([inert] *)")
+              .evaluate((el) => el.scrollWidth > el.clientWidth),
           ).toBe(truncated);
           await footer(page, 8);
           await shot(`composer-responsive-${theme.id}-${width}`);
@@ -831,7 +837,8 @@ export async function collections456(input: Inputs) {
           await page.locator(
             `.otk-agent-picker [data-picker-key=${agent}] .otk-picker-option`,
           ).click();
-          await expect(page.locator(".otk-composer-agent")).toHaveText(label);
+          await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+            .toHaveText(label);
           await expect(page.locator(".otk-variant-picker > button > span"))
             .toHaveText(choice);
           await shot(`composer-${agent}-${theme.id}-1280`);
@@ -843,16 +850,19 @@ export async function collections456(input: Inputs) {
         }
         await expect(page.locator(".otk-variant-picker > button"))
           .toHaveAttribute("aria-label", "Variant: High");
-        await expect(page.locator(".otk-composer-provider")).toHaveText(
-          "Second fixture provider",
-        );
-        await expect(page.locator(".otk-composer-model-name")).toHaveText(
-          "Scripted with variants",
-        );
-        await expect(page.locator(".otk-composer-provider")).toHaveCSS(
-          "color",
-          applied,
-        );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveText(
+            "Second fixture provider",
+          );
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toHaveText(
+            "Scripted with variants",
+          );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
         expect(
           await model.evaluate((el) => {
             const provider = el.querySelector(".otk-composer-provider")!,

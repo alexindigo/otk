@@ -104,7 +104,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         });
       });
       return {
-        actions: () => (
+        corner: () => (
           <button
             type="button"
             class="otk-icon-button"

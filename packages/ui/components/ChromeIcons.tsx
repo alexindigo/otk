@@ -20,6 +20,15 @@ export const GapIcon = () => (
     </g>
   </Icon>
 );
+export const MoreIcon = () => (
+  <Icon>
+    <g fill="currentColor" stroke="none">
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </g>
+  </Icon>
+);
 export const ArrowLeftIcon = () => (
   <Icon>
     <path d="m11 18-6-6 6-6M19 12H5" />

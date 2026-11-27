@@ -17,7 +17,7 @@ test("smoke.native-agent-identities-retain-display-labels", {
   const agent = agents.find((agent) => (agent.id ?? agent.name) === "build")!;
   expect(agent).toBeDefined();
   const identity = agent.id ?? agent.name;
-  const picker = page.locator(".otk-agent-picker");
+  const picker = page.locator(".otk-agent-picker:not([inert] *)");
   await picker.locator(":scope > button").click();
   await picker.locator(
     `[data-picker-key=${JSON.stringify(identity)}] .otk-picker-option`,
