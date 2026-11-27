@@ -53,6 +53,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       ? "record" as const
       : activity()?.category ?? "record" as const,
     prefs: () => props.prefs,
+    required: props.row?.required,
   });
   const choice = useDisclosure("record", identify, input);
   const reference = () => unknownPartSource(props.part);
@@ -66,13 +67,14 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     !!(props.recordTime !== undefined || activity()?.state ||
       activity()?.body?.length ||
       activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
-      reference());
+      reference() || props.row?.extra);
   const expanded = () => details() && choice.open();
   const preview = createMemo(() =>
     expanded() ? unknownPartPreview(props.part) : undefined
   );
   const label = () => {
-    const title = activity()?.title ?? `Unsupported part: ${name()}`;
+    const title = props.row?.label ?? activity()?.title ??
+      `Unsupported part: ${name()}`;
     return title;
   };
   // A state already presented by the heading or a parameter is not repeated.
@@ -124,6 +126,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             identity={identify()}
             input={input()}
             variant="label"
+            tone={props.row?.tone}
             class="otk-tool-toggle"
             lead={() => (
               <Show when={activity()?.icon?.name === "warning"}>
@@ -141,7 +144,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
             )}
             label={label()}
             accessibleLabel={label()}
-            labelContent={heading}
+            labelContent={props.row ? undefined : heading}
             hasContent={details}
             layout={({ trigger, region, open, frame }) => (
               <TreeNode
@@ -154,6 +157,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                   : undefined}
                 bodyVisible={open()}
                 region={region}
+                detail={props.row?.detail}
                 feedbackGutter={activity()?.direction !== "outgoing"}
                 feedback={failure()
                   ? () => (
@@ -165,29 +169,30 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                     />
                   )
                   : undefined}
-                trail={activity()?.entity || activity()?.child
-                  ? () => (
-                    <header class="otk-tool-state otk-control-row">
-                      <Show when={activity()?.entity}>
-                        {(entity) => (
-                          <EntityPill
-                            label={entity().label}
-                            facts={scopedEntityFacts(session, entity())}
-                          />
-                        )}
-                      </Show>
-                      <Show when={activity()?.child}>
-                        {(ref) => child(ref())}
-                      </Show>
-                    </header>
-                  )
-                  : undefined}
+                trail={props.row?.trail ??
+                  (activity()?.entity || activity()?.child
+                    ? () => (
+                      <header class="otk-tool-state otk-control-row">
+                        <Show when={activity()?.entity}>
+                          {(entity) => (
+                            <EntityPill
+                              label={entity().label}
+                              facts={scopedEntityFacts(session, entity())}
+                            />
+                          )}
+                        </Show>
+                        <Show when={activity()?.child}>
+                          {(ref) => child(ref())}
+                        </Show>
+                      </header>
+                    )
+                    : undefined)}
               />
             )}
           >
             {() => (
               <>
-                <TreeItem last={!hasSource()}>
+                <TreeItem last={!hasSource() && !props.row?.extra}>
                   <TreeNode
                     header={() => (
                       <div class="otk-tool-body">
@@ -263,7 +268,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                   />
                 </TreeItem>
                 <Show when={hasSource()}>
-                  <TreeItem last>
+                  <TreeItem last={!props.row?.extra}>
                     <NativeSource
                       reference={reference()}
                       preview={preview()}
@@ -271,6 +276,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                     />
                   </TreeItem>
                 </Show>
+                {props.row?.extra?.()}
               </>
             )}
           </Disclosure>

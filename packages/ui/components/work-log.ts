@@ -35,6 +35,7 @@ export interface WorkRun {
   start?: number;
   end?: number;
   thinkingMs?: number;
+  thinkingIDs?: string[];
   live: boolean;
   failed: boolean;
   child?: string;
@@ -196,6 +197,7 @@ function deriveWorkRuns(
         child,
       };
       if (thinking.length) {
+        run.thinkingIDs = thinking.map((thought) => thought.key);
         run.thinkingMs = thinking.reduce(
           (sum, thought) => sum + (workDuration(thought) ?? 0),
           0,

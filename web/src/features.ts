@@ -50,6 +50,7 @@ import {
   registerToolPart,
   registerUnknownPart,
   registerWebSearchTool,
+  registerWorkPanel,
   registerWriteTool,
   ThemeEngine,
   ThemeRegistry,
@@ -105,6 +106,7 @@ export function applicationUi(): UiRegistries {
   registerSessionsPanel(ui.panels);
   registerTimelinePanel(ui.panels);
   registerActivityPanel(ui.panels);
+  registerWorkPanel(ui.panels);
   registerTerminalDock(ui.composerDocks);
   registerTerminalDialog(ui.dialogs);
   return ui;

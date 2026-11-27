@@ -74,6 +74,18 @@ const Sources = createContext<SourceReader | null>(null);
 export function useNativeSource(): SourceReader | null {
   return useContext(Sources);
 }
+/** Record surfaces borrow the same identity and lazy Source resources. */
+export function TranscriptRecords(props: {
+  interaction: TranscriptInteraction;
+  nativeSource?: SourceReader;
+  children: Element;
+}): Element {
+  return (
+    <Sources value={props.nativeSource ?? null}>
+      <Interaction value={props.interaction}>{props.children}</Interaction>
+    </Sources>
+  );
+}
 /** A saved presentation cannot borrow a live transcript's source reader, action
  * ports, visibility observer or disclosure identities. It has no native demand. */
 export function TranscriptSnapshot(props: { children: Element }): Element {
@@ -255,35 +267,36 @@ export function TranscriptContext(
   });
   return (
     <Visibility value={props.visibility ?? null}>
-      <Sources value={props.nativeSource ?? null}>
-        <Interaction value={interaction}>
-          <Actions
-            value={{
-              bind: (identity, value) => {
-                const id = key(identity);
-                if (owners.has(id)) {
-                  throw new Error(
-                    "Duplicate transcript action owner",
-                  );
-                }
-                owners.set(id, value);
+      <TranscriptRecords
+        interaction={interaction}
+        nativeSource={props.nativeSource}
+      >
+        <Actions
+          value={{
+            bind: (identity, value) => {
+              const id = key(identity);
+              if (owners.has(id)) {
+                throw new Error(
+                  "Duplicate transcript action owner",
+                );
+              }
+              owners.set(id, value);
+              setRevision((value) => value + 1);
+              return () => {
+                if (owners.get(id) !== value) return;
+                owners.delete(id);
                 setRevision((value) => value + 1);
-                return () => {
-                  if (owners.get(id) !== value) return;
-                  owners.delete(id);
-                  setRevision((value) => value + 1);
-                };
-              },
-            }}
-          >
-            <DisclosuresProvider owner={interaction.disclosures}>
-              <DisclosureFocusHome value={props.focusHome ?? null}>
-                {props.children}
-              </DisclosureFocusHome>
-            </DisclosuresProvider>
-          </Actions>
-        </Interaction>
-      </Sources>
+              };
+            },
+          }}
+        >
+          <DisclosuresProvider owner={interaction.disclosures}>
+            <DisclosureFocusHome value={props.focusHome ?? null}>
+              {props.children}
+            </DisclosureFocusHome>
+          </DisclosuresProvider>
+        </Actions>
+      </TranscriptRecords>
     </Visibility>
   );
 }

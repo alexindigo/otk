@@ -4,6 +4,19 @@ import type { ShellLayout } from "@otk/protocol";
 import { type CommandPorts, ownedCommand } from "../keyboard/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
 import type { ShellWork } from "../state/shell.ts";
+import WorkPanelView from "../components/WorkPanelView.tsx";
+import { WorkLogIcon } from "../components/ChromeIcons.tsx";
+
+export function registerWorkPanel(
+  registry: SurfaceRegistry<PanelDefinition>,
+): void {
+  registry.register({
+    id: "work",
+    title: "Work log",
+    icon: WorkLogIcon,
+    component: WorkPanelView,
+  });
+}
 
 type ShowTarget = Selection & { turn: string; run?: string };
 const scopeOf = ({ sidecarId, sessionID }: Selection) =>

@@ -165,6 +165,7 @@ export function TreeNode(props: {
   frame?: Frame;
   header?(connected: boolean, toggleID: string): Element;
   trail?(): Element;
+  detail?(): Element;
   feedback?(): Element;
   /** Feedback with its own leading control may borrow the artwork track. */
   feedbackGutter?: boolean;
@@ -335,6 +336,11 @@ export function TreeNode(props: {
           <Show when={props.trail}>
             <div class="otk-tree-slot otk-tree-trail-slot">
               <ContentSlot content={props.trail} />
+            </div>
+          </Show>
+          <Show when={props.detail}>
+            <div class="otk-tree-slot otk-tree-detail-slot">
+              <ContentSlot content={props.detail} />
             </div>
           </Show>
           <Show when={props.feedback}>
