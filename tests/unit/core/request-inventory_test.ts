@@ -330,14 +330,17 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     signal: new AbortController().signal,
   });
   registerTerminals(rpc, terminals);
-  const localFiles = new Core.LocalFiles({ home: terminalRoot, deny: [] });
+  const localFiles = new Core.LocalFiles({
+    home: terminalRoot,
+    deny: [],
+    roots: { roots: () => [terminalRoot] },
+  });
   const images = cfg().images;
   Core.registerLocalFiles(
     rpc,
     localFiles,
     new InlineImages({
       files: localFiles,
-      roots: { roots: () => [terminalRoot] },
       limits: images,
       concurrency: images.concurrency,
       directory: async (id, signal) =>
