@@ -2,6 +2,7 @@
 import type { CommandHub, ContextTarget } from "@otk/client";
 import { copyText } from "../clipboard.ts";
 import type { ContextInvocation } from "../components/context-target.ts";
+import { nativeTextField } from "../keyboard/ownership.ts";
 
 interface TextTarget {
   text: string;
@@ -11,14 +12,7 @@ interface ImageTarget extends TextTarget {
 }
 /** Text-field menus belong to the browser, including its spelling/dictionary UI. */
 export function nativeTextContext(path: readonly EventTarget[]): boolean {
-  return path.some((node) =>
-    node instanceof HTMLTextAreaElement ||
-    (node instanceof HTMLInputElement &&
-      ["text", "search", "tel", "url", "email", "password", "number"].includes(
-        node.type,
-      )) ||
-    (node instanceof HTMLElement && node.isContentEditable)
-  );
+  return path.some(nativeTextField);
 }
 
 /** Browser built-ins are contributed just like feature actions, never dispatched

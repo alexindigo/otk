@@ -1352,6 +1352,12 @@ stop function runs. Layers contain close-command IDs, a predicate and priority,
 with latest registration breaking ties. Composition and repeat events do not
 invoke commands.
 
+The shell enables the keyboard owner's window/tab focus recovery only with an
+open session. It leaves existing focus, overlay focus and selections alone;
+otherwise it returns to the last live text target or the mounted prompt's
+registered textarea. The composer fallback places the caret at the end without
+scrolling or modifying the draft. Views install no reactivation listeners.
+
 `Palette` and slash completion enumerate the injected CommandHub, with no
 per-command surface tables or opt-in flags. Slash spelling and typed invocation
 use the hub's single resolution/schema owner. Both surfaces currently omit
