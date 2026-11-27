@@ -2,12 +2,68 @@
 import Palette from "../components/Palette.tsx";
 import KeysHelp from "../components/KeysHelp.tsx";
 import ThemePicker from "../components/ThemePicker.tsx";
+import ActionButton from "../components/ActionButton.tsx";
 import { DisplayPreferences } from "../components/DisplayMenu.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import type { DialogRegistry } from "../registries/shell.ts";
-import { LOCAL_SIDECAR } from "@otk/client";
+import {
+  type ActionControl,
+  type CommandHub,
+  LOCAL_SIDECAR,
+} from "@otk/client";
+
+interface Confirmation {
+  message: string;
+  resolve(accepted: boolean): void;
+}
+
+function dialogAction(run: () => void): ActionControl {
+  return {
+    availability: () => ({ available: true }),
+    subscribe: () => () => {},
+    run: () => {
+      run();
+      return Promise.resolve({ kind: "shown" });
+    },
+  };
+}
+
+export function confirmAction(
+  commands: CommandHub,
+  message: string,
+): Promise<boolean> {
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  void commands.run("dialog.open", {
+    id: "confirm-action",
+    input: { message, resolve } satisfies Confirmation,
+  }).catch(() => resolve(false));
+  return promise;
+}
+
 export function registerCommandDialogs(dialogs: DialogRegistry): void {
+  dialogs.register<Confirmation>({
+    id: "confirm-action",
+    title: "Confirm action",
+    ended: (input) => input.resolve(false),
+    component: ({ input }) => <p>{input.message}</p>,
+    actions: ({ input, close }) => (
+      <>
+        <ActionButton class="otk-pill" action={dialogAction(close)}>
+          Cancel
+        </ActionButton>
+        <ActionButton
+          class="otk-primary otk-pill"
+          action={dialogAction(() => {
+            input.resolve(true);
+            close();
+          })}
+        >
+          Continue
+        </ActionButton>
+      </>
+    ),
+  });
   dialogs.register({
     id: "display",
     title: "Display preferences",

@@ -1028,20 +1028,17 @@ Breadcrumbs use the one-line shrinking contract, with independent More controls
 for omitted identities. Task strips render the client-owned stable saved order
 directly in a horizontal scroll lane, without overflow fitting or wrapping.
 
-`createInputGuard({drafts, key, confirm})` owns dirty-input marks and
-confirmation policy. Release reads the invocation-current draft through
-`Drafts.current(key)` (non-creating and independent of framework publication)
-and clears only an accepted editor, preserving the prompt and choices;
-navigation clears attention marks only when the session identity changes.
-`permit` checks a single input owner without consuming its dirty state.
-`release({draft: "kept" | "dropped", keys?})` states whether released stored
-drafts survive. Ordinary navigation defaults to kept. Dropping unsent content
-asks first, including background/family drafts named by keys; consent does not
-consume those drafts before the mutation succeeds. Deleted native lifetimes keep
-unsent attention input in the same guard until normal guarded release; the
-metadata-only details surface can display it without a native send control.
-`Drafts.drop(key)` removes committed deletions and retires captured writers, so
-late uploads/sends cannot resurrect their deleted draft lifetime.
+`createInputGuard({drafts, key, confirm})` owns loss checks, not draft custody.
+Ordinary routing keeps keyed prompt/editor drafts and request-owned drafts;
+navigation clears only view marks when the session identity changes. `permit`
+checks one input owner without consuming it. A destructive release reads
+invocation-current input through `Drafts.current(key)` without creating drafts.
+`release({draft: "dropped", keys?})` asks only if it would lose input and
+returns a captured discard callback to run after successful deletion, not on
+consent or later navigation. Native deletion retains its request-owned unsent
+attention input for the metadata-only details view. `Drafts.drop(key)` removes
+committed deletions and retires captured writers, so late uploads/sends cannot
+resurrect their deleted draft lifetime.
 
 `createShellNavigation({resources, actions, guard, drafts, session, presence,
 environment?, factory?})`

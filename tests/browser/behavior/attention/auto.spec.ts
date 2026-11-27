@@ -250,14 +250,20 @@ test(
         .toBeVisible();
     };
     await palette();
-    page.once("dialog", (dialog) => dialog.dismiss());
     await page.locator('[data-command="permission.auto"]').click();
+    const confirmation = page.getByRole("dialog", { name: "Confirm action" });
+    await expect(confirmation).toContainText(
+      "Discard unsaved permission input",
+    );
+    await confirmation.getByRole("button", { name: "Cancel", exact: true })
+      .click();
     await expect(page.locator("dialog")).toHaveCount(0);
     await expect(dirty).toHaveValue("Keep my unsaved permission feedback");
     await file(state, "guarded-auto.txt", null);
     await palette();
-    page.once("dialog", (dialog) => dialog.accept());
     await page.locator('[data-command="permission.auto"]').click();
+    await confirmation.getByRole("button", { name: "Continue", exact: true })
+      .click();
     await expect(page.locator("dialog")).toHaveCount(0);
     await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
     await file(state, "guarded-auto.txt", "guarded-auto");

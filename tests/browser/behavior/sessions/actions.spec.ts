@@ -575,10 +575,9 @@ test("sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal", {
   await openSession(state, page, s.id);
   await page.locator("textarea[name=prompt]").fill("Keep this unsent draft");
   const dialogs: string[] = [];
-  let accept = false;
   page.on("dialog", (d) => {
     dialogs.push(d.message());
-    void (accept ? d.accept() : d.dismiss());
+    void d.dismiss();
   });
   await sessionContext(page, `[data-tab="${s.id}"]`, "session.close");
   await expect(page).toHaveURL(/#project\//);
@@ -598,17 +597,22 @@ test("sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal", {
   await expect(item).toHaveText("Press again to delete");
   await item.click();
   await expect(page.locator(contextMenu)).toHaveCount(0);
+  const confirmation = page.getByRole("dialog", { name: "Confirm action" });
+  await expect(confirmation).toContainText("Discard your unsent input");
+  await confirmation.getByRole("button", { name: "Cancel", exact: true })
+    .click();
   expect((await state.native<{ id: string }>(`/session/${s.id}`)).id).toBe(
     s.nativeID,
   );
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Keep this unsent draft",
   );
-  accept = true;
   await sessionContext(page, `[data-tab="${s.id}"]`);
   await item.click();
   await expect(item).toHaveText("Press again to delete");
   await item.click();
+  await confirmation.getByRole("button", { name: "Continue", exact: true })
+    .click();
   await expect(page.locator(`[data-tab="${s.id}"]`)).toHaveCount(0);
   await expect(page).toHaveURL(/#project\//);
   await expect(state.native(`/session/${s.id}`)).rejects.toThrow("404");
@@ -638,11 +642,10 @@ test("sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal", {
   await sessionContext(page, `[data-tab="${empty.id}"]`);
   await item.click();
   await expect(item).toHaveText("Press again to delete");
-  const before = dialogs.length;
   await item.click();
   await expect(page.locator(`[data-tab="${empty.id}"]`)).toHaveCount(0);
   await expect(page).toHaveURL(/#project\//);
-  expect(dialogs).toHaveLength(before);
+  expect(dialogs).toEqual([]);
   await expect(state.native(`/session/${empty.id}`)).rejects.toThrow("404");
   await deletedDetails(page, empty.id, "Empty draft");
 });

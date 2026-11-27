@@ -1509,9 +1509,9 @@ interruption and the helper count. A second activation executes; row-to-row
 pointer/focus movement, Tab and dismissal disarm it. Generic Menu owns row
 transitions; CommandMenu owns confirmation state and prevents concurrent
 execution. The shell passes deletion to the shared client view-release owner.
-The guard's draft-survival input asks only when a stored draft would be lost;
-Close keeps ordinary drafts, while successful native deletion drops the family
-drafts.
+Switching sessions (including history) and Close keep per-session drafts. Only
+actions that lose input request confirmation, through the existing Dialog host.
+Successful native deletion drops the affected family drafts.
 
 The session-action owner also contributes Fork session to session targets and
 the palette, and Fork from here to completed replies. `MessageFooter` owns the

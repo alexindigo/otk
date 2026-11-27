@@ -336,23 +336,19 @@ test("sessions.history-guard", tags, async ({ isolatedState: state, page }) => {
   // The modal deliberately makes the real toolbar inert; dispatch activation
   // straight to its button to exercise the same binding with the editor live.
   const back = page.locator(".otk-history button").first();
-  const declined = page.waitForEvent("dialog").then(async (dialog) => {
-    expect(dialog.message()).toContain("Discard unsaved editor");
+  const dialogs: string[] = [];
+  page.on("dialog", async (dialog) => {
+    dialogs.push(dialog.message());
     await dialog.dismiss();
   });
   await back.dispatchEvent("click");
-  await declined;
-  await selected(page, b);
-  await expect(editor).toHaveValue("Keep this unsaved editor text");
-  await expect(page.locator(".otk-history button").last()).toBeDisabled();
-  const accepted = page.waitForEvent("dialog").then((dialog) =>
-    dialog.accept()
-  );
-  await back.dispatchEvent("click");
-  await accepted;
   await selected(page, a);
   await expect(editor).toHaveCount(0);
   await expect(toolbar(page).forward).toBeEnabled();
+  await toolbar(page).forward.click();
+  await selected(page, b);
+  await expect(editor).toHaveValue("Keep this unsaved editor text");
+  expect(dialogs).toEqual([]);
 });
 
 test(
