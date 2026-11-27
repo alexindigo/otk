@@ -616,6 +616,8 @@ export function createSessionActions(o: {
     },
     async question(input) {
       const { selection: target, rpc } = current.context();
+      const settled = resources.sidecars.connection(target.sidecarId)
+        .attention?.settlement("question", input.requestID);
       const asking =
         session.state.content.questions.find((request) =>
           request.id === input.requestID
@@ -632,14 +634,16 @@ export function createSessionActions(o: {
       };
       await act(
         target,
-        () =>
-          input.answers
-            ? rpc.call(
+        async () => {
+          if (input.answers) {
+            await rpc.call(
               "question.reply",
               { ...input, answers: input.answers },
               options,
-            )
-            : rpc.call("question.reject", input, options),
+            );
+          } else await rpc.call("question.reject", input, options);
+          settled?.();
+        },
       );
     },
     location(target, id) {

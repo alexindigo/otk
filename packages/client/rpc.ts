@@ -23,8 +23,20 @@ import {
   RequestTracker,
 } from "./requests.ts";
 import { RequestFailure } from "./failures.ts";
-import type { FeedbackOwner } from "./failures.ts";
-import { createRequestFeedback } from "./failure-features.ts";
+import type { Feedback, FeedbackOwner } from "./failures.ts";
+import {
+  createRequestFeedback,
+  isQuestionResponse,
+  requestFeedback,
+} from "./failure-features.ts";
+import type { RequestLifetimes } from "./request-lifetime.ts";
+
+export interface QuestionResponse {
+  state: "sending" | "confirmed" | "failed";
+  answers?: readonly string[][];
+  feedback?: Feedback;
+  canResend?: boolean;
+}
 /** Optional object properties are absent on JSON wire; invalid array values remain strict. */
 function wireParams(
   value: unknown,
@@ -70,6 +82,8 @@ export class Rpc {
       method: string;
       canonical: string;
       operation: Operation<unknown>;
+      peek(): Operation<unknown> | undefined;
+      canRetry(): boolean;
       readonly target: FailureFacts["target"];
     }
   >();
@@ -87,6 +101,31 @@ export class Rpc {
       this.#feedback.set(owner, feedback);
     }
     return feedback;
+  }
+  /** The native question and its exact RPC give one read-only presentation. */
+  questionResponse(
+    id: string,
+    lifetimes?: RequestLifetimes,
+  ): QuestionResponse | undefined {
+    const record = this.#settlements.get(JSON.stringify(["input", id]));
+    if (!record || !isQuestionResponse(record.method)) return;
+    const native = lifetimes?.get("question", id)?.state;
+    const state = record.peek()?.state;
+    if (!state) return;
+    if (state.phase === "released" || native === "retired") return;
+    if (
+      state.phase === "succeeded" || native === "settled-locally" ||
+      native === "settled-remotely"
+    ) {
+      return { state: "confirmed" };
+    }
+    return {
+      state: state.phase === "failed" ? "failed" : "sending",
+      answers:
+        (JSON.parse(record.canonical) as { answers?: string[][] }).answers,
+      feedback: requestFeedback(state, this.metadata, this.requests),
+      canResend: state.error?.retry === "new-intent",
+    };
   }
   constructor(
     readonly send: (frame: ClientFrame) => void,
@@ -181,7 +220,7 @@ export class Rpc {
     }
     // Any caller, view lifetime or remount joins the request's one settlement.
     const prior = this.#settlements.get(subject);
-    if (prior) {
+    if (prior && !prior.canRetry()) {
       if (prior.method === method && prior.canonical === canonical) {
         return prior.operation as Operation<RpcResult<M>>;
       }
@@ -221,6 +260,7 @@ export class Rpc {
       if (phase === "succeeded") return stop();
       if (phase !== "failed" && phase !== "released") return;
       stop();
+      if (phase === "failed" && isQuestionResponse(method)) return;
       if (this.#settlements.get(subject) === record) {
         this.#settlements.delete(subject);
       }
@@ -239,6 +279,13 @@ export class Rpc {
     const record = {
       method,
       canonical,
+      // Initial tracker publication is synchronous, before start() returns.
+      // Readers may borrow that registered operation without starting it.
+      peek: () => initialized ?? (initializing ? registered() : undefined),
+      canRetry: () =>
+        !initializing && isQuestionResponse(method) &&
+        initialized?.state.phase === "failed" &&
+        initialized.state.error?.retry === "new-intent",
       get target() {
         return initialized?.state.facts?.target ?? target;
       },

@@ -11,6 +11,7 @@ import type {
   InboxRpc,
   LiveWorkOwner,
   ModelCatalogOwner,
+  QuestionResponse,
   SessionDelivery,
   SessionSubmission,
   ToolCompletionSource,
@@ -65,6 +66,8 @@ export interface SessionPorts {
   permissions(): PermissionRequest[];
   permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];
+  questionResponse?(id: string): QuestionResponse | undefined;
+  observeQuestionResponse?(listener: () => void): () => void;
   forms?(): readonly import("@otk/protocol").FormRequest[];
   requests?: import("@otk/client").RequestLifetimes;
   prefs(): Preferences;

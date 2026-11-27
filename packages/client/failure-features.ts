@@ -34,7 +34,7 @@ import { projectHash } from "./project-navigation.ts";
 import { folderName } from "./project-names.ts";
 import type { Note } from "./notifications.ts";
 import { localFailure, RequestFailure, RequestReleased } from "./failures.ts";
-import type { RequestTracker } from "./requests.ts";
+import type { OperationState, RequestTracker } from "./requests.ts";
 import { bootstrapRequestMetadata } from "./bootstrap-request-metadata.ts";
 
 /** Shipped failure vocabulary. The reusable presenter itself has no feature list. */
@@ -450,6 +450,59 @@ export function failedSendPresentation(feedback?: Feedback): {
 }
 
 /** Target-bound presentation outlives any mounted view and borrows request state. */
+export function isQuestionResponse(method: string): boolean {
+  return method === "question.reply" || method === "question.reject";
+}
+
+export function requestFeedback(
+  state: Readonly<OperationState>,
+  metadata: RequestMetadataRegistry,
+  tracker: RequestTracker,
+): Feedback | undefined {
+  const identified = (value: Feedback): Feedback => ({
+    ...value,
+    identity: state.ref.key,
+  });
+  if (state.phase === "released" || state.phase === "succeeded") return;
+  if (state.error) {
+    if (state.feedbackDismissed) return;
+    const shown = shipped.place(state.error, {
+      surface: "feedback",
+      view: state.error.facts?.target,
+    });
+    if (!shown) return;
+    return {
+      ...shown,
+      identity: state.ref.key,
+      diagnosticID: state.error.diagnosticID,
+      ...(state.phase === "failed" && !state.error.facts?.record
+        ? { dismiss: () => tracker.dismissFeedback(state) }
+        : {}),
+    };
+  }
+  if (state.connection === "authentication-required") {
+    return identified({
+      kind: "connection",
+      text: "Sign in to continue checking this action",
+    });
+  }
+  if (state.connection !== "connected") {
+    return identified(
+      shipped.connection(state.connection === "client-outdated"),
+    );
+  }
+  if (
+    state.progress && state.progress.code !== "working" &&
+    state.progress.code !== "queued"
+  ) {
+    return identified(shipped.progress(state.progress));
+  }
+  return identified({
+    kind: "pending",
+    text: metadata.get(state.method)!.pending,
+  });
+}
+
 export function createRequestFeedback(
   tracker: RequestTracker,
   owner: string,
@@ -466,56 +519,14 @@ export function createRequestFeedback(
       // result for older work. Keep it visible until its owner clears it.
       if (local) return local;
       const operations = tracker.operations(owner).filter((operation) =>
-        metadata.get(operation.state.method)?.kind === "mutation"
+        metadata.get(operation.state.method)?.kind === "mutation" &&
+        !isQuestionResponse(operation.state.method)
       );
       const operation =
         operations.findLast((operation) =>
           metadata.get(operation.state.method)?.presentation !== "bookkeeping"
         ) ?? operations.at(-1);
-      if (!operation) return local;
-      const state = operation.state;
-      const identified = (value: Feedback): Feedback => ({
-        ...value,
-        identity: state.ref.key,
-      });
-      if (state.phase === "released" || state.phase === "succeeded") {
-        return local;
-      }
-      if (state.error) {
-        if (state.feedbackDismissed) return;
-        const shown = shipped.place(state.error, {
-          surface: "feedback",
-          view: state.error.facts?.target,
-        });
-        if (!shown) return;
-        return {
-          ...shown,
-          identity: state.ref.key,
-          diagnosticID: state.error.diagnosticID,
-          ...(state.phase === "failed" && !state.error.facts?.record
-            ? { dismiss: () => tracker.dismissFeedback(state) }
-            : {}),
-        };
-      }
-      if (state.connection === "authentication-required") {
-        return identified({
-          kind: "connection",
-          text: "Sign in to continue checking this action",
-        });
-      }
-      if (state.connection !== "connected") {
-        return identified(
-          shipped.connection(state.connection === "client-outdated"),
-        );
-      }
-      if (
-        state.progress && state.progress.code !== "working" &&
-        state.progress.code !== "queued"
-      ) return identified(shipped.progress(state.progress));
-      return identified({
-        kind: "pending",
-        text: metadata.get(state.method)!.pending,
-      });
+      return operation && requestFeedback(operation.state, metadata, tracker);
     },
     subscribe(listener) {
       listeners.add(listener);
