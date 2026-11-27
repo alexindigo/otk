@@ -69,7 +69,7 @@ test("sessions.history-hands-project-focus-to-current-row", tags, async ({
       .locator(".otk-project-open");
   await page.mouse.move(650, 420);
   await keyboardFocus(page, control(b));
-  await expect(project(page, b.directory).locator(".otk-project-menu"))
+  await expect(project(page, b.directory).locator(".otk-sidebar-control"))
     .toHaveCSS("opacity", "1");
   for (
     const [travel, previous, next] of [
@@ -81,7 +81,7 @@ test("sessions.history-hands-project-focus-to-current-row", tags, async ({
     await selected(page, next);
     await expect.soft(control(previous)).not.toBeFocused();
     await expect.soft(
-      project(page, previous.directory).locator(".otk-project-menu"),
+      project(page, previous.directory).locator(".otk-sidebar-control"),
     )
       .toHaveCSS("opacity", "0");
     await expect.soft(control(next)).toBeFocused();
@@ -99,8 +99,8 @@ test("sessions.project-menu-pointer-dismissal-stays-quiet", tags, async ({
   await page.goto(state.url);
   await openProject(page, a);
   const old = project(page, b.directory);
-  const menu = old.locator(".otk-project-menu");
-  const trigger = menu.getByRole("button");
+  const menu = old.locator(".otk-sidebar-control");
+  const trigger = menu.locator(".otk-project-menu").getByRole("button");
   await trigger.click();
   await expect(page.getByRole("menu")).toBeVisible();
   await trigger.click();
