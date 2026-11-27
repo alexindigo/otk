@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { focusControl } from "../keyboard/focus.ts";
 import "./VirtualList.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import ContentSlot from "./ContentSlot.tsx";
@@ -595,7 +596,7 @@ export default function VirtualList(props: {
       records.some((record) =>
         Array.from(record.removedNodes).some((node) => node.contains(control))
       )
-    ) control.focus({ preventScroll: true });
+    ) focusControl(control, { preventScroll: true });
   };
   async function navigateKey(
     key: string,

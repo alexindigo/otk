@@ -52,6 +52,7 @@ import { PlusIcon } from "./ChromeIcons.tsx";
 import {
   ownedAction,
   ownedCommand,
+  selectionFocus,
   useCommandPorts,
 } from "../keyboard/context.tsx";
 import { createTaskControls } from "../features/task-controls.ts";
@@ -444,9 +445,16 @@ export default function ProjectTabs(props: {
                 }, "tab");
               const editing = () => renaming() && props.rename!.editing;
               const Control = dynamic(() => editing() ? "div" : "button");
+              let control: HTMLElement | undefined;
+              const selected = () =>
+                props.model.state.selected?.id === tab().id;
+              const bindFocus = selectionFocus("tab", selected, () =>
+                editing() ? undefined : control);
               const native = nativeAttributes(() => ({
                 onClick: () => {
-                  if (!editing()) run(select(tab()));
+                  if (!editing()) {
+                    run(select(tab()));
+                  }
                 },
                 onDblClick: () =>
                   !editing() && tab().kind === "phantom" && run(pin(tab().id)),
@@ -454,26 +462,30 @@ export default function ProjectTabs(props: {
               return (
                 <div
                   class="otk-tab"
-                  ref={contextTarget<SessionContextTarget | TaskContextTarget>(
-                    () =>
-                      tab().kind === "task"
-                        ? {
-                          kind: "task",
-                          data: {
-                            ...props.project,
-                            directory:
-                              tasks().find((task) => task.id === tab().id)
-                                ?.directory ?? props.project.directory,
-                            taskID: tab().id,
-                          },
-                        }
-                        : sessionTarget(tab().id, "tab"),
-                  )}
+                  ref={[
+                    bindFocus,
+                    contextTarget<SessionContextTarget | TaskContextTarget>(
+                      () =>
+                        tab().kind === "task"
+                          ? {
+                            kind: "task",
+                            data: {
+                              ...props.project,
+                              directory:
+                                tasks().find((task) => task.id === tab().id)
+                                  ?.directory ?? props.project.directory,
+                              taskID: tab().id,
+                            },
+                          }
+                          : sessionTarget(tab().id, "tab"),
+                    ),
+                  ]}
                   data-kind={tab().kind}
                   data-preview={String(tab().preview)}
                 >
                   <Control
-                    ref={native.ref}
+                    ref={[native.ref, (node: HTMLElement) =>
+                      control = node]}
                     type="button"
                     role="tab"
                     {...selection({
@@ -485,7 +497,7 @@ export default function ProjectTabs(props: {
                           : ""
                       ) + (editing() ? " is-editing" : ""),
                       kind: "selected",
-                      selected: props.model.state.selected?.id === tab().id,
+                      selected: selected(),
                     })}
                     data-otk-selection="horizontal"
                     title={tab().title}

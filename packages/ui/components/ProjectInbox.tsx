@@ -58,6 +58,7 @@ import {
   commandHints,
   ownedAction,
   ownedCommand,
+  selectionFocus,
   useCommandPorts,
 } from "../keyboard/context.tsx";
 import CommandMenu from "./CommandMenu.tsx";
@@ -196,9 +197,14 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
       directory: { type: "string" as const },
     },
   };
+  const captureReturn = () => ports.keyboard?.focusOwner.returnLease();
+  let restoreRename: ReturnType<typeof captureReturn>;
   ownedAction("project.rename", (input: ProjectSelection) => {
     const row = renameRow(input), target = row && renameTarget(row);
-    if (target) props.projectRename?.start(target);
+    if (target) {
+      restoreRename = captureReturn();
+      props.projectRename?.start(target);
+    }
   }, {
     arguments: renameArgs,
     context: { kind: "project", title: () => "Rename", order: -20 },
@@ -291,7 +297,11 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     roots(section).filter((node) =>
       node.project.sidecarId === sidecar && reorderable(node)
     );
-  async function commitMove(key: string, target: ProjectMoveTarget) {
+  async function commitMove(
+    key: string,
+    target: ProjectMoveTarget,
+    pointer = false,
+  ) {
     const section = sectionOf(key);
     const row = section &&
       roots(section).find((node) => node.key === key)?.project;
@@ -302,15 +312,16 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
         node.project.otkProjectID === anchor
       )
     ) return;
-    const focus = document.activeElement === focusable(key);
+    const origin = focusable(key);
+    const restore = document.activeElement === origin
+      ? ports.keyboard?.focusOwner.returnLease(
+        !pointer && origin?.matches(":focus-visible"),
+      )
+      : undefined;
     setOrderStatus("");
     await props.onMove(row.sidecarId, { id: row.otkProjectID, ...target });
     queueMicrotask(() => {
-      if (
-        focus &&
-        (document.activeElement === document.body ||
-          document.activeElement === focusable(key))
-      ) focusable(key)?.focus();
+      restore?.(focusable(key), origin);
       const nodes = roots(section).filter(reorderable);
       const index = nodes.findIndex((node) => node.key === key);
       if (index >= 0) {
@@ -416,7 +427,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     scrollBy: (delta) => {
       if (scroller) scrollLease?.owner.input(scroller.scrollTop + delta);
     },
-    move: commitMove,
+    move: (key, target) => commitMove(key, target, true),
     menu: (key) => {
       const origin = focusable(key);
       if (!origin) return;
@@ -729,16 +740,15 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
     const editing = () => renaming() && props.projectRename!.editing;
     let root!: HTMLElement;
     let openButton: HTMLButtonElement | undefined;
+    const selected = () =>
+      props.selected?.sidecarId === project().sidecarId &&
+      props.selected?.directory === project().directory;
+    const bindFocus = selectionFocus("project", selected, () => openButton);
     createEffect(editing, (active, before) => {
       if (!active && before) {
+        const returnFocus = restoreRename;
         queueMicrotask(() => {
-          if (
-            !editing() &&
-            (document.activeElement === document.body ||
-              root.contains(document.activeElement))
-          ) {
-            openButton?.focus();
-          }
+          if (!editing()) returnFocus?.(openButton, root);
         });
       }
     });
@@ -764,6 +774,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
         frame={{
           ref: (element) => {
             root = element;
+            bindFocus(element);
             contextTarget(target)(element);
             if (row.reorderKey) {
               rowErrors.set(row.reorderKey, (cause) =>
@@ -775,8 +786,7 @@ export default function ProjectInbox<T extends ProjectRow>(props: {
           class: `otk-project-row otk-sidebar-selection${
             project().depth ? " is-subproject" : ""
           }`,
-          selected: props.selected?.sidecarId === project().sidecarId &&
-            props.selected?.directory === project().directory,
+          selected: selected(),
           attributes: {
             "data-project": project().directory,
             "data-server": project().sidecarId,

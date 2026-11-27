@@ -444,6 +444,19 @@ test(
     await page.mouse.up();
     await expect.poll(() => activeOrder(page)).toEqual(moved);
     await expect(page.locator(".otk-project-drop")).toHaveCount(0);
+    const old = active(page).and(
+      page.locator(`[data-project=${JSON.stringify(moved[1])}]`),
+    );
+    await page.mouse.move(650, 420);
+    await expect.soft(old.locator(":focus-visible")).toHaveCount(0);
+    await expect.soft(old.locator(".otk-project-menu")).toHaveCSS(
+      "opacity",
+      "0",
+    );
+    await active(page).first().locator(".otk-project-open").click();
+    await page.mouse.move(650, 420);
+    await expect(old.locator(":focus-visible")).toHaveCount(0);
+    await expect(old.locator(".otk-project-menu")).toHaveCSS("opacity", "0");
     await page.reload();
     await expect.poll(() => activeOrder(page)).toEqual(moved);
     const other = await browser.newContext();

@@ -4,6 +4,7 @@ import {
   createSignal,
   createUniqueId,
   type Element,
+  onCleanup,
   onSettled,
   useContext,
 } from "solid-js";
@@ -14,6 +15,7 @@ import {
   CommandHub,
 } from "@otk/client";
 import type { Keyboard } from "./dispatcher.ts";
+import type { SelectionFocusGroup } from "./focus.ts";
 export interface CommandPorts {
   commands: CommandHub;
   keyboard?: Keyboard;
@@ -39,6 +41,21 @@ export function CommandProvider(
 }
 export function useCommandPorts(): CommandPorts {
   return useContext(Context) ?? { commands: new CommandHub() };
+}
+
+/** Register this item's own selection and control; the shell decides when to move focus. */
+export function selectionFocus(
+  group: SelectionFocusGroup,
+  selected: () => boolean,
+  home: () => HTMLElement | undefined,
+): (root: HTMLElement) => void {
+  const owner = useCommandPorts().keyboard?.focusOwner;
+  let release: (() => void) | undefined;
+  onCleanup(() => release?.());
+  return (root) => {
+    release?.();
+    release = owner?.item(root, { group, selected, home });
+  };
 }
 /** Current shortcut presentation from the same command descriptors as menus. */
 export function commandHints(ports: CommandPorts): {

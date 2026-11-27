@@ -1358,6 +1358,13 @@ otherwise it returns to the last live text target or the mounted prompt's
 registered textarea. The composer fallback places the caret at the end without
 scrolling or modifying the draft. Views install no reactivation listeners.
 
+The keyboard's browser focus owner resolves returns and accepted navigation with
+live control references. Projects, task/session tabs, the right Sessions tree
+and the trail register their existing selection and natural focus home; changing
+selection elsewhere moves stale focus without intercepting keyboard browsing.
+Returns preserve the invoking modality. A late edit/reorder return cannot take
+focus from a newer navigation or another control.
+
 `Palette` and slash completion enumerate the injected CommandHub, with no
 per-command surface tables or opt-in flags. Slash spelling and typed invocation
 use the hub's single resolution/schema owner. Both surfaces currently omit
