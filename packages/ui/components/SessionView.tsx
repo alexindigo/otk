@@ -1202,21 +1202,18 @@ export default function SessionView(props: {
                   }}
                 </Show>
               </div>
-              <Show when={!props.child}>
-                <div class="otk-session-docks">
-                  <For
-                    each={composerDocks.available(sessionPorts.supports)}
-                    keyed={(dock) => dock.id}
-                  >
-                    {(dock) => dock().component()}
-                  </For>
-                </div>
-              </Show>
+              <div class="otk-session-docks">
+                <For
+                  each={composerDocks.available(sessionPorts.supports)}
+                  keyed={(dock) => dock.id}
+                >
+                  {(dock) => dock().component()}
+                </For>
+              </div>
             </div>
             <ComposerTakeovers
               focusNotice={() => noticeControl?.focus()}
               notice={noticed() ? notice : undefined}
-              readOnly={props.child}
             >
               {(active) => (
                 <div
@@ -1227,6 +1224,7 @@ export default function SessionView(props: {
                     class={["otk-composer-input", {}]}
                   >
                     <Prompt
+                      joinRequired={props.child}
                       suspended={active()}
                       context={props.latestPrompt}
                       activity={props.activity}

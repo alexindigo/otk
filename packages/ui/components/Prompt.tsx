@@ -46,10 +46,20 @@ import PromptActionButton from "./PromptActionButton.tsx";
 const INTERRUPT_WINDOW_MS = 5000;
 const SETTINGS_KEY = "settings";
 const SETTINGS_LABEL = "Next message settings";
+const JOIN_LABEL = "Join the conversation";
+const joinAction = {
+  label: JOIN_LABEL,
+  visible: true,
+  available: true,
+  pending: false,
+} as const;
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
   const session = useSessionPorts();
+  const [joined, setJoined] = createSignal(false);
+  const collapsed = () => !!props.joinRequired && !joined();
+  const editable = () => !collapsed() && !props.suspended;
   const pending = () => primaryState().sending;
   const [feedback, setFeedback] = createSignal<Feedback>(),
     [lastRefusal, setRefusal] = createSignal<
@@ -72,7 +82,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     createKeyboard(ports.commands, (error) => ctx.fail(error));
   onSettled(() =>
     ports.keyboard?.focusHome(() =>
-      props.suspended || props.value.editor ? undefined : input
+      !editable() || props.value.editor ? undefined : input
     )
   );
   const hints = commandHints({ ...ports, keyboard });
@@ -106,12 +116,13 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     change,
     caret,
     active: () => active,
+    collapsed,
     selection: () => ({ start: input.selectionStart, end: input.selectionEnd }),
     focus: () => {
       focusControl(input);
     },
     focused: () =>
-      !props.suspended && document.activeElement === input &&
+      editable() && document.activeElement === input &&
       !props.value.editor,
     nextSelection: (draft = props.value) =>
       features.find((feature) => feature.selection)?.selection?.(draft) ??
@@ -124,16 +135,20 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       else if (active) setFeedback(actionFeedback(error));
     },
     acceptFiles: async (files) => {
-      for (const feature of features) await feature.drop?.(files);
+      if (editable()) {
+        for (const feature of features) await feature.drop?.(files);
+      }
     },
   };
   const features = useUiRegistries().prompt.create(ctx);
   const actions = features.flatMap((feature) =>
     feature.action ? [feature.action()] : []
   );
-  const toolbarItems: { key: string; action?: PromptAction }[] = [
+  const toolbarActions = () =>
+    actions.filter((action) => !action.needsInput || !collapsed());
+  const toolbarItems = (): { key: string; action?: PromptAction }[] => [
     { key: SETTINGS_KEY },
-    ...actions.map((action) => ({ key: action.key, action })),
+    ...toolbarActions().map((action) => ({ key: action.key, action })),
   ];
   // Invoke synchronously so feature-owned preventDefault still precedes native
   // paste, then contain either a synchronous throw or an asynchronous rejection.
@@ -147,14 +162,19 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const completion = createCompletion(ctx, features);
   // The input owns its focus port. Resume only when the replacing surface has
   // released focus, preserving a reader's newer focus elsewhere in the shell.
-  createEffect(() => props.suspended, (suspended, previous) => {
-    if (previous && !suspended && document.activeElement === document.body) {
+  createEffect(editable, (ready, previous) => {
+    if (
+      previous === false && ready && document.activeElement === document.body
+    ) {
       ctx.focus();
     }
   });
+  createEffect(joined, (joined) => {
+    if (joined && editable()) ctx.focus();
+  });
   const facts = (draft: PromptProps["value"]) => ({
     active,
-    suspended: !!props.suspended,
+    suspended: !editable(),
     connected: props.connected,
     supported:
       features.map((feature) => feature.enabled?.()).find((value) =>
@@ -230,13 +250,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "prompt.focus",
     title: "Focus prompt",
     category: "Prompt",
-    enabled: () => !props.suspended,
+    enabled: editable,
     run: () => ctx.focus(),
   });
   ownedCommand(ports, {
     id: "prompt.submit",
     title: "Send prompt",
     category: "Prompt",
+    enabled: () => !collapsed(),
     // Keymap owns routing, not admission: even a refused Enter is consumed.
     run: () => activate("enter"),
   });
@@ -244,6 +265,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     id: "prompt.newline",
     title: "Insert newline",
     category: "Prompt",
+    enabled: editable,
     run: () => {
       const { start, end } = ctx.selection();
       change((current) =>
@@ -293,8 +315,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   });
   onSettled(() => {
     releases.push(keyboard.onLayerClose("session.escape.reset"));
-    const focused = () =>
-      document.activeElement === input && !props.value.editor;
+    const focused = () => ctx.focused();
     releases.push(
       keyboard.keymap.bind({
         id: "prompt.newline",
@@ -338,7 +359,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         area: true,
         data: undefined,
       }))}
-      class="otk-prompt"
+      class={["otk-prompt", { "is-collapsed": collapsed() }]}
       aria-label="Composer"
       aria-busy={pending() || features.some((feature) => feature.pending?.())
         ? "true"
@@ -377,52 +398,56 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       <label for="otk-prompt-input">
         {features.find((feature) => feature.label)?.label?.() ?? "Prompt"}
       </label>
-      <div
-        class={["otk-prompt-field", {
-          "has-corner": features.some((feature) => feature.corner),
-        }]}
-      >
-        <div class="otk-prompt-body">
-          {completion.beforeInput?.()}
-          <For each={features}>{(feature) => feature.beforeInput?.()}</For>
-          <ContentTextarea
-            class="otk-prompt-input"
-            ref={(element) => {
-              input = element;
-            }}
-            id="otk-prompt-input"
-            name="prompt"
-            placeholder={features.find((feature) => feature.placeholder)
-              ?.placeholder?.() ??
-              "Ask for a change, @ to add files, / for commands"}
-            value={props.value.input}
-            onPaste={(event) => {
-              for (const feature of features) {
-                if (feature.paste) {
-                  interact(() => feature.paste!(event));
-                  break;
+      <div class="otk-prompt-reveal" inert={collapsed()}>
+        <div
+          class={["otk-prompt-field", {
+            "has-corner": features.some((feature) => feature.corner),
+          }]}
+        >
+          <div class="otk-prompt-body">
+            {completion.beforeInput?.()}
+            <For each={features}>{(feature) => feature.beforeInput?.()}</For>
+            <ContentTextarea
+              class="otk-prompt-input"
+              ref={(element) => {
+                input = element;
+              }}
+              id="otk-prompt-input"
+              name="prompt"
+              placeholder={features.find((feature) => feature.placeholder)
+                ?.placeholder?.() ??
+                "Ask for a change, @ to add files, / for commands"}
+              value={props.value.input}
+              onPaste={(event) => {
+                for (const feature of features) {
+                  if (feature.paste) {
+                    interact(() => feature.paste!(event));
+                    break;
+                  }
                 }
-              }
-            }}
-            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-            onClick={(event) => setCaret(event.currentTarget.selectionStart)}
-            onInput={(event) => {
-              setRefusal(undefined);
-              setCaret(event.currentTarget.selectionStart);
-              const value = event.currentTarget.value;
-              change((current) => editDraft(current, value));
-            }}
-            onKeyDown={(event) => {
-              if (completion.key?.(event)) return;
-              for (const feature of features) if (feature.key?.(event)) return;
-            }}
-          />
-        </div>
-        <Show when={features.some((feature) => feature.corner)}>
-          <div class="otk-prompt-corner">
-            <For each={features}>{(feature) => feature.corner?.()}</For>
+              }}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onClick={(event) => setCaret(event.currentTarget.selectionStart)}
+              onInput={(event) => {
+                setRefusal(undefined);
+                setCaret(event.currentTarget.selectionStart);
+                const value = event.currentTarget.value;
+                change((current) => editDraft(current, value));
+              }}
+              onKeyDown={(event) => {
+                if (completion.key?.(event)) return;
+                for (const feature of features) {
+                  if (feature.key?.(event)) return;
+                }
+              }}
+            />
           </div>
-        </Show>
+          <Show when={features.some((feature) => feature.corner)}>
+            <div class="otk-prompt-corner">
+              <For each={features}>{(feature) => feature.corner?.()}</For>
+            </div>
+          </Show>
+        </div>
       </div>
       <div class="otk-prompt-actions">
         <Show when={armed()}>
@@ -473,7 +498,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           );
           return (
             <OverflowRow
-              items={toolbarItems}
+              items={toolbarItems()}
               required={[SETTINGS_KEY]}
               grow={SETTINGS_KEY}
               singleLine
@@ -493,7 +518,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
                     control={(control) => menu = control}
                   >
                     <For
-                      each={actions.filter((action) =>
+                      each={toolbarActions().filter((action) =>
                         keys().includes(action.key)
                       )}
                       keyed={(action) => action.key}
@@ -529,25 +554,38 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             </OverflowRow>
           );
         })()}
-        <div class="otk-prompt-send-slot">
+        <div class={["otk-prompt-send-slot", { "is-join": collapsed() }]}>
           <PrimaryAction
-            state={primaryState()}
-            class="otk-primary otk-send-button"
-            title={primaryState().mode === "stop"
+            state={collapsed() ? joinAction : primaryState()}
+            class={collapsed()
+              ? "otk-primary otk-join-conversation"
+              : "otk-primary otk-send-button"}
+            title={collapsed()
+              ? undefined
+              : primaryState().mode === "stop"
               ? primaryState().label
               : submitTitle()}
-            description={primaryState().mode === "stop"
+            description={!collapsed() && primaryState().mode === "stop"
               ? (props.activity().unstarted
                 ? "Stop and return the message to the composer"
                 : "Stop the response")
               : undefined}
-            onInvoke={() => void activate("button")}
+            onInvoke={() => {
+              if (collapsed()) setJoined(true);
+              else void activate("button");
+            }}
           >
-            {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
+            {collapsed()
+              ? JOIN_LABEL
+              : primaryState().mode === "stop"
+              ? <StopIcon />
+              : <SendIcon />}
           </PrimaryAction>
         </div>
       </div>
-      <For each={features}>{(feature) => feature.overlay?.()}</For>
+      <Show when={!collapsed()}>
+        <For each={features}>{(feature) => feature.overlay?.()}</For>
+      </Show>
     </form>
   );
 }

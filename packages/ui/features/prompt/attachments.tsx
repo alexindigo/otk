@@ -23,15 +23,16 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
         title: "Attach files",
         category: "Prompt",
         context: { kind: "composer", order: 30 },
-        enabled: () => !ctx.props.suspended,
+        enabled: () => !ctx.collapsed() && !ctx.props.suspended,
         run: () => picker.click(),
       });
       onSettled(() => () => {
-        picker.value = "";
+        if (picker) picker.value = "";
       });
       return {
         action: () => ({
           key: "attach",
+          needsInput: true,
           label: () => "Attach files",
           icon: () => <AttachIcon />,
           control: ctx.commands.control(command, undefined, {

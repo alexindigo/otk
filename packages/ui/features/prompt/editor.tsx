@@ -34,7 +34,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
           rest: "text",
           properties: { text: { type: "string", optional: true } },
         },
-        enabled: () => !ctx.props.suspended,
+        enabled: () => !ctx.collapsed() && !ctx.props.suspended,
         run: (_context, input?: { text?: string }) => {
           ctx.change((current) => ({
             ...current,
@@ -65,43 +65,46 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
       ctx.own(
         ctx.keyboard.layer(
           "prompt.editor.cancel",
-          () => !!ctx.props.value.editor,
+          () => !ctx.collapsed() && !!ctx.props.value.editor,
           25,
         ),
       );
       onSettled(() => {
-        createEffect(() => !!ctx.props.value.editor, (opened) => {
-          if (opened) {
-            void ctx.commands.run<{ close(): void }>("dialog.open", {
-              id: "editor",
-              input: {
-                get title() {
-                  return ctx.props.value.editor?.chipID
-                    ? "Edit pasted text"
-                    : "Edit prompt";
+        createEffect(
+          () => !ctx.collapsed() && !!ctx.props.value.editor,
+          (opened) => {
+            if (opened) {
+              void ctx.commands.run<{ close(): void }>("dialog.open", {
+                id: "editor",
+                input: {
+                  get title() {
+                    return ctx.props.value.editor?.chipID
+                      ? "Edit pasted text"
+                      : "Edit prompt";
+                  },
+                  get value() {
+                    return ctx.props.value.editor?.text ?? "";
+                  },
+                  onChange: (text: string) =>
+                    ctx.change((current) =>
+                      current.editor
+                        ? { ...current, editor: { ...current.editor, text } }
+                        : current
+                    ),
+                  onSave: () => {
+                    void save().catch(ctx.fail);
+                  },
+                  onCancel: () => {
+                    void cancel().catch(ctx.fail);
+                  },
                 },
-                get value() {
-                  return ctx.props.value.editor?.text ?? "";
-                },
-                onChange: (text: string) =>
-                  ctx.change((current) =>
-                    current.editor
-                      ? { ...current, editor: { ...current.editor, text } }
-                      : current
-                  ),
-                onSave: () => {
-                  void save().catch(ctx.fail);
-                },
-                onCancel: () => {
-                  void cancel().catch(ctx.fail);
-                },
-              },
-            }).then((handle) => {
-              if (ctx.active()) dialog = handle;
-              else handle.close();
-            }).catch(ctx.fail);
-          }
-        });
+              }).then((handle) => {
+                if (ctx.active()) dialog = handle;
+                else handle.close();
+              }).catch(ctx.fail);
+            }
+          },
+        );
       });
       return {
         corner: () => (

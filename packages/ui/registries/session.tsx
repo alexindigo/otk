@@ -42,6 +42,8 @@ export interface SessionPorts {
   directoryCatalog?: DirectoryCatalogLease;
   frecencyCatalog?: FrecencyCatalogLease;
   approvals?: ApprovalModel;
+  /** The explicit approval policy controls this whole session family. */
+  approvalTarget?(): { sidecarId: string; sessionID: string; title?: string };
   feedback?: FeedbackOwner;
   sessionID(): string;
   /** Name of the captured send destination, supplied by the selection owner. */
