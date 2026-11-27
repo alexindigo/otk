@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -230,12 +231,7 @@ test.describe("V2 records", () => {
     await expect(compaction.locator("strong")).toHaveText("Compaction summary");
     await expect(page.locator('[data-native-record="opencode-v2/retry"]'))
       .toContainText("Retry scheduled - attempt 2");
-    const work = page.locator(".otk-work-fold");
-    for (const fold of await work.all()) {
-      if (await fold.getAttribute("aria-expanded") === "false") {
-        await fold.click();
-      }
-    }
+    await openLatestWork(page);
     await expect(
       page.locator('[data-native-record="opencode-v2/active-retry"]'),
     ).toContainText("Provider temporarily unavailable");
@@ -351,12 +347,7 @@ test.describe("V2 records", () => {
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toContainText("Question cancelled");
-      const work = page.locator(".otk-work-fold");
-      for (let i = 0; i < await work.count(); i++) {
-        if (await work.nth(i).getAttribute("aria-expanded") === "false") {
-          await work.nth(i).click();
-        }
-      }
+      await openLatestWork(page);
       const task = page.locator('[data-tool="task"]');
       await task.locator(".otk-tool-toggle").first().click();
       await expect(task.locator("strong.otk-prose-strong")).toHaveText(

@@ -49,8 +49,8 @@ async function geometry(page: Page, responsiveHeader = false) {
         footer: rect(
           pane.querySelector("[data-role=assistant] .otk-message-footer"),
         ),
-        work: rect(pane.querySelector(".otk-work-fold")),
-        execution: rect(pane.querySelector(".otk-tool-line")),
+        work: rect(pane.querySelector(".otk-work-strip")),
+        execution: rect(pane.querySelector(".otk-work-strip-track")),
         thumb: rect(
           pane.parentElement!.querySelector(
             ".otk-scroll-track-y > .otk-scroll-thumb",
@@ -114,7 +114,6 @@ test(
   },
   async ({ isolatedState: state, page }, info) => {
     const { session } = await state.observe<{ session: string }>();
-    await state.product("prefs.set", { key: "expandWork", value: true });
     await state.product("permission.auto", {
       sessionID: session,
       enabled: true,
@@ -122,7 +121,7 @@ test(
     await openSession(state, page, session);
     await page.evaluate(() => document.fonts.ready);
     await expect(page.locator(".otk-response-progress")).toBeVisible();
-    await expect(page.locator(".otk-work-fold")).toBeVisible();
+    await expect(page.locator(".otk-work-strip")).toBeVisible();
     await throughDuration(300, async () => {});
     const before = await geometry(page), stop = await frameProbe(page);
     expect(before.footer).not.toBeNull();

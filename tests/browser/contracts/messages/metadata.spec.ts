@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork } from "../../pages/transcript.ts";
 
 test.describe("neutral backend facts", () => {
   test.use({ profile: "contract-messages-facts" });
@@ -12,7 +12,7 @@ test.describe("neutral backend facts", () => {
     async ({ isolatedState: state, page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`${state.url}/#/local/tstv1-core`);
-      await openWorkLogs(page);
+      await openLatestWork(page);
       await expect(page.locator(".otk-composer-agent:not([inert] *)"))
         .toHaveText("Action");
       await page.locator(".otk-agent-picker > button").click();
@@ -91,7 +91,7 @@ test.describe("honest native metadata", () => {
   }, async ({ isolatedState: state, page }) => {
     const frames = await wire(page);
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await expect(page.locator("[data-tool=search]")).toHaveCount(2);
     const rows = await page.locator("[data-tool=search] .otk-tool-toggle")
       .allTextContents();

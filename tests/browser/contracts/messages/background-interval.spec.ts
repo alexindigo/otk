@@ -146,7 +146,6 @@ test("messages.success-only-interval-borrows-footer-and-direct-reveal", {
 }, async ({ isolatedState: state, page }) => {
   const { session } = await state.observe<{ session: string }>();
   await state.product("prefs.set", { key: "expandRecords", value: true });
-  await state.product("prefs.set", { key: "expandWork", value: false });
   await openSession(state, page, session);
   await action(state, "succeed");
   await expect(page.locator("[data-background-interval]")).toHaveCount(0);
@@ -161,7 +160,9 @@ test("messages.success-only-interval-borrows-footer-and-direct-reveal", {
   await details.click();
   await expect(record).toBeVisible();
   await expect(record).toContainText("Run succeeded");
-  await expect(page.locator(".otk-work-log").locator(record)).toHaveCount(0);
+  await expect(page.locator("#otk-panel-content").locator(record)).toHaveCount(
+    0,
+  );
   await details.click();
   await expect(record).toHaveCount(0);
   await action(state, "fail");

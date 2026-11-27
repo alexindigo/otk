@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import type { Page } from "@playwright/test";
 import type { Message, Part } from "@otk/protocol";
 import { expect } from "../../fixtures/evidence.ts";
@@ -222,14 +223,12 @@ for (const zoom of [1, 1.25, 1.5, 1.75, 2]) {
                 );
                 await expect.poll(() => treeLaneFindings(span)).toEqual([]);
 
-                const work = page.locator(".otk-work-log");
-                await revealAcquired(page, ".otk-work-log .otk-work-fold");
-                const workToggle = work.locator(".otk-work-fold");
-                if (
-                  await workToggle.getAttribute("aria-expanded") === "false"
-                ) await workToggle.click();
+                const work = await openLatestWork(page);
                 const tool = work.locator('[data-tool="external"]');
-                await tool.locator(".otk-tool-toggle").first().click();
+                const trigger = tool.locator(".otk-tool-toggle").first();
+                if (await trigger.getAttribute("aria-expanded") === "false") {
+                  await trigger.click();
+                }
                 await expect(tool.locator(".otk-tool-body")).toContainText(
                   "Partial tool output",
                 );

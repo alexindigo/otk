@@ -3,7 +3,12 @@ import type { Locator } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWork, prompt, recordToggle } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  openWork,
+  prompt,
+  recordToggle,
+} from "../../pages/transcript.ts";
 import {
   labelDisclosure,
   transcriptVisibility,
@@ -52,7 +57,7 @@ test.describe("reply record disclosures", () => {
         const reply = page.locator('[data-message="reply"]');
         const acquire = async () => await find(await openWork(reply));
         const trigger = await acquire();
-        await labelDisclosure(trigger, false, id === "recordKinds");
+        await labelDisclosure(trigger, false, true);
         await trigger.press("ArrowRight");
         await transcriptVisibility(page, false);
         await expect(reply).toHaveCount(0);
@@ -74,12 +79,17 @@ test.describe("reasoning in reply work", () => {
       await page.setViewportSize({ width: 1560, height: 980 });
       await openSession(state, page, "tstv1-otk");
       const reply = page.locator('[data-role="assistant"]', {
-        has: page.locator(".otk-work-fold"),
+        has: page.locator(".otk-work-strip"),
       });
-      const find = async () =>
-        (await openWork(reply)).locator(".otk-reasoning-heading");
+      const find = async () => {
+        const work = await openWork(reply);
+        // This thought precedes the project-directory command. Its disclosure
+        // lives in that run's detail, not alongside the transcript's prose.
+        await expandTool(page, "[data-tool=bash]", reply);
+        return work.locator(".otk-reasoning-heading");
+      };
       const trigger = await find();
-      await labelDisclosure(trigger);
+      await labelDisclosure(trigger, false, true);
       await trigger.press("ArrowRight");
       await transcriptVisibility(page, false);
       await expect(reply).toHaveCount(0);

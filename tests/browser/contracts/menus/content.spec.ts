@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
+import { openLatestWork, revealAcquired } from "../../pages/transcript.ts";
 import { diffHunk, expectDiffHunk } from "../../pages/diff.ts";
 import {
   clipboard,
@@ -17,7 +17,7 @@ test("menus.content-targets-complete-source-code-hunks-and-feature-tools", {
   tag: ["@menus", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   await openSession(state, page, "tstv1-otk");
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await clipboard(page);
   const open = async (selector: string) => {
     await revealAcquired(page, selector);

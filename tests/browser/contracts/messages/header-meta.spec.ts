@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { openLatestWork } from "../../pages/transcript.ts";
 import { openSession } from "../../fixtures/wire.ts";
 
 function headerGeometry(root: Element) {
@@ -10,7 +11,7 @@ function headerGeometry(root: Element) {
     ":scope > .otk-tree-node > .otk-tree-heading > .otk-tree-trigger > .otk-disclosure-caption",
   )!;
   const label = root.querySelector(
-    ".otk-work-label, .otk-record-group-toggle .otk-disclosure-label",
+    ".otk-record-group-toggle .otk-disclosure-label",
   )!;
   const counts = Array.from(root.querySelectorAll("[data-record-kind]"));
   const meta = counts[0].closest(".otk-meta-row")!;
@@ -55,35 +56,24 @@ function headerGeometry(root: Element) {
 }
 
 test.use({ profile: "contract-messages-disclosures" });
-for (const surface of ["work", "interval"] as const) {
+{
+  const surface = "interval";
   test(`messages.${surface}-header-shared-meta-and-whole-controls`, {
     tag: ["@messages", "@contracts"],
   }, async ({ isolatedState: state, page }) => {
     await state.controller.call("scenario", {
       lease: state.lease.lease,
-      action: surface === "work" ? "hold" : "thaw",
+      action: "thaw",
     });
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
     const header = page.locator(
-      surface === "work" ? ".otk-work-log" : "[data-background-interval]",
+      "[data-background-interval]",
     ).first();
     const counts = header.locator("[data-record-kind]");
     await expect(counts).toHaveCount(2);
     await expect.soft(header.locator(".otk-meta-row [data-record-kind]"))
       .toHaveCount(2);
-    if (surface === "work") {
-      await expect.soft(header.locator(".otk-work-label")).toHaveText(
-        "Work log",
-      );
-      await expect.soft(header.locator(".otk-work-label em")).toHaveCount(0);
-      await expect.soft(page.locator(".otk-turn-time").first()).toHaveText(
-        "counting...",
-      );
-      await expect.soft(page.locator(".otk-turn-time em").first()).toHaveText(
-        "counting...",
-      );
-    }
     for (const width of [1440, 760]) {
       await page.setViewportSize({ width, height: 1000 });
       await expect.poll(async () => {
@@ -117,7 +107,7 @@ for (const surface of ["work", "interval"] as const) {
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     const buttons = counts.and(header.getByRole("button"));
-    await expect(buttons).toHaveCount(surface === "work" ? 1 : 2);
+    await expect(buttons).toHaveCount(2);
     for (const count of await buttons.all()) {
       await expect.soft(count.locator(".otk-disclosure-icon")).toBeVisible();
       await expect(count).toHaveAttribute("aria-expanded", "false");
@@ -128,3 +118,30 @@ for (const surface of ["work", "interval"] as const) {
     }
   });
 }
+
+// D74: reply summaries are on the strip; bookkeeping controls retain their rows in the panel.
+test("messages.work-header-shared-meta-and-whole-controls", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await openSession(state, page, "tstv1-otk");
+  const strip = page.locator(".otk-work-strip").first();
+  await expect(strip.getByText("Work log", { exact: true })).toBeVisible();
+  await expect(strip.locator("em")).toHaveCount(0);
+  await expect(page.locator(".otk-turn-time em").first()).toHaveText(
+    "counting...",
+  );
+  const panel = await openLatestWork(page);
+  const counts = panel.locator("[data-record-kind]");
+  await expect(counts).toHaveCount(2);
+  for (const control of await counts.all()) {
+    await expect(control.locator(".otk-disclosure-icon")).toBeVisible();
+    await expect(control).toHaveAttribute("aria-expanded", "false");
+    await control.click();
+    await expect(control).toHaveAttribute("aria-expanded", "true");
+  }
+});

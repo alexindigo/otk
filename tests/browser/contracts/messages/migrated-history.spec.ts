@@ -2,14 +2,18 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  openWork,
+  revealAcquired,
+} from "../../pages/transcript.ts";
 test.use({ profile: "contract-messages-migrated-history" });
 test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
   tag: ["@messages", "@contracts"],
 }, async ({ isolatedState: state, page }) => {
   await page.setViewportSize({ width: 1280, height: 1600 });
   await openSession(state, page, "tstv1-otk");
-  await openWorkLogs(page);
+  await openLatestWork(page);
   const patch = page.locator("[data-tool=patch]");
   await revealAcquired(page, "[data-tool=patch]");
   await expect(patch).toHaveCount(1);
@@ -40,7 +44,7 @@ test("messages.migrated-tools-have-typed-patch-target-range-and-agent", {
     "The real end time was lost when opencode migrated this session.",
   );
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
-  await expect(page.locator(".otk-work-fold").first()).toContainText(
+  await expect(page.locator(".otk-work-strip").first()).toContainText(
     "Work log",
   );
   await expect(page.locator('[data-message="known-call-0"] .otk-turn-time'))
@@ -59,14 +63,14 @@ test("messages.work-log-segments-keep-their-name-and-footer-owns-turn-time", {
   await page.setViewportSize({ width: 1280, height: 1600 });
   await openSession(state, page, "tstv1-otk");
   const reply = page.locator('[data-message="segment-call"]');
-  const header = reply.locator(".otk-work-fold");
+  const header = reply.locator(".otk-work-strip");
   const assertWorkLog = async () => {
     await expect(header).toHaveCount(1);
-    await expect(header).toHaveText("Work log");
+    await expect(header).toContainText("Work log");
     await expect(reply.locator(".otk-turn-time")).toHaveText("Worked for 1.6s");
   };
   await assertWorkLog();
-  await expect(header).toHaveAttribute("aria-expanded", "false");
+  await expect(header).not.toHaveAttribute("aria-current", "true");
   for (const detail of [false, true]) {
     await state.product("prefs.set", { key: "toolDetails", value: detail });
     await assertWorkLog();
@@ -75,6 +79,8 @@ test("messages.work-log-segments-keep-their-name-and-footer-owns-turn-time", {
   }
   await page.reload();
   await assertWorkLog();
-  await header.click();
-  await expect(reply.locator(".otk-work-body [data-tool=read]")).toHaveCount(3);
+  const panel = await openWork(reply);
+  // One thinking span separates the first two reads from the third read.
+  await panel.getByRole("button", { name: "Read 2 files", exact: true }).click();
+  await expect(panel.locator("[data-tool=read]")).toHaveCount(3);
 });
