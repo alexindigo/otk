@@ -6,8 +6,6 @@ export interface ReleaseInput {
   draft: "kept" | "dropped";
   /** Captured draft identities being released; defaults to the current session. */
   keys?: readonly string[];
-  /** A deleted view can lose request input while keeping its stored draft. */
-  retainedOnly?: boolean;
   message?: string;
 }
 
@@ -16,6 +14,8 @@ export interface InputGuard {
   retained(): { owner: string; value: string }[];
   dirty(owner: string): boolean;
   clear(): void;
+  /** Commit kept custody for the selected deleted view before releasing it. */
+  keepDeleted(): void;
   release(input?: ReleaseInput & { draft: "kept" }): true;
   release(
     input: ReleaseInput & { draft: "dropped" },
@@ -28,6 +28,12 @@ export interface InputRetention {
   inputs: { owner: string; value: string }[];
   discard(): void;
 }
+/** Install the values before releasing source custody, all before publication. */
+export type ParkDeletedInput = (
+  inputs: readonly string[],
+  release: () => void,
+) => void;
+
 export function createInputGuard(
   o: {
     drafts: Drafts;
@@ -36,6 +42,7 @@ export function createInputGuard(
     retain?(): boolean;
     /** Retained request drafts belong to their lifecycle, not mounted inputs. */
     retention?(): InputRetention | undefined;
+    transferDeleted?(park: ParkDeletedInput): void;
   },
 ): InputGuard {
   const dirty = new Map<string, boolean>();
@@ -68,9 +75,10 @@ export function createInputGuard(
     // nor navigation consumes this captured draft; only committed deletion does.
     const key = o.key(), keys = input.keys ?? [key];
     const retention = keys.includes(key) ? o.retention?.() : undefined;
-    const losesDraft = !input.retainedOnly && keys.some((key) => {
+    const losesDraft = keys.some((key) => {
       const draft = o.drafts.current(key);
-      return !!draft.input.trim() || draft.chips.length > 0 || !!draft.editor;
+      return !!draft.input.trim() || draft.chips.length > 0 || !!draft.editor ||
+        o.drafts.recoveries(key).length > 0;
     });
     const losesInput = keys.includes(key) &&
       ([...dirty.keys()].some((owner) => isDirty(owner, retention)) ||
@@ -97,6 +105,15 @@ export function createInputGuard(
     clear() {
       dirty.clear();
       inputs.clear();
+    },
+    keepDeleted() {
+      const key = o.key();
+      if (!key) return;
+      if (o.transferDeleted) {
+        o.transferDeleted((inputs, release) =>
+          o.drafts.parkDeleted(key, inputs, release)
+        );
+      } else o.drafts.parkDeleted(key);
     },
     release,
     permit: (owner, message) => !isDirty(owner) || o.confirm(message),

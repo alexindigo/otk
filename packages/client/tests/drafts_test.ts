@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals } from "@std/assert";
-import { createDrafts } from "../drafts.ts";
+import { createDrafts, emptyDraft } from "../drafts.ts";
 import { createState } from "../state.ts";
 import { serialize } from "../draft-content.ts";
 import { prepareAttachments } from "../attachment-batches.ts";
@@ -118,6 +118,72 @@ Deno.test("discarding after Recover draft only drops the copy still parked", () 
   restored.restore(JSON.parse(JSON.stringify(drafts.snapshot())));
   assertEquals(restored.current("session").input, "Restored to composer");
   assertEquals(restored.recoveries("session"), []);
+});
+
+Deno.test("parked deleted text restores without a send and Recover exchanges the entire current draft", () => {
+  const drafts = createDrafts(), key = "deleted";
+  drafts.parkDeleted(key);
+  assertEquals(drafts.recoveries(key), []);
+  drafts.parkDeleted(key, ["multiline\ntext\n", "other request"]);
+  const restored = createDrafts();
+  restored.restore(JSON.parse(JSON.stringify(drafts.snapshot())));
+  assertEquals(restored.pendingSends(), []);
+  const current = {
+    ...emptyDraft(),
+    input: "Keep this input too",
+    editor: { text: "  exact editor contents\n" },
+  };
+  restored.writer(key)(current);
+  const [first, second] = restored.recoveries(key);
+  assertEquals(first.cause, "deleted-close");
+  assertEquals(restored.resumeSend(key, first.id, () => {}), undefined);
+  first.run();
+  first.run();
+  first.discard();
+  assertEquals(restored.current(key).input, "multiline\ntext\n");
+  const [exchanged] = restored.recoveries(key);
+  assertEquals(exchanged.draft, current);
+  second.discard();
+  assertEquals(restored.recoveries(key), [exchanged]);
+  exchanged.run();
+  assertEquals(restored.current(key), current);
+});
+
+Deno.test("deleted Close fences stale writers and sends while retaining late attachment completion", () => {
+  const drafts = createDrafts(), key = "deleted";
+  const write = drafts.writer(key);
+  const pending = write({
+    ...emptyDraft(),
+    input: "Unsent",
+    chips: [{
+      id: "reading",
+      label: "Attachment",
+      part: { kind: "text", text: "" },
+      pending: true,
+    }],
+  });
+  const send = drafts.captureSend(key, pending);
+  drafts.parkDeleted(key);
+  write({ ...emptyDraft(), input: "Stale unmount" });
+  assertEquals(send.take("late", () => {}), undefined);
+  const [parked] = drafts.recoveries(key);
+  write((draft) => ({
+    ...draft,
+    chips: draft.chips.map((chip) => ({
+      ...chip,
+      pending: false,
+      part: { kind: "text", text: "Finished reading" },
+    })),
+  }));
+  assertEquals(drafts.current(key), emptyDraft());
+  assertEquals(parked.draft.chips[0].part, {
+    kind: "text",
+    text: "Finished reading",
+  });
+  parked.run();
+  assertEquals(drafts.current(key).input, pending.input);
+  assertEquals(drafts.recoveries(key), []);
+  assertEquals(drafts.pendingSends(), []);
 });
 
 Deno.test("draft writers retain session ownership, attachments and invocation-current identity across delayed painting", () => {

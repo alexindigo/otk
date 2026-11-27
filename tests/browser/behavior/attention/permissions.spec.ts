@@ -327,6 +327,11 @@ test(
     await expect(page.locator(".otk-permission-command")).toHaveText(
       "printf rejected",
     );
+    const pending = (await state.native<{ id: string; sessionID: string }[]>(
+      "/permission",
+    )).filter((p) => p.sessionID === session.nativeID);
+    expect(pending).toHaveLength(1);
+    const requestID = pending[0]!.id;
     await dock.locator("h2").click();
     await page.keyboard.press("3");
     const rejection = page.locator("textarea[name=rejection]"),
@@ -339,26 +344,53 @@ test(
     await page.keyboard.press("3");
     await expect(rejection).toBeVisible();
     await expect(first).toBeFocused();
-    await rejection.fill("Please use another approach");
-    page.once("dialog", (dialog) => dialog.dismiss());
+    const reason = "Please use another approach";
+    await rejection.fill(reason);
+    const cdp = await page.context().newCDPSession(page);
+    const nativeDialogs: string[] = [];
+    // Observe without installing a Playwright handler that blocks the page.
+    cdp.on("Page.javascriptDialogOpening", ({ message }) => {
+      nativeDialogs.push(message);
+    });
+    await cdp.send("Page.enable");
+    const otkDialogs = page.getByRole("dialog");
     await page.locator(`[data-session="${other.id}"]`).click();
+    await expect(otkDialogs).toHaveCount(0);
+    expect(nativeDialogs).toEqual([]);
+    await expect(page).toHaveURL(new RegExp(`${other.id}$`));
+    await expect(dock).toHaveCount(0);
+
+    await page.locator(`[data-session="${session.id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${session.id}$`));
-    await expect(rejection).toHaveValue("Please use another approach");
+    await expect(page.locator(".otk-permission-command")).toHaveText(
+      "printf rejected",
+    );
+    await dock.locator("h2").click();
+    await page.keyboard.press("3");
+    await expect(rejection).toBeVisible();
+    await expect(first).toBeFocused();
+    await expect(rejection).toHaveValue(reason);
+    await expect(otkDialogs).toHaveCount(0);
+    expect(nativeDialogs).toEqual([]);
+    expect(
+      frames.sent.filter(({ frame }) => frame.method === "permission.reply"),
+    ).toHaveLength(1);
     await page.getByRole("button", { name: "Reject request", exact: true })
       .click();
     await expect(dock).toHaveCount(0);
     await expect(page.locator("[data-tool-status=denied]")).toBeVisible();
     await expect(page.locator("[data-tool-status=denied] .otk-tool-toggle"))
       .toHaveCSS("text-decoration-line", "line-through");
+    await reply(page, session.id, "Rejection handled");
     const replies = frames.sent.filter(({ frame }) =>
       frame.method === "permission.reply"
     ).map(({ frame }) => frame.params);
     expect(replies.some((p) => p?.reply === "always")).toBe(true);
-    expect(
-      replies.some((p) =>
-        p?.reply === "reject" && p.message === "Please use another approach"
-      ),
-    ).toBe(true);
-    await reply(page, session.id, "Rejection handled");
+    expect(replies.slice(1)).toEqual([{
+      sessionID: session.id,
+      requestID,
+      reply: "reject",
+      message: reason,
+    }]);
   },
 );

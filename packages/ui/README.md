@@ -1511,7 +1511,11 @@ transitions; CommandMenu owns confirmation state and prevents concurrent
 execution. The shell passes deletion to the shared client view-release owner.
 Switching sessions (including history) and Close keep per-session drafts. Only
 actions that lose input request confirmation, through the existing Dialog host.
-Successful native deletion drops the affected family drafts.
+Successful native deletion drops the affected family drafts. Closing a deleted
+view keeps unsent text without prompting (2.159). Reopening its Sessions row
+uses the shared recovery notice (2.145): Recover shows the value as selectable
+read-only text, and the explicit discard X removes only that parked draft. A
+deleted session never mounts a sending composer.
 
 The session-action owner also contributes Fork session to session targets and
 the palette, and Fork from here to completed replies. `MessageFooter` owns the

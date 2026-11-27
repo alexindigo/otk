@@ -42,6 +42,7 @@ import SavedBranches, {
 import { ForkFact } from "./ForkNote.tsx";
 import ComposerNotice, { ComposerActionNotice } from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
+import DraftRecoveryNotice from "./DraftRecoveryNotice.tsx";
 import PaneState from "./PaneState.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
@@ -429,34 +430,7 @@ export default function SessionView(props: {
         )}
       </Show>
       <For each={props.draftRecoveries}>
-        {(recovery) => (
-          <OperationFeedback
-            feedback={{
-              kind: "info",
-              text: recovery.cause === "stop-unconfirmed"
-                ? "Couldn't confirm the stop; your message is kept."
-                : recovery.kind === "uncertain"
-                ? "Send not confirmed. The submitted draft is kept separately."
-                : `${
-                  recovery.cause === "withdrawn"
-                    ? "Stopped before it started. "
-                    : ""
-                }Draft kept separately: ${
-                  recovery.draft.input.trim() ||
-                  recovery.draft.chips.map((chip) => chip.label).join(", ") ||
-                  "Empty draft"
-                }`,
-              action: {
-                label: recovery.kind === "uncertain"
-                  ? "Check send"
-                  : "Recover draft",
-                run: recovery.run,
-              },
-            }}
-            dismissLabel="Discard draft"
-            onDismiss={recovery.discard}
-          />
-        )}
+        {(recovery) => <DraftRecoveryNotice recovery={recovery} />}
       </For>
       <Show when={props.forkNote}>
         {(note) => (

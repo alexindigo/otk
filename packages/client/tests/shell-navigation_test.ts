@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertStrictEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import * as client from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { fixtureRequests } from "../../../tests/support/request-wire.ts";
@@ -484,6 +489,16 @@ function fixture(
   const guard = client.createInputGuard({
     drafts,
     key: actions.key,
+    transferDeleted(park) {
+      const target = f.session.state.selection;
+      if (!target) return;
+      f.resources.sidecars.connection(target.sidecarId).attention
+        .transferDeleted(
+          target.sessionID,
+          (id) => f.resources.entry(target.sidecarId, id),
+          park,
+        );
+    },
     confirm: (m) => {
       messages.push(m);
       return consent;
@@ -1545,6 +1560,71 @@ Deno.test("deleting the visible last session replaces it with a deliberate proje
       hash: "#project/local/%2Fp",
       page: true,
     });
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("deleted Close parks input only after successful membership and while still selected", async () => {
+  const f = fixture();
+  const id = "tstv1-selected", key = `local/${id}`;
+  const requests = f.resources.sidecars.connection("local").attention;
+  const entry = shellEntry(id);
+  const text = "Retain exactly\n  the request input";
+  try {
+    requests.receive({
+      op: "permission.upsert",
+      request: {
+        id: "p",
+        sessionID: id,
+        kind: "read",
+        title: "Read",
+        patterns: [],
+        alwaysPatterns: [],
+        detail: { kind: "generic", summary: "Read" },
+        time: 1,
+      },
+    });
+    requests.draft("permission", "p", text);
+    f.entries("local", [
+      { ...entry, deleted: { at: 3, how: "provider" } },
+      shellEntry("tstv1-other"),
+    ]);
+    f.resources.inbox("local").state.inbox.tasks = [shellTask("task", [id])];
+    f.guard.mark("permissions", true, text);
+    f.consent(false);
+    f.reply((_sidecar, method) =>
+      method === "tasks.removeSession"
+        ? Promise.reject(new Error("membership failed"))
+        : Promise.resolve(null)
+    );
+    await assertRejects(() => f.navigation.close(), Error, "membership failed");
+    assertEquals(f.location.hash, `#/local/${id}`);
+    assertEquals(requests.draft("permission", "p"), text);
+    assertEquals(f.drafts.recoveries(key), []);
+
+    const held = Promise.withResolvers<null>();
+    f.reply((_sidecar, method) =>
+      method === "tasks.removeSession" ? held.promise : Promise.resolve(null)
+    );
+    const superseded = f.navigation.close();
+    await settled();
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    held.resolve(null);
+    assertEquals(await superseded, true);
+    assertEquals(requests.draft("permission", "p"), text);
+    assertEquals(f.drafts.recoveries(key), []);
+    assertEquals(f.location.hash, "#/local/tstv1-other");
+
+    f.navigation.navigate({ sidecarId: "local", sessionID: id });
+    assertEquals(await f.navigation.close(), true);
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(requests.draft("permission", "p"), undefined);
+    assertEquals(f.drafts.recoveries(key).map(({ draft }) => draft.input), [
+      text,
+    ]);
+    assertEquals(f.messages, []);
+    assertEquals(f.calls.some((call) => call[1] === "session.delete"), false);
   } finally {
     f.stop();
   }

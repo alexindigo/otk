@@ -32,3 +32,7 @@
     gap: var(--space-1);
   }
 }
+.otk-deleted-draft {
+  display: grid;
+  gap: var(--space-2);
+}
