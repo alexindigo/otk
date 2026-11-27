@@ -83,6 +83,13 @@ type ServerMessage =
   | { t: "ping" }
   | { t: "prefs"; prefs: Preferences }
   | ({ t: "inbox.snapshot" } & InboxBaseline)
+  /** Live, body-free entity verdicts independent of the socket's row lease. */
+  | {
+    t: "inbox.settlement";
+    generation: string;
+    revision: number;
+    values: import("./supervision.ts").SettlementChange[];
+  }
   | {
     t: "inbox.summaries";
     generation: string;

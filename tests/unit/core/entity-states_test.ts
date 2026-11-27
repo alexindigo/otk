@@ -90,6 +90,64 @@ function owner() {
   return { entries, published, states, supervision, put, get, mature };
 }
 
+test("successful session settles only after native confirmation of its current work", () => {
+  const o = owner();
+  const success = {
+    terminal: 50,
+    outcome: "succeeded" as const,
+    terminalOrigin: "live" as const,
+  };
+  const put = (activity: IndexMetadata["activity"]) =>
+    o.put({ ...base, activity });
+  const settlement = () => o.get(base.id)?.evidence?.settlement?.id;
+  put({ work: keys("run") });
+  put(success);
+  assertEquals(settlement(), undefined);
+  for (const pending of ["queued", "parked", "starting", "returning"]) {
+    put({ ...success, completion: { pending: [pending], confirmed: 50 } });
+    assertEquals(settlement(), undefined);
+    assertEquals(o.get(base.id)?.state, "working");
+    assertEquals(o.states.composerLink(base.id), "running");
+  }
+  put({ ...success, completion: { pending: [], confirmed: 49 } });
+  assertEquals(settlement(), undefined);
+  o.put({
+    ...base,
+    activityAuthority: "stale",
+    activity: { ...success, completion: { pending: [], confirmed: 50 } },
+  });
+  assertEquals(settlement(), undefined);
+  put({
+    ...success,
+    completion: { pending: [], confirmed: 50 },
+    inputs: keys("question"),
+  });
+  assertEquals(settlement(), undefined);
+  put({ ...success, completion: { pending: [], confirmed: 50 } });
+  assertEquals(settlement(), 50);
+  assertEquals(o.get(base.id)?.state, "finished");
+  const child = { ...base, id: "helper", parentID: base.id };
+  o.put({ ...child, activity: { terminal: 58, outcome: "succeeded" } });
+  assertEquals(settlement(), 50, "an unseen child end is not pending delivery");
+  o.put({
+    ...child,
+    activity: {
+      terminal: 58,
+      outcome: "succeeded",
+      delivered: { parentID: base.id, receipt: "result", terminal: 58 },
+    },
+  });
+  assertEquals(settlement(), 50);
+  const publications = o.published.length;
+  put({ ...success, completion: { pending: [], confirmed: 50 } });
+  assertEquals(o.published.length, publications);
+  put({ ...success, work: keys("next-run") });
+  assertEquals(settlement(), undefined);
+  o.supervision.freshness(false);
+  put({ ...success, completion: { pending: [], confirmed: 50 } });
+  assertEquals(settlement(), undefined);
+});
+
 test("composer link owns native work and task helper activity independently of lamps", () => {
   const o = owner(), link = () => o.states.composerLink(base.id);
   o.put(base);
