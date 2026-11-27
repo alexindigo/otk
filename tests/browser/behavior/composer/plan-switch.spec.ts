@@ -4,6 +4,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
+import { sessionStatus, workPanel } from "../../pages/transcript.ts";
 
 test.use({ profile: "composer-plan" });
 test(
@@ -225,9 +226,17 @@ test(
     await expect(page.locator(".otk-question-dock .otk-question-options"))
       .toBeVisible();
     await answer(1);
-    await expect(page.locator("[data-tool-status=denied]")).toBeVisible();
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    // D74: the reply owns the failure summary, its Work view owns the tool.
+    await page.getByRole("alert", { name: /^plan_exit failed:/ })
+      .getByRole("button", { name: "Show in Work log", exact: true }).click();
+    await expect(
+      workPanel(page).locator(
+        '[data-tool="external"][data-tool-status="denied"]',
+      ).filter({
+        has: page.getByRole("button", { name: "plan_exit", exact: true }),
+      }),
+    ).toBeVisible();
+    await sessionStatus(page, session.id, "idle");
     await footer("plan", "low");
     await nativeUser("P5 keep refining the plan", "plan", "low");
     const observation = await state.observe<
