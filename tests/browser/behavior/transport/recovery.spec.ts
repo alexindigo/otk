@@ -162,17 +162,32 @@ test(
       .click();
     const editor = page.locator("textarea[name=editor]");
     await editor.fill("Unsaved editor bytes");
-    page.once("dialog", (dialog) => dialog.dismiss());
+    // 2.159 (D54): history keeps the session's editor without a native prompt.
+    const dialogs: string[] = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
     await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`${a.id}$`));
+    await expect(editor).toHaveCount(0);
+    await expect(input).toHaveValue("");
+    await page.goForward();
     await expect(page).toHaveURL(new RegExp(`${b.id}$`));
     await expect(editor).toHaveValue("Unsaved editor bytes");
-    await page.locator(".otk-editor footer button").last().click();
+    await page.locator(".otk-editor").getByRole("button", {
+      name: "Save",
+      exact: true,
+    }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(input).toHaveValue("Unsaved editor bytes");
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`${a.id}$`));
     await expect(input).toHaveValue("");
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`${b.id}$`));
     await expect(input).toHaveValue("Unsaved editor bytes");
+    expect(dialogs).toEqual([]);
   },
 );
 
