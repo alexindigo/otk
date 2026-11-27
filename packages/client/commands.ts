@@ -23,6 +23,8 @@ export interface CommandContext {
   viewing?: boolean;
   focus?: string;
   dialog?: string;
+  /** The active binding, present only for a keyboard dispatch. */
+  shortcut?: string;
   /** An explicit action offer must change its target, unlike ordinary re-selection. */
   transition?: true;
   /** Prevent reentrant text commands from invoking their own input owner. */
