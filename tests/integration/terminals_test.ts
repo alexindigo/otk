@@ -747,10 +747,11 @@ test("terminal operations do not overwrite the checkout's inactive policy", asyn
   });
   try {
     await bounded("terminal close waiting on its owner", entered.promise);
-    await client.conn.rpc.call("projects.inactive", {
+    const policy = await client.conn.rpc.call("projects.inactive", {
       directory: app.root,
       inactive: true,
     });
+    assertEquals(policy.inactive, true);
   } finally {
     release.resolve();
     await closing;

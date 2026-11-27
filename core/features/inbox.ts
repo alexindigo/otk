@@ -1395,10 +1395,7 @@ export class InboxFeature implements FrameSource {
       this.#seenTerminal(entry.id, this.user),
       this.#finishes.get(entry.id),
     );
-    // Persist activity policy from supervision, not the temporary entity lamp
-    // (which also includes received operations such as closing a terminal).
-    const active = supervision.state === "working" ||
-      supervision.state === "needsYou";
+    const active = supervision.nativeActive;
     const unseen = [...new Set([...this.#seen.keys(), this.user])].some((
       user,
     ) => this.#unseen(entry.id, user));
