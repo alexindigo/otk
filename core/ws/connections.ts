@@ -20,6 +20,7 @@ import type {
   IndexEntry,
   MessagePolicy,
   Preferences,
+  ProgramsFrame,
   ProjectOrderFrame,
   RequestControl,
   RequestEvent,
@@ -42,6 +43,7 @@ interface Connection {
   welcomed: boolean;
   principal: string;
   orderRevision?: number;
+  programsRevision?: number;
   sessions: Set<string>;
   view: ViewLease;
   index: IndexView;
@@ -81,6 +83,10 @@ export interface ConnectionRequests {
     frame(user: string): ProjectOrderFrame;
     listen(listener: (user: string) => void): () => void;
   };
+  programs?: {
+    frame(user: string): ProgramsFrame;
+    listen(listener: (user: string) => void): () => void;
+  };
 }
 /** Socket recipients own delivery and leases, never action execution. */
 export class Connections {
@@ -112,22 +118,24 @@ export class Connections {
       this.#stops.push(
         prefs.listen((prefs) => this.broadcast({ t: "prefs", prefs })),
       );
-      const order = this.requests.projectOrder;
-      if (order) {
-        // Merge a burst of admissions, but #send always flushes synchronously
-        // when a recipient is about to receive a frame that depends on order.
-        const pending = new Set<string>();
-        this.#stops.push(order.listen((user) => {
-          if (pending.has(user)) return;
-          pending.add(user);
-          queueMicrotask(() => {
-            pending.delete(user);
-            if (this.#closed) return;
-            for (const c of this.#connections) {
-              if (c.principal === user) this.#flushOrder(c);
-            }
-          });
-        }));
+      // Coalesce committed changes to order and membership, but always flush
+      // both together before sending a frame that might contain project rows.
+      const pending = new Set<string>();
+      const flush = (user: string) => {
+        if (pending.has(user)) return;
+        pending.add(user);
+        queueMicrotask(() => {
+          pending.delete(user);
+          if (this.#closed) return;
+          for (const c of this.#connections) {
+            if (c.principal === user) this.#flushProjectFrames(c);
+          }
+        });
+      };
+      for (
+        const owner of [this.requests.projectOrder, this.requests.programs]
+      ) {
+        if (owner) this.#stops.push(owner.listen(flush));
       }
       for (const source of sources) {
         source.connection?.(this.harnessState);
@@ -151,21 +159,23 @@ export class Connections {
       throw error;
     }
   }
-  #flushOrder(connection: Connection): void {
+  #flushProjectFrames(connection: Connection): void {
+    if (!connection.welcomed) return;
     const order = this.requests.projectOrder;
-    if (
-      order && connection.welcomed &&
-      connection.orderRevision !== order.revision
-    ) {
+    if (order && connection.orderRevision !== order.revision) {
       this.#send(connection, order.frame(connection.principal));
+    }
+    const programs = this.requests.programs?.frame(connection.principal);
+    if (programs && programs.revision !== connection.programsRevision) {
+      this.#send(connection, programs);
     }
   }
   #beforeFrame(connection: Connection, frame: ServerFrame): void {
     if (
       frame.t !== "welcome" && frame.t !== "ping" && frame.t !== "error" &&
-      frame.t !== "projects.order"
+      frame.t !== "projects.order" && frame.t !== "programs"
     ) {
-      this.#flushOrder(connection);
+      this.#flushProjectFrames(connection);
     }
   }
   #send(connection: Connection, frame: ServerFrame): void {
@@ -179,6 +189,8 @@ export class Connections {
       connection.ws.send(serialized);
       if (frame.t === "projects.order") {
         connection.orderRevision = frame.revision;
+      } else if (frame.t === "programs") {
+        connection.programsRevision = frame.revision;
       }
     }
   }

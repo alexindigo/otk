@@ -82,3 +82,4 @@ export {
   type FrecencyOptions,
 } from "./features/frecency.ts";
 export { ProjectOrderStore } from "./features/project-order.ts";
+export { programsMigrations, ProgramStore } from "./features/programs.ts";

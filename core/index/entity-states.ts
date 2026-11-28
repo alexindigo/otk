@@ -136,6 +136,9 @@ export class EntityStates {
   #checkoutOf = new Map<string, string>();
   #listed = new Map<string, Listing>();
   #projectListings = new Map<string, Listing>();
+  #programListings = new Map<string, Listing>();
+  #programProjects = new Map<string, readonly string[]>();
+  #programOf = new Map<string, string>();
   #archiveListings = new Map<string, Listing>();
   #viewsOf = new Map<string, Set<Listing>>();
   #listingRevision = 0;
@@ -213,6 +216,9 @@ export class EntityStates {
     // ProjectSummaries retains structural placements across user generations.
     this.#listed.clear();
     this.#projectListings.clear();
+    this.#programListings.clear();
+    this.#programProjects.clear();
+    this.#programOf.clear();
     this.#archiveListings.clear();
     this.#viewsOf.clear();
     this.#listingRevision++;
@@ -378,11 +384,12 @@ export class EntityStates {
   project(directory: string, checkouts: readonly string[]): EntityState {
     const previous = this.#leaves.get(directory) ?? [];
     const next = [...new Set(checkouts.length ? checkouts : [directory])];
-    const listing = this.#listing(this.#projectListings, directory);
     for (const leaf of previous) {
       if (next.includes(leaf)) continue;
       this.#projectsOf.get(leaf)?.delete(directory);
-      for (const task of this.listed(leaf)) this.#include(listing, task, -1);
+      for (const task of this.listed(leaf)) {
+        this.#includeProject(directory, task, -1);
+      }
     }
     this.#leaves.set(directory, next);
     for (const leaf of next) {
@@ -390,12 +397,51 @@ export class EntityStates {
       const projects = this.#projectsOf.get(leaf) ?? new Set<string>();
       projects.add(directory);
       this.#projectsOf.set(leaf, projects);
-      for (const task of this.listed(leaf)) this.#include(listing, task, 1);
+      for (const task of this.listed(leaf)) {
+        this.#includeProject(directory, task, 1);
+      }
     }
     const upserts: EntityState[] = [];
     this.#project(directory, upserts);
     if (upserts.length) this.publish(upserts, []);
     return this.#states.get(entityKey("project", directory))!;
+  }
+  /** Reconcile only the membership supplied by ProjectPrograms, not sidebar rows. */
+  programs(groups: ReadonlyMap<string, readonly string[]>): void {
+    const previous = this.#programProjects;
+    this.#programProjects = new Map(groups);
+    const next = new Map<string, string>();
+    for (const [id, projects] of groups) {
+      for (const project of projects) next.set(project, id);
+    }
+    const dirty = new Set<string>();
+    const change = (project: string, id: string, sign: 1 | -1) => {
+      const listing = this.#listing(this.#programListings, id);
+      for (
+        const task of this.#projectListings.get(project)?.tasks.keys() ?? []
+      ) {
+        this.#include(listing, task, sign);
+      }
+      dirty.add(id);
+    };
+    for (const [project, id] of this.#programOf) {
+      if (next.get(project) !== id) change(project, id, -1);
+    }
+    for (const [project, id] of next) {
+      if (this.#programOf.get(project) !== id) change(project, id, 1);
+    }
+    this.#programOf = next;
+    const upserts: EntityState[] = [], removals: string[] = [];
+    for (const id of previous.keys()) {
+      if (groups.has(id)) continue;
+      this.#programListings.delete(id);
+      const key = entityKey("program", id);
+      if (this.#states.delete(key)) removals.push(key);
+    }
+    for (const id of groups.keys()) {
+      if (!previous.has(id) || dirty.has(id)) this.#program(id, upserts);
+    }
+    if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** A directory is no longer summarized: its aggregates are gone. */
   placement(
@@ -429,14 +475,20 @@ export class EntityStates {
     }
     const listing = this.#projectListings.get(directory);
     if (listing) {
+      const program = this.#programOf.get(directory);
       for (const id of listing.tasks.keys()) {
         this.#viewsOf.get(id)?.delete(listing);
+        if (program) {
+          this.#include(this.#listing(this.#programListings, program), id, -1);
+        }
       }
       this.#projectListings.delete(directory);
     }
     this.#leaves.delete(directory);
     this.#forms.delete(directory);
     this.#checkoutDependencies.delete(directory);
+    const program = this.#programOf.get(directory);
+    if (program) this.#program(program, upserts);
     if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** Interpret one session, publish its state and its ancestors' descendant
@@ -702,11 +754,22 @@ export class EntityStates {
     else leaves.delete(checkout);
     this.#checkoutsOf.set(task, leaves);
     for (const project of this.#projectsOf.get(checkout) ?? []) {
-      this.#include(this.#listing(this.#projectListings, project), task, sign);
+      this.#includeProject(project, task, sign);
     }
     const archive = this.#archiveOf.get(checkout);
     if (archive) {
       this.#include(this.#listing(this.#archiveListings, archive), task, sign);
+    }
+  }
+  #includeProject(directory: string, task: string, sign: 1 | -1): void {
+    const changed = this.#include(
+      this.#listing(this.#projectListings, directory),
+      task,
+      sign,
+    );
+    const program = this.#programOf.get(directory);
+    if (changed && program) {
+      this.#include(this.#listing(this.#programListings, program), task, sign);
     }
   }
   #checkout(directory: string, upserts: EntityState[]): void {
@@ -724,23 +787,51 @@ export class EntityStates {
       this.#project(project, upserts);
     }
   }
-  #project(directory: string, upserts: EntityState[]): void {
+  #locations(leaves: Iterable<string>) {
     let forms = 0;
     let dependencies = 0;
     const operations: ("working" | "blocked")[] = [];
-    for (const leaf of this.#leaves.get(directory) ?? [directory]) {
+    for (const leaf of leaves) {
       forms += this.#forms.get(leaf) ?? 0;
       dependencies += this.#checkoutDependencies.get(leaf) ?? 0;
       const operation = this.#checkoutOperations.get(leaf);
       if (operation) operations.push(operation);
     }
-    const operation = rollupStatus(...operations);
+    const state = rollupStatus(...operations);
+    const operation = state === "blocked" || state === "working"
+      ? state
+      : undefined;
+    return { forms, operation, dependencies };
+  }
+  #project(directory: string, upserts: EntityState[]): void {
+    const { forms, operation, dependencies } = this.#locations(
+      this.#leaves.get(directory) ?? [directory],
+    );
     const value = this.#aggregate(
       "project",
       directory,
       this.#listing(this.#projectListings, directory).sum,
       forms,
-      operation === "none" ? undefined : operation as "working" | "blocked",
+      operation,
+      dependencies,
+    );
+    if (this.#set(value)) upserts.push(value);
+    const program = this.#programOf.get(directory);
+    if (program) this.#program(program, upserts);
+  }
+  #program(id: string, upserts: EntityState[]): void {
+    const leaves = new Set(
+      this.#programProjects.get(id)!.flatMap((directory) =>
+        this.#leaves.get(directory) ?? [directory]
+      ),
+    );
+    const { forms, operation, dependencies } = this.#locations(leaves);
+    const value = this.#aggregate(
+      "program",
+      id,
+      this.#listing(this.#programListings, id).sum,
+      forms,
+      operation,
       dependencies,
     );
     if (this.#set(value)) upserts.push(value);

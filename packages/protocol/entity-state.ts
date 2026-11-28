@@ -8,6 +8,7 @@ export type EntityKind =
   | "task"
   | "checkout"
   | "project"
+  | "program"
   | "archive"
   | "global";
 export type BlockedCause =

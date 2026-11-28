@@ -14,6 +14,8 @@ import {
   PluginStore,
   Prefs,
   prefsMigrations,
+  programsMigrations,
+  ProgramStore,
   Projects,
   projectsMigrations,
   ProjectTemplates,
@@ -105,6 +107,7 @@ export async function startApplication(
     prefsMigrations,
     frecencyMigrations,
     projectsMigrations,
+    programsMigrations,
     checkoutsMigrations,
     tasksMigrations,
     seenMigrations,
@@ -136,6 +139,7 @@ export async function startApplication(
     const inbox = new InboxFeature(
       {
         projects: new Projects(store),
+        programs: new ProgramStore(store),
         tasks: new Tasks(store),
         seen: new Seen(store),
         finishes: new Finishes(store),
@@ -293,6 +297,7 @@ export async function startApplication(
       index,
       sources,
       projectOrder: inbox.projectOrder,
+      programs: inbox.programs,
       diagnostics: options.diagnostics,
       diagnostic: options.diagnostic,
       signal: options.signal,

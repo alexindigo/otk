@@ -376,6 +376,7 @@ function publishOrder(
   id: string,
   directories: (string | string[])[],
   revision = 1,
+  programs = true,
 ) {
   f.receive(id, {
     t: "projects.order",
@@ -385,7 +386,61 @@ function publishOrder(
       return { id: aliases[0], directories: aliases };
     }),
   });
+  if (programs && !f.resources.programs(id).ready) {
+    f.receive(id, {
+      t: "programs",
+      revision: 1,
+      auto: false,
+      programs: [],
+      members: {},
+    });
+  }
 }
+
+Deno.test("programs and project order jointly gate rows per sidecar; roots borrow membership", () => {
+  const f = fixture();
+  const row = () =>
+    f.resources.projects(100).map((r) => [r.sidecarId, r.program]);
+  try {
+    for (const id of ["local", "remote"]) {
+      f.receive(id, {
+        t: "inbox.snapshot",
+        generation: "programs",
+        revision: 1,
+        inbox: metadata(),
+      });
+    }
+    publishOrder(f, "local", ["/p"], 1, false);
+    const membership = {
+      t: "programs" as const,
+      revision: 1,
+      auto: true,
+      programs: [{
+        id: "first",
+        name: "First",
+        named: true,
+        origin: "user" as const,
+      }],
+      members: { "/p": { program: "first", by: "user" as const } },
+    };
+    f.receive("remote", membership);
+    assertEquals(row(), []);
+    f.receive("local", membership);
+    assertEquals(row(), [["local", { id: "first", by: "user" }]]);
+    publishOrder(f, "remote", ["/p"], 1, false);
+    f.receive("remote", {
+      ...membership,
+      revision: 2,
+      members: { "/p": { program: null, by: "user" } },
+    });
+    assertEquals(row(), [["local", { id: "first", by: "user" }], ["remote", {
+      id: null,
+      by: "user",
+    }]]);
+  } finally {
+    f.resources.stop();
+  }
+});
 
 Deno.test("sidebar identities stay ordered through state/recency ticks, explicit moves reorder and arrivals append", () => {
   const f = fixture();

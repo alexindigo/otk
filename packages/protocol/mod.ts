@@ -56,3 +56,12 @@ export type {
   ProjectOrderEntry,
   ProjectOrderFrame,
 } from "./project-order.ts";
+export {
+  OTHER_PROGRAM_ID,
+  type Program,
+  type ProgramAssign,
+  type ProgramCreate,
+  type ProgramMembership,
+  type ProgramMove,
+  type ProgramsFrame,
+} from "./programs.ts";
