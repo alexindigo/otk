@@ -6,10 +6,63 @@ import {
   type SessionListRow,
   type SessionLookup,
   type SessionStructure,
+  type SessionTreeTarget,
   type TaskRecord,
 } from "@otk/protocol";
 import { projectTabGroups } from "./tab-groups.ts";
+import { treePaths } from "./tree-paths.ts";
 export type { SessionListRow } from "@otk/protocol";
+
+type SessionTreeBranch = {
+  key: string;
+  row: SessionListRow;
+  depth: number;
+  hasChildren: boolean;
+  target: SessionTreeTarget;
+};
+export type SessionTreeItem = SessionTreeBranch & { path: boolean[] };
+
+/** A view over the existing preorder, not a second hierarchy or task owner. */
+export function sessionTreeView(
+  rows: readonly SessionListRow[],
+  scope: { sidecarId: string; directory: string },
+  open: (item: SessionTreeBranch) => boolean,
+): SessionTreeItem[] {
+  const visible: SessionTreeBranch[] = [];
+  let hiddenBelow: number | undefined;
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+    const next = rows[index + 1];
+    const depth = row.kind === "heading" ? 0 : row.depth + 1;
+    const hasChildren = next?.kind === "session" &&
+      (row.kind === "heading"
+        ? next.group === row.group
+        : next.parentID === row.id);
+    const item: SessionTreeBranch = {
+      key: row.key,
+      row,
+      depth,
+      hasChildren,
+      target: {
+        sidecarId: scope.sidecarId,
+        kind: row.kind === "session"
+          ? "session"
+          : row.group
+          ? "task"
+          : "ungrouped",
+        id: row.kind === "session" ? row.id : row.group || scope.directory,
+      },
+    };
+    const expanded = (row.kind === "heading" || hasChildren)
+      ? open(item)
+      : true;
+    if (hiddenBelow !== undefined && depth > hiddenBelow) continue;
+    hiddenBelow = expanded ? undefined : depth;
+    visible.push(item);
+  }
+  const paths = treePaths(visible, (item) => item.depth);
+  return visible.map((item, index) => ({ ...item, path: paths[index] }));
+}
 
 export function sessionFamily(id: string, lookup: SessionLookup): string[] {
   return [id, ...sessionAncestors(id, lookup)];
@@ -64,9 +117,12 @@ export function sessionTree<T extends SessionStructure>(
   directory: string,
   query = "",
   directories: readonly string[] = [directory],
+  taskOrder?: readonly string[],
 ): SessionTreeGroup<T>[] {
   const scopes = new Set(directories);
-  const sessions = entries.filter((e) => scopes.has(e.directory));
+  const sessions = entries.filter((e) => scopes.has(e.directory)).sort((a, b) =>
+    (a.timeCreated ?? 0) - (b.timeCreated ?? 0)
+  );
   const byID = new Map(sessions.map((e) => [e.id, e]));
   const nodes = entries.every((entry) => entry.hierarchy)
     ? undefined
@@ -77,7 +133,11 @@ export function sessionTree<T extends SessionStructure>(
   const ordered = tasks.filter((t) =>
     scopes.has(t.directory) || inherited.has(t.id)
   )
-    .sort((a, b) => a.order - b.order);
+    .sort((a, b) =>
+      taskOrder
+        ? taskOrder.indexOf(a.id) - taskOrder.indexOf(b.id)
+        : a.order - b.order
+    );
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
   const taskByID = new Map(ordered.map((t) => [t.id, t]));
   const partition = projectTabGroups(entries, ordered, {
@@ -101,10 +161,17 @@ export function sessionTree<T extends SessionStructure>(
     buckets.get(id)!.push(session);
   }
   const needle = query.trim().toLocaleLowerCase();
-  return [...ordered.map((t) => ({ id: t.id, title: t.name })), {
-    id: "",
-    title: "Not in a task",
-  }].map((group) => {
+  return [
+    ...ordered.filter((task) =>
+      partition.groups.some((group) =>
+        group.kind === "task" && group.id === task.id
+      )
+    ).map((t) => ({ id: t.id, title: t.name })),
+    {
+      id: "",
+      title: "Not in a task",
+    },
+  ].map((group) => {
     const members = buckets.get(group.id) ?? [];
     const ids = new Set(members.map((e) => e.id));
     const children = new Map<string, T[]>();
@@ -164,16 +231,28 @@ export function createSessionTree(): {
     directory: string,
     query?: string,
     directories?: readonly string[],
+    taskOrder?: readonly string[],
   ): SessionListRow[];
 } {
   let previousEntries: readonly SessionStructure[] | undefined;
-  let previousTasks: readonly TaskRecord[] | undefined;
+  // Owned task snapshot: callers' task records and arrays may change in place.
+  let previousTasks: string | undefined;
+  let entryIDs = new Set<string>(), taskRefs = new Set<string | undefined>();
   let previousDirectory = "", previousQuery = "", result: SessionListRow[] = [];
   let previousScopes = "";
+  let previousOrder = "";
   return {
-    rows(entries, tasks, directory, query = "", directories = [directory]) {
+    rows(
+      entries,
+      tasks,
+      directory,
+      query = "",
+      directories = [directory],
+      taskOrder,
+    ) {
       const scopes = JSON.stringify(directories);
       const needle = query.trim().toLocaleLowerCase();
+      const order = JSON.stringify(taskOrder);
       const sameEntries = entries === previousEntries ||
         (!!previousEntries && entries.length === previousEntries.length &&
           entries.every((entry, i) => {
@@ -185,26 +264,45 @@ export function createSessionTree(): {
               JSON.stringify(entry.hierarchy) ===
                 JSON.stringify(previous.hierarchy);
           }));
-      const sameTasks = tasks === previousTasks ||
-        (!!previousTasks && tasks.length === previousTasks.length &&
-          tasks.every((task, i) => {
-            const previous = previousTasks![i];
-            return task.id === previous.id && task.name === previous.name &&
-              task.directory === previous.directory &&
-              task.order === previous.order &&
-              task.sessions.length === previous.sessions.length &&
-              task.sessions.every((id, n) => id === previous.sessions[n]);
-          }));
+      if (!sameEntries) {
+        entryIDs = new Set(entries.map((entry) => entry.id));
+        taskRefs = new Set(entries.map((entry) => entry.hierarchy?.taskID));
+      }
+      // Only tasks that can own or scope these rows key the cache, so another
+      // project's membership changes cost no derivation work here.
+      const scoped = new Set(directories);
+      const taskKey = JSON.stringify(
+        tasks.filter((task) =>
+          scoped.has(task.directory) || taskRefs.has(task.id) ||
+          task.sessions.some((id) => entryIDs.has(id))
+        ).map((task) => [
+          task.id,
+          task.name,
+          task.directory,
+          task.order,
+          task.sessions,
+        ]),
+      );
       if (
-        sameEntries && sameTasks && directory === previousDirectory &&
-        needle === previousQuery && scopes === previousScopes
+        sameEntries && taskKey === previousTasks &&
+        directory === previousDirectory &&
+        needle === previousQuery && scopes === previousScopes &&
+        order === previousOrder
       ) return result;
       previousEntries = entries;
-      previousTasks = tasks;
+      previousTasks = taskKey;
       previousDirectory = directory;
       previousQuery = needle;
       previousScopes = scopes;
-      const groups = sessionTree(entries, tasks, directory, query, directories);
+      previousOrder = order;
+      const groups = sessionTree(
+        entries,
+        tasks,
+        directory,
+        query,
+        directories,
+        taskOrder,
+      );
       const size = groups.reduce((sum, group) => sum + group.rows.length, 0);
       let position = 0;
       result = groups.flatMap(

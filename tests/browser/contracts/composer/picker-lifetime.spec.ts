@@ -18,7 +18,10 @@ for (const search of [false, true]) {
         page.locator(`[data-picker-key="${key}"] .otk-picker-option`);
       const fallback = search
         ? page.getByRole("combobox", { name: "Search live catalog" })
-        : page.locator(".otk-picker-content");
+        : page.locator(
+          ".otk-picker-content, .otk-picker-content [role=listbox]",
+        )
+          .and(page.locator(":focus"));
       await expect(option("alpha")).toBeVisible();
       if (scenario === "surviving") {
         await option("beta").focus();

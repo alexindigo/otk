@@ -12,6 +12,10 @@ test("attention.failure-toast-burst-grouping-and-mixed-overflow", {
     .click();
   const failure = page.locator(".otk-toast[data-kind=error]");
   await expect(failure).toHaveCount(1);
+  await expect(page.locator("[data-note-count]")).toHaveAttribute(
+    "data-note-count",
+    "1",
+  );
   await badge(page, 0);
   await expect(failure).toContainText("22 identical failures");
   await expect(failure).toContainText("Loading permission requests failed");
@@ -68,6 +72,7 @@ test("attention.failure-toast-burst-grouping-and-mixed-overflow", {
     "data-note-count",
     "7",
   );
+  await badge(page, 2);
 });
 
 test("attention.oversized-failure-keeps-complete-reason-reachable", {
@@ -78,12 +83,15 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
   await page.getByRole("button", { name: "Long failure", exact: true }).click();
   const toast = page.locator(".otk-toast");
   await expect(toast).toHaveCount(1);
-  const region = toast.locator(".otk-scroll");
+  await toast.getByRole("button", { name: "Details", exact: true }).click();
+  const region = toast.locator(".otk-failure-detail-body");
   expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
     true,
   );
   await region.evaluate((el) => el.scrollTop = el.scrollHeight);
-  await expect(toast.getByRole("button", { name: "Dismiss", exact: true }))
+  await expect(
+    toast.getByRole("button", { name: "Dismiss notification", exact: true }),
+  )
     .toBeInViewport();
   expect(
     await toast.evaluate((el) => {
@@ -93,10 +101,14 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
   ).toBe(true);
   await expect(toast).toContainText("END OF REASON");
   const geometry = await toast.evaluate((el) => {
-    const header = el.querySelector("header")!.getBoundingClientRect();
-    const actions = el.querySelector(".otk-toast-actions")!
+    const header = el.querySelector(".otk-failure-heading")!
       .getBoundingClientRect();
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const actions = el.querySelector(".otk-failure-details")!
+      .getBoundingClientRect();
+    const walker = document.createTreeWalker(
+      el.querySelector(".otk-failure-detail-body")!,
+      NodeFilter.SHOW_TEXT,
+    );
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
       const index = node.textContent!.indexOf("END OF REASON");
       if (index < 0) continue;

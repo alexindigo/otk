@@ -11,7 +11,7 @@ import { OpencodeV2Test } from "../support/opencode-v2.ts";
 import { DigestBridge } from "../../core/digest/bridge.ts";
 import { SessionHierarchy } from "../../core/index/session-hierarchy.ts";
 
-test(`native ${nativeVersion}: moved children retain their family, local anchor and sibling navigation`, async () => {
+test(`native ${nativeVersion}: moved children retain their family and local anchor`, async () => {
   const fake = new FakeLlm();
   const oc = nativeKind === "opencode-v2-server"
     ? await OpencodeV2Test.start(fake)
@@ -76,12 +76,12 @@ test(`native ${nativeVersion}: moved children retain their family, local anchor 
       options,
     );
     assertEquals(local.items.map((row) => row.id), [childID]);
-    const siblings = await bridge.read("sessions.list", {
+    const children = await bridge.read("sessions.list", {
       directory: oc.directory,
       parentID: parent.id,
       limit: 20,
     }, options);
-    assertEquals(siblings.items.map((row) => row.id), [childID]);
+    assertEquals(children.items.map((row) => row.id), [childID]);
     const hierarchy = new SessionHierarchy();
     await hierarchy.prepare(
       local.items,
@@ -101,7 +101,7 @@ test(`native ${nativeVersion}: moved children retain their family, local anchor 
         childDirectory: directory,
         parentDirectory: oc.directory,
         rootsInChildDirectory: 0,
-        siblingIDs: siblings.items.map((row) => row.id),
+        childIDs: children.items.map((row) => row.id),
       }),
     );
   } finally {

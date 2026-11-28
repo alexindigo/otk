@@ -3,7 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, reply, seed, tool } from "../../pages/attention.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork, workPanel } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("messages.pending-preview-and-ready-question-copy", {
@@ -22,10 +22,10 @@ test("messages.pending-preview-and-ready-question-copy", {
   const dock = page.locator(".otk-permission-dock");
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(dock).toContainText("+1 / \u22121");
-  await openWorkLogs(page);
-  const edit = page.locator("[data-tool=edit]");
-  await expect(edit.locator(".otk-tool-add")).toHaveText("+1");
-  await expect(edit.locator(".otk-tool-del")).toHaveText("\u22121");
+  await openLatestWork(page);
+  const edit = workPanel(page).locator(".otk-work-run:has([data-tool=edit])");
+  await expect(edit.locator(".otk-work-add")).toHaveText("+1");
+  await expect(edit.locator(".otk-work-del")).toHaveText("\u22121");
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
@@ -34,10 +34,15 @@ test("messages.pending-preview-and-ready-question-copy", {
       contentType: "image/png",
     });
   }
+  const sessions = page.getByRole("tab", { name: "Sessions", exact: true });
+  await sessions.click();
   await dock.getByRole("button", { name: "Allow once", exact: true }).click();
   await reply(page, session.id, "Edit completed.");
-  await expect(edit.locator(".otk-tool-add")).toHaveText("+1");
-  await expect(edit.locator(".otk-tool-del")).toHaveText("\u22121");
+  // Pending and settled steps belong to the same reply's Work panel.
+  await openLatestWork(page);
+  await expect(edit.locator(".otk-work-add")).toHaveText("+1");
+  await expect(edit.locator(".otk-work-del")).toHaveText("\u22121");
+  await sessions.click();
   await tool(state, "question", {
     questions: [{
       header: "Next step",

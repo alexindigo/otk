@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { runNativeTool, showFileChanges } from "../../pages/transcript.ts";
 import { readFile, stat } from "node:fs/promises";
+
+async function openDiffStyleForKeyboard(page: Page) {
+  await page.locator("button[name=diffStyle]").click();
+  // fad738b9: the listbox owns focus and the active keyboard candidate.
+  const picker = page.getByRole("listbox", { name: "Diff style", exact: true });
+  await expect(picker).toBeFocused();
+}
 
 test.use({ profile: "messages-files" });
 test("messages.edit-write-patch-native-files-geometry", {
@@ -39,7 +47,7 @@ test("messages.edit-write-patch-native-files-geometry", {
   const diff = page.locator("[data-tool=edit] .otk-diff");
   await expect(diff).toHaveAttribute("aria-label", "Modified edit.ts");
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("select[name=diffStyle]").click();
+  await openDiffStyleForKeyboard(page);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(diff).toHaveAttribute("data-diff-style", "split");
@@ -57,7 +65,7 @@ test("messages.edit-write-patch-native-files-geometry", {
     JSON.stringify(geometry),
   ).toBe(true);
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("select[name=diffStyle]").click();
+  await openDiffStyleForKeyboard(page);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(diff).toHaveAttribute("data-diff-style", "unified");
@@ -65,11 +73,14 @@ test("messages.edit-write-patch-native-files-geometry", {
   await expect(diff).not.toHaveClass(/otk-diff-wrap/);
   await page.locator(".otk-display-menu > button").click();
   await page.locator(".otk-display-menu > button").click();
-  await page.locator("select[name=diffStyle]").click();
+  await openDiffStyleForKeyboard(page);
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("Enter");
-  await expect(page.locator("select[name=diffStyle]")).toHaveValue("auto");
+  await expect(page.locator("button[name=diffStyle]")).toHaveAccessibleName(
+    "Diff style: Auto",
+  );
+  await expect(page.locator("input[name=diffStyle]")).toHaveValue("auto");
   await page.locator(".otk-display-menu > button").click();
   const wideViewport = await page.locator(".otk-session-view").evaluate(
     (element) =>
@@ -90,15 +101,38 @@ test("messages.edit-write-patch-native-files-geometry", {
         )
     ),
   ).toBe(true);
-  await page.locator(".otk-session-view").evaluate((element) =>
-    (element as HTMLElement).style.setProperty("--lane-width", "1600px")
+  // The app's Work pane has a bounded width. Widen the owning track in this
+  // geometry probe, as the transcript lane was widened before D74.
+  const panel = page.locator(".otk-right-panel");
+  const expansion = await diff.evaluate((element) =>
+    Math.ceil(
+      parseFloat(
+        getComputedStyle(element).getPropertyValue("--diff-split-min"),
+      ) -
+        element.getBoundingClientRect().width + 1,
+    )
   );
+  await page.setViewportSize({ width: wideViewport + expansion, height: 800 });
+  const previousWidth = await panel.evaluate((element, extra) => {
+    const rail = element as HTMLElement;
+    const original = rail.style.width;
+    rail.style.width = `${rail.getBoundingClientRect().width + extra}px`;
+    return original;
+  }, expansion);
+  await expect.poll(() =>
+    diff.evaluate((element) =>
+      element.getBoundingClientRect().width >=
+        parseFloat(
+          getComputedStyle(element).getPropertyValue("--diff-split-min"),
+        )
+    )
+  ).toBe(true);
   await expect(diff).toHaveAttribute("data-diff-style", "split");
+  await panel.evaluate((element, width) => {
+    (element as HTMLElement).style.width = width;
+  }, previousWidth);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(diff).toHaveAttribute("data-diff-style", "unified");
-  await page.locator(".otk-session-view").evaluate((element) =>
-    (element as HTMLElement).style.removeProperty("--lane-width")
-  );
   parts.push(
     await runNativeTool(state, page, session.id, "write", {
       filePath: state.directory + "/write.ts",

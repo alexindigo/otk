@@ -27,6 +27,12 @@ db = ""
 heartbeattimeout = 25
 reconnectmax = 30
 requestms = 60000
+[images]
+roots = ["{checkouts}", "~/Documents/{project}", "~/TemporaryFiles/{project}"]
+maxbytes = 10485760
+maxpixels = 40000000
+concurrency = 4
+
 [index]
 days = 30
 [catalogs]
@@ -67,6 +73,7 @@ httpms = 15000
 retrybase = 1000
 retrymax = 30000
 [messages]
+bridgepages = 4
 prefetchms = 300000
 prefetchbytes = 67108864
 coolms = 300000

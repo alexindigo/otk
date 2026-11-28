@@ -23,13 +23,15 @@ test(
       "The transcript is still available.",
     );
     await expect(notice).toHaveCount(1);
-    await expect(notice).toHaveText(
+    await expect(notice).toHaveAccessibleName(
       "Queued messages aren't available on this server.",
     );
     await expect(notice).toHaveAttribute("role", "status");
     await expect(notice).toHaveClass(/is-info/);
     await expect(notice).not.toHaveClass(/is-error/);
-    await expect(notice.getByRole("button")).toHaveCount(0);
+    await expect(notice.getByRole("button", { name: "Details", exact: true }))
+      .toBeVisible();
+    await expect(notice.getByRole("button", { name: /Retry/ })).toHaveCount(0);
     await expect(
       page.getByRole("alert").filter({
         hasText: "Queued messages aren't available on this server.",
@@ -62,7 +64,7 @@ test(
     );
     await openSession(state, page, values.permission);
     await expect(notice).toHaveCount(1);
-    await expect(notice).toHaveText(
+    await expect(notice).toHaveAccessibleName(
       "Queued messages aren't available on this server.",
     );
     await openSession(state, page, values.form);

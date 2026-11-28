@@ -2,6 +2,7 @@
 import {
   capabilityNames,
   checkClientFrameSize,
+  ContentDeliveryDiagnostics,
   isAttentionOp,
   isSessionID,
   MAX_UPLOAD_BYTES,
@@ -19,6 +20,8 @@ import type {
   IndexEntry,
   MessagePolicy,
   Preferences,
+  ProgramsFrame,
+  ProjectOrderFrame,
   RequestControl,
   RequestEvent,
   RequestRef,
@@ -38,6 +41,9 @@ import { ExecutionFailure, publicFailure } from "../requests/failures.ts";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
+  principal: string;
+  orderRevision?: number;
+  programsRevision?: number;
   sessions: Set<string>;
   view: ViewLease;
   index: IndexView;
@@ -72,9 +78,19 @@ export interface ConnectionRequests {
   helloms: number;
   requested?: () => void;
   attachments?: import("@otk/protocol").AttachmentPolicy;
+  projectOrder?: {
+    readonly revision: number;
+    frame(user: string): ProjectOrderFrame;
+    listen(listener: (user: string) => void): () => void;
+  };
+  programs?: {
+    frame(user: string): ProgramsFrame;
+    listen(listener: (user: string) => void): () => void;
+  };
 }
 /** Socket recipients own delivery and leases, never action execution. */
 export class Connections {
+  readonly contentDelivery = new ContentDeliveryDiagnostics("fanout");
   #connections = new Set<Connection>();
   #counts = new Map<string, number>();
   harnessState: HarnessState = "connecting";
@@ -87,7 +103,9 @@ export class Connections {
     readonly prefs: Prefs<Preferences>,
     readonly rpc: RpcRegistry,
     readonly messages: MessagePolicy,
-    readonly requests: ConnectionRequests,
+    readonly requests: ConnectionRequests & {
+      server: Readonly<{ build: string; instance: string }>;
+    },
     readonly sources: readonly FrameSource[] = [],
     readonly diagnostics?: SectionObserver,
   ) {
@@ -100,6 +118,25 @@ export class Connections {
       this.#stops.push(
         prefs.listen((prefs) => this.broadcast({ t: "prefs", prefs })),
       );
+      // Coalesce committed changes to order and membership, but always flush
+      // both together before sending a frame that might contain project rows.
+      const pending = new Set<string>();
+      const flush = (user: string) => {
+        if (pending.has(user)) return;
+        pending.add(user);
+        queueMicrotask(() => {
+          pending.delete(user);
+          if (this.#closed) return;
+          for (const c of this.#connections) {
+            if (c.principal === user) this.#flushProjectFrames(c);
+          }
+        });
+      };
+      for (
+        const owner of [this.requests.projectOrder, this.requests.programs]
+      ) {
+        if (owner) this.#stops.push(owner.listen(flush));
+      }
       for (const source of sources) {
         source.connection?.(this.harnessState);
         if (source.open) continue;
@@ -122,14 +159,39 @@ export class Connections {
       throw error;
     }
   }
+  #flushProjectFrames(connection: Connection): void {
+    if (!connection.welcomed) return;
+    const order = this.requests.projectOrder;
+    if (order && connection.orderRevision !== order.revision) {
+      this.#send(connection, order.frame(connection.principal));
+    }
+    const programs = this.requests.programs?.frame(connection.principal);
+    if (programs && programs.revision !== connection.programsRevision) {
+      this.#send(connection, programs);
+    }
+  }
+  #beforeFrame(connection: Connection, frame: ServerFrame): void {
+    if (
+      frame.t !== "welcome" && frame.t !== "ping" && frame.t !== "error" &&
+      frame.t !== "projects.order" && frame.t !== "programs"
+    ) {
+      this.#flushProjectFrames(connection);
+    }
+  }
   #send(connection: Connection, frame: ServerFrame): void {
     if (
       this.#connections.has(connection) &&
       connection.ws.readyState === WebSocket.OPEN
     ) {
+      this.#beforeFrame(connection, frame);
       const start = performance.now(), serialized = JSON.stringify(frame);
       this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
       connection.ws.send(serialized);
+      if (frame.t === "projects.order") {
+        connection.orderRevision = frame.revision;
+      } else if (frame.t === "programs") {
+        connection.programsRevision = frame.revision;
+      }
     }
   }
   broadcast(frame: ServerFrame): void {
@@ -138,19 +200,23 @@ export class Connections {
   #fanout(
     frame: ServerFrame,
     accepts: (connection: Connection) => boolean,
-  ): void {
+  ): number {
     let serialized: string | undefined;
+    let recipients = 0;
     for (const connection of this.#connections) {
       if (!accepts(connection) || connection.ws.readyState !== WebSocket.OPEN) {
         continue;
       }
+      this.#beforeFrame(connection, frame);
       if (serialized === undefined) {
         const start = performance.now();
         serialized = JSON.stringify(frame);
         this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
       }
       connection.ws.send(serialized);
+      recipients++;
     }
+    return recipients;
   }
   connection(state: HarnessState): void {
     this.harnessState = state;
@@ -164,12 +230,20 @@ export class Connections {
     const recipients = isAttentionOp(event)
       ? [sessionID, ...this.index.ancestors(sessionID)]
       : [sessionID];
-    this.#fanout({
+    const delivered = this.#fanout({
       t: "content",
       sessionID,
       event,
       ...(clock ? { clock } : {}),
     }, (c) => c.welcomed && recipients.some((id) => c.sessions.has(id)));
+    this.contentDelivery.record({
+      sessionID,
+      operation: event.op,
+      clock,
+      state: "sent",
+      recipients: delivered,
+      ...(event.op === "message.upsert" ? { messageID: event.message.id } : {}),
+    });
   }
   #subscribe(c: Connection, id: string, enabled: boolean): void {
     if (enabled === c.sessions.has(id)) return;
@@ -188,6 +262,7 @@ export class Connections {
     const c: Connection = {
       ws,
       welcomed: false,
+      principal: "",
       sessions: new Set(),
       view: { epoch: 0, crumbs: [], rows: [] },
       index: undefined as unknown as IndexView,
@@ -239,6 +314,9 @@ export class Connections {
         !Number.isSafeInteger(raw.epoch) || Number(raw.epoch) < 0 ||
         raw.directory !== undefined && typeof raw.directory !== "string" ||
         raw.selected !== undefined && !isSessionID(raw.selected) ||
+        raw.historyNeighbors !== undefined &&
+          (!Array.isArray(raw.historyNeighbors) ||
+            raw.historyNeighbors.length > 2) ||
         raw.query !== undefined && typeof raw.query !== "string" ||
         raw.tasksFollowParent !== undefined &&
           typeof raw.tasksFollowParent !== "boolean"
@@ -251,6 +329,12 @@ export class Connections {
         selected: raw.selected as string | undefined,
         crumbs: list(raw.crumbs),
         rows: list(raw.rows),
+        references: raw.references === undefined
+          ? undefined
+          : list(raw.references),
+        historyNeighbors: raw.historyNeighbors === undefined
+          ? undefined
+          : list(raw.historyNeighbors),
         query: raw.query as string | undefined,
         tasksFollowParent: raw.tasksFollowParent as boolean | undefined,
       };
@@ -263,6 +347,7 @@ export class Connections {
         if (controller.signal.aborted || c.view.epoch !== epoch) return;
         this.#send(c, { ...frame, epoch });
       }
+      this.#send(c, { t: "view.ready", epoch });
     };
     let selectionGeneration = 0;
     const changed = () => {
@@ -362,13 +447,20 @@ export class Connections {
         refresh();
         if (!c.welcomed) {
           if (frame.t !== "hello" || frame.protocol !== PROTOCOL_VERSION) {
-            this.#send(c, { t: "error", code: "protocol" });
-            ws.close(1002, "protocol mismatch");
+            // Keep this envelope stable: already-open older bundles understand it.
+            this.#send(c, {
+              t: "error",
+              code: "protocol",
+              reason: "client-outdated",
+              protocol: PROTOCOL_VERSION,
+              build: this.requests.server.build,
+            });
+            ws.close(1000, "OTK was updated");
             return;
           }
           if (welcoming) return;
           welcoming = true;
-          principal = this.requests.identity();
+          principal = c.principal = this.requests.identity();
           const identity = await requestFingerprint(`principal:${principal}`);
           if (!this.#connections.has(c)) return;
           if (raw.view) c.view = view(object(raw.view));
@@ -381,6 +473,7 @@ export class Connections {
           this.#send(c, {
             t: "welcome",
             protocol: PROTOCOL_VERSION,
+            viewAcknowledgements: true,
             messages: this.messages,
             ...(this.requests.attachments
               ? {
@@ -397,6 +490,7 @@ export class Connections {
             },
             sidecar: {
               version: SIDECAR_VERSION,
+              ...this.requests.server,
               harness: {
                 kind: this.backend.core.kind,
                 version: this.backend.core.version,

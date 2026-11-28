@@ -70,6 +70,22 @@ test("spare native I/O capacity admits an urgent read without retiring its peer"
   optional();
 });
 
+test("the shared native scheduler admits identity while a history page holds its lane", async () => {
+  const admission = new ReadAdmission();
+  const bulk = new AbortController(), small = new AbortController();
+  const release = await admission.acquire(bulk.signal, true, undefined, "bulk");
+  try {
+    const queued = admission.acquire(bulk.signal, true, undefined, "bulk");
+    const settled = Promise.allSettled([queued]);
+    const read = await admission.acquire(small.signal, true);
+    read();
+    bulk.abort();
+    assertEquals((await settled)[0].status, "rejected");
+  } finally {
+    release();
+  }
+});
+
 test("essential native admission preempts and retries a revocable transient read", async () => {
   const scheduler = new DigestScheduler({
     ...cfg().digest,

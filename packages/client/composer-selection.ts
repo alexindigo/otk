@@ -297,7 +297,7 @@ export function createComposerSelection(
       if (!alive) return;
       options.change((draft) => {
         const current = selection(draft);
-        if (!current.applies.variant || !current.model.variants.length) {
+        if (!current.variantSelectable) {
           return draft;
         }
         const variants = [undefined, ...current.model.variants];

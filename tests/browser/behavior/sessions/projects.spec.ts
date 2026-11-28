@@ -10,6 +10,75 @@ import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.describe("project catalog", () => {
   test.use({ profile: "contract-sessions-catalog" });
+  test("sessions.project-switch-list-evidence", {
+    tag: ["@sessions", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    const { root } = await state.observe<{ root: string }>();
+    const empty = root + "/projects/empty";
+    const session = "tstv1-atmosphera";
+    const populated =
+      (await state.product("session.get", { sessionID: session })).directory;
+    const open = (directory: string) =>
+      page.locator(
+        `[data-project=${JSON.stringify(directory)}] .otk-project-open`,
+      ).click();
+    const frames = await wire(page);
+    const hold = (directory: string) =>
+      frames.hold((frame, request) =>
+        request?.params?.directory === directory &&
+        (request.method === "navigation.default" ||
+          request.method === "sessions.list") &&
+        (frame.t === "request.result" || frame.t === "load.chunk")
+      );
+    const hero = page.locator(".otk-welcome");
+    const loading = hero.getByRole("status");
+    const start = hero.getByText(/start a new session/i);
+    const group = page.getByRole("heading", { name: "Not in a task" });
+
+    await openSession(state, page, session);
+    // The catalog can keep indexing after the first list is already reusable.
+    await expect(page.locator(".otk-session-loading-row")).toHaveCount(0);
+    hold(empty);
+    await open(empty);
+    await expect.poll(() =>
+      frames.held.some(({ request }) => request?.method === "sessions.list")
+    ).toBe(true);
+    await expect(start).toHaveCount(0);
+    await expect(hero.getByRole("heading", { name: "empty", exact: true }))
+      .toBeVisible();
+    await expect(loading).toHaveText("Loading sessions...");
+    await expect(hero.getByRole("button")).toHaveCount(0);
+    await expect(group).toHaveCount(0);
+    const block = hero.locator(".otk-pane-state-content");
+    const heroBox = await block.boundingBox();
+    frames.release();
+    await expect(start).toBeVisible();
+    expect(await block.boundingBox()).toEqual(heroBox);
+
+    hold(populated);
+    await open(populated);
+    await expect.poll(() =>
+      frames.held.some(({ request }) =>
+        request?.method === "navigation.default"
+      )
+    ).toBe(true);
+    await expect(loading).toHaveCount(0);
+    await expect(start).toHaveCount(0);
+    frames.release();
+    await expect(page).toHaveURL(new RegExp(`${session}$`));
+
+    hold(empty);
+    await open(empty);
+    await expect.poll(() =>
+      frames.held.some(({ request }) =>
+        request?.method === "navigation.default"
+      )
+    ).toBe(true);
+    await expect(start).toBeVisible();
+    await expect(loading).toHaveCount(0);
+    frames.release();
+  });
+
   test("sessions.project-catalog-discovery-activity-creation-and-collapse", {
     tag: ["@load", "@sessions", "@contracts", "@isolated"],
   }, async ({ isolatedState: state, page }, info) => {
@@ -24,7 +93,11 @@ test.describe("project catalog", () => {
       finished = root + "/projects/finished-discovery";
     await page.goto(state.url);
     // Session-bearing index-origin projects now belong to Active, not Discovered.
-    await expect(page.locator(".otk-discovered-toggle")).toContainText("(1)");
+    await expect(page.locator(".otk-discovered-toggle")).toHaveAccessibleName(
+      "Discovered projects, 1",
+    );
+    await expect(page.locator(".otk-discovered-toggle .otk-chrome-meta"))
+      .toHaveText("1");
     await expect(row(root + "/projects/linked")).toHaveCount(0);
     await expect(
       row(empty).getByRole("img", { name: "No known activity", exact: true }),
@@ -37,8 +110,12 @@ test.describe("project catalog", () => {
     );
     await expect(row(empty)).toHaveAttribute("data-group", "discovered");
     expect(
-      await page.locator(".otk-inbox-scroll > *").evaluateAll((es) =>
-        es.map((e) => e.className).filter((s) => s.includes("toggle"))
+      await page.locator(
+        ".otk-inbox-scroll .otk-discovered-toggle, .otk-inbox-scroll .otk-inactive-toggle",
+      ).evaluateAll((es) =>
+        es.flatMap((e) =>
+          Array.from(e.classList).filter((s) => s.endsWith("-toggle"))
+        )
       ),
     ).toEqual(["otk-discovered-toggle", "otk-inactive-toggle"]);
     await openSession(state, page, "tstv1-atmosphera");
@@ -93,6 +170,23 @@ test.describe("project catalog", () => {
     await activity(state, "tstv1-atmosphera", "release");
     await page.locator(".otk-discovered-toggle").click();
     await expect(row(empty)).toBeVisible();
+    // D71 (4d810f0f): in the compact rail Back/Forward stack above Search,
+    // moving the viewport as a whole. Project markers and lamps must keep
+    // their slots within it, not their absolute coordinates on the page.
+    const positions = (selector: string) =>
+      page.locator(".otk-inbox-scroll").locator(selector).evaluateAll((
+        elements,
+      ) =>
+        elements.map((element) => {
+          const box = element.getBoundingClientRect();
+          const viewport = element.closest(".otk-inbox-scroll")!;
+          const row = element.closest("[data-project]")!;
+          return {
+            project: row.getAttribute("data-project"),
+            y: box.y + box.height / 2 - viewport.getBoundingClientRect().top,
+          };
+        })
+      );
     for (
       const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
         "otk-light-stone",
@@ -118,23 +212,20 @@ test.describe("project catalog", () => {
         path: info.outputPath(`q1-${name}-column.png`),
         fullPage: true,
       });
-      const centers = () =>
-        page.locator(
-          ".otk-project-row:not([data-inactive=true]) .otk-project-marker",
-        ).evaluateAll((elements) =>
-          elements.map((element) => {
-            const box = element.getBoundingClientRect();
-            return box.y + box.height / 2;
-          })
+      // Issue 2.116 moved the lamp into the shared sidebar row control.
+      const markers = () =>
+        positions(
+          ".otk-project-row:not([data-inactive=true]) .otk-sidebar-lamp-action",
         );
-      const column = await centers();
+      const column = await markers();
+      expect(column.length).toBeGreaterThan(0);
       await page.getByRole("button", { name: "Collapse projects", exact: true })
         .click();
       await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
         "data-collapsed",
         "true",
       );
-      expect(await centers()).toEqual(column);
+      expect(await markers()).toEqual(column);
       // Rows are never lampless; discovered rows carry no evidence, so grey.
       await expect(
         page.locator(
@@ -156,30 +247,32 @@ test.describe("project catalog", () => {
         "false",
       );
     }
-    const positions = () =>
-      page.locator(".otk-project-row[data-inactive=false] .otk-status-light")
-        .evaluateAll((es) =>
-          es.map((e) => {
-            const r = e.getBoundingClientRect();
-            return r.y + r.height / 2;
-          })
-        );
-    const before = await positions();
+    const lamps = () =>
+      positions(".otk-project-row[data-inactive=false] .otk-status-light");
+    const before = await lamps();
+    expect(before.length).toBeGreaterThan(0);
     await page.getByRole("button", { name: "Collapse projects", exact: true })
       .click();
     await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
       "data-collapsed",
       "true",
     );
-    expect(await positions()).toEqual(before);
+    expect(await lamps()).toEqual(before);
     await expect(
       row(empty).getByRole("img", { name: "No known activity", exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Expand projects", exact: true })
       .click();
     await row(empty).locator(".otk-project-menu > button").click();
-    await expect(page.getByRole("menuitem")).toHaveText(["New session"]);
-    await page.getByRole("menuitem").click();
+    await expect(page.getByRole("menuitem")).toHaveText([
+      "New session",
+      "Move up",
+      "Move down",
+    ]);
+    for (const name of ["Move up", "Move down"]) {
+      await expect(page.getByRole("menuitem", { name })).toBeDisabled();
+    }
+    await page.getByRole("menuitem", { name: "New session" }).click();
     await expect(row(empty)).toHaveAttribute("data-source", "tracked");
     expect(
       (await state.observe<{ entries: { directory: string }[] }>()).entries
@@ -214,7 +307,7 @@ test("sessions.project-scan-retires-disconnected-work-current-connection-add", {
     frames.held.filter((x) => x.request?.method === "projects.scan").length
   ).toBe(1);
   await expect(page.locator(".otk-template-paths")).toContainText(
-    "Scanning directories…",
+    "Scanning directories...",
   );
   holdWelcome = true;
   frames.close();
@@ -224,7 +317,7 @@ test("sessions.project-scan-retires-disconnected-work-current-connection-add", {
     0,
   );
   await expect(page.locator(".otk-template-paths")).not.toContainText(
-    "Scanning directories…",
+    "Scanning directories...",
   );
   holdWelcome = false;
   for (let i = 0; i < frames.held.length;) {

@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { scrollTranscript } from "../../pages/transcript.ts";
 
 test.describe("pre-message rejection", () => {
   test.use({ profile: "composer-request-failure" });
@@ -24,23 +25,43 @@ test.describe("pre-message rejection", () => {
     for (
       const text of [
         "Sending prompt failed",
-        "Configuration rejected before send",
         "opencode.config.ts",
         "Required",
         "Invalid",
         "HTTP 400",
       ]
     ) await expect(failure).toContainText(text);
+    await expect(failure.locator(".otk-failure-target")).toHaveCount(0);
+    await expect(failure).not.toContainText(
+      "Configuration rejected before send",
+    );
     await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
-    await expect(editor).toHaveValue("Keep this unsent draft intact");
     const notice = page.locator(".otk-operation-feedback");
-    await expect(notice).toHaveText("Not sent - see the error above");
+    await expect(notice.locator(".otk-record-row-label")).toHaveText(
+      "Not sent. Sending prompt failed",
+    );
     await expect(notice).not.toContainText("opencode.config.ts");
     await expect(notice).not.toContainText("HTTP 400");
-    await notice.getByRole("link", { name: "Not sent - see the error above" })
+    await expect(editor).toHaveValue("Keep this unsent draft intact");
+    await notice.getByRole("button", { name: "Show error" })
       .click();
     await expect(failure.locator("xpath=ancestor::article")).toBeFocused();
-    await expect(page.locator('[data-role="user"]')).toHaveCount(0);
+    await expect(editor).toHaveValue("Keep this unsent draft intact");
+    // 2.39: rejected input remains one failed local transcript entry, not a
+    // native prompt. Refusal must retain both its input and the editable draft.
+    const local = page.locator('[data-role="user"][data-send-state="failed"]');
+    await expect(local).toHaveCount(1);
+    await scrollTranscript(page, false);
+    await expect(local).toContainText("Keep this unsent draft intact");
+    await expect(local.locator(".otk-failure-content")).toHaveCount(0);
+    await expect(local).toContainText("Not sent");
+    await expect(page.locator(".otk-messages .otk-failure-content"))
+      .toHaveCount(1);
+    await expect(local.getByRole("button", { name: "Retry", exact: true }))
+      .toHaveCount(0);
+    expect((await state.native<{ info: { role: string } }[]>(
+      `/session/${session.id}/message`,
+    )).filter((message) => message.info.role === "user")).toHaveLength(0);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(
@@ -75,9 +96,12 @@ test.describe("pre-message rejection", () => {
     for (const text of ["x/y2", "x/y3", "HTTP 404"]) {
       await expect(record).toContainText(text);
     }
-    await expect(page.locator(".otk-operation-feedback")).toHaveText(
-      "Not sent - see the error above",
+    const notice = page.locator(".otk-operation-feedback");
+    await expect(notice.locator(".otk-record-row-label")).toHaveText(
+      "Not sent. Sending prompt failed",
     );
+    await expect(notice.getByRole("button", { name: "Show error" }))
+      .toBeVisible();
     await expect(editor).toHaveValue("Keep the model draft");
   });
 });

@@ -30,6 +30,13 @@ export function checkClientFrameSize(serialized: string): void {
   }
 }
 export type HarnessState = "connecting" | "connected" | "reconnecting";
+export interface StorageState {
+  degraded: boolean;
+  problem?: "full" | "io";
+  /** Monotone observation-gap identity, retained after recovery. */
+  gap: number;
+  failure?: import("./requests.ts").PublicFailure;
+}
 export type ClientFrame =
   | RequestControl
   | { t: "hello"; protocol: number; view?: import("./view.ts").ViewLease }
@@ -42,11 +49,15 @@ export type ClientFrame =
 export type ServerFrame = ServerMessage & { epoch?: number };
 type ServerMessage =
   | RequestEvent
+  | import("./project-order.ts").ProjectOrderFrame
+  | import("./programs.ts").ProgramsFrame
   | import("./session-list.ts").LoadChunk
   | { t: "sessions.changed"; directory: string }
   | {
     t: "welcome";
     protocol: number;
+    /** This peer acknowledges each installed view after publishing its baselines. */
+    viewAcknowledgements?: true;
     messages: MessagePolicy;
     attachments?: AttachmentPolicy & { uploadbytes: number };
     requests: {
@@ -56,6 +67,8 @@ type ServerMessage =
     };
     sidecar: {
       version: string;
+      build: string;
+      instance: string;
       harness: {
         kind: string;
         version: string;
@@ -65,10 +78,19 @@ type ServerMessage =
     };
   }
   | { t: "harness"; state: HarnessState }
+  | { t: "view.ready"; epoch: number }
+  | { t: "storage"; state: StorageState }
   | { t: "digest.progress"; values: import("./progress.ts").ProgressFacts[] }
   | { t: "ping" }
   | { t: "prefs"; prefs: Preferences }
   | ({ t: "inbox.snapshot" } & InboxBaseline)
+  /** Live, body-free entity verdicts independent of the socket's row lease. */
+  | {
+    t: "inbox.settlement";
+    generation: string;
+    revision: number;
+    values: import("./supervision.ts").SettlementChange[];
+  }
   | {
     t: "inbox.summaries";
     generation: string;
@@ -110,7 +132,14 @@ type ServerMessage =
   | { t: "content"; sessionID: string; event: ContentOp; clock?: ContentClock }
   | { t: "bootstrap.complete" }
   | ({ t: "transcript.invalidated" } & TranscriptInvalidation)
-  | { t: "error"; code: string; message?: string };
+  | {
+    t: "error";
+    code: string;
+    message?: string;
+    reason?: "client-outdated";
+    protocol?: number;
+    build?: string;
+  };
 
 // A missing advertisement uses the compatibility families; an explicit []
 // advertises none.

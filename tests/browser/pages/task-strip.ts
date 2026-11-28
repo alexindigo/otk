@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Page, TestInfo } from "@playwright/test";
 import { expect } from "../fixtures/evidence.ts";
+import { cssLength } from "./css-length.ts";
 
 export const stripThemes = [
   { name: "dark", id: "otk-dark", mode: "dark" },
@@ -9,7 +10,11 @@ export const stripThemes = [
 ];
 
 export async function stripGeometry(page: Page) {
-  return await page.locator(".otk-task-list").evaluate((lane) => {
+  const expected = await cssLength(
+    page.locator(".otk-task-strip"),
+    "--chrome-header-height",
+  );
+  const geometry = await page.locator(".otk-task-list").evaluate((lane) => {
     const bounds = lane.getBoundingClientRect();
     const tabs = Array.from(lane.querySelectorAll<HTMLElement>("[data-tab]"))
       .map(
@@ -18,6 +23,8 @@ export async function stripGeometry(page: Page) {
           return {
             id: tab.dataset.tab!,
             width: box.width,
+            start: box.left - bounds.left + lane.scrollLeft,
+            end: box.right - bounds.left + lane.scrollLeft,
             y: box.y,
             full: box.left >= bounds.left - 1 && box.right <= bounds.right + 1,
             selected: tab.getAttribute("aria-selected") === "true",
@@ -27,9 +34,6 @@ export async function stripGeometry(page: Page) {
     const strip = lane.closest(".otk-task-strip")!;
     return {
       height: strip.getBoundingClientRect().height,
-      expected: parseFloat(
-        getComputedStyle(strip).getPropertyValue("--chrome-header-height"),
-      ),
       tabs,
       full: tabs.filter((tab) => tab.full).map((tab) => tab.id),
       left: lane.scrollLeft,
@@ -57,6 +61,7 @@ export async function stripGeometry(page: Page) {
       ),
     };
   });
+  return { ...geometry, expected };
 }
 
 export async function stripContract(page: Page, count: number) {
@@ -104,32 +109,34 @@ export async function stripContract(page: Page, count: number) {
     await expect(page.getByRole("button", { name: "Next tasks", exact: true }))
       .toBeVisible();
     const first = await stripGeometry(page);
-    await page.getByRole("button", { name: "Next tasks", exact: true }).click();
-    await expect.poll(async () => (await stripGeometry(page)).full[0], {
-      message: JSON.stringify({
-        before: first,
-        after: await stripGeometry(page),
-      }),
-    }).toBe(
-      first.full.length === 1
-        ? first.tabs[
-          first.tabs.findIndex((tab) => tab.id === first.full[0]) + 1
-        ]
-          .id
-        : first.full.at(-1),
-    );
-    const second = await stripGeometry(page);
-    expect(second.left).toBeGreaterThan(first.left);
-    await page.getByRole("button", { name: "Previous tasks", exact: true })
-      .click();
-    await expect.poll(async () => (await stripGeometry(page)).full.at(-1)).toBe(
-      second.full.length === 1
-        ? second.tabs[
-          second.tabs.findIndex((tab) => tab.id === second.full[0]) - 1
-        ].id
-        : second.full[0],
-    );
-    expect((await stripGeometry(page)).left).toBeLessThan(second.left);
+    expect(first.left).toBe(0);
+    // Exercise start, an interior page, and the browser-clamped end.
+    await pageTasks(page, "next");
+    await pageTasks(page, "previous");
+    if (first.total - first.width > first.width * 2) {
+      await lane.evaluate((el) =>
+        el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2
+      );
+      await expect(page.locator(".otk-edge-triangle")).toHaveCount(2);
+      await pageTasks(page, "next");
+      await pageTasks(page, "previous");
+    }
+    await lane.evaluate((el) => el.scrollLeft = el.scrollWidth);
+    await expect(page.getByRole("button", { name: "Next tasks", exact: true }))
+      .toHaveCount(0);
+    const end = await stripGeometry(page);
+    expect(end.full).toContain(end.tabs.at(-1)!.id);
+    expect(Math.abs(end.left - (end.total - end.width))).toBeLessThanOrEqual(1);
+    expect(end.next).toBe(false);
+    await pageTasks(page, "previous");
+    await lane.evaluate((el) => el.scrollLeft = 0);
+    await expect(
+      page.getByRole("button", { name: "Previous tasks", exact: true }),
+    ).toHaveCount(0);
+    const start = await stripGeometry(page);
+    expect(start.full).toContain(start.tabs[0].id);
+    expect(start.left).toBe(0);
+    expect(start.previous).toBe(false);
     await lane.hover();
     await page.mouse.wheel(0, 180);
     await expect.poll(async () => (await stripGeometry(page)).left)
@@ -162,6 +169,64 @@ export async function stripContract(page: Page, count: number) {
     await expect(page.locator(".otk-edge-triangle")).toHaveCount(0);
   }
   return g;
+}
+
+type StripGeometry = Awaited<ReturnType<typeof stripGeometry>>;
+function pagingTarget(before: StripGeometry, direction: "next" | "previous") {
+  const boundary = direction === "next" ? before.full.at(-1) : before.full[0];
+  const index = before.tabs.findIndex((tab) => tab.id === boundary);
+  const target = before
+    .tabs[
+      index + (before.full.length === 1 ? direction === "next" ? 1 : -1 : 0)
+    ];
+  const requested = target
+    ? direction === "next" ? target.start : target.end - before.width
+    : before.left + (direction === "next" ? before.width : -before.width);
+  return {
+    target,
+    offset: Math.max(0, Math.min(before.total - before.width, requested)),
+  };
+}
+export function assertPagingStep(
+  before: StripGeometry,
+  after: StripGeometry,
+  direction: "next" | "previous",
+) {
+  const { target, offset } = pagingTarget(before, direction);
+  expect(
+    Math.abs(after.left - offset),
+    JSON.stringify({ before, after, direction }),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    direction === "next" ? after.left - before.left : before.left - after.left,
+  ).toBeGreaterThan(0);
+  expect(after.previous).toBe(after.left > 1);
+  expect(after.next).toBe(after.left + after.width < after.total - 1);
+  // A sole visible tab must advance to its neighbour, never overlap itself.
+  if (before.full.length === 1 && target) {
+    expect(after.full).toContain(target.id);
+  }
+  if (offset === 0) expect(after.full).toContain(after.tabs[0].id);
+  if (offset === after.total - after.width) {
+    expect(after.full).toContain(after.tabs.at(-1)!.id);
+  }
+}
+export async function pageTasks(page: Page, direction: "next" | "previous") {
+  const before = await stripGeometry(page),
+    { offset } = pagingTarget(before, direction);
+  await page.getByRole("button", {
+    name: direction === "next" ? "Next tasks" : "Previous tasks",
+    exact: true,
+  }).click();
+  await expect.poll(async () =>
+    Math.abs((await stripGeometry(page)).left - offset)
+  ).toBeLessThanOrEqual(1);
+  await expect.poll(async () => {
+    const after = await stripGeometry(page);
+    return after.previous === (after.left > 1) &&
+      after.next === (after.left + after.width < after.total - 1);
+  }).toBe(true);
+  assertPagingStep(before, await stripGeometry(page), direction);
 }
 
 export async function stripShot(page: Page, info: TestInfo, name: string) {

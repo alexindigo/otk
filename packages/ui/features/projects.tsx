@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./projects.css" with { type: "text" };
-import { scrollRegion } from "../components/ScrollRegion.tsx";
+import ScrollRegion from "../components/ScrollRegion.tsx";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { createProjectPicker } from "@otk/client";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
@@ -14,8 +14,11 @@ import { solidState } from "../state/binding.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import PreferenceControls from "../components/PreferenceControls.tsx";
 import FeedbackStatus from "../components/FeedbackStatus.tsx";
+import { registerProjectSettings } from "./project-settings.tsx";
+import { retainForReload } from "../state/reload.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
+  registerProjectSettings(dialogs);
   dialogs.register({
     id: "add-project",
     size: "form",
@@ -31,6 +34,14 @@ function AddProject(props: DialogProps) {
     shell.servers().find((s) => s.status === "connected")?.id ?? "local",
   );
   const [path, setPath] = createSignal("");
+  retainForReload("add-project", {
+    snapshot: () => ({ server: server(), path: path() }),
+    restore(value) {
+      const saved = value as { server: string; path: string };
+      setServer(saved.server);
+      setPath(saved.path);
+    },
+  });
   const connection = () => {
     const selected = shell.servers().find((s) => s.id === server());
     return {
@@ -59,7 +70,7 @@ function AddProject(props: DialogProps) {
       <Form
         title="Project directory"
         submitLabel="Create session"
-        pendingLabel="Creating project session…"
+        pendingLabel="Creating project session..."
         onSubmit={(data) =>
           picker.add({
             sidecarId: String(data.get("server")),
@@ -72,20 +83,12 @@ function AddProject(props: DialogProps) {
         <label>
           Server<FormSelect
             name="server"
+            label="Server"
             value={server()}
-            onChange={(e) => setServer(e.currentTarget.value)}
-          >
-            <For
-              each={shell.servers().filter((s) => s.status === "connected")}
-              keyed={(s) => s.id}
-            >
-              {(s) => (
-                <option value={s().id}>
-                  {s().label}
-                </option>
-              )}
-            </For>
-          </FormSelect>
+            onValue={setServer}
+            options={shell.servers().filter((s) => s.status === "connected")
+              .map((s) => ({ value: s.id, label: s.label }))}
+          />
         </label>
         <label>
           Path<FormInput
@@ -98,13 +101,14 @@ function AddProject(props: DialogProps) {
           />
         </label>
       </Form>
-      <section
-        class={[scrollRegion(), "otk-template-paths"]}
+      <ScrollRegion
+        as="section"
+        class="otk-template-paths"
         aria-label="Scanned projects"
       >
         <strong>From path templates</strong>
         <Show when={picker.state.loading}>
-          <p class="otk-muted">Scanning directories…</p>
+          <p class="otk-muted">Scanning directories...</p>
         </Show>
         <Show when={picker.state.error}>
           <FeedbackStatus feedback={picker.state.error || undefined} />
@@ -129,12 +133,12 @@ function AddProject(props: DialogProps) {
             path above.
           </p>
         </Show>
-      </section>
+      </ScrollRegion>
     </>
   );
 }
 
-/** Server-scoped templates and host-owned ageing controls live with inbox UI. */
+/** Server-scoped templates and host-owned project controls live with inbox UI. */
 export function ProjectSettings(): import("solid-js").Element {
   const shell = useShellPorts();
   const { commands } = useCommandPorts();
@@ -147,38 +151,6 @@ export function ProjectSettings(): import("solid-js").Element {
         ready={shell.toggles.state.ready}
         onSet={(key, value) => commands.run("prefs.set", { key, value })}
       />
-      <h3>Ageing thresholds (hours)</h3>
-      <Form
-        title="Ageing thresholds (hours)"
-        submitLabel="Save ageing"
-        onSubmit={async (data) => {
-          const value = [1, 2, 3].map((n) =>
-            Number(data.get(`age${n}`)) * 3_600_000
-          );
-          await shell.connection("local").rpc.call("prefs.set", {
-            key: "projectAgeing",
-            value,
-          });
-        }}
-      >
-        <div class="otk-ageing-fields">
-          <For each={[0, 1, 2]}>
-            {(n) => (
-              <label>
-                Level {n + 1}
-                <FormInput
-                  name={`age${n + 1}`}
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  required
-                  value={shell.toggles.state.prefs.projectAgeing[n] / 3_600_000}
-                />
-              </label>
-            )}
-          </For>
-        </div>
-      </Form>
       <For each={shell.servers()} keyed={(s) => s.id}>
         {(s) => (
           <>

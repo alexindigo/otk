@@ -64,10 +64,9 @@ test("messages.highlight-2000-lines-passive-latency", {
     delay: 0,
   });
   await prompt(page, "Highlight the large block then twenty chunks");
-  // The newest reply is the last virtual row holding an assistant: a V2
-  // execution record can follow it as the transcript's final row.
-  const measured =
-    '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item:has([data-role=assistant])) [data-role=assistant] .otk-text';
+  const measuredReply =
+    '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item:has([data-role=assistant])) [data-role=assistant]';
+  const measured = measuredReply + " .otk-text";
   await page.evaluate(
     `highlightMeasure(${
       JSON.stringify(measured + " .otk-code code")
@@ -153,15 +152,9 @@ test("messages.highlight-2000-lines-passive-latency", {
       ),
     { timeout: 30_000 },
   ).toBe(true);
-  // Following keeps the newest reply's last line in view after any trailing
-  // record lands below it.
-  if (state.controller.info!.version.startsWith("2.")) {
-    await expect(
-      page.locator(
-        '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item)',
-      ),
-    ).toContainText("Execution succeeded");
-  }
+  // A text-only reply has no Work strip for step or completion bookkeeping.
+  await expect(page.locator(measuredReply).locator(".otk-work-strip"))
+    .toHaveCount(0);
   await expect.poll(() =>
     page.locator(".otk-messages").evaluate((root) => {
       const codes = Array.from(root.querySelectorAll(".otk-code code"))

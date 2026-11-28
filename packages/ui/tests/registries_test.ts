@@ -159,8 +159,8 @@ Deno.test("prompt factories create independent feature lifetimes with caller-inj
       contexts.push(ctx);
       let count = 0;
       return {
-        beforeSubmit() {
-          return ++count === 2;
+        localCommand() {
+          return ++count === 2 ? () => Promise.resolve() : undefined;
         },
       };
     },
@@ -168,9 +168,9 @@ Deno.test("prompt factories create independent feature lifetimes with caller-inj
   const one = {} as PromptContext, two = {} as PromptContext;
   const first = prompt.create(one)[0], second = prompt.create(two)[0];
   const draft = { input: "", chips: [], mode: "normal" as const };
-  assertEquals(first.beforeSubmit?.(draft), false);
-  assertEquals(first.beforeSubmit?.(draft), true);
-  assertEquals(second.beforeSubmit?.(draft), false);
+  assertEquals(first.localCommand?.(draft), undefined);
+  assertEquals(typeof first.localCommand?.(draft), "function");
+  assertEquals(second.localCommand?.(draft), undefined);
   assertEquals(contexts, [one, two]);
   assertThrows(
     () => prompt.register({ id: "custom", create: () => ({}) }),
@@ -200,13 +200,13 @@ Deno.test("open dialog, panel and takeover collections retain component ownershi
   panels.register({
     id: "always",
     title: "Always",
-    icon: "A",
+    icon: () => null,
     component: () => "A",
   });
   panels.register({
     id: "custom",
     title: "Custom",
-    icon: "C",
+    icon: () => null,
     capability: "custom",
     component: () => "C",
   });
@@ -220,7 +220,7 @@ Deno.test("open dialog, panel and takeover collections retain component ownershi
       panels.register({
         id: "custom",
         title: "duplicate",
-        icon: "D",
+        icon: () => null,
         component: () => "D",
       }),
     Error,

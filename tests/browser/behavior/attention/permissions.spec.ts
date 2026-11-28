@@ -3,7 +3,18 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { file, prompt, reply, seed, tool } from "../../pages/attention.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import {
+  openBlockedSubagents,
+  restorePermissionDock,
+  subagent,
+  subagentLamp,
+  subagents,
+} from "../../pages/crumbs.ts";
+import {
+  openLatestWork,
+  sessionStatus,
+  showSessions,
+} from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
@@ -37,10 +48,7 @@ test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
   await dock.getByRole("button", { name: "Reject request", exact: true })
     .click();
   await expect(dock).toHaveCount(0);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   await file(state, "README.md", "# OTK fixture\n");
   await tool(state, "read", { filePath: `${state.directory}/README.md` });
   await prompt(page, "Describe the read permission");
@@ -72,7 +80,7 @@ test("attention.permission-once-completes-native-output-and-idle", {
   expect(Math.abs(bounds.dock - bounds.surface)).toBeLessThan(.5);
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
     .toContainText("otk");
   await reply(page, session.id, "Permission completed");
@@ -114,7 +122,15 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   );
   await expect(page.locator(".otk-permission-command")).toHaveText("echo otk");
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
-  await expect(page.locator(`[data-crumb="${child.id}"] .otk-status-light`))
+  const childCrumb = page.locator(`[data-crumb="${child.id}"]`);
+  const inventory = subagents(page);
+  await expect(childCrumb).toHaveCount(0);
+  await openBlockedSubagents(page);
+  await expect(subagentLamp(page, child.id))
+    .toHaveAttribute("data-state", "blocked");
+  await inventory.click();
+  await restorePermissionDock(page);
+  await expect(page.locator(`[data-session="${child.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "blocked");
   await expect(
     page.locator(`[data-session="${child.id}"]`).locator(
@@ -124,9 +140,15 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await reply(page, session.id, "Parent completed");
-  // The child's finish was never viewed, so its crumb stays (AXIOM 1).
-  await expect(page.locator(`[data-crumb="${child.id}"] .otk-status-light`))
-    .toHaveAttribute("data-state", "finished");
+  // Decision 58: receiving the helper result acknowledges that exact run. Its
+  // parent result remains visible, without acquiring the child's transcript.
+  await expect(inventory).toHaveCount(0);
+  await expect(childCrumb).toHaveCount(0);
+  await expect(
+    page.locator(
+      `[data-session="${child.id}"] .otk-status-light[data-state="finished"]`,
+    ),
+  ).toHaveCount(0);
   await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   expect(
     frames.sent.some(({ frame }) =>
@@ -134,6 +156,12 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
       frame.params?.sessionID === child.id
     ),
   ).toBe(true);
+  expect(
+    frames.sent.some(({ frame }) =>
+      frame.method === "session.messages" &&
+      frame.params?.sessionID === child.id
+    ),
+  ).toBe(false);
   const history = await state.native<
     {
       parts: { tool?: string; state?: { status: string; output?: string } }[];
@@ -167,22 +195,26 @@ test.describe("native helper lifecycle", () => {
     });
     const parentTab = page.locator(`[data-tab="${parent.id}"]`);
     const childTab = page.locator(`[data-tab="${child.id}"]`);
-    // AXIOM 1 and decision 35: ungrouped helpers have their own visible tab;
-    // a parent's own lamp cannot substitute for that child's activity.
-    await expect(childTab.locator(".otk-status-light"))
+    // The human task rolls up activity; D66 retains the helper's own lamp.
+    await expect(parentTab.locator(".otk-status-light"))
       .toHaveAttribute("data-state", "blocked");
-    await expect(parentTab).toHaveCount(0);
-    await childTab.click();
-    // Fix 4.2 case 2: an independent phantom selects itself. D35 still
-    // gives the ancestor link its parent's own, not the helper's, lamp.
-    await expect(childTab).toHaveAttribute("aria-selected", "true");
-    await expect(parentTab).toHaveCount(0);
+    await expect(childTab).toHaveCount(0);
+    await parentTab.click();
+    const crumb = page.locator(`[data-crumb="${child.id}"]`);
+    const helper = subagent(page, child.id);
+    await expect(crumb).toHaveCount(0);
+    await openBlockedSubagents(page);
+    await expect(subagentLamp(page, child.id))
+      .toHaveAttribute("data-state", "blocked");
+    const target = helper.locator(".otk-subagent-name");
+    await expect(target).toHaveText("Live helper");
+    await target.click();
+    await expect(parentTab).toHaveAttribute("aria-selected", "true");
     const ancestor = page.locator(
-      `[data-crumb="${parent.id}"][data-crumb-kind="ancestor"]`,
+      `[data-crumb="${parent.id}"][data-crumb-kind="member"]`,
     );
     await expect(ancestor.locator(".otk-status-light"))
       .toHaveAttribute("data-state", "none");
-    const crumb = page.locator(`[data-crumb="${child.id}"]`);
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
       "blocked",
@@ -199,6 +231,7 @@ test.describe("native helper lifecycle", () => {
     );
     await expect(parentTab).toHaveCount(0);
     await expect(childTab).toHaveCount(0);
+    await restorePermissionDock(page);
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
@@ -271,7 +304,13 @@ test(
     await state.queue(["Covered command completed"]);
     await prompt(page, "Use the approved echo pattern");
     await reply(page, session.id, "Covered command completed");
-    await openWorkLogs(page);
+    await openLatestWork(page);
+    // Expanded earlier work can move the newer reply outside the virtual range.
+    // Use the public navigation owner before inspecting that reply's work.
+    await page.keyboard.press("Control+k");
+    await page.locator("input[name=command-search]").fill("Jump to latest");
+    await page.locator('[data-command="transcript.latest"]').click();
+    await openLatestWork(page);
     await expect(
       page.locator("[data-tool-status=completed]").filter({
         hasText: "echo covered",
@@ -289,6 +328,11 @@ test(
     await expect(page.locator(".otk-permission-command")).toHaveText(
       "printf rejected",
     );
+    const pending = (await state.native<{ id: string; sessionID: string }[]>(
+      "/permission",
+    )).filter((p) => p.sessionID === session.nativeID);
+    expect(pending).toHaveLength(1);
+    const requestID = pending[0]!.id;
     await dock.locator("h2").click();
     await page.keyboard.press("3");
     const rejection = page.locator("textarea[name=rejection]"),
@@ -301,26 +345,55 @@ test(
     await page.keyboard.press("3");
     await expect(rejection).toBeVisible();
     await expect(first).toBeFocused();
-    await rejection.fill("Please use another approach");
-    page.once("dialog", (dialog) => dialog.dismiss());
+    const reason = "Please use another approach";
+    await rejection.fill(reason);
+    await showSessions(page);
+    const cdp = await page.context().newCDPSession(page);
+    const nativeDialogs: string[] = [];
+    // Observe without installing a Playwright handler that blocks the page.
+    cdp.on("Page.javascriptDialogOpening", ({ message }) => {
+      nativeDialogs.push(message);
+    });
+    await cdp.send("Page.enable");
+    const otkDialogs = page.getByRole("dialog");
     await page.locator(`[data-session="${other.id}"]`).click();
+    await expect(otkDialogs).toHaveCount(0);
+    expect(nativeDialogs).toEqual([]);
+    await expect(page).toHaveURL(new RegExp(`${other.id}$`));
+    await expect(dock).toHaveCount(0);
+
+    await page.locator(`[data-session="${session.id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${session.id}$`));
-    await expect(rejection).toHaveValue("Please use another approach");
+    await expect(page.locator(".otk-permission-command")).toHaveText(
+      "printf rejected",
+    );
+    await dock.locator("h2").click();
+    await page.keyboard.press("3");
+    await expect(rejection).toBeVisible();
+    await expect(first).toBeFocused();
+    await expect(rejection).toHaveValue(reason);
+    await expect(otkDialogs).toHaveCount(0);
+    expect(nativeDialogs).toEqual([]);
+    expect(
+      frames.sent.filter(({ frame }) => frame.method === "permission.reply"),
+    ).toHaveLength(1);
     await page.getByRole("button", { name: "Reject request", exact: true })
       .click();
     await expect(dock).toHaveCount(0);
+    await openLatestWork(page);
     await expect(page.locator("[data-tool-status=denied]")).toBeVisible();
     await expect(page.locator("[data-tool-status=denied] .otk-tool-toggle"))
       .toHaveCSS("text-decoration-line", "line-through");
+    await reply(page, session.id, "Rejection handled");
     const replies = frames.sent.filter(({ frame }) =>
       frame.method === "permission.reply"
     ).map(({ frame }) => frame.params);
     expect(replies.some((p) => p?.reply === "always")).toBe(true);
-    expect(
-      replies.some((p) =>
-        p?.reply === "reject" && p.message === "Please use another approach"
-      ),
-    ).toBe(true);
-    await reply(page, session.id, "Rejection handled");
+    expect(replies.slice(1)).toEqual([{
+      sessionID: session.id,
+      requestID,
+      reply: "reject",
+      message: reason,
+    }]);
   },
 );

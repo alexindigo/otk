@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { receivedPrompt } from "../../fixtures/provider.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import {
+  openBlockedSubagents,
+  restorePermissionDock,
+  subagent,
+  subagentLamp,
+  subagents,
+} from "../../pages/crumbs.ts";
+import { openLatestWork, showSessions } from "../../pages/transcript.ts";
 
 test.use({ profile: "isolated", timezoneId: "America/Los_Angeles" });
 for (
@@ -26,19 +34,26 @@ for (
     if (view === "publication") {
       frames.hold((f) => f.t === "index.patch" || f.t === "index.snapshot");
     }
-    const child = await seed(
-      state,
-      "Execute optimized-preview-build plan",
-      parent.id,
-    );
+    const childTitle = "Execute optimized-preview-build plan";
+    const child = await seed(state, childTitle, parent.id);
     await tool(state, "bash", {
       command: "printf permission-owner-output",
       description: "Helper permission owner probe",
     });
     await state.queue(["Helper permission owner completed"]);
+    const prompt = "Run the helper permission probe";
     await state.native(`/session/${child.id}/prompt_async`, "POST", {
-      parts: [{ type: "text", text: "Run the helper permission probe" }],
+      parts: [{ type: "text", text: prompt }],
     });
+    // Native async acceptance can precede the first provider call on a cold
+    // stack. Start the permission witness only once this prompt has arrived.
+    await expect.poll(async () => {
+      const { requests } = await state.observe<{ requests: unknown[] }>({
+        fields: ["requests"],
+      });
+      return receivedPrompt(requests, prompt);
+    }, { timeout: 30_000, message: "Provider received the helper prompt" })
+      .toBe(true);
     await expect.poll(async () =>
       (await state.native<{ sessionID: string }[]>("/permission")).some((p) =>
         p.sessionID === child.nativeID
@@ -74,24 +89,36 @@ for (
     });
     const parentRow = page.locator(`[data-session="${parent.id}"]`);
     const childRow = page.locator(`[data-session="${child.id}"]`);
-    await expect(parentRow).toContainText("P 1");
+    // D35/D62: the parent's count names child sessions, not own permissions.
+    await expect(parentRow).toContainText("Children 1");
+    await expect(parentRow.getByLabel("Child sessions needing you: 1"))
+      .toBeVisible();
+    await expect(parentRow.getByTitle("This session's pending permissions"))
+      .toHaveCount(0);
     await expect(childRow).toContainText("P 1");
-    // Fix 4.2 case 2: the ungrouped asking helper owns a mandatory phantom,
-    // not a member of its parent's trail. Permission-family ownership is unchanged.
+    // 2.67: asking helpers remain inside their human task, with their own lamp.
     const childTab = page.locator(`[data-tab="${child.id}"]`);
-    await expect(childTab.locator(".otk-status-light")).toHaveAttribute(
+    const parentTab = page.locator(`[data-tab="${parent.id}"]`);
+    await expect(childTab).toHaveCount(0);
+    const crumb = page.locator(`[data-crumb="${child.id}"]`);
+    await expect(crumb).toHaveCount(0);
+    const inventory = subagents(page);
+    await openBlockedSubagents(page);
+    const helper = subagent(page, child.id);
+    await expect(subagentLamp(page, child.id)).toHaveAttribute(
       "data-state",
       "blocked",
     );
-    const crumb = page.locator(`[data-crumb="${child.id}"]`);
-    await expect(crumb).toHaveCount(0);
     if (view === "direct") {
       await page.clock.setFixedTime(Date.now() + 12 * 86400_000 + 60_000);
       await page.goto(`${state.url}/#/local/${child.id}`);
     } else if (view !== "parent" && view !== "publication") {
-      await childTab.click();
+      const target = helper.locator(".otk-subagent-name");
+      await expect(target).toHaveText(childTitle);
+      await target.click();
       await expect(crumb).toHaveAttribute("data-crumb-kind", "member");
-      await crumb.click();
+    } else {
+      await inventory.click();
     }
     if (view === "reload") await page.reload();
     if (view === "reconnect") {
@@ -102,14 +129,14 @@ for (
       );
     }
     if (view !== "parent" && view !== "publication") {
-      await expect(childTab).toHaveAttribute("aria-selected", "true");
+      await expect(parentTab).toHaveAttribute("aria-selected", "true");
       await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
         "data-state",
         "blocked",
       );
       await expect(page.locator(`[data-crumb="${parent.id}"]`)).toHaveAttribute(
         "data-crumb-kind",
-        "ancestor",
+        "member",
       );
     }
     const requests = await state.product("permission.list", {
@@ -129,7 +156,7 @@ for (
       }),
       contentType: "application/json",
     });
-    await expect(page.locator(".otk-permission-dock")).toBeVisible();
+    await restorePermissionDock(page);
     await expect(page.locator(".otk-permission-command")).toHaveText(
       "printf permission-owner-output",
     );
@@ -137,10 +164,9 @@ for (
       await expect(page.getByRole("button", { name, exact: true }))
         .toBeVisible();
     }
-    const hasComposer = view === "parent" || view === "publication";
-    await expect(page.locator(".otk-draft-kept")).toHaveCount(
-      hasComposer ? 1 : 0,
-    );
+    // D17: the takeover suspends the composer even in a child session.
+    await expect(page.locator(".otk-permission-dock .otk-draft-kept"))
+      .toHaveText("Your draft is kept");
     if (view === "direct") {
       // Permission age must not depend on unfinished session indexing.
       await expect.poll(() => {
@@ -155,14 +181,16 @@ for (
       }).toBe(true);
       await expect(page.locator(".otk-shell-progress")).toHaveText("");
       await expect(page.locator(".otk-permission-dock .otk-request-age"))
-        .toHaveText("Session idle 12 days");
+        .toHaveText(/^Session idle 12d(?: \d+(?:\.\d+)?[hms])*$/);
       await expect(
         page.getByRole("button", { name: "Allow once", exact: true }),
       ).toHaveAttribute("title", "Allow once (1 when focused)");
       await expect(
         page.getByRole("button", { name: "Allow once", exact: true }),
       )
-        .toHaveAccessibleDescription("Resumes work paused 12 days ago");
+        .toHaveAccessibleDescription(
+          /^Resumes work paused 12d(?: \d+(?:\.\d+)?[hms])* ago$/,
+        );
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await state.product("prefs.set", { key: "theme", value: theme });
         await expect(page.locator("html")).toHaveAttribute(
@@ -219,18 +247,24 @@ for (
       ? "task"
       : "bash";
     if (pendingTool === "bash") {
-      await openWorkLogs(page);
+      await openLatestWork(page);
       await expect(page.locator("[data-tool=bash]")).toContainText(
         "Awaiting permission",
       );
-      await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+      await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
     // Replies go through the visible existing dock, to the asking helper.
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
     if (pendingTool === "bash") {
-      await expect(page.locator(".otk-composer-dock")).toHaveCount(0);
+      // Answering a permission does not join the child's conversation.
+      await expect(page.getByRole("button", {
+        name: "Join the conversation",
+        exact: true,
+      })).toBeVisible();
+      await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
+    await showSessions(page);
     await expect(parentRow).not.toContainText("P 1");
     await expect(childRow).not.toContainText("P 1");
     await expect.poll(async () =>
@@ -250,6 +284,7 @@ for (
         )
     ).toBe(true);
     if (pendingTool === "bash") {
+      await openLatestWork(page);
       await expect(page.locator("[data-tool=bash]")).not.toContainText(
         "Awaiting permission",
       );

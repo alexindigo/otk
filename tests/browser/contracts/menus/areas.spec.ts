@@ -5,6 +5,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import {
   appActions,
   clipboard,
+  composerInputActions,
   contextMenu,
   copied,
   dismiss,
@@ -138,7 +139,15 @@ test(
       page,
       '[data-project$="/projects/otk"] .otk-project-open',
     );
-    expect(await groups(page)).toEqual([["Mark inactive"], projects]);
+    expect(await groups(page)).toEqual([
+      ["Move up", "Move down", "Mark inactive"],
+      projects,
+    ]);
+    const projectMenu = contextMenu(page);
+    await expect(projectMenu.getByRole("menuitem", { name: "Move up" }))
+      .toBeDisabled();
+    await expect(projectMenu.getByRole("menuitem", { name: "Move down" }))
+      .toBeEnabled();
     await dismiss(page);
     await rightClick(page, ".otk-inbox-scroll", true);
     await pick(page, "Add project");
@@ -218,7 +227,7 @@ test(
     await prompt.fill("Keep this prompt");
     await rightClick(page, ".otk-prompt-actions", true);
     expect(await groups(page)).toEqual([
-      ["Edit prompt", "Attach files"],
+      composerInputActions,
       appActions,
     ]);
     await pick(page, "Edit prompt");

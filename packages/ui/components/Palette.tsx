@@ -7,10 +7,10 @@ import {
 } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./Palette.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
-import { createSignal, For, onSettled, Show } from "solid-js";
+import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
 export default function Palette(
   props: { onClose(): void },
@@ -27,7 +27,9 @@ export default function Palette(
       release();
     };
   });
-  const rows = () => {
+  // Every row borrows the same discovery snapshot, including while a command
+  // is pending and live context changes invalidate availability.
+  const rows = createMemo(() => {
     revision();
     return commands.list().filter((row) => row.enabled).filter((row) =>
       `${row.cmd.title} ${row.cmd.category} ${row.cmd.name} ${
@@ -35,7 +37,7 @@ export default function Palette(
       }`
         .toLowerCase().includes(query().toLowerCase())
     );
-  };
+  });
   const invoke = async (id: string) => {
     const facts = commandFailureFacts({
       id,
@@ -64,7 +66,7 @@ export default function Palette(
       <input
         name="command-search"
         aria-label="Find a command"
-        placeholder="Find a command…"
+        placeholder="Find a command..."
         autofocus
         value={query()}
         onInput={(event) => setQuery(event.currentTarget.value)}
@@ -76,7 +78,7 @@ export default function Palette(
           }
         }}
       />
-      <ul class={[scrollRegion(), "otk-palette-list"]}>
+      <ScrollRegion as="ul" class="otk-palette-list">
         <For each={rows()} keyed={(row) => row.cmd.id}>
           {(row) => (
             <li>
@@ -98,13 +100,13 @@ export default function Palette(
                     </span>
                     <small>{row().cmd.category}</small>
                   </span>
-                  <kbd>{row().keys.join(" / ")}</kbd>
+                  <kbd>{row().keys.join(" or ")}</kbd>
                 </SelectionContent>
               </button>
             </li>
           )}
         </For>
-      </ul>
+      </ScrollRegion>
       <Show when={!rows().length}>
         <p class="otk-muted">No matching commands.</p>
       </Show>

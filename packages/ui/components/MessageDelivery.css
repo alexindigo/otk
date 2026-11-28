@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-message-delivery-slot {
+  min-block-size: var(--control-size);
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+}

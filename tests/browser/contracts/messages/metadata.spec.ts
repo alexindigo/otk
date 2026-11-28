@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork } from "../../pages/transcript.ts";
 
 test.describe("neutral backend facts", () => {
   test.use({ profile: "contract-messages-facts" });
@@ -12,8 +12,9 @@ test.describe("neutral backend facts", () => {
     async ({ isolatedState: state, page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`${state.url}/#/local/tstv1-core`);
-      await openWorkLogs(page);
-      await expect(page.locator(".otk-composer-agent")).toHaveText("Action");
+      await openLatestWork(page);
+      await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+        .toHaveText("Action");
       await page.locator(".otk-agent-picker > button").click();
       await expect(
         page.locator(".otk-popover-panel:popover-open .otk-picker-name"),
@@ -24,32 +25,41 @@ test.describe("neutral backend facts", () => {
       await expect(page.locator(".otk-agent-picker > button")).not.toHaveClass(
         /is-applied/,
       );
-      await page.locator("[data-tool=external] .otk-tool-toggle").click();
-      await expect(page.locator("[data-tool=external] .otk-tool-toggle"))
-        .toHaveAttribute("aria-expanded", "true");
-      await page.locator(".otk-message-agent").hover();
+      const external = page.locator("[data-tool=external] .otk-tool-toggle");
+      if (await external.getAttribute("aria-expanded") === "false") {
+        await external.click();
+      }
+      await expect(external).toHaveAttribute("aria-expanded", "true");
+      await page.locator(".otk-reply-start .otk-entity-pill").hover();
       const observed = await page.evaluate(() => {
         const probe = document.createElement("span");
         probe.style.color = "var(--accent)";
         document.body.append(probe);
         const accent = getComputedStyle(probe).color;
+        probe.style.color = "var(--otk-fg)";
+        const foreground = getComputedStyle(probe).color;
         probe.remove();
         return {
-          task: document.querySelector("[data-tool=task] .otk-tool-target")
+          task: document.querySelector(
+            "[data-tool=task] .otk-work-run-preview .otk-chrome-meta",
+          )
             ?.textContent,
           notice: document.querySelector("[data-tool=external] small")
             ?.textContent,
-          reply: getComputedStyle(document.querySelector(".otk-message-agent")!)
+          reply: getComputedStyle(
+            document.querySelector(".otk-reply-start .otk-entity-pill")!,
+          )
             .color,
           trigger: getComputedStyle(
             document.querySelector(".otk-agent-picker > button")!,
           ).color,
           accent,
+          foreground,
         };
       });
       expect(observed.task).toBe("Unknown agent");
       expect(observed.notice).toBe("Output truncated.");
-      expect(observed.reply).toBe(observed.accent);
+      expect(observed.reply).toBe(observed.foreground); // WP2 neutral entity surface.
       expect(observed.trigger).toBe(observed.accent);
       await page.locator(".otk-agent-picker > button").click();
       await expect(
@@ -85,9 +95,11 @@ test.describe("honest native metadata", () => {
   }, async ({ isolatedState: state, page }) => {
     const frames = await wire(page);
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    await openWorkLogs(page);
-    await expect(page.locator("[data-tool=search]")).toHaveCount(2);
-    const rows = await page.locator("[data-tool=search] .otk-tool-toggle")
+    const work = await openLatestWork(page);
+    await work.getByRole("button", { name: "Search 2 searches", exact: true })
+      .click();
+    await expect(work.locator("[data-tool=search]")).toHaveCount(2);
+    const rows = await work.locator("[data-tool=search] .otk-tool-toggle")
       .allTextContents();
     expect(rows[0]).not.toContain("0 matches");
     expect(rows[0]).not.toContain("*");
@@ -98,7 +110,10 @@ test.describe("honest native metadata", () => {
       "aria-label",
       "Change Path not reported",
     );
-    await expect(page.locator("[data-tool=patch] .otk-tool-target")).toHaveText(
+    await expect(
+      work.locator("[data-tool=patch] .otk-work-run-preview > .otk-chrome-meta")
+        .first(),
+    ).toHaveText(
       "Path not reported",
     );
     await patch.click({ button: "right" });
@@ -127,9 +142,15 @@ test.describe("honest native metadata", () => {
         new DragEvent("drop", { bubbles: true, dataTransfer: data }),
       );
     });
-    await expect(page.locator(".otk-prompt-chip")).toContainText(
-      "Each upload must be 20 MiB or smaller",
-    );
+    const chip = page.locator(".otk-prompt-chip");
+    await expect(chip).toHaveClass(/has-error/);
+    const feedbackID = await chip.locator("button.otk-control-grow")
+      .getAttribute("aria-describedby");
+    expect(feedbackID).toBeTruthy();
+    await expect(page.locator(`[id=${JSON.stringify(feedbackID)}]`))
+      .toContainText(
+        "Each upload must be 20 MiB or smaller",
+      );
     await expect(page.locator("textarea[name=prompt]")).toHaveValue(
       /Keep this unsent draft/,
     );

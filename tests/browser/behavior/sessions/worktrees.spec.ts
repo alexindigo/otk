@@ -56,7 +56,14 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
   await visibleOnScreen(page.locator("[data-tab=tstv1-worktree-0]"));
   await page.locator(".otk-inactive-toggle").click();
   await expect(row(archived)).toHaveAttribute("data-inactive", "true");
-  await expect(row(archived).locator(".otk-project-parent")).toHaveText("otk");
+  // 6ca4d662: the checkout inherits the native project label, not its basename.
+  await expect(row(canonical).locator(".otk-sidebar-title-text")).toHaveText(
+    "Fixture project",
+  );
+  await expect(row(archived).locator(".otk-sidebar-title-qualifier"))
+    .toHaveText(
+      "Fixture project",
+    );
   for (
     const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
       "otk-light-stone",
@@ -76,7 +83,7 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
       .evaluateAll((rows) =>
         rows.map((row) => {
           const box = row.getBoundingClientRect();
-          const name = row.querySelector(".otk-project-name")!
+          const name = row.querySelector(".otk-sidebar-title-text")!
             .getBoundingClientRect();
           const light = row.querySelector(".otk-status-light")!
             .getBoundingClientRect();
@@ -86,13 +93,15 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
             height: box.height,
             center: box.y + box.height / 2,
             light: light.y + light.height / 2,
+            markerX: light.x + light.width / 2,
           };
         })
       );
     const parent = geometry.find((r) => r.directory === canonical)!;
     const first = geometry.find((r) => r.directory === one)!;
     const second = geometry.find((r) => r.directory === two)!;
-    expect(first.x).toBeGreaterThan(parent.x);
+    // Hierarchy aligns marker axes; project-only artwork can extend its label.
+    expect(first.markerX).toBeGreaterThan(parent.markerX);
     expect(first.x).toBe(second.x);
     for (const r of geometry) {
       expect(Math.abs(r.center - r.light)).toBeLessThanOrEqual(1);
@@ -105,7 +114,18 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
     await page.locator(".otk-project-inbox").screenshot({
       path: info.outputPath(`review-${name}-column.png`),
     });
-    const centers = await row(one).locator(".otk-status-light").boundingBox();
+    // Back/Forward plan, 4d810f0f: the collapsed header adds a vertical
+    // control stack. Its height is not part of tree or row alignment.
+    const centerInList = () =>
+      row(one).locator(".otk-status-light").evaluate(
+        (element) => {
+          const lamp = element.getBoundingClientRect();
+          const list = element.closest(".otk-inbox-scroll")!
+            .getBoundingClientRect();
+          return lamp.y + lamp.height / 2 - list.y;
+        },
+      );
+    const centers = await centerInList();
     await page.getByRole("button", { name: "Collapse projects", exact: true })
       .click();
     await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
@@ -116,8 +136,7 @@ test("sessions.worktree-hierarchy-leaf-archive-auto-return-and-rail-geometry", {
       row(one).locator(".otk-status-light[data-state=working]"),
     );
     await visibleOnScreen(page.locator("[data-kind=phantom]").first());
-    const rail = await row(one).locator(".otk-status-light").boundingBox();
-    expect(rail!.y + rail!.height / 2).toBe(centers!.y + centers!.height / 2);
+    expect(await centerInList()).toBe(centers);
     await page.screenshot({
       path: info.outputPath(`v6a-${name}-rail.png`),
       fullPage: true,

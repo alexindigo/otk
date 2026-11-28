@@ -74,7 +74,11 @@ test("messages.native-catalog-context-window", {
       JSON.stringify(JSON.stringify(["other", "beam-free"])) +
       "] .otk-picker-option",
   ).click();
-  await expect(page.locator(".otk-model-picker .otk-composer-model-name"))
+  await expect(
+    page.locator(
+      ".otk-model-picker:not([inert] *) .otk-composer-model-name:not([inert] *)",
+    ),
+  )
     .toHaveText("Other catalog model");
   await expect(meter).toHaveAttribute("data-limit", "10000");
   await prompt(page, "Use the other catalog window");
@@ -99,5 +103,10 @@ test("messages.native-catalog-context-window", {
   await page.goto(`${state.url}/#/local/${child.id}`);
   await expect(meter).toHaveAttribute("data-limit", "10000");
   await expect(meter).toHaveAttribute("data-tokens", "2500");
-  await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+  // D17: child usage is visible without joining or exposing the input.
+  await expect(page.getByRole("button", {
+    name: "Join the conversation",
+    exact: true,
+  })).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
 });

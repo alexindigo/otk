@@ -135,6 +135,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         const pending = connection.rpc.start("session.get", {
           sessionID: "open",
         });
+        const beforeReconnect = pending.state.ref;
         let settled = false;
         void pending.result.then(() => settled = true, () => settled = true);
         Socket.current.close();
@@ -166,8 +167,13 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
           "hello",
           "subscribe",
-          "request.resume",
+          "request",
         ]);
+        assertEquals(pending.state.ref.key === beforeReconnect.key, false);
+        assertEquals(
+          pending.state.ref.window === beforeReconnect.window,
+          false,
+        );
         replyRequest(connection.rpc, {
           t: "request",
           ref: pending.state.ref,

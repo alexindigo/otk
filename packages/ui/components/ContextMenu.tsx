@@ -2,6 +2,7 @@
 import { onCleanup, onSettled } from "solid-js";
 import type { ContextTarget } from "@otk/client";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import { localKeyboard } from "../keyboard/ownership.ts";
 import {
   browserContextTargets,
@@ -14,9 +15,12 @@ import type { PopoverControl, PopoverOpenReason } from "./surface/Popover.tsx";
 
 /** One listener owner per shell. Targets declare data; commands own behavior. */
 export default function ContextMenu(
-  props: { root: HTMLElement },
+  props: {
+    root: HTMLElement;
+    control?(openFor: (element: HTMLElement) => void): void;
+  },
 ): import("solid-js").Element {
-  const { commands } = useCommandPorts();
+  const { commands, keyboard: dispatcher } = useCommandPorts();
   let targets: ContextTarget[] = [];
   let menu!: PopoverControl, returnFocus = () => {};
   let retained: (() => void)[] = [];
@@ -35,17 +39,20 @@ export default function ContextMenu(
     width = 0,
     height = 0,
   ) => {
-    menu.close(() => {});
+    menu.close(false);
     releaseOrigin();
     targets = focused === document.body && reason === "keyboard"
       ? []
       : browserContextTargets(
         path,
-        (node) => contextTargets([node]),
+        (node, invocation) => contextTargets([node], invocation),
         reason === "pointer" ? { x, y } : undefined,
       );
     returnFocus = () => {
-      if (focused?.isConnected) focused.focus();
+      focusControl(focused, {
+        focusVisible:
+          (dispatcher?.focusOwner.modality() ?? reason) === "keyboard",
+      });
     };
     const origin =
       path.find((node): node is HTMLElement => node instanceof HTMLElement) ??
@@ -56,10 +63,36 @@ export default function ContextMenu(
         detail: { release: retained },
       }),
     );
-    menu.open({ x, y, width, height, origin, focus: returnFocus }, reason);
+    menu.open({ x, y, width, height, origin, returnTo: focused }, reason);
+  };
+  const openFor = (
+    origin: HTMLElement,
+    focused: HTMLElement | null = origin,
+  ) => {
+    if (!props.root.contains(origin)) return;
+    const path: HTMLElement[] = [];
+    for (
+      let node: HTMLElement | null = origin;
+      node;
+      node = node.parentElement
+    ) {
+      path.push(node);
+      if (node === props.root) break;
+    }
+    const rect = origin.getBoundingClientRect();
+    open(
+      path,
+      rect.left,
+      rect.top,
+      focused,
+      "keyboard",
+      origin === props.root ? 0 : rect.width,
+      origin === props.root ? 0 : rect.height,
+    );
   };
   onSettled(() => {
     const root = props.root;
+    props.control?.(openFor);
     let rightPressed = false, pending: (() => void) | undefined;
     let opening: ReturnType<typeof setTimeout> | undefined;
     const finish = () => {
@@ -84,10 +117,26 @@ export default function ContextMenu(
     };
     const pointer = (event: MouseEvent) => {
       if (event.shiftKey) return;
+      // A registered touch gesture may own the long press, not the menu.
+      // Its completion may request this same menu with a plain MouseEvent.
+      const { sourceCapabilities } = event as MouseEvent & {
+        sourceCapabilities?: { firesTouchEvents: boolean } | null;
+      };
+      if (
+        (event instanceof PointerEvent && event.pointerType === "touch" ||
+          sourceCapabilities?.firesTouchEvents) &&
+        event.composedPath().some((node) =>
+          node instanceof HTMLElement &&
+          node.hasAttribute("data-defer-touch-menu")
+        )
+      ) {
+        event.preventDefault();
+        return;
+      }
       if (nativeTextContext(event.composedPath())) {
         pending = undefined;
         clearTimeout(opening);
-        menu.close(() => {});
+        menu.close(false);
         return;
       }
       event.preventDefault();
@@ -118,7 +167,7 @@ export default function ContextMenu(
       if (nativeTextContext(event.composedPath())) {
         pending = undefined;
         clearTimeout(opening);
-        menu.close(() => {});
+        menu.close(false);
         return;
       }
       event.preventDefault();
@@ -126,16 +175,7 @@ export default function ContextMenu(
       pending = undefined;
       clearTimeout(opening);
       const origin = focused && focused !== document.body ? focused : root;
-      const rect = origin.getBoundingClientRect();
-      open(
-        origin === root ? [root] : event.composedPath(),
-        rect.left,
-        rect.top,
-        focused,
-        "keyboard",
-        origin === root ? 0 : rect.width,
-        origin === root ? 0 : rect.height,
-      );
+      openFor(origin, focused);
     };
     const cancel = () => {
       rightPressed = false;

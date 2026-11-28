@@ -43,6 +43,9 @@ test("restore resolves its directory and posts unrevert before returning authori
   );
   try {
     const restored = await adapter.capabilities.restore!.restore("opcv1-s");
+    // Message deletion and revert cleanup emit the same event on this harness.
+    assertEquals(Reflect.get(adapter.capabilities, "revertCommit"), undefined);
+    assertEquals(Reflect.get(restored, "revertCommitted"), undefined);
     assertEquals(restored.revert, undefined);
     assertEquals(calls, [["/session/s", "GET", null], [
       "/session/s/unrevert",

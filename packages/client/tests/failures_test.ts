@@ -1,10 +1,124 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import {
+  attachmentFailure,
   createFailurePresenter,
+  errorFeedback,
   FailurePresenter,
+  failureValue,
+  notificationFailure,
   RequestFailure,
 } from "../mod.ts";
+
+Deno.test("attachment errors carry file identity through the app's presentation owner", () => {
+  const value = attachmentFailure(
+    new RequestFailure({
+      code: "attachment.upload-size",
+      retry: "new-intent",
+      diagnosticID: "file",
+    }),
+    "notes.txt",
+  );
+  assertEquals(value && value.failure?.target, {
+    label: "notes.txt",
+    href: undefined,
+  });
+  assertEquals(value && value.failure?.heading, "Reading attachment failed");
+  assertEquals(value && value.failure?.value.facts?.target, {
+    label: "notes.txt",
+  });
+});
+
+Deno.test("inline failure targets are view-scoped, not session-ID-only or global suppression", () => {
+  const presenter = createFailurePresenter();
+  const target = {
+    sidecarId: "remote",
+    sessionID: "opcv1-ses_one",
+    label: "Captured session",
+  };
+  const value = {
+    code: "send.refused",
+    retry: "none" as const,
+    diagnosticID: "scoped",
+    facts: { target, reason: "Refused" },
+  };
+  for (const surface of ["feedback", "session", "record"] as const) {
+    assertEquals(
+      presenter.describe(value, { surface, view: target }).failure?.target,
+      { label: "" },
+    );
+    for (
+      const view of [{ ...target, sessionID: "opcv1-ses_other" }, {
+        ...target,
+        sidecarId: "other",
+      }]
+    ) {
+      assertEquals(
+        presenter.describe(value, { surface, view }).failure?.target,
+        { label: "Captured session", href: "#/remote/opcv1-ses_one" },
+      );
+    }
+  }
+  const crossView = failureValue(new RequestFailure(value), {
+    target: { ...target, sessionID: "opcv1-ses_other" },
+  });
+  assertEquals(crossView && crossView.failure?.target, {
+    label: "Captured session",
+    href: "#/remote/opcv1-ses_one",
+  });
+});
+
+Deno.test("failure headings do not append another outcome to producer outcome titles", () => {
+  const presenter = new FailurePresenter();
+  for (
+    const actionLabel of [
+      "failed",
+      "Execution failed",
+      "Install dependencies failed",
+    ]
+  ) {
+    const shown = presenter.describe({
+      code: "invented",
+      retry: "none",
+      diagnosticID: "outcome",
+      facts: { actionLabel, reason: "The request was refused" },
+    });
+    assertEquals(shown.failure?.heading, actionLabel);
+  }
+});
+
+Deno.test("record placement omits its own session target but retains cross-session navigation", () => {
+  const presenter = new FailurePresenter({
+    target: (target) => ({
+      label: target.label ?? "OTK",
+      href: `/session/${target.sessionID}`,
+    }),
+  });
+  const target = {
+    sidecarId: "server",
+    sessionID: "session",
+    label: "Current session",
+  };
+  const failure = {
+    code: "send.refused",
+    retry: "none" as const,
+    diagnosticID: "send",
+    facts: {
+      actionLabel: "Sending prompt",
+      target,
+      reason: "The model is unavailable",
+    },
+  };
+  const own = presenter.describe(failure, { surface: "record", view: target });
+  assertEquals(own.failure?.target, { label: "" });
+  assertEquals(own.text, "Sending prompt failed: The model is unavailable.");
+  const other = presenter.describe(failure, {
+    surface: "record",
+    view: { ...target, sessionID: "other" },
+  });
+  assertEquals(other.failure?.target.href, "/session/session");
+  assertEquals(other.failure?.target.label, "Current session");
+});
 
 Deno.test("failure presenter derives the complete contract and optional enrichment", () => {
   const presenter = new FailurePresenter();
@@ -31,6 +145,41 @@ Deno.test("failure presenter derives the complete contract and optional enrichme
   );
 });
 
+Deno.test("text-only error feedback gains shared failure facts without losing its action or identity", () => {
+  let invoked = 0;
+  const original = {
+    kind: "error" as const,
+    text: "The server refused the request",
+    identity: "captured-operation",
+    diagnosticID: "captured-diagnostic",
+    action: { label: "Retry response", run: () => invoked++ },
+  };
+  const shown = errorFeedback(original, {
+    actionLabel: "Loading response",
+    target: { label: "Selected session" },
+  })!;
+  assertEquals(shown.failure?.reason, original.text);
+  assertEquals(shown.failure?.heading, "Loading response failed");
+  assertEquals(shown.failure?.target.label, "Selected session");
+  assertEquals(shown.failure?.value.diagnosticID, "captured-diagnostic");
+  assertEquals(shown.identity, original.identity);
+  shown.action?.run();
+  assertEquals(invoked, 1);
+  assertEquals(errorFeedback(shown), shown);
+});
+
+Deno.test("legacy error notification titles remain outcome headings rather than failing twice", () => {
+  const shown = notificationFailure({
+    id: "legacy-error",
+    kind: "error",
+    title: "Sending prompt failed",
+    body: "The provider quota has been reached",
+    actions: [],
+  });
+  assertEquals(shown?.heading, "Sending prompt failed");
+  assertEquals(shown?.reason, "The provider quota has been reached");
+});
+
 Deno.test("FP1 unsupported capability is one informational notice, not a failed action", () => {
   const presenter = createFailurePresenter();
   const notice = {
@@ -54,7 +203,7 @@ Deno.test("FP1 unsupported capability is one informational notice, not a failed 
     assertEquals(value.failure?.tone, "info");
     assertEquals(value.failure?.count, 1);
     assertEquals(value.failure?.recovery, undefined);
-    assertEquals(value.failure?.target.label, "Session one");
+    assertEquals(value.failure?.target.label, "");
   }
 });
 
@@ -74,9 +223,9 @@ Deno.test("FP1 informational contributions cannot downgrade an uncertain outcome
   for (const outcome of ["unknown", "unavailable"] as const) {
     const value = presenter.describe({ ...info, facts: { outcome } });
     assertEquals(value.kind, "pending");
-    assertEquals(value.failure?.tone, undefined);
+    assertEquals(value.failure?.tone, "neutral");
   }
   const error = presenter.describe({ ...info, code: "other.failure" });
   assertEquals(error.kind, "error");
-  assertEquals(error.failure?.tone, undefined);
+  assertEquals(error.failure?.tone, "error");
 });

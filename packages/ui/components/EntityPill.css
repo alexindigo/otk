@@ -1,0 +1,46 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-entity {
+  min-width: 0;
+  max-width: 100%;
+}
+.otk-entity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--otk-hover);
+  color: var(--otk-fg);
+  font: 500 var(--text-meta)/var(--line-meta) var(--font-ui);
+  min-width: 0;
+  max-width: 100%;
+}
+.otk-entity-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-meta);
+}
+.otk-entity-facts dt {
+  color: var(--otk-fg-3);
+}
+.otk-entity-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.otk-entity-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.otk-entity-reference .otk-entity-pill {
+  text-decoration: none;
+}
+.otk-entity-reference {
+  user-select: all;
+}
+.otk-entity-reference .otk-entity-pill:is(:hover, :focus-visible) {
+  color: var(--otk-action-text);
+}
+.otk-entity-lamp {
+  display: flex;
+}

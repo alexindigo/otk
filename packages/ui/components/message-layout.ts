@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Part } from "@otk/protocol";
+import type { TranscriptReply } from "@otk/client";
 import type { PartPresentation } from "../registries/renderers.ts";
 import {
   partFrames,
   type PartGroup,
   partGroups,
-  segmentWorkingTime,
+  type ReplyStart,
 } from "./work-log.ts";
 
 export interface MessageLayout {
@@ -13,6 +14,7 @@ export interface MessageLayout {
   userBubble: boolean;
   prompt: boolean;
   copyable: boolean;
+  replyAgents: ReplyStart[];
 }
 interface Descriptor {
   part: Part;
@@ -28,11 +30,21 @@ export function createMessageLayout() {
     userBubble: false,
     prompt: false,
     copyable: false,
+    replyAgents: [],
   };
   let preference: string | undefined, previousRole = "", copyable = 0;
   let order: string[] = [];
-  let waits: Part[] = [];
-  const segments = new Map<string, { parts: Part[]; rows: Descriptor[] }>();
+  const segments = new Map<
+    string,
+    {
+      parts: Part[];
+      rows: Descriptor[];
+      agent?: string;
+      model?: ReplyStart["model"];
+      time?: ReplyStart["time"];
+      turnID?: string;
+    }
+  >();
   const parts = new Map<string, Descriptor>();
   const slots = new Map<
     string,
@@ -43,7 +55,7 @@ export function createMessageLayout() {
     update(
       id: string,
       role: string,
-      input: readonly { messageID: string; parts: Part[] }[],
+      input: readonly TranscriptReply["segments"][number][],
       version: string,
       present: (part: Part) => PartPresentation,
     ): MessageLayout {
@@ -51,8 +63,28 @@ export function createMessageLayout() {
       let structural = role !== previousRole || order.length !== input.length ||
         input.some((segment, i) => segment.messageID !== order[i]);
       const replacements: { before: Descriptor; after: Descriptor }[] = [];
+      const changedSources = new Set<string>();
       for (const segment of input) {
         const old = segments.get(segment.messageID);
+        if (
+          old?.agent !== segment.agent || old?.time !== segment.time ||
+          old?.model !== segment.model || old?.turnID !== segment.turnID
+        ) {
+          changedSources.add(segment.messageID);
+          if (
+            !!(old?.agent !== undefined && old.time) !==
+              !!(segment.agent !== undefined && segment.time)
+          ) structural = true;
+          if (old) {
+            segments.set(segment.messageID, {
+              ...old,
+              agent: segment.agent,
+              model: segment.model,
+              time: segment.time,
+              turnID: segment.turnID,
+            });
+          }
+        }
         if (!changedPreferences && old?.parts === segment.parts) continue;
         const rows = segment.parts.map((part) => {
           const before = parts.get(part.id);
@@ -70,6 +102,7 @@ export function createMessageLayout() {
           if (
             !before || !!before.value.hidden !== !!value.hidden ||
             before.value.frame !== value.frame ||
+            !!before.value.prose !== !!value.prose ||
             !!before.value.work !== !!value.work ||
             !!before.value.required !== !!value.required
           ) structural = true;
@@ -81,21 +114,43 @@ export function createMessageLayout() {
           !old || old.rows.length !== rows.length ||
           rows.some((row, i) => row.part.id !== old.rows[i].part.id)
         ) structural = true;
-        segments.set(segment.messageID, { parts: segment.parts, rows });
+        segments.set(segment.messageID, {
+          parts: segment.parts,
+          rows,
+          agent: segment.agent,
+          model: segment.model,
+          time: segment.time,
+          turnID: segment.turnID,
+        });
       }
       preference = version;
       previousRole = role;
-      const waitsChanged = replacements.some(({ before, after }) =>
-        before.value.timing?.waitsForUser || after.value.timing?.waitsForUser
-      );
+      // Calls are source identities, not footer fact identities. Preserve the
+      // first occurrence of each agent, including tool-only model calls.
+      const replyAgents = structural || changedSources.size
+        ? (() => {
+          const agents = new Map<string, ReplyStart>();
+          if (role === "assistant") {
+            for (const { agent, messageID, turnID, model, time } of input) {
+              if (agent === undefined || !time || agents.has(agent)) continue;
+              agents.set(agent, {
+                agent,
+                messageID,
+                turnID,
+                model,
+                time,
+                continuation: agents.size > 0,
+              });
+            }
+          }
+          return [...agents.values()];
+        })()
+        : state.replyAgents;
       if (structural) {
         const rows = input.flatMap((segment) =>
           segments.get(segment.messageID)!.rows
         );
         const retained = new Set(rows.map((row) => row.part.id));
-        waits = rows.filter((row) => row.value.timing?.waitsForUser).map((
-          row,
-        ) => row.part);
         for (const key of parts.keys()) {
           if (!retained.has(key)) parts.delete(key);
         }
@@ -117,9 +172,8 @@ export function createMessageLayout() {
           const groups = partGroups(
             frame.parts,
             (part) => role === "assistant" ? parts.get(part.id)!.value : {},
-            waits,
           );
-          // Prepending a work prefix keeps an already-known fold's identity.
+          // Prepending source keeps already-measured prose identities.
           for (const group of groups) {
             const known = group.parts.map((part) => slots.get(part.id)).find((
               slot,
@@ -146,11 +200,11 @@ export function createMessageLayout() {
         });
         slots.clear();
         next.forEach((frame, f) =>
-          frame.groups.forEach((group, g) =>
+          frame.groups.forEach((group, g) => {
             group.parts.forEach((part, index) =>
               slots.set(part.id, { frame: f, group: g, index })
-            )
-          )
+            );
+          })
         );
         order = input.map((segment) => segment.messageID);
         const userBubble = role === "user" &&
@@ -160,13 +214,9 @@ export function createMessageLayout() {
           userBubble,
           prompt: role === "user" && userBubble,
           copyable: copyable > 0,
+          replyAgents,
         };
         return state;
-      }
-      if (waitsChanged) {
-        waits = [...parts.values()].filter((row) =>
-          row.value.timing?.waitsForUser
-        ).map((row) => row.part);
       }
       let frames = state.frames;
       const changedFrames = new Set<number>(),
@@ -195,35 +245,11 @@ export function createMessageLayout() {
         ) continue;
         writable(slot.frame, slot.group).parts[slot.index] = after.part;
       }
-      for (const key of changedGroups) {
-        const [f, g] = key.split(":").map(Number);
-        const group = frames[f].groups[g];
-        if (group.work) {
-          group.workingMs = segmentWorkingTime(
-            group.parts,
-            (part) => parts.get(part.id)!.value,
-            waits,
-          );
-        }
-      }
-      if (waitsChanged) {
-        for (let f = 0; f < frames.length; f++) {
-          for (let g = 0; g < frames[f].groups.length; g++) {
-            const group = frames[f].groups[g];
-            if (!group.work || changedGroups.has(`${f}:${g}`)) continue;
-            const workingMs = segmentWorkingTime(
-              group.parts,
-              (part) => parts.get(part.id)!.value,
-              waits,
-            );
-            if (workingMs !== group.workingMs) {
-              writable(f, g).workingMs = workingMs;
-            }
-          }
-        }
-      }
-      if (frames !== state.frames || state.copyable !== (copyable > 0)) {
-        state = { ...state, frames, copyable: copyable > 0 };
+      if (
+        frames !== state.frames || replyAgents !== state.replyAgents ||
+        state.copyable !== (copyable > 0)
+      ) {
+        state = { ...state, frames, replyAgents, copyable: copyable > 0 };
       }
       return state;
     },

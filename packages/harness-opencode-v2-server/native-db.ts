@@ -2,11 +2,16 @@
 import { DatabaseSync } from "node:sqlite";
 import { cachedStatements } from "@otk/harness";
 import type { ProjectSeed, SessionIdentity } from "@otk/harness";
-import type { SessionListInput, SessionMetadata } from "@otk/protocol";
+import type {
+  SessionListInput,
+  SessionMetadata,
+  TerminalEvidence,
+} from "@otk/protocol";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type SessionFacts, terminalFacts } from "./metadata.ts";
 import { sessionRecencySql } from "./recency.ts";
 import { recordedCheckout } from "./project-topology.ts";
+import { terminalFailure } from "./request-failure.ts";
 
 const required = {
   project: ["id", "worktree"],
@@ -26,6 +31,7 @@ export class V2NativeDb {
   readonly identity: string;
   readonly columns: Set<string>;
   readonly messageClocks: boolean;
+  readonly messageIDs: boolean;
   readonly worktreeColumns: Set<string>;
   constructor(
     readonly file: string,
@@ -61,6 +67,7 @@ export class V2NativeDb {
       );
       this.messageClocks = ["session_id", "seq", "type", "time_created", "data"]
         .every((name) => messages.has(name));
+      this.messageIDs = messages.has("id");
       this.worktreeColumns = new Set(
         db.prepare("PRAGMA table_info(worktree)").all().map((row) =>
           String(row.name)
@@ -88,10 +95,15 @@ export class V2NativeDb {
       );
   }
   #projection(): string {
+    const idleRecords = this.messageClocks && this.columns.has("time_idle") &&
+      this.columns.has("idle_outcome");
+    const idleAtTerminal =
+      "FROM session_message m WHERE m.session_id=s.id AND m.type='idle' AND m.time_created=s.time_idle";
     return "s.id,s.parent_id,s.directory,s.project_id,s.time_created,s.time_updated," +
       sessionRecencySql(this.columns, this.messageClocks) +
       " AS activity_time," +
       (this.columns.has("path") ? "s.path," : "NULL AS path,") +
+      (this.columns.has("agent") ? "s.agent," : "NULL AS agent,") +
       (this.columns.has("title") ? "s.title" : "NULL AS title") + "," +
       (this.columns.has("time_archived")
         ? "s.time_archived"
@@ -106,7 +118,29 @@ export class V2NativeDb {
       (this.messageClocks
         ? "coalesce((SELECT json_extract(m.data,'$.time.completed') FROM session_message m WHERE m.session_id=s.id AND m.type='shell' AND json_valid(m.data) AND json_extract(m.data,'$.time.completed')>0 ORDER BY m.seq DESC LIMIT 1),0)"
         : "0") +
-      " AS terminal";
+      " AS terminal," +
+      (idleRecords && this.messageIDs
+        ? `(SELECT m.id ${idleAtTerminal} AND s.parent_id IS NOT NULL AND json_valid(m.data) AND json_extract(m.data,'$.outcome')=s.idle_outcome ORDER BY m.seq DESC LIMIT 1)`
+        : "NULL") +
+      " AS run_id," +
+      (idleRecords && this.messageIDs
+        ? `CASE WHEN s.parent_id IS NOT NULL AND s.time_idle>0
+           THEN (SELECT count(*) FROM (SELECT 1 ${idleAtTerminal} LIMIT 2)) END`
+        : "NULL") +
+      " AS terminal_matches," +
+      (this.messageClocks && this.columns.has("time_idle") &&
+          this.columns.has("idle_outcome")
+        ? "(SELECT json_object('type',json_extract(m.data,'$.error.type'),'message',json_extract(m.data,'$.error.message')) FROM session_message m WHERE s.idle_outcome='failed' AND m.session_id=s.id AND m.type='idle' AND m.time_created=s.time_idle AND json_valid(m.data) AND json_extract(m.data,'$.outcome')='failed' ORDER BY m.seq DESC LIMIT 1)"
+        : "NULL") +
+      " AS terminal_error";
+  }
+  #legacyAcknowledgement(
+    row: Record<string, unknown>,
+  ): TerminalEvidence["legacyAcknowledgement"] {
+    if (typeof row.run_id !== "string" || !row.run_id) return;
+    return row.terminal_matches === 1
+      ? { terminal: Number(row.time_idle), runID: row.run_id }
+      : null;
   }
   /** Optional saved topology, paged in this worker's already source-proven DB. */
   worktrees(
@@ -131,6 +165,24 @@ export class V2NativeDb {
     }));
   }
   #metadata(row: Record<string, unknown>): SessionMetadata {
+    const terminal = terminalFacts(
+      row.time_idle,
+      row.idle_outcome,
+      row.parent_id == null ? Number(row.terminal) : undefined,
+      typeof row.run_id === "string" ? row.run_id : undefined,
+      this.#legacyAcknowledgement(row),
+    );
+    const failure = terminal.outcome === "failed" &&
+        terminal.terminal === Number(row.time_idle)
+      ? terminalFailure(
+        row.terminal_error == null
+          ? undefined
+          : JSON.parse(String(row.terminal_error)),
+        ids.encode(String(row.id)),
+        Number(row.time_idle),
+        String(row.title ?? "Untitled session"),
+      )
+      : undefined;
     return {
       id: ids.encode(String(row.id)),
       directory: String(row.directory),
@@ -148,17 +200,15 @@ export class V2NativeDb {
         ? {}
         : { parentID: ids.encode(String(row.parent_id)) }),
       title: row.title == null ? "Untitled session" : String(row.title),
+      ...(row.agent == null ? {} : { agent: String(row.agent) }),
       timeCreated: Number(row.time_created),
       timeUpdated: Number(row.activity_time),
       archived: row.time_archived != null,
       status: "idle",
       activityAuthority: "unknown",
       activity: {
-        ...terminalFacts(
-          row.time_idle,
-          row.idle_outcome,
-          Number(row.terminal),
-        ),
+        ...terminal,
+        ...(failure ? { terminalFailure: failure } : {}),
       },
       attention: {
         permissions: 0,
@@ -181,7 +231,7 @@ export class V2NativeDb {
   terminals(after: string, limit: number): SessionMetadata[] {
     this.observe?.("supervision-terminals");
     return this.db.prepare(
-      `SELECT * FROM (SELECT ${this.#projection()} FROM session_v2 s WHERE s.id>?) WHERE (time_idle>0 AND idle_outcome IN ('succeeded','failed','interrupted')) OR terminal>0 ORDER BY id LIMIT ?`,
+      `SELECT * FROM (SELECT ${this.#projection()} FROM session_v2 s WHERE s.id>?) WHERE (time_idle>0 AND idle_outcome IN ('succeeded','failed','interrupted')) OR (parent_id IS NULL AND terminal>0) ORDER BY id LIMIT ?`,
     ).all(after ? ids.decode(after) : "", limit).map((row) =>
       this.#metadata(row)
     );
@@ -194,30 +244,41 @@ export class V2NativeDb {
     return this.db.prepare(
       `SELECT ${this.#projection()},${optional} FROM session_v2 s JOIN json_each(?) wanted ON s.id=wanted.value ORDER BY s.id`,
     )
-      .all(JSON.stringify([...new Set(keys.map(ids.decode))])).map((row) => ({
-        id: String(row.id),
-        projectID: String(row.project_id),
-        activity: Number(row.activity_time),
-        ...(Number(row.terminal) > 0 ? { terminal: Number(row.terminal) } : {}),
-        location: { directory: String(row.directory) },
-        ...(typeof row.path === "string" ? { subpath: row.path } : {}),
-        ...(row.title == null ? {} : { title: String(row.title) }),
-        ...(row.parent_id == null ? {} : { parentID: String(row.parent_id) }),
-        time: {
-          created: Number(row.time_created),
-          updated: Number(row.time_updated),
-          ...(row.time_archived == null
+      .all(JSON.stringify([...new Set(keys.map(ids.decode))])).map((row) => {
+        const proof = this.#legacyAcknowledgement(row);
+        return {
+          id: String(row.id),
+          ...(typeof row.run_id === "string" ? { runID: row.run_id } : {}),
+          ...(proof === undefined ? {} : { legacyAcknowledgement: proof }),
+          projectID: String(row.project_id),
+          activity: Number(row.activity_time),
+          ...(Number(row.terminal) > 0
+            ? { terminal: Number(row.terminal) }
+            : {}),
+          ...(row.terminal_error == null
             ? {}
-            : { archived: Number(row.time_archived) }),
-          ...(row.time_busy == null ? {} : { busy: Number(row.time_busy) }),
-          ...(row.time_idle == null ? {} : { idle: Number(row.time_idle) }),
-        },
-        ...(["succeeded", "failed", "interrupted"].includes(
-            String(row.idle_outcome),
-          )
-          ? { outcome: row.idle_outcome as SessionFacts["outcome"] }
-          : {}),
-      }));
+            : { terminalError: JSON.parse(String(row.terminal_error)) }),
+          location: { directory: String(row.directory) },
+          ...(typeof row.path === "string" ? { subpath: row.path } : {}),
+          ...(row.title == null ? {} : { title: String(row.title) }),
+          ...(row.agent == null ? {} : { agent: String(row.agent) }),
+          ...(row.parent_id == null ? {} : { parentID: String(row.parent_id) }),
+          time: {
+            created: Number(row.time_created),
+            updated: Number(row.time_updated),
+            ...(row.time_archived == null
+              ? {}
+              : { archived: Number(row.time_archived) }),
+            ...(row.time_busy == null ? {} : { busy: Number(row.time_busy) }),
+            ...(row.time_idle == null ? {} : { idle: Number(row.time_idle) }),
+          },
+          ...(["succeeded", "failed", "interrupted"].includes(
+              String(row.idle_outcome),
+            )
+            ? { outcome: row.idle_outcome as SessionFacts["outcome"] }
+            : {}),
+        };
+      });
   }
   identities(keys: readonly string[]): SessionIdentity[] {
     this.observe?.("identities");

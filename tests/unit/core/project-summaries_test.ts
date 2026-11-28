@@ -4,6 +4,48 @@ import { ProjectSummaries } from "../../../core/index/project-summaries.ts";
 import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 import type { IndexMetadata, ProjectSummary } from "@otk/protocol";
 
+Deno.test("project metadata publishes just the changed repo aliases and ignores stale duplicate replies", () => {
+  const published: string[] = [];
+  const owner = new ProjectSummaries(
+    () => ({ seen: 0, finish: 0 }),
+    (row) => published.push(row.directory),
+  );
+  const seeds = ["/one", "/alias", "/two"].map((directory) => ({
+    directory,
+    sessionCount: 1,
+    lastActivity: 10,
+    hasSessions: true,
+    authority: "current" as const,
+    presentation: { id: directory === "/two" ? "two" : "one", name: "Before" },
+    nativeProject: {
+      topology: directory === "/two" ? "/two" : "/one",
+      updated: 1,
+    },
+  }));
+  owner.seed(seeds);
+  published.length = 0;
+  const update = (name: string, updated: number, topology = "/one") => ({
+    presentation: { id: "one", name },
+    updated,
+    topology,
+  });
+  assertEquals(owner.metadata(update("After", 2), "reply"), true);
+  assertEquals(owner.metadata(update("After", 2), "event"), true);
+  assertEquals(published.splice(0), ["/one", "/alias"]);
+  assertEquals(owner.metadata(update("External", 3), "event"), true);
+  assertEquals(owner.metadata(update("After", 2), "reply"), true);
+  assertEquals(
+    owner.metadata(update("Moved", 4, "/different"), "event"),
+    false,
+  );
+  assertEquals(published.splice(0), ["/one", "/alias"]);
+  owner.seed(seeds);
+  assertEquals(published, []);
+  assertEquals(owner.values.get("/one")?.presentation?.name, "External");
+  assertEquals(owner.values.get("/alias")?.presentation?.name, "External");
+  assertEquals(owner.values.get("/two")?.presentation?.name, "Before");
+});
+
 const entry = (id = "tstv1-a"): IndexMetadata => ({
   id,
   directory: "/other",
@@ -99,7 +141,41 @@ Deno.test("unknown population retains last-known discovery without inventing emp
   assertEquals(owner.values.get("/unknown")?.sessionCount, null);
   assertEquals(owner.values.get("/unknown")?.lastActivity, null);
 });
-Deno.test("project summaries own status priority, persisted marks, recency and unavailable authority without digest", () => {
+
+Deno.test("D78: repository lamp shows an unseen finished checkout over work but blocked still wins", () => {
+  const owner = new ProjectSummaries(
+    (id) => ({ seen: 0, finish: id === "tstv1-done" ? 10 : 0 }),
+    () => {},
+  );
+  owner.seed(["/repo", "/tree"].map((directory) => ({
+    directory,
+    hasSessions: true,
+    sessionCount: 1,
+    lastActivity: 2,
+    authority: "current" as const,
+    topology: {
+      repoID: "p",
+      canonicalRoot: "/repo",
+      leafDirectory: directory,
+      ...(directory === "/tree" ? { parentDirectory: "/repo" } : {}),
+    },
+  })));
+  owner.authority("current");
+  owner.entry({ ...entry("tstv1-done"), directory: "/repo" });
+  const running = {
+    ...entry("tstv1-running"),
+    directory: "/tree",
+    activity: { work: { keys: ["run"], fresh: true } },
+  };
+  owner.entry(running);
+  assertEquals(owner.values.get("/repo")?.direct?.status, "finished");
+  assertEquals(owner.values.get("/tree")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.status, "finished");
+  assertEquals(owner.values.get("/repo")?.unseenCount, 1);
+  owner.locationForms({ "/tree": 1 });
+  assertEquals(owner.values.get("/repo")?.status, "blocked");
+});
+Deno.test("project summaries own D78 status priority, persisted marks, recency and unavailable authority without digest", () => {
   let seen = 0, finish = 0;
   const emitted: ProjectSummary[] = [];
   const owner = new ProjectSummaries(
@@ -290,6 +366,7 @@ Deno.test("topology outlives population-only seeds and inventory removal; empty 
   const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
   const topology = {
     repoID: "p",
+    group: "repo:p",
     canonicalRoot: "/repo",
     leafDirectory: "/tree",
     parentDirectory: "/repo",
@@ -321,7 +398,7 @@ Deno.test("topology outlives population-only seeds and inventory removal; empty 
     topology: null,
   }]);
   assertEquals(owner.values.get("/tree")?.topology, topology);
-  assertEquals(owner.values.get("/tree")?.availability, "removed");
+  assertEquals(owner.values.get("/tree")?.availability, "unknown");
   owner.seed([{
     directory: "/empty",
     hasSessions: false,
@@ -491,7 +568,7 @@ Deno.test("late recorded roots migrate all retained contributions and exact seed
     false,
     "resolved stored policy is not an obsolete flat row",
   );
-  assertEquals(owner.values.get("/tree")?.status, "finished");
+  assertEquals(owner.values.get("/tree")?.status, "finished", "D78");
   assertEquals(owner.values.get("/tree")?.unseenCount, 2);
   assertEquals(owner.values.get("/tree")?.sessionCount, 2);
   assertEquals(owner.values.get("/tree")?.scopes, ["/tree", "/tree/sub"]);
@@ -543,4 +620,43 @@ Deno.test("recorded root migration retains deleted routing metadata without a ph
   assertEquals(owner.values.has("/tree/sub"), false);
   owner.remove("deleted");
   assertEquals(owner.values.get("/repo")?.unseenCount, 0);
+});
+Deno.test("a removed self-claimed checkout is summarized under its repository's archive, and an unknown one fabricates no project", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  const claim = (
+    directory: string,
+    repository: {
+      root: string | null;
+      present: boolean;
+      evidence: "git" | "name" | "none";
+    },
+  ) => ({
+    directory,
+    hasSessions: true,
+    sessionCount: 2,
+    lastActivity: 1,
+    authority: "current" as const,
+    identities: [{
+      source: "native",
+      repoID: directory,
+      canonicalRoot: directory,
+      recordedRoot: directory,
+      inventory: [{ directory, kind: "checkout" as const }],
+      repository: { checkout: directory, ...repository },
+    }],
+  });
+  owner.seed([
+    claim("/repo", { root: "/repo", present: true, evidence: "git" }),
+    claim("/repo.review", { root: "/repo", present: false, evidence: "name" }),
+    claim("/lost", { root: null, present: false, evidence: "none" }),
+  ]);
+  const review = owner.values.get("/repo.review")!;
+  assertEquals(review.topology?.parentDirectory, "/repo");
+  assertEquals([review.availability, review.archived], ["removed", true]);
+  assertEquals(owner.values.get("/repo")?.sessionCount, 4);
+  assertEquals(
+    owner.values.get("/lost")?.topology?.canonicalRoot,
+    "otk:unknown-repository",
+  );
+  assertEquals(owner.values.has("otk:unknown-repository"), false);
 });

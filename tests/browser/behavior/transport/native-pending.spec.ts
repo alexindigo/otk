@@ -6,7 +6,7 @@ import {
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
-import { revealTool } from "../../pages/transcript.ts";
+import { revealAcquired, revealTool } from "../../pages/transcript.ts";
 
 test.describe("native page", () => {
   test.use({ profile: "transport-page" });
@@ -41,7 +41,7 @@ test.describe("native page", () => {
       await expect(
         page.getByRole("region", { name: "Transcript", exact: true }),
       ).toHaveAttribute("aria-busy", "true");
-      await expect(page.locator(".otk-messages")).toContainText(
+      await expect(page.locator(".otk-shell-progress")).toContainText(
         "Loading messages",
       );
       await expect(
@@ -76,6 +76,25 @@ test.describe("native page", () => {
     await expect(page.locator('.otk-messages [data-role="user"]')).toHaveCount(
       2,
     );
+    await info.attach("held-page-authority", {
+      body: JSON.stringify({
+        observation: await state.observe(),
+        requests: frames.sent.filter(({ frame }) =>
+          frame.method === "session.messages"
+        ),
+        received: frames.received.filter((frame) =>
+          [
+            "transcript.invalidated",
+            "content",
+            "load.chunk",
+            "request.result",
+            "request.rejected",
+          ]
+            .includes(frame.t)
+        ),
+      }),
+      contentType: "application/json",
+    });
     expect(
       (await state.observe<{ transport: { reads: number } }>()).transport.reads,
     ).toBe(1);
@@ -113,11 +132,13 @@ test.describe("native shell", () => {
       (await state.observe<{ transport: { entered: boolean } }>()).transport
         .entered
     ).toBe(true);
-    // NT2: a V2 user shell is a plugin-owned shell record, not a bash tool call.
-    const shell = state.controller.info!.version.startsWith("2.")
+    // D74: V2's background shell stays in the transcript; V1's bash is Work.
+    const v2 = state.controller.info!.version.startsWith("2.");
+    const shell = v2
       ? '[data-native-record="opencode-v2/shell"]'
       : "[data-tool=bash]";
-    await revealTool(page, shell);
+    if (v2) await revealAcquired(page, shell);
+    else await revealTool(page, shell);
     await expect(page.locator(shell)).toContainText(
       "request-native-once",
     );
@@ -132,7 +153,10 @@ test.describe("native shell", () => {
     await expect(page.locator(".otk-composer-dock [role=alert]"))
       .toHaveCount(0);
     // The resumed receipt still owns the send; the new draft cannot add one.
-    await expectPrimaryBlocked(composerSend(page), "Sending");
+    await expectPrimaryBlocked(
+      composerSend(page),
+      "Previous message still sending",
+    );
     expect(
       (await state.observe<{ transport: { effects: number } }>()).transport
         .effects,
@@ -144,8 +168,7 @@ test.describe("native shell", () => {
     await expect(page.locator(".otk-operation-feedback.is-pending"))
       .toHaveCount(0);
     try {
-      await expect(page.locator(".otk-prompt button[type=submit]"))
-        .toBeVisible();
+      await expect(composerSend(page)).toBeEnabled();
     } finally {
       await info.attach("shell-wire", {
         body: JSON.stringify({ sent: frames.sent, received: frames.received }),

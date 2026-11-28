@@ -15,7 +15,7 @@ test(
     ).click();
     await expect(page.locator("textarea[name=prompt]")).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`${seed.id}$`));
-    await page.getByRole("navigation", { name: "Task sessions" }).getByRole(
+    await page.locator(".otk-breadcrumb-row").getByRole(
       "button",
       { name: "Session", exact: true },
     )

@@ -8,6 +8,98 @@ import type {
 } from "@otk/protocol";
 import { createSessionLists } from "../session-lists.ts";
 
+Deno.test("@sessions paging demand follows projected order, not native activity order", async () => {
+  const rpc = new Rpc(() => {});
+  const reads: {
+    input: SessionListInput;
+    intent: IntentIdentity;
+    resolve(page: SessionListPage): void;
+  }[] = [];
+  rpc.call = (_method, input, options) =>
+    new Promise((resolve) => {
+      reads.push({
+        input: input as SessionListInput,
+        intent: (options as { intent: IntentIdentity }).intent,
+        resolve: resolve as never,
+      });
+    }) as never;
+  const owner = createSessionLists(rpc, () => 1);
+  const input = { directory: "/project", limit: 12 };
+  const ordered = Array.from({ length: 12 }, (_, i) => `session-${i}`);
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  // The projection is borrowed at advancement, including request settlement.
+  const viewport = owner.viewport;
+  try {
+    const list = owner.get(input);
+    const order = () =>
+      list.items.toSorted((a, b) => a.timeCreated! - b.timeCreated!).map((
+        item,
+      ) => item.id);
+    reads[0].resolve({
+      items: [...ordered].reverse().map((id, i) => ({
+        id,
+        title: id,
+        directory: input.directory,
+        timeCreated: 12 - i,
+      })),
+      older: "next-native-page",
+      load: {
+        id: reads[0].intent.key,
+        scope: { kind: "project-sessions", directory: input.directory },
+        boundary: { kind: "page", limit: 12 },
+        generation: "source",
+        revision: 1,
+        state: "complete",
+      },
+    });
+    await tick();
+    viewport(list, [ordered[0]], order);
+    assertEquals(
+      reads.length,
+      1,
+      "native tail at the projected start is not end demand",
+    );
+    viewport(list, [ordered.at(-1)!], order);
+    assertEquals(
+      reads.length,
+      2,
+      "projected end acquires the next opaque native page",
+    );
+    assertEquals(reads[1].input.before, "next-native-page");
+    viewport(list, [ordered.at(-1)!], order);
+    assertEquals(reads.length, 2, "one owner joins repeated range demand");
+    reads[1].resolve({
+      items: Array.from({ length: 12 }, (_, i) => ({
+        id: `session-${23 - i}`,
+        title: `session-${23 - i}`,
+        directory: input.directory,
+        timeCreated: 24 - i,
+      })),
+      older: "third-native-page",
+      load: {
+        id: reads[1].intent.key,
+        scope: { kind: "project-sessions", directory: input.directory },
+        boundary: { kind: "page", limit: 12, before: "next-native-page" },
+        generation: "source",
+        revision: 1,
+        state: "complete",
+      },
+    });
+    await tick();
+    assertEquals(
+      reads.length,
+      2,
+      "settlement borrows the extended projection, not the old frontier",
+    );
+    viewport(list, ["session-23"], order);
+    assertEquals(reads.length, 3);
+    assertEquals(reads[2].input.before, "third-native-page");
+  } finally {
+    owner.stop();
+    rpc.close();
+  }
+});
+
 Deno.test("@load @sessions list demand fences replacement/reconnect chunks, retains last-good rows and appends only its requested boundary", async () => {
   const rpc = new Rpc(() => {}),
     reads: {
@@ -33,7 +125,7 @@ Deno.test("@load @sessions list demand fences replacement/reconnect chunks, reta
     id: string,
     generation = "source",
   ): SessionListPage => ({
-    items: [{ id, title: id, directory: input.directory }],
+    items: [{ id, title: id, directory: input.directory, timeCreated: 1 }],
     older: "older",
     load: {
       id: reads[at].intent.key,
@@ -51,7 +143,7 @@ Deno.test("@load @sessions list demand fences replacement/reconnect chunks, reta
   const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
   try {
     const list = owner.get(input);
-    owner.viewport(list, ["first"]);
+    owner.viewport(list, ["first"], () => list.items.map((item) => item.id));
     reads[0].resolve(page(0, "first"));
     await tick();
     assertEquals(list.items.map((item) => item.id), ["first"]);
@@ -62,7 +154,7 @@ Deno.test("@load @sessions list demand fences replacement/reconnect chunks, reta
       2,
       "range acceptance before request settlement still acquires the reserve",
     );
-    owner.viewport(list, []);
+    owner.viewport(list, [], () => list.items.map((item) => item.id));
     reads[1].resolve(page(1, "second"));
     await tick();
     assertEquals(list.items.map((item) => item.id), ["first", "second"]);
@@ -130,7 +222,12 @@ Deno.test("@sessions page replacement preserves the acquired window and retained
     }) as never;
   const owner = createSessionLists(rpc, () => 1);
   const input = { directory: "/project", limit: 2 };
-  const item = (id: string) => ({ id, title: id, directory: input.directory });
+  const item = (id: string) => ({
+    id,
+    title: id,
+    directory: input.directory,
+    timeCreated: 1,
+  });
   const reply = (at: number, ids: string[], older: string | null) =>
     reads[at].resolve({
       items: ids.map(item),
@@ -212,7 +309,12 @@ Deno.test("hierarchy refresh invalidates inactive cached lists without I/O until
   const owner = createSessionLists(rpc, () => 1), input = { directory: "/p" };
   const finish = (at: number, title: string) =>
     reads[at].resolve({
-      items: [{ id: "child", directory: input.directory, title }],
+      items: [{
+        id: "child",
+        directory: input.directory,
+        title,
+        timeCreated: 1,
+      }],
       older: null,
       load: {
         id: reads[at].intent.key,
@@ -262,7 +364,12 @@ Deno.test("reactivating an invalidated inactive list cannot join its old in-flig
   const owner = createSessionLists(rpc, () => 1), input = { directory: "/p" };
   const finish = (at: number, title: string) =>
     reads[at].resolve({
-      items: [{ id: "child", directory: input.directory, title }],
+      items: [{
+        id: "child",
+        directory: input.directory,
+        title,
+        timeCreated: 1,
+      }],
       older: null,
       load: {
         id: reads[at].intent.key,

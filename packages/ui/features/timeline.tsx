@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createMemo } from "solid-js";
-import { timelinePrompts } from "@otk/client";
-import { useCommandPorts } from "../keyboard/context.tsx";
+import { collectionState, sessionRunning, timelinePrompts } from "@otk/client";
+import { entityKey } from "@otk/protocol";
 import { useShellPorts } from "../shell/context.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
@@ -17,24 +17,32 @@ export function registerTimelinePanel(
     title: "Timeline",
     icon: TimelineIcon,
     component: () => {
-      const shell = useShellPorts(), { commands } = useCommandPorts();
+      const shell = useShellPorts();
       const { parts } = useUiRegistries();
-      const prompts = createMemo(() =>
-        timelinePrompts(
+      const prompts = createMemo(() => {
+        const target = shell.selection();
+        return timelinePrompts(
           shell.transcript.messages(),
-          shell.entries().some((entry) =>
-            entry.sidecarId === shell.selection()?.sidecarId &&
-            entry.id === shell.selection()?.sessionID && entry.status !== "idle"
-          ),
+          !!target &&
+            sessionRunning(
+              shell.inbox(target.sidecarId).entities,
+              entityKey("session", target.sessionID),
+            ),
         ).filter((prompt) =>
-          messageFrames({ ...prompt, role: "user" }, (part) =>
-            parts.presentation(part, shell.toggles.state.prefs)).prompt
-        )
-      );
+          messageFrames(
+            { ...prompt, role: "user" },
+            (part) => parts.presentation(part, shell.toggles.state.prefs),
+          ).prompt
+        );
+      });
       return (
         <Timeline
           session={shell.selection()}
           prompts={prompts()}
+          state={collectionState(
+            shell.transcript.answered?.() === true,
+            prompts().length,
+          )}
           exhausted={shell.transcript.exhausted()}
           paging={shell.transcript.paging()}
           preview={(prompt) =>
@@ -46,8 +54,7 @@ export function registerTimelinePanel(
             entry.id === shell.selection()?.sessionID
           )?.directory}
           onOlder={() => shell.transcript.older()}
-          onReveal={(messageID) =>
-            commands.run("transcript.reveal", { messageID })}
+          onReveal={shell.transcript.reveal}
         />
       );
     },

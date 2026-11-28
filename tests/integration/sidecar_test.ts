@@ -7,7 +7,7 @@ import type { ContentSession, Message } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import { markdown } from "@otk/content";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
+import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { ownSocket, WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
@@ -51,6 +51,7 @@ v1Test(
         "history",
         "models",
         "permissions",
+        "projectEdit", // WP9: native project editing is capability-selected.
         "prompt",
         "questions",
         "resources",
@@ -120,13 +121,14 @@ async function fixture() {
  * object, `metadata` objects) never cross into neutral content ops. Only the
  * protocol's own fields of those names may appear, in their declared shapes:
  * an activity's lifecycle `state`, a recovery op's `state` word and an
- * external call's bounded `metadata` preview string. */
+ * external call's bounded `metadata` preview string, and an outcome clock. */
 type BoundaryContext =
   | "op"
   | "message"
   | "part"
   | "call"
   | "activity"
+  | "outcomeTime"
   | "other";
 const oracleObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -143,6 +145,15 @@ function activityState(value: unknown): boolean {
       fact === null || typeof fact === "boolean"
     );
 }
+function outcomeClock(value: unknown): boolean {
+  if (!oracleObject(value)) return false;
+  return value.state === "known"
+    ? Object.keys(value).sort().join() === "at,source,state" &&
+      Number.isSafeInteger(value.at) && Number(value.at) >= 0 &&
+      ["completed", "error", "part", "event"].includes(String(value.source))
+    : value.state === "unknown" && typeof value.reason === "string" &&
+      Object.keys(value).sort().join() === "reason,state";
+}
 function nativeInternals(
   value: unknown,
   path = "",
@@ -158,6 +169,7 @@ function nativeInternals(
     const at = `${path}.${key}`;
     const declared = key === "state"
       ? (context === "activity" && activityState(child)) ||
+        (context === "outcomeTime" && outcomeClock(value)) ||
         (context === "op" && Reflect.get(value, "op") === "stream.recovery" &&
           typeof child === "string" &&
           ["recovering", "ready", "unavailable"].includes(child))
@@ -181,6 +193,8 @@ function nativeInternals(
       : context === "part" && key === "activity" &&
           Reflect.get(value, "kind") === "external"
       ? "activity"
+      : context === "message" && key === "outcomeTime"
+      ? "outcomeTime"
       : "other";
     return [...(declared ? [] : [at]), ...nativeInternals(child, at, next)];
   });
@@ -343,11 +357,36 @@ test("adapter boundary oracle accepts declared neutral fields and rejects native
       },
       { op: "stream.recovery", state: "ready" },
       {
+        op: "message.upsert",
+        message: {
+          outcomeTime: { state: "known", at: 10, source: "completed" },
+        },
+      },
+      {
+        op: "message.upsert",
+        message: {
+          outcomeTime: { state: "unknown", reason: "Missing native clock" },
+        },
+      },
+      {
         op: "part.upsert",
         part: { kind: "tool", call: { tool: "external", metadata: "{}" } },
       },
     ]),
     [],
+  );
+  assertEquals(
+    nativeInternals([
+      {
+        op: "message.upsert",
+        message: { outcomeTime: { state: "completed", input: {} } },
+      },
+      {
+        op: "part.upsert",
+        part: { outcomeTime: { state: "known", at: 10, source: "completed" } },
+      },
+    ]),
+    ["[0].message.outcomeTime.state", "[1].part.outcomeTime.state"],
   );
   assertEquals(
     nativeInternals([
@@ -746,7 +785,7 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
   try {
     const extraOrigin = "http://127.0.0.1:31502";
     const server = await f.sidecar({
-      server: { port: freePort(), origins: [extraOrigin] },
+      server: { origins: [extraOrigin] },
       auth: {
         type: "password",
         username: "tester",

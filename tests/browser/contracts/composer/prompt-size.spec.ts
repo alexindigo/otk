@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import {
@@ -53,6 +54,10 @@ const measure = (page: Page) =>
       footerTop: footer.top,
       footerBottom: footer.bottom,
       composerTop: box.top,
+      // WP1: the fixed runtime-status slot belongs to the dock, not the input.
+      dockTop:
+        document.querySelector(".otk-composer-dock")!.getBoundingClientRect()
+          .top,
       composerBottom: box.bottom,
       transcriptBottom:
         document.querySelector(".otk-messages")!.getBoundingClientRect().bottom,
@@ -71,7 +76,8 @@ test("composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover", {
   await state.product("prefs.set", { key: "animationsOff", value: true });
   const frames = await wire(page);
   await openSession(state, page, session.id);
-  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toHaveText("scripted");
   await viewing(page, frames, session.id);
   await page.evaluate(() => document.fonts.ready);
   const empty = await measure(page), growing = [];
@@ -99,7 +105,7 @@ test("composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover", {
     expect(geometry.composerTop).toBe(
       empty.composerTop - (geometry.height - empty.height),
     );
-    expect(Math.abs(geometry.transcriptBottom - geometry.composerTop))
+    expect(Math.abs(geometry.transcriptBottom - geometry.dockTop))
       .toBeLessThan(.5);
     expect(geometry.footerTop).toBeGreaterThanOrEqual(geometry.bottom);
     expect(geometry.footerBottom).toBeLessThan(geometry.viewport);
@@ -138,7 +144,7 @@ test("composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover", {
   await expect(prompt(page)).toHaveValue(lines(4));
   await expect.poll(async () => (await measure(page)).height).toBe(96);
   await state.queue(["Growing draft received."]);
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(prompt(page)).toHaveValue("");
   await expect.poll(async () => (await measure(page)).height).toBe(48);
   await reply(state, page, session.id, "Growing draft received.");
@@ -191,7 +197,7 @@ test("composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover", {
   await expect(chips(page)).toHaveCount(0);
   await expect.poll(async () => (await measure(page)).height).toBe(240);
   await state.queue(["Expanded draft received."]);
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(prompt(page)).toHaveValue("");
   await expect.poll(async () => (await measure(page)).height).toBe(48);
   await reply(state, page, session.id, "Expanded draft received.");

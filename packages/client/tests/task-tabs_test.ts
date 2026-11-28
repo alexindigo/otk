@@ -148,10 +148,10 @@ Deno.test("tab and crumb reads share cached keyed inputs instead of borrowing th
   tabs.crumbs();
   tabs.tabs();
   tabs.entry(entries[0].id);
-  assertEquals(reads, { entries: 0, inbox: 1, taskActivity: 1 });
+  assertEquals(reads, { entries: 0, inbox: 0, taskActivity: 0 });
 });
 
-Deno.test("task tabs order by urgency then newest family activity, never stored order", () => {
+Deno.test("task tabs keep saved order through activity changes and accept explicit moves", () => {
   const entries = [
     entry("idle", 100),
     entry("working", 20),
@@ -167,27 +167,27 @@ Deno.test("task tabs order by urgency then newest family activity, never stored 
   const input = { directory: "/p", entries, inbox: meta };
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), [
-    "blocked",
-    "done",
-    "working",
-    "newer",
     "idle",
+    "working",
+    "done",
+    "blocked",
+    "newer",
   ]);
   meta.tasks.reverse().forEach((t, i) => t.order = i);
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), [
+    "newer",
     "blocked",
     "done",
     "working",
-    "newer",
     "idle",
   ]);
   entries[4].status = "busy";
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), [
+    "newer",
     "blocked",
     "done",
-    "newer",
     "working",
     "idle",
   ]);
@@ -203,6 +203,63 @@ Deno.test("keyed task membership retains an explicitly grouped session before it
   tabs.select({ kind: "task", id: "task" }, "pending");
   assertEquals(tabs.taskFor("pending")?.id, "task");
   assertEquals(tabs.sessionFor("task"), "pending");
+});
+
+Deno.test("D78: a mixed task lamp shows an unseen finish without changing saved strip order", () => {
+  const running = { ...entry("running"), status: "busy" as const },
+    finished = entry("finished"),
+    newer = { ...entry("newer", 100), status: "busy" as const };
+  const meta = inbox([
+    task("mixed", [running.id, finished.id]),
+    task("newer", [newer.id]),
+  ]);
+  meta.finishes.finished = 50;
+  const tabs = model();
+  tabs.update({
+    directory: "/p",
+    entries: [running, finished, newer],
+    inbox: meta,
+  });
+  assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
+    ["mixed", "finished"],
+    ["newer", "working"],
+  ]);
+  tabs.stop();
+});
+
+Deno.test("pending operation lamp paint cannot change saved task order", () => {
+  const finished = {
+      ...entry("finished"),
+      operationStatus: "working" as const,
+    },
+    newer = entry("newer", 100);
+  const meta = inbox([
+    task("finished", [finished.id]),
+    task("newer", [newer.id]),
+  ]);
+  meta.supervision = {
+    finished: { state: "finishedUnseen", terminal: 50 },
+    newer: { state: "working", terminal: 0 },
+  };
+  // Received operations are part of the server's task state, never a browser
+  // overlay on completion bookkeeping (D62).
+  meta.entities = Object.fromEntries(["finished", "newer"].map((id) => [
+    `task:task/${id}`,
+    {
+      kind: "task" as const,
+      id: `task/${id}`,
+      state: "working" as const,
+      previous: "none" as const,
+      counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
+    },
+  ]));
+  const tabs = canonicalTabs(() => Promise.reject(new Error("No promotion")));
+  tabs.update({ directory: "/p", entries: [finished, newer], inbox: meta });
+  assertEquals(tabs.tabs().map((tab) => [tab.id, tab.status]), [
+    ["finished", "working"],
+    ["newer", "working"],
+  ]);
+  tabs.stop();
 });
 
 Deno.test("helpers roll up to their nearest task and finished helpers remain mandatory until acknowledged", () => {
@@ -240,9 +297,8 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   nested.status = "busy";
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [
-    ["child-task", "working"],
+    ["root-task", "working"],
     ["other-task", "none"],
-    ["root-task", "none"],
   ]);
   assertEquals(
     taskBreadcrumbs(meta.tasks[0], input.entries, meta.tasks).map((c) => c.id),
@@ -250,7 +306,7 @@ Deno.test("helpers roll up to their nearest task and finished helpers remain man
   );
 });
 
-Deno.test("ungrouped mandatory helpers keep and select their own tab (fix 4.2 case 2)", () => {
+Deno.test("ungrouped mandatory helpers keep their human task visible (2.67 supersedes independent helper phantoms)", () => {
   const root = entry("root"),
     child = entry("child", 2, "root"),
     other = entry("other");
@@ -259,27 +315,27 @@ Deno.test("ungrouped mandatory helpers keep and select their own tab (fix 4.2 ca
     input = { directory: "/p", entries: [root, child, other], inbox: meta };
   child.attention.questions = 1;
   tabs.update(input);
-  // AXIOM 1: a root's lamp cannot replace an ungrouped child's visible tab.
+  // 2.67: helper attention lives inside its human task, not a new task tab.
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
-    "child",
+    "root",
     "blocked",
   ]]);
   tabs.preview(child.id);
-  assertEquals(tabs.state.selected, { kind: "session", id: "child" });
+  assertEquals(tabs.state.selected, { kind: "session", id: "root" });
   assertEquals(tabs.state.sessionID, "child");
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
-    "child",
+    "root",
     "blocked",
   ]]);
   child.attention.questions = 0;
   meta.finishes.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => [t.id, t.status]), [[
-    "child",
+    "root",
     "finished",
   ]]);
   tabs.preview("other");
-  assertEquals(tabs.tabs().map((t) => t.id), ["child", "other"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["root", "other"]);
   meta.seen.child = 10;
   tabs.update(input);
   assertEquals(tabs.tabs().map((t) => t.id), ["other"]);
@@ -288,7 +344,7 @@ Deno.test("ungrouped mandatory helpers keep and select their own tab (fix 4.2 ca
   assertEquals(tabs.tabs(), []);
 });
 
-Deno.test("phantom crumbs show all active descendants of every member and retire even while selected", () => {
+Deno.test("D66 phantom crumbs isolate the native root within a multi-root task", () => {
   const a = entry("a"),
     b = entry("b"),
     child = entry("child", 2, "b"),
@@ -297,24 +353,29 @@ Deno.test("phantom crumbs show all active descendants of every member and retire
   const members = task("task", ["a", "b"]), entries = [a, b, child, nested];
   assertEquals(taskBreadcrumbs(members, entries).map((c) => [c.id, c.depth]), [
     ["a", 0],
-    ["b", 0],
-    ["nested", 2],
   ]);
   child.attention.questions = 1;
   assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), [
     "a",
-    "b",
-    "child",
-    "nested",
   ]);
+  const tabs = model();
+  tabs.update({
+    directory: "/p",
+    entries,
+    inbox: { ...inbox(), tasks: [members] },
+  });
+  tabs.select({ kind: "task", id: members.id }, b.id);
+  assertEquals(tabs.crumbs().map((c) => [c.id, c.depth]), [
+    ["b", 0],
+  ]);
+  assertEquals(tabs.trail().task, "task:task/task");
+  tabs.stop();
   child.attention.questions = 0;
   nested.status = "idle";
-  assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), ["a", "b"]);
+  assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), ["a"]);
   members.sessions.push("child");
   assertEquals(taskBreadcrumbs(members, entries).map((c) => c.id), [
     "a",
-    "b",
-    "child",
   ]);
 });
 
@@ -359,20 +420,19 @@ Deno.test("rename and pin share captured-name promotion without selecting a late
   failed.stop();
 });
 
-Deno.test("direct child phantom selection stays on its own group across metadata updates (fix 4.2 case 2)", () => {
+Deno.test("direct helper navigation stays on its human group across metadata updates", () => {
   const root = entry("root"), child = entry("child", 2, root.id);
   child.attention.questions = 1;
   const tabs = model(),
     input = { directory: "/p", entries: [root, child], inbox: inbox() };
   try {
     tabs.update(input);
-    tabs.select({ kind: "session", id: child.id });
-    // Fix 4.2 case 2: D3's ancestor selection applies only to quiet children
-    // without an independent mandatory phantom.
+    tabs.preview(child.id);
+    // 2.67: activity cannot turn a helper into an independent task.
     for (let pass = 0; pass < 2; pass++) {
-      assertEquals(tabs.state.selected, { kind: "session", id: child.id });
+      assertEquals(tabs.state.selected, { kind: "session", id: root.id });
       assertEquals(tabs.state.sessionID, child.id);
-      assert(tabs.tabs().some((row) => row.id === child.id));
+      assert(tabs.tabs().some((row) => row.id === root.id));
       child.title = "Updated title";
       tabs.update(input);
     }
@@ -403,6 +463,7 @@ for (const followParent of [true, false]) {
         tabs.crumbs().find((crumb) => crumb.id === b.id)?.external,
         true,
       );
+      assertEquals(tabs.path().map((crumb) => crumb.id), [a.id, b.id, c.id]);
       assertEquals(tabs.state.sessionID, c.id);
     } finally {
       tabs.stop();

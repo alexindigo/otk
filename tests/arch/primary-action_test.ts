@@ -92,14 +92,22 @@ Deno.test("primary action audit follows nested JSX child render callbacks withou
 Deno.test("Prompt and takeovers use the persistent shared primary control and owner", async () => {
   for (const name of ["Prompt", "QuestionDock", "PermissionDock", "FormDock"]) {
     const text = await Deno.readTextFile(`packages/ui/components/${name}.tsx`);
-    assert(text.includes("createPrimaryAction"), name);
+    assert(
+      text.includes(
+        name === "Prompt" ? "createComposerAction" : "createPrimaryAction",
+      ),
+      name,
+    );
     assert(text.includes("<PrimaryAction"), name);
     assertEquals(hiddenPrimary(text), [], name);
   }
   const text = await Deno.readTextFile(
     "packages/ui/components/PrimaryAction.tsx",
   );
-  assert(text.includes("disabled={!props.state.available}"));
+  assert(
+    text.includes('aria-disabled={props.state.available ? "false" : "true"}'),
+  );
+  assert(!/\sdisabled=/.test(text));
   assert(text.includes("aria-description={props.state.reason"));
   assert(!/\bhidden=|<Show\b/.test(text));
   const takeover = await Deno.readTextFile(

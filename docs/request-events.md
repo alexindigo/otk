@@ -30,11 +30,14 @@ native effect cannot overtake an earlier one. Features explicitly declare
 `ordering: "target"` when conflicting metadata needs its own lifetime permission
 (the feature's resource, or its method/session target), so an older pending
 enable cannot overwrite a later disable and membership intents for the same task
-retain their order. A resource identity alone does not imply serialization:
-closing a task remains independent of held membership validation, which must
-revalidate ownership before writing. Independent metadata does not borrow either
-permission. Interrupts retain their explicit priority bypass. Neither yielding
-nor re-queuing resends a handler or weakens its intent duplicate fence, atomic
+retain their order. Ordered local intents keep their place while a failed write
+awaits storage recovery, and restart rebuilds that order from durable admission
+before accepting replacement input. Neither wait keeps an executing turn. A
+resource identity alone does not imply serialization: closing a task remains
+independent of held membership validation, which must revalidate ownership
+before writing. Independent metadata does not borrow either permission.
+Interrupts retain their explicit priority bypass. Neither yielding nor
+re-queuing resends a handler or weakens its intent duplicate fence, atomic
 metadata receipt, dispatch fence or cancellation cleanup.
 
 Registrations distinguish strictly local metadata from `prepared-local` metadata
@@ -63,7 +66,10 @@ OTK and stock opencode do not share a transaction. An unconfirmed native effect
 can remain **Checking whether this finished** until identity-specific evidence
 establishes an outcome. Generic idle activity, elapsed time, a matching title or
 the disappearance of an approval is not evidence that this particular action
-succeeded or failed. There is no repeat-effect Retry action for this state.
+succeeded or failed. There is no repeat-effect Retry action for this state. When
+a newer durable intent makes mutable evidence ambiguous, the older unconfirmed
+change closes with an unknown outcome, not success or a retry. An
+already-confirmed receipt stays authoritative.
 
 Prompt submission completes when the native async endpoint confirms it was sent;
 the agent's subsequent reply has its own lifecycle. Shell, command and
@@ -72,6 +78,13 @@ completed native work while its operation still awaits HTTP settlement. Captured
 input is retained until reliable admission/settlement evidence; a newer edited
 draft is never cleared by the older result. Successful sends are not made to
 look unsent by later visit/location bookkeeping.
+
+Question answers and skips use the existing request tracker, keyed by the native
+request identity. The dock shows its captured answer and request status; the
+generic session notice does not publish a second copy. Native question
+retirement clears the dock even when the RPC result is still in transit. A
+confirmed result also retires the request and consumes only the submitted draft.
+Switching views detaches the presentation, not the draft or the operation.
 
 Text missed during a native stream gap appears when the part finishes;
 unfinished native HTTP parts do not expose that missing source.

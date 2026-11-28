@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Code.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
-import { isCancellation } from "@otk/protocol";
+import ScrollRegion from "./ScrollRegion.tsx";
 import {
   createEffect,
   createMemo,
@@ -21,10 +20,6 @@ import {
 } from "../highlight/lines.ts";
 import type { HighlightToken } from "../highlight/types.ts";
 import CodeGroup from "./CodeGroup.tsx";
-import { contextTarget } from "./context-target.ts";
-import { useContentIdentity } from "../features/transcript-context.tsx";
-import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
-import FeedbackStatus from "./FeedbackStatus.tsx";
 interface SourcePiece {
   key: number;
   start: number;
@@ -144,11 +139,11 @@ export default function Code(
     streaming?: boolean;
     lineNumbers?: boolean;
     startLine?: number;
+    mark?: { start: number; end?: number };
     /** Reveal source fence markers without an ancestor styling this renderer. */
     revealFence?: boolean;
   },
 ): import("solid-js").Element {
-  const identity = useContentIdentity();
   const block = highlightBlock(
     untrack(() => (props.lang || "text").toLowerCase()),
     untrack(() => props.text),
@@ -159,7 +154,6 @@ export default function Code(
   const [styles, setStyles] = createStore<
     Record<number, { owner: number; tokens: HighlightToken[][] } | undefined>
   >({});
-  const [error, setError] = createSignal<FailureValue>("");
   let currentInput:
     | Readonly<{ text: string; lang: string; streaming: boolean }>
     | undefined;
@@ -366,25 +360,10 @@ export default function Code(
         disposed || frame().model !== owner ||
         !owner.source.startsWith(value.text)
       ) return;
+      owner.verifySource(chunk.start, chunk.tokens);
       projections.set(chunk.start, { owner: owner.id, tokens: chunk.tokens });
       enqueue();
-    }).then(() => {
-      if (!disposed && id === generation && frame().model === owner) {
-        setError("");
-      }
-    }).catch((error) => {
-      if (
-        !disposed && id === generation && frame().model === owner &&
-        !isCancellation(error)
-      ) {
-        setError(
-          failureValue(error, {
-            actionLabel: "Highlighting source",
-            target: identity,
-          }),
-        );
-      }
-    });
+    }).catch(() => {/* The shared enhancement owner retains diagnostics. */});
   };
   const schedule = () => {
     if (disposed || !desired || timer !== undefined) return;
@@ -396,17 +375,8 @@ export default function Code(
       if (previous?.value === value && previous.owner === owner) return;
       if (previous && previous.owner !== owner) block.cancel();
       if (!previous || previous.value.lang !== value.lang) {
-        void block.prepare(value.lang, value.text).catch((error) => {
-          if (
-            !disposed && frame().model === owner && !isCancellation(error)
-          ) {
-            setError(
-              failureValue(error, {
-                actionLabel: "Preparing syntax highlighting",
-                target: identity,
-              }),
-            );
-          }
+        void block.prepare(value.lang, value.text).catch(() => {
+          /* Preparation is optional; source layout never depends on it. */
         });
       }
       enqueue();
@@ -468,32 +438,98 @@ export default function Code(
     ) result.push({ key: -start - 1, start, end: current.source.length });
     return result;
   });
+  const numbers = createMemo(() =>
+    props.text.split(/\r\n|\n|\r/).map((_, i) => i + (props.startLine ?? 1))
+  );
+  const renderNumbers = () => {
+    const rows = numbers(), mark = props.mark;
+    if (!mark || !rows.includes(mark.start)) return rows.join("\n");
+    const first = mark.start - rows[0];
+    const last = Math.min(rows.length, (mark.end ?? mark.start) - rows[0] + 1);
+    return (
+      <>
+        {first ? `${rows.slice(0, first).join("\n")}\n` : ""}
+        <For each={rows.slice(first, last)}>
+          {(line) => (
+            <>
+              <span
+                class="otk-code-number is-marked"
+                ref={(element) => {
+                  if (line === mark.start) {
+                    requestAnimationFrame(() => {
+                      if (element.isConnected) {
+                        element.scrollIntoView({
+                          block: "nearest",
+                          inline: "nearest",
+                        });
+                      }
+                    });
+                  }
+                }}
+              >
+                {line}
+              </span>
+              {line < rows.at(-1)! ? "\n" : ""}
+            </>
+          )}
+        </For>
+        {rows.slice(last).join("\n")}
+      </>
+    );
+  };
   return (
     <div
       class="otk-code"
-      ref={contextTarget(() => ({
-        kind: "code",
-        data: { ...identity, text: props.text },
-      }))}
       data-language={props.lang || "text"}
       data-numbered={props.lineNumbers ? "true" : "false"}
       data-reveal-fence={props.revealFence ? "true" : undefined}
     >
-      <Show when={props.lineNumbers}>
-        <pre
-          class={[scrollRegion("x"), "otk-code-numbers"]}
-          aria-hidden="true"
-        >{props.text.split(/\r\n|\n|\r/).map((_, i) => i + (props.startLine ?? 1)).join("\n")}</pre>
-      </Show>
-      <pre class={scrollRegion("x")}><code>
-      <For each={pieces()} keyed={piece => piece.key}>{piece => (
-        <Show when={piece().group} fallback={<RawSource text={frame().source.slice(piece().start, piece().end)} source={frame().source} start={piece().start} terminal={piece().end === frame().source.length} mount={selected => mountTail(piece().key, selected)} onDemand={range => demandTail(piece().key, range)} onSelection={() => { setSelectionTick(value => value + 1); enqueue(); }} />}>
-          {group => <CodeGroup rows={group().rows} tokens={styles[group().key]?.owner === frame().model.id ? styles[group().key]?.tokens : undefined} onDemand={visible => demand(group().key, visible)} />}
+      <Show when={props.text.length || props.lineNumbers || props.revealFence}>
+        <Show when={props.lineNumbers}>
+          <ScrollRegion
+            as="pre"
+            axis="x"
+            class="otk-code-numbers"
+            aria-hidden="true"
+          >
+            {renderNumbers()}
+          </ScrollRegion>
         </Show>
-      )}</For>
-    </code></pre>
-      <Show when={error()}>
-        <FeedbackStatus feedback={errorFeedback(error())} />
+        <ScrollRegion as="pre" axis="x" class="otk-code-content">
+          <code>
+            <For each={pieces()} keyed={(piece) => piece.key}>
+              {(piece) => (
+                <Show
+                  when={piece().group}
+                  fallback={
+                    <RawSource
+                      text={frame().source.slice(piece().start, piece().end)}
+                      source={frame().source}
+                      start={piece().start}
+                      terminal={piece().end === frame().source.length}
+                      mount={(selected) => mountTail(piece().key, selected)}
+                      onDemand={(range) => demandTail(piece().key, range)}
+                      onSelection={() => {
+                        setSelectionTick((value) => value + 1);
+                        enqueue();
+                      }}
+                    />
+                  }
+                >
+                  {(group) => (
+                    <CodeGroup
+                      rows={group().rows}
+                      tokens={styles[group().key]?.owner === frame().model.id
+                        ? styles[group().key]?.tokens
+                        : undefined}
+                      onDemand={(visible) => demand(group().key, visible)}
+                    />
+                  )}
+                </Show>
+              )}
+            </For>
+          </code>
+        </ScrollRegion>
       </Show>
     </div>
   );

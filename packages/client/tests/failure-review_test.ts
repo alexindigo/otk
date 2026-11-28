@@ -14,6 +14,7 @@ import {
 } from "@otk/client";
 import { latestTerminal, type SupervisionEvidence } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
+import { sessionEntity } from "./supervision-fixture.ts";
 
 Deno.test("failed completion and failure facts merge into one session-outcome note in either arrival order", () => {
   for (const factsFirst of [true, false]) {
@@ -187,10 +188,13 @@ Deno.test("request failures capture the canonical title before selection or meta
     const cause = await result;
     assert(cause instanceof RequestFailure);
     const owner = createFailurePresenter();
-    assertEquals(owner.present(cause.failure).failure?.target, {
-      label: "Original target",
-      href: "#/remote/tstv1-native_id",
-    });
+    assertEquals(
+      owner.present(cause.failure, { surface: "notification" }).failure?.target,
+      {
+        label: "Original target",
+        href: "#/remote/tstv1-native_id",
+      },
+    );
     assertEquals(
       owner.present({
         ...cause.failure,
@@ -198,7 +202,7 @@ Deno.test("request failures capture the canonical title before selection or meta
           action: "session.rename",
           target: { sidecarId: "remote", sessionID: "tstv1-native_id" },
         },
-      }).failure?.target,
+      }, { surface: "notification" }).failure?.target,
       { label: "native_id", href: "#/remote/tstv1-native_id" },
     );
   } finally {
@@ -246,7 +250,8 @@ Deno.test("inline and notification context cannot replace a captured target titl
     };
     const inline = failureValue(cause, context);
     assert(inline);
-    assertEquals(inline.failure?.target.label, "Captured target");
+    assertEquals(inline.failure?.target, { label: "" });
+    assertEquals(inline.failure?.value.facts?.target?.label, "Captured target");
     const note = failureNote(cause, context)!;
     assertEquals(notificationFailure(note)?.target, {
       label: "Captured target",
@@ -263,7 +268,7 @@ Deno.test("terminal replacement clears an older outcome when composed with retai
   assertEquals(merged.outcome, undefined);
 });
 
-Deno.test("supervision's paired outcome reaches finish notifications before index activity", () => {
+Deno.test("the session entity's paired outcome reaches finish notifications before index activity", () => {
   const f = shellFixture(), notes: Note[] = [];
   const trigger = new NotificationTriggers(
     (note) => notes.push(note),
@@ -298,15 +303,20 @@ Deno.test("supervision's paired outcome reaches finish notifications before inde
       revision: 2,
       ops: [
         {
-          op: "supervision",
-          sessionID: "root",
-          value: { state: "finishedUnseen", terminal: 20, outcome: "failed" },
+          op: "entity.upsert",
+          value: sessionEntity("root", {
+            state: "needsYou",
+            terminal: 20,
+            unseen: true,
+            outcome: "failed",
+            terminalOrigin: "live",
+          }),
         },
         { op: "finish", sessionID: "root", time: 20 },
       ],
     });
     assertEquals(notes.map((note) => [note.title, note.kind]), [[
-      "Session failed",
+      "Running session failed for root: The provider reported a failed execution without a reason. Open the session to inspect the provider response before sending a new prompt.",
       "error",
     ]]);
   } finally {
@@ -341,9 +351,21 @@ Deno.test("finish notifications use terminal outcome before separate error obser
         },
       }],
     });
+    if (outcome === "succeeded") {
+      assertEquals(notes, []);
+      trigger.settlement("remote", entry.id, {
+        id: 20,
+        outcome,
+        live: true,
+        unseen: true,
+      });
+    }
     assertEquals(notes.map((note) => [note.title, note.kind]), [
       outcome === "failed"
-        ? ["Session failed", "error"]
+        ? [
+          "Running session failed for tstv1-review: The provider reported a failed execution without a reason. Open the session to inspect the provider response before sending a new prompt.",
+          "error",
+        ]
         : outcome === "succeeded"
         ? ["Session done", "done"]
         : outcome === "interrupted"
@@ -363,7 +385,10 @@ Deno.test("finish notifications use terminal outcome before separate error obser
           },
         }],
       });
-      assertEquals(notes.at(-1)?.title, "Session failed");
+      assertEquals(
+        notes.at(-1)?.title,
+        "Running session failed for tstv1-review: The provider reported a failed execution without a reason. Open the session to inspect the provider response before sending a new prompt.",
+      );
       assertEquals(notes.at(-1)?.id, "remote/tstv1-review/outcome/failed");
       assertEquals(retracted, [notes[0].id]);
     }

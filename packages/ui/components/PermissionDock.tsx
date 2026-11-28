@@ -11,7 +11,7 @@ import {
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
 import "./PermissionDock.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import Takeover from "./surface/Takeover.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
 export function registerPermissionDock(docks: DockRegistry): void {
@@ -36,6 +36,8 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { type SessionPorts, useSessionPorts } from "../registries/session.tsx";
 import { oldestPermission } from "@otk/client";
 import TakeoverHeader from "./TakeoverHeader.tsx";
+import RequestDismiss from "./RequestDismiss.tsx";
+import { bindDirtyInput } from "../state/dirty-input.ts";
 import PermissionSummary from "./PermissionSummary.tsx";
 import RequestAge from "./RequestAge.tsx";
 import type {
@@ -57,15 +59,8 @@ export function registerPermissionTakeover(
       ),
   });
 }
-function waitingPermissions(session: SessionPorts) {
-  return session.approvals
-    ? session.approvals.attention(session.connected?.() ?? false).permissions(
-      session.permissions(),
-    )
-    : session.permissions();
-}
 function visiblePermissions(session: SessionPorts) {
-  return waitingPermissions(session).filter((request) =>
+  return session.permissions().filter((request) =>
     session.permissionVisible?.(request) ?? true
   );
 }
@@ -80,13 +75,8 @@ function PermissionTakeover(
       session.sessionID(),
       session.entry,
     );
-  const automatic = () =>
-    session.permissions().length - waitingPermissions(session).length;
   return (
     <>
-      <Show when={automatic() > 0 && !request()}>
-        <p class="otk-auto-approving" role="status">Auto-approving…</p>
-      </Show>
       <PermissionDock
         notice={props.notice}
         focusNotice={props.focusNotice}
@@ -106,6 +96,11 @@ function PermissionTakeover(
             request()?.sessionID
           : undefined}
         onDirty={(value, input) => session.dirty("permissions", value, input)}
+        onDismiss={session.requests && (() => {
+          const current = request();
+          if (!current) return;
+          session.requests!.dismiss("permission", current.id);
+        })}
         onReply={(input) => commands.run("permission.reply", input)}
       />
     </>
@@ -120,6 +115,7 @@ function RequestDock(
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
+    onDismiss?(): void;
     onDirty(value: boolean, input?: string): void;
   },
 ) {
@@ -129,10 +125,22 @@ function RequestDock(
   const [mode, setMode] = createSignal<"normal" | "always" | "reject">(
     "normal",
   );
-  const [message, setMessage] = createSignal(""),
+  const [message, changeMessage] = createSignal(
+      (session?.requests?.draft("permission", props.request.id) as
+        | string
+        | undefined) ?? "",
+    ),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal<FailureValue>("");
   let active = true, card!: HTMLElement, pendingStatus!: HTMLDivElement;
+  bindDirtyInput(
+    () => ({ dirty: !!message(), text: message() }),
+    (dirty, text) => props.onDirty(dirty, text),
+  );
+  const setMessage = (value: string) => {
+    changeMessage(value);
+    session?.requests?.draft("permission", props.request.id, value);
+  };
   createEffect(
     () => ({ pending: pending(), feedback: operation() }),
     (value) => {
@@ -164,9 +172,14 @@ function RequestDock(
     setPending(true);
     feedback?.clear();
     setError("");
+    const settled = session?.requests?.settlement(
+      "permission",
+      props.request.id,
+    );
     try {
       await props.onReply(input);
-      props.onDirty(false);
+      settled?.();
+      if (active) props.onDirty(false);
     } catch (error) {
       if (feedback) feedback.fail(error);
       else if (active) {
@@ -236,10 +249,14 @@ function RequestDock(
     id: "permission.close",
     title: "Close permission confirmation",
     category: "Attention",
-    run: () => setMode("normal"),
+    run: () => mode() !== "normal" ? setMode("normal") : props.onDismiss?.(),
   });
   onSettled(() =>
-    ports.keyboard?.layer("permission.close", () => mode() !== "normal", 20)
+    ports.keyboard?.layer(
+      "permission.close",
+      () => card.contains(document.activeElement),
+      20,
+    )
   );
   return (
     <section
@@ -250,7 +267,7 @@ function RequestDock(
       }}
       aria-label="Pending permission"
       onKeyDown={(event) => {
-        if (event.key === "Escape" && mode() !== "normal") {
+        if (event.key === "Escape") {
           event.preventDefault();
           void close();
           return;
@@ -273,6 +290,7 @@ function RequestDock(
         notice={props.notice}
         title={
           <TakeoverHeader
+            entityKey={`session:${props.request.sessionID}`}
             title={props.request.detail.kind === "bash"
               ? "Run this command?"
               : "Allow this action?"}
@@ -309,7 +327,7 @@ function RequestDock(
               <FeedbackStatus
                 ref={(element) => pendingStatus = element}
                 focusable
-                feedback={{ kind: "pending", text: "Sending response…" }}
+                feedback={{ kind: "pending", text: "Sending response..." }}
               />
             </Show>
             <Switch>
@@ -340,10 +358,6 @@ function RequestDock(
                   readonly={pending()}
                   onInput={(event) => {
                     setMessage(event.currentTarget.value);
-                    props.onDirty(
-                      !!event.currentTarget.value,
-                      event.currentTarget.value,
-                    );
                   }}
                 />
               </Match>
@@ -368,13 +382,18 @@ function RequestDock(
                 </button>
               </Match>
             </Switch>
+            <RequestDismiss onDismiss={props.onDismiss} />
           </div>
         )}
       >
-        <Show when={props.activity}>
-          {(activity) => <RequestAge label={activity().label} />}
-        </Show>
-        <PermissionSummary request={props.request} />
+        <RequestAge value={props.activity?.lead ? props.activity : undefined} />
+        <PermissionSummary
+          request={props.request}
+          focusHome={() => {
+            if (card.isConnected) card.focus({ preventScroll: true });
+            else props.focusNotice?.();
+          }}
+        />
         <Show when={error()}>
           <FeedbackStatus feedback={errorFeedback(error())} />
         </Show>
@@ -398,14 +417,13 @@ function RequestDock(
             }}
           >
             <label>
-              Optional rejection message<textarea
-                class={scrollRegion()}
+              Optional rejection message<ScrollRegion
+                as="textarea"
                 name="rejection"
                 value={message()}
                 onInput={(event) => {
                   const value = event.currentTarget.value;
                   setMessage(value);
-                  props.onDirty(!!value, value);
                 }}
               />
             </label>
@@ -424,6 +442,7 @@ export default function PermissionDock(
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
+    onDismiss?(): void;
     onDirty(value: boolean, input?: string): void;
   },
 ): import("solid-js").Element {
@@ -441,6 +460,7 @@ export default function PermissionDock(
           childTitle={props.childTitle}
           where={props.where}
           onReply={(input) => props.onReply(input)}
+          onDismiss={props.onDismiss}
           onDirty={(value, input) => props.onDirty(value, input)}
         />
       )}

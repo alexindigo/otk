@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
+import { cssLength } from "../../pages/css-length.ts";
+import { subagents } from "../../pages/crumbs.ts";
 import {
   captureParagraph,
   paragraphTop,
@@ -56,6 +58,20 @@ test(
     await expect(page.getByRole("form", { name: "Composer", exact: true }))
       .toHaveAttribute("aria-busy", "false");
     const pane = page.getByRole("region", { name: "Transcript", exact: true });
+    const tailGap = async () => {
+      const footer = pane.locator("[data-role=assistant] footer").last();
+      const header = page.getByLabel("Message destination", { exact: true });
+      const spacing = await cssLength(pane, "--space-6");
+      await expect(footer).toBeVisible();
+      await expect.poll(async () => {
+        const [from, to] = await Promise.all([
+          footer.boundingBox(),
+          header.boundingBox(),
+        ]);
+        return Math.abs(to!.y - (from!.y + from!.height) - spacing);
+      }, { message: "Reply footer to composer header is one block gap" })
+        .toBeLessThanOrEqual(1);
+    };
     const jump = page.locator(".otk-jump-slot").getByRole("button", {
       name: "Jump to latest",
       exact: true,
@@ -79,6 +95,7 @@ test(
       await expect(jump).toBeVisible();
     };
     await bottom();
+    await tailGap();
     const layout = () =>
       page.evaluate(() => ({
         transcript: document.querySelector(".otk-messages")!
@@ -101,6 +118,7 @@ test(
         "data-otk-theme",
         theme,
       );
+      const inset = await cssLength(jump.locator(".."), "--jump-bottom-inset");
       const geometry = await jump.evaluate((button) => {
         const control = button.getBoundingClientRect();
         const icon = button.querySelector("svg")!.getBoundingClientRect();
@@ -109,10 +127,6 @@ test(
           .getBoundingClientRect();
         const viewport = document.querySelector(".otk-messages")!
           .getBoundingClientRect();
-        const inset = parseFloat(
-          getComputedStyle(button.parentElement!)
-            .getPropertyValue("--jump-bottom-inset"),
-        );
         const reference = document.createElement("span");
         Object.assign(reference.style, {
           position: "fixed",
@@ -142,7 +156,6 @@ test(
           footer,
           composer,
           viewport,
-          inset,
           actualPaint,
           expectedPaint,
         };
@@ -157,7 +170,7 @@ test(
       );
       expect(
         Math.abs(
-          geometry.footer.bottom - geometry.viewport.bottom + geometry.inset,
+          geometry.footer.bottom - geometry.viewport.bottom + inset,
         ),
       ).toBeLessThanOrEqual(.5);
       expect(
@@ -197,11 +210,28 @@ test(
     await expect(pane.getByText("FOLLOW WITNESS", { exact: true }))
       .toBeVisible();
     await bottom();
+    await tailGap();
     await up();
     // Native reverse/forward Tab travel reaches the visible named control.
     await jump.focus();
     await page.keyboard.press("Shift+Tab");
+    await info.attach("jump-reverse-tab", {
+      body: JSON.stringify(
+        await page.evaluate(() => ({
+          active: document.activeElement?.outerHTML,
+          scrollTop: document.querySelector(".otk-messages")?.scrollTop,
+          jump: document.querySelector(".otk-jump-slot")?.outerHTML,
+        })),
+      ),
+      contentType: "application/json",
+    });
     await expect(jump).not.toBeFocused();
+    // WP2: reverse Tab can focus a reply identity and open its independent
+    // preview. Close that card before continuing the surrounding tab order.
+    if (await page.locator(".otk-entity :popover-open").count()) {
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".otk-entity :popover-open")).toHaveCount(0);
+    }
     await page.keyboard.press("Tab");
     await expect(jump).toBeFocused();
     await page.keyboard.press("Enter");
@@ -275,6 +305,10 @@ test(
     });
     await jump.click();
     await bottom();
+    await state.product("prefs.set", { key: "textSize", value: "125" });
+    await expect(page.locator("html")).toHaveCSS("--otk-scale", "1.25");
+    await bottom();
+    await tailGap();
   },
 );
 
@@ -288,19 +322,43 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
     title: "Read-only child",
     parentID: root.id,
   });
+  const sibling = await state.native<{ id: string }>("/session", "POST", {
+    title: "Unread sibling",
+    parentID: root.id,
+  });
   await state.queue(["Child source.\n\n".repeat(180)]);
   await state.native(`/session/${child.id}/prompt_async`, "POST", {
     parts: [{ type: "text", text: "Inspect the child" }],
   });
   // The common opener explicitly waits for an editable root composer.
   await page.goto(`${state.url}/#/local/${child.id}`);
-  await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+  // D17: the child has a collapsed toolbar, not an editable composer.
+  await expect(page.getByRole("button", {
+    name: "Join the conversation",
+    exact: true,
+  })).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   const pane = page.getByRole("region", { name: "Transcript", exact: true });
   await expect(pane).toHaveAttribute("aria-busy", "false");
   await expect(pane).toContainText("Child source.");
+  // D72 removes the selected helper after it is read. Keep the footer in the
+  // layout under test with an independent unread sibling, not a seen row.
+  await expect(subagents(page)).toHaveCount(0);
+  await state.queue(["Sibling source."]);
+  await state.native(`/session/${sibling.id}/prompt_async`, "POST", {
+    parts: [{ type: "text", text: "Inspect the sibling" }],
+  });
+  await expect(subagents(page)).toHaveAccessibleName(
+    "Subagents: 1 finished",
+  );
+  const activity = page.locator(".otk-composer-activity-slot");
+  await expect(activity).toBeVisible();
   const rect = await pane.boundingBox();
   const session = await page.locator(".otk-session-view").boundingBox();
-  expect(Math.abs(rect!.y + rect!.height - session!.y - session!.height))
+  const header = await activity.boundingBox();
+  const dock = await page.locator(".otk-composer-dock").boundingBox();
+  expect(Math.abs(rect!.y + rect!.height - header!.y)).toBeLessThanOrEqual(.5);
+  expect(Math.abs(dock!.y + dock!.height - session!.y - session!.height))
     .toBeLessThanOrEqual(.5);
   await page.mouse.move(rect!.x + 8, rect!.y + rect!.height / 2);
   for (let i = 0; i < 4; i++) {
@@ -313,16 +371,11 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
   });
   await expect(jump).toBeVisible();
   expect(await pane.boundingBox()).toEqual(rect);
-  const geometry = await jump.evaluate((button) => ({
-    footer: button.parentElement!.getBoundingClientRect().bottom,
-    session:
-      button.closest(".otk-session-view")!.getBoundingClientRect().bottom,
-    inset: parseFloat(
-      getComputedStyle(button.parentElement!)
-        .getPropertyValue("--jump-bottom-inset"),
-    ),
-  }));
-  expect(Math.abs(geometry.footer - geometry.session + geometry.inset))
+  const inset = await cssLength(jump.locator(".."), "--jump-bottom-inset");
+  const footer = await jump.evaluate((button) =>
+    button.parentElement!.getBoundingClientRect().bottom
+  );
+  expect(Math.abs(footer - (rect!.y + rect!.height) + inset))
     .toBeLessThanOrEqual(.5);
   await page.screenshot({ path: info.outputPath("child-jump.png") });
   await jump.click();

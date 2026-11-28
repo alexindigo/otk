@@ -27,10 +27,15 @@ test.describe("inactive supervision", () => {
           `[data-project=${JSON.stringify(entry.directory)}]`,
         );
         await row.locator(".otk-project-menu > button").click();
-        await row.locator(".otk-menu-items button").click();
+        await row.getByRole("menuitem", { name: "Mark inactive", exact: true })
+          .click();
         await expect(row).toHaveCount(0);
       }
-      await expect(page.locator(".otk-inactive-toggle")).toContainText("(3)");
+      await expect(page.locator(".otk-inactive-toggle")).toHaveAccessibleName(
+        "Inactive, 3",
+      );
+      await expect(page.locator(".otk-inactive-toggle .otk-chrome-meta"))
+        .toHaveText("3");
       await activity(state, "tstv1-otk", "hold");
       await activity(state, "tstv1-atmosphera", "thaw");
       await activity(state, "tstv1-globnotes", "hold");
@@ -43,11 +48,14 @@ test.describe("inactive supervision", () => {
           ),
         ).toHaveAttribute("data-rollup", states[i]);
       }
-      expect(
-        (await state.product("inbox.get", {})).inbox.projects.every((p) =>
-          !p.inactive
-        ),
-      ).toBe(true);
+      // The rollup can render from the entity feed before the inactive policy
+      // update is published in the inbox. Observe that separate contract before
+      // testing the collapsed layout on both sides of the reload.
+      await expect.poll(async () =>
+        (await state.product("inbox.get", {})).inbox.projects.filter((p) =>
+          p.inactive
+        ).map((p) => p.directory)
+      ).toEqual([]);
       await page.getByRole("button", { name: "Collapse projects", exact: true })
         .click();
       for (let reload = 0; reload < 2; reload++) {
@@ -68,7 +76,7 @@ test.describe("inactive supervision", () => {
       const unread = page.locator(
         `[data-project=${
           JSON.stringify(entries[2].directory)
-        }] .otk-project-name`,
+        }] .otk-sidebar-title-text`,
       );
       await expect(unread).toHaveAttribute("data-unread", "true");
       await openSession(state, page, "tstv1-other-finished");
@@ -148,7 +156,7 @@ test.describe("filtered and unmounted supervision", () => {
       await visibleOnScreen(
         page.locator(`${project} .otk-status-light[data-state=blocked]`),
       );
-      await page.locator(`${project} .otk-project-open`).click();
+      await page.locator(`${project} .otk-sidebar-lamp-action`).click();
       // Decision 7: blocked attention outranks the remembered working session.
       await expect(page).toHaveURL(/tstv1-background-blocked$/);
       for (

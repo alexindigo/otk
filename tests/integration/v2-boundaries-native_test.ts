@@ -47,7 +47,7 @@ Deno.test({
         prompt.id,
       );
       const projection = createTranscriptProjection();
-      projection.replace(snapshot.items);
+      projection.reset(snapshot.items);
       assert(
         projection.state.replyIDs.indexOf(prompt.id) <
           projection.state.replyIDs.indexOf(`reply:${prompt.id}`),
@@ -104,7 +104,7 @@ async function observe(
     content: (_id, op) => projection.apply(op),
   });
   adapter.core.subscriptions(sid, 1);
-  projection.replace((await adapter.core.listMessages(sid, {})).items);
+  projection.reset((await adapter.core.listMessages(sid, {})).items);
   return { adapter, projection, connections, errors };
 }
 /** The application route: pages come from the app/worker SQL sequence
@@ -141,7 +141,7 @@ async function application(native: OpencodeV2Test, sid: string) {
   const first = await page(), from = ws.frames.length;
   const projection = () => {
     const live = createTranscriptProjection();
-    live.replace(first.items);
+    live.reset(first.items);
     for (const frame of ws.frames.slice(from)) {
       if (frame.t === "content" && frame.sessionID === sid) {
         live.apply(frame.event);
@@ -372,7 +372,8 @@ Deno.test({
         rows.some((m) => {
           const p = part(m);
           return p?.kind === "external" &&
-            p.activity?.title === "Explore failed" &&
+            p.activity?.title === "failed" &&
+            p.activity.entity?.label === "Explore" && // WP2: entity and outcome are separate.
             JSON.stringify(p.activity.body).includes(
               "The usage limit has been reached",
             );

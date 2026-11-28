@@ -2,6 +2,7 @@
 import {
   type ClockedContent,
   type ContentClock,
+  ContentDeliveryDiagnostics,
   type ContentOp,
   isAttentionOp,
   type MessagePolicy,
@@ -16,9 +17,12 @@ interface Capture {
 interface Session {
   clock: ContentClock;
   captures: Set<Capture>;
+  revisions: Map<string, number>;
 }
 /** Bounded event-aligned capture only: no native reader, bodies cache or timers. */
 export class ContentReplay {
+  readonly delivery: ContentDeliveryDiagnostics =
+    new ContentDeliveryDiagnostics("native");
   #sessions = new Map<string, Session>();
   #generation = 0;
   #revisions = new Map<string, number>();
@@ -34,6 +38,7 @@ export class ContentReplay {
       session = {
         clock: { epoch: this.options.nonce(), seq: 0 },
         captures: new Set(),
+        revisions: new Map(),
       };
       this.#sessions.set(id, session);
     }
@@ -41,6 +46,18 @@ export class ContentReplay {
   }
   clock(id: string): ContentClock {
     return { ...this.#session(id).clock };
+  }
+  /** Scalar body witnesses share the publication clock's lifetime, not a cache. */
+  revisions(id: string, messageIDs: readonly string[]): Record<string, number> {
+    const session = this.#session(id);
+    return Object.fromEntries(
+      messageIDs.map((
+        messageID,
+      ) => [
+        messageID,
+        session.revisions.get(messageID) ?? 0,
+      ]),
+    );
   }
   version(id: string): TranscriptVersion {
     return {
@@ -73,6 +90,11 @@ export class ContentReplay {
       seq: session.clock.seq + 1,
     };
     const frame = { clock, event };
+    if (event.op === "message.upsert") {
+      session.revisions.set(event.message.id, clock.seq);
+    } else if ("messageID" in event) {
+      session.revisions.set(event.messageID, clock.seq);
+    }
     if (session.captures.size) {
       const bytes = new TextEncoder().encode(JSON.stringify(frame)).byteLength;
       for (const capture of session.captures) {
@@ -90,6 +112,13 @@ export class ContentReplay {
         }
       }
     }
+    this.delivery.record({
+      sessionID: id,
+      operation: event.op,
+      clock,
+      state: "emitted",
+      ...(event.op === "message.upsert" ? { messageID: event.message.id } : {}),
+    });
     this.options.emit(id, event, clock);
     return { ...clock };
   }

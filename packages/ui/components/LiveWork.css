@@ -1,0 +1,33 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-live-work-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-2);
+  inline-size: max-content;
+  max-inline-size: 100%;
+  max-block-size: calc(270 * var(--otk-unit));
+  font-size: var(--text-meta);
+  line-height: var(--line-meta);
+}
+.otk-live-work-item {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-radius: var(--radius-control);
+}
+.otk-live-work-entity {
+  display: inline-flex;
+  min-inline-size: 0;
+}
+.otk-live-work-title {
+  min-inline-size: 0;
+}
+.otk-live-work-elapsed {
+  text-align: end;
+}
+.otk-live-work-list:has(.otk-live-work-terminate) {
+  grid-template-columns: auto minmax(0, 1fr) auto var(--control-size);
+}

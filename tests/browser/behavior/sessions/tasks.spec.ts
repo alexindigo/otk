@@ -2,14 +2,19 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt, revealAcquired } from "../../pages/transcript.ts";
+import {
+  openWork,
+  prompt,
+  revealAcquired,
+  sessionStatus,
+} from "../../pages/transcript.ts";
+import { send } from "../../pages/primary-action.ts";
 
 test.use({ profile: "sessions-tasks" });
-test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
+test("sessions.real-task-progress-helper-parent-history-and-draft", {
   tag: ["@sessions", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   test.setTimeout(120_000);
-  await state.product("prefs.set", { key: "expandWork", value: true });
   await state.product("prefs.set", { key: "expandDelegation", value: true });
   const root = await state.native<{ id: string }>("/session", "POST", {
     title: "Subagents",
@@ -22,6 +27,15 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
       chunks: [],
       tool: { name, input },
     });
+  const openInspection = (name: string) =>
+    openWork(
+      page.locator('.otk-messages [data-role="assistant"]').filter({
+        has: page.getByRole("button", {
+          name: `Work log: 1 action. ${name}`,
+          exact: true,
+        }),
+      }),
+    );
   await tool("task", {
     subagent_type: "general",
     description: "First inspection",
@@ -34,6 +48,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await state.queue(["First child completed."]);
   await state.queue(["First parent completed."]);
   await prompt(page, "Delegate first");
+  await openInspection("First inspection");
   const task = page.locator("[data-tool=task]");
   await expect(task.locator(".otk-tool-state")).toContainText(
     "First inspection",
@@ -49,10 +64,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await expect(page.locator(".otk-messages")).toContainText(
     "First parent completed.",
   );
-  await expect(page.locator(`[data-session="${root.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, root.id, "idle");
   await tool("task", {
     subagent_type: "general",
     description: "Second inspection",
@@ -61,8 +73,12 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await state.queue(["Second child completed."]);
   await state.queue(["Second parent completed."]);
   await prompt(page, "Delegate second");
+  // Do not click the previous reply's strip while Enter is still pending.
+  await openInspection("Second inspection");
   await expect(
-    page.locator("[data-tool=task][data-tool-status=completed] .otk-tool-brief")
+    page.locator(
+      "[data-tool=task][data-tool-status=completed] .otk-disclosure-label",
+    )
       .filter({ hasText: /^Second inspection$/ }),
   ).toBeVisible({ timeout: 60000 });
   await expect.poll(async () =>
@@ -79,10 +95,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await expect(page.locator(".otk-messages")).toContainText(
     "Second parent completed.",
   );
-  await expect(page.locator(`[data-session="${root.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, root.id, "idle");
   const raw = await state.native<{ id: string; title: string }[]>(
     `/session/${root.id}/children`,
   );
@@ -91,41 +104,77 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   const first = children.find((c) => c.title.includes("First inspection"))!,
     second = children.find((c) => c.title.includes("Second inspection"))!;
   await page.locator("textarea[name=prompt]").fill("Unsent parent work");
-  await expect(page.locator(".otk-send-button")).toBeEnabled();
+  await expect(send(page)).toBeEnabled();
   const card =
-    '[data-tool=task]:has(.otk-tool-brief[title="First inspection"]) .otk-task-card';
+    '[data-tool=task]:has(.otk-disclosure-label[title="First inspection"]) .otk-task-card';
+  await openWork(
+    page.locator('.otk-messages [data-role="assistant"]').filter({
+      hasText: "First parent completed.",
+    }),
+  );
   await revealAcquired(page, card);
   await page.locator(card).click();
+  const trail = page.getByRole("navigation", { name: "Task sessions" });
+  const current = trail.locator('[aria-current="page"]');
+  const parent = trail.getByRole("link", { name: "Subagents", exact: true });
+  const join = page.getByRole("button", {
+    name: "Join the conversation",
+    exact: true,
+  });
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}/${first.id}$`));
-  await expect(page.locator(".otk-subagent-bar")).toContainText(
-    "First inspection",
-  );
-  await expect(page.locator(".otk-prompt")).toHaveCount(0);
-  await page.locator(".otk-subagent-bar button").nth(2).click();
-  await expect(page).toHaveURL(new RegExp(`${second.id}$`));
-  await expect(page.locator(".otk-subagent-bar")).toContainText(
-    "Second inspection",
-  );
-  await page.locator(".otk-subagent-bar button").nth(1).click();
-  await expect(page).toHaveURL(new RegExp(`${first.id}$`));
-  await page.locator(".otk-subagent-bar button").first().click();
+  await expect(current).toContainText("First inspection");
+  // D17: opening or revisiting a child does not reveal its input or parent's draft.
+  await expect(join).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
+  await parent.click();
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}$`));
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Unsent parent work",
   );
   await page.evaluate(() => history.back());
   await expect(page).toHaveURL(new RegExp(`${first.id}$`));
-  await expect(page.locator(".otk-subagent-bar")).toContainText(
-    "First inspection",
-  );
-  await expect(page.locator(".otk-prompt")).toHaveCount(0);
+  await expect(current).toContainText("First inspection");
+  await expect(join).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   await page.evaluate(() => history.forward());
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}$`));
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Unsent parent work",
   );
+  await openWork(
+    page.locator('.otk-messages [data-role="assistant"]').filter({
+      hasText: "First parent completed.",
+    }),
+  );
   await revealAcquired(page, card);
   await expect(page.locator(card)).toContainText("1 tool call");
   await expect(page.locator(card)).not.toContainText("1 tool calls");
   await expect(page.locator(card)).toContainText(/\ds/);
+  // Details and navigation are separate actions. The shared Open control must
+  // show the actual helper, not only settle its navigation callback.
+  const helperPill = page.locator(
+    '[data-tool=task]:has(.otk-disclosure-label[title="Second inspection"]) .otk-entity-pill',
+  ).first();
+  await openWork(
+    page.locator('.otk-messages [data-role="assistant"]').filter({
+      hasText: "Second parent completed.",
+    }),
+  );
+  await revealAcquired(
+    page,
+    '[data-tool=task]:has(.otk-disclosure-label[title="Second inspection"])',
+  );
+  await helperPill.click();
+  const entityCard = page.locator(".otk-entity:has(.otk-entity-facts:visible)");
+  await expect(entityCard).toContainText("Session");
+  await entityCard.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${second.id}$`));
+  await expect(current).toContainText("Second inspection");
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Second child completed.",
+  );
+  await parent.click();
+  await expect(page.locator("textarea[name=prompt]")).toHaveValue(
+    "Unsent parent work",
+  );
 });

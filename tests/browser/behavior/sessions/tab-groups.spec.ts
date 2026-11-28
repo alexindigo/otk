@@ -10,65 +10,58 @@ const root = "tstv1-otk",
   b = "tstv1-group-b",
   quiet = "tstv1-group-quiet";
 
+// 2.67 supersedes #71's independent helper phantom/explicit-helper boundaries.
+// Keep the partition, reload, overflow, membership and theme coverage.
 test("sessions.tab-groups-disjoint-phantoms-ancestor-links-more-and-reload", {
   tag: ["@sessions", "@contracts", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   for (const id of [root, a, b]) await activity(state, id, "hold");
   await openSession(state, page, root);
-  const trail = async (members: string[], links: string[]) => {
-    await expect(page.locator('[data-crumb-kind="member"][data-crumb]'))
-      .toHaveCount(members.length);
-    await expect(page.locator('[data-crumb-kind="ancestor"][data-crumb]'))
-      .toHaveCount(links.length);
-    for (const id of members) {
-      await expect(
-        page.locator(`[data-crumb="${id}"][data-crumb-kind="member"]`),
-      ).toBeAttached();
-    }
-    for (const id of links) {
-      await expect(
-        page.locator(`a[data-crumb="${id}"][data-crumb-kind="ancestor"]`),
-      ).toBeAttached();
-    }
-  };
   for (let pass = 0; pass < 2; pass++) {
     if (pass) await page.reload();
-    for (const id of [root, a, b]) {
-      await visibleOnScreen(page.locator(`[data-tab="${id}"]`));
-      await page.locator(`[data-tab="${id}"]`).click();
-      await expect(page.locator(`[data-tab="${id}"]`)).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      await trail([id], id === root ? [] : [root]);
-    }
+    await expect(page.locator(`[data-tab="${a}"]`)).toHaveCount(0);
+    await page.locator(`[data-tab="${b}"]`).click();
+    await expect(page.locator(`[data-crumb="${b}"]`)).toBeVisible();
+    await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
+    await page.locator(`[data-tab="${root}"]`).click();
+    // D67: the ancestry stays separate from the composer's D66 inventory.
+    await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
+    await page.getByRole("button", { name: /^Subagents:/ }).click();
+    await expect(page.locator(`[data-subagent="${a}"]`)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(`[data-crumb="${b}"]`)).toHaveCount(0);
     await page.locator(`[data-session="${quiet}"]`).click();
     await expect(page.locator(`[data-tab="${root}"]`)).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    await trail([root, quiet], []);
+    await expect(page.locator(`[data-crumb="${quiet}"]`)).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await page.locator(`[data-tab="${root}"]`).click();
-    await trail([root], []);
+    await expect(page.locator(`[data-crumb="${quiet}"]`)).toHaveCount(0);
   }
-  await page.locator(`[data-tab="${a}"]`).click();
+  await page.locator(`[data-session="${a}"]`).click();
   await page.setViewportSize({ width: 900, height: 800 });
-  const more = page.getByRole("button", {
-    name: "More task sessions",
-    exact: true,
-  });
-  await expect(more).toBeVisible();
-  await more.click();
-  const choices = page.locator(".otk-folded-crumbs [data-overflow-target]");
-  await expect(choices).toHaveCount(1);
-  await expect(choices).toHaveAttribute("data-overflow-target", root);
-  await expect(choices).toHaveAttribute("data-crumb-kind", "ancestor");
-  await choices.click();
-  await expect(page.locator(`[data-tab="${root}"]`)).toHaveAttribute(
-    "aria-selected",
-    "true",
+  // D74: the ancestor links are behind the sheet at this width.
+  await page.getByRole("button", { name: "Back to conversation" }).click();
+  await expect(page.locator(`[data-crumb="${a}"]`)).toBeVisible();
+  await expect.poll(() =>
+    page.locator(`[data-crumb="${a}"]`).evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const lane = element.closest(".otk-overflow-items")!
+        .getBoundingClientRect();
+      return box.width > 0 && box.left >= lane.left - 1 &&
+        box.right <= lane.right + 1;
+    })
+  ).toBe(true);
+  const rootCrumb = page.locator(`[data-crumb="${root}"]`);
+  await rootCrumb.click();
+  await expect(page.locator(`[data-crumb="${root}"]`)).toHaveAttribute(
+    "aria-current",
+    "page",
   );
-  await trail([root], []);
   expect(await state.product("tasks.list", { directory: state.directory }))
     .toEqual([]);
 });
@@ -85,67 +78,53 @@ test(
       name: "Main task",
       sessions: [root],
     });
-    const second = await state.product("tasks.create", {
+    const helperRecord = await state.product("tasks.create", {
       directory: state.directory,
-      name: "Explore group A",
+      name: "Legacy helper record",
       sessions: [a],
     });
+    const second = await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Another human task",
+      sessions: [b],
+    });
     await openSession(state, page, root);
+    await page.locator(`[data-session="${a}"]`).click();
     for (let pass = 0; pass < 2; pass++) {
       if (pass) await page.reload();
-      await page.locator(`[data-tab="${first.id}"]`).click();
-      await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
-      await expect(
-        page.locator(`[data-crumb="${b}"][data-crumb-kind="member"]`),
-      ).toBeVisible();
-      await page.locator(`[data-tab="${second.id}"]`).click();
-      await expect(
-        page.locator(`[data-crumb="${a}"][data-crumb-kind="member"]`),
-      ).toBeVisible();
-      const ancestor = page.locator(
-        `a[data-crumb="${root}"][data-crumb-kind="ancestor"]`,
+      await expect(page.locator(`[data-tab="${helperRecord.id}"]`)).toHaveCount(
+        0,
       );
-      await expect(ancestor).toBeAttached();
-      if (!await ancestor.isVisible()) {
-        await page.getByRole("button", {
-          name: "More task sessions",
-          exact: true,
-        }).click();
-        const link = page.locator(
-          `.otk-folded-crumbs [data-overflow-target="${root}"][data-crumb-kind="ancestor"]`,
-        );
-        await expect(link).toBeVisible();
-        await expect(page.locator(".otk-folded-crumbs [data-overflow-target]"))
-          .toHaveCount(1);
-        await page.keyboard.press("Escape");
-      }
-      await expect.poll(() =>
-        page.locator(`[data-crumb="${a}"]`).evaluate((element) => {
-          const box = element.getBoundingClientRect();
-          const lane = element.closest(".otk-overflow-items")!
-            .getBoundingClientRect();
-          return box.width > 0 && box.left >= lane.left - 1 &&
-            box.right <= lane.right + 1;
-        })
-      ).toBe(true);
+      await expect(page.locator(`[data-tab="${first.id}"]`)).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await expect(page.locator(`[data-crumb="${a}"]`)).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
       await expect(page.locator(`[data-crumb="${b}"]`)).toHaveCount(0);
+      await page.locator(`[data-tab="${second.id}"]`).click();
+      await expect(page.locator(`[data-crumb="${a}"]`)).toHaveCount(0);
+      await expect(page.locator(`[data-crumb="${b}"]`)).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+      await page.locator(`[data-tab="${first.id}"]`).click();
     }
     await state.product("tasks.close", { id: second.id });
-    // With no explicit child task, A inherits the saved parent task, not a
-    // competing phantom. This is case 1, not ungrouped case 2.
-    await expect(page.locator(`[data-tab="${first.id}"]`)).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(page.locator(`[data-crumb="${a}"][data-crumb-kind="member"]`))
-      .toBeVisible();
+    await expect(page.locator(`[data-tab="${b}"]`)).toBeVisible();
     await activity(state, b, "release");
-    const finishes = await state.product("sessions.finishes", {});
     await state.product("sessions.seen", {
       sessionID: b,
-      terminal: finishes[b],
+      terminal: (await state.product("sessions.finishes", {}))[b],
     });
-    await expect(page.locator(`[data-crumb="${b}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-tab="${b}"]`)).toHaveCount(0);
+    expect(
+      (await state.product("tasks.list", { directory: state.directory })).find((
+        record,
+      ) => record.id === helperRecord.id)?.sessions,
+    ).toEqual([a]);
   },
 );
 
@@ -156,24 +135,28 @@ test("sessions.tab-groups-dark-light-selected-child-trail", {
   await state.product("prefs.set", { key: "animationsOff", value: true });
   for (const id of [root, a, b]) await activity(state, id, "hold");
   await openSession(state, page, root);
-  await page.locator(`[data-tab="${a}"]`).click();
-  await expect(page.getByRole("region", { name: "Transcript", exact: true }))
-    .toHaveAttribute("aria-busy", "false");
-  for (const [name, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]) {
+  await page.locator(`[data-session="${a}"]`).click();
+  for (
+    const [name, theme] of [["dark", "otk-dark"], ["linen", "otk-light"], [
+      "stone",
+      "otk-light-stone",
+    ]]
+  ) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
-    for (const id of [root, a, b]) {
+    for (const id of [root, b]) {
       await visibleOnScreen(page.locator(`[data-tab="${id}"]`));
     }
-    await expect(page.locator(`[data-tab="${a}"]`)).toHaveAttribute(
+    await expect(page.locator(`[data-tab="${a}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-tab="${root}"]`)).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    await expect(
-      page.locator(`[data-crumb="${root}"][data-crumb-kind="ancestor"]`),
-    ).toBeVisible();
-    await expect(page.locator(`[data-crumb="${a}"][data-crumb-kind="member"]`))
-      .toBeVisible();
+    await expect(page.locator(`[data-crumb="${root}"]`)).toBeVisible();
+    await expect(page.locator(`[data-crumb="${a}"]`)).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await expect(page.locator(`[data-crumb="${b}"]`)).toHaveCount(0);
     if (process.env.OTK_FIX42_SCREENSHOTS) {
       await page.screenshot({

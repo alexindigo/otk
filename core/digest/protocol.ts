@@ -58,6 +58,7 @@ export type ToWorker =
       since: number;
       connection?: number;
       diagnostics?: boolean;
+      storageRecovery?: true;
     }
     | { t: "catalog"; connection: number }
     | { t: "projects"; connection: number; directory?: string }
@@ -102,7 +103,7 @@ export type ToWorker =
     }
     | { t: "credit"; publications: number; workms?: number }
     | { t: "cancel"; request: number }
-    | { t: "native.acquire" }
+    | { t: "native.acquire"; lane?: import("@otk/harness").NativeReadLane }
     | { t: "native.release"; request: number }
     | { t: "stop" }
   );
@@ -137,6 +138,7 @@ export type FromWorker =
     | ({ t: "digest" } & DigestWorkerValue)
     | { t: "digests"; values: DigestWorkerValue[] }
     | { t: "progress"; values: import("@otk/protocol").ProgressFacts[] }
+    | { t: "storage"; state: import("@otk/store").StorageStatus }
     | {
       t: "detail";
       sessionID: string;

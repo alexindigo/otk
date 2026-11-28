@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
@@ -144,7 +145,7 @@ test(
     await openSession(state, page, b.id);
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Unsent work");
-    await expect(page.locator(".otk-prompt button[type=submit]")).toBeEnabled();
+    await expect(send(page)).toBeEnabled();
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`${a.id}$`));
     await expect(
@@ -161,17 +162,32 @@ test(
       .click();
     const editor = page.locator("textarea[name=editor]");
     await editor.fill("Unsaved editor bytes");
-    page.once("dialog", (dialog) => dialog.dismiss());
+    // 2.159 (D54): history keeps the session's editor without a native prompt.
+    const dialogs: string[] = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
     await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`${a.id}$`));
+    await expect(editor).toHaveCount(0);
+    await expect(input).toHaveValue("");
+    await page.goForward();
     await expect(page).toHaveURL(new RegExp(`${b.id}$`));
     await expect(editor).toHaveValue("Unsaved editor bytes");
-    await page.locator(".otk-editor footer button").last().click();
+    await page.locator(".otk-editor").getByRole("button", {
+      name: "Save",
+      exact: true,
+    }).click();
+    await expect(editor).toHaveCount(0);
+    await expect(input).toHaveValue("Unsaved editor bytes");
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`${a.id}$`));
     await expect(input).toHaveValue("");
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`${b.id}$`));
     await expect(input).toHaveValue("Unsaved editor bytes");
+    expect(dialogs).toEqual([]);
   },
 );
 

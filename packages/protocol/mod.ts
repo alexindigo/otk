@@ -5,10 +5,12 @@ export * from "./catalogs/models.ts";
 export * from "./catalogs/arrays.ts";
 export * from "./digest.ts";
 export * from "./turn-timing.ts";
+export * from "./outcome-time.ts";
 /** Harness-neutral OTK wire types, versions and shared protocol helpers. */
 export * from "./capabilities.ts";
 export * from "./approvals.ts";
 export * from "./content.ts";
+export * from "./content-delivery.ts";
 export * from "./native-source.ts";
 export * from "./errors.ts";
 export * from "./frecency.ts";
@@ -18,7 +20,10 @@ export * from "./policies/titles.ts";
 export * from "./paths.ts";
 export * from "./index.ts";
 export * from "./inbox.ts";
+export * from "./entity-state.ts";
+export * from "./project-placement.ts";
 export * from "./supervision.ts";
+export * from "./entity-transitions.ts";
 export * from "./messages.ts";
 export * from "./models.ts";
 export * from "./usage.ts";
@@ -27,6 +32,7 @@ export * from "./preferences.ts";
 export * from "./rpc.ts";
 export * from "./session-tree.ts";
 export * from "./session-hierarchy.ts";
+export * from "./tab-groups.ts";
 export * from "./session-list.ts";
 export * from "./view.ts";
 export * from "./session-id.ts";
@@ -41,4 +47,21 @@ export * from "./progress.ts";
 export * from "./forms.ts";
 export * from "./identity.ts";
 export * from "./hash.ts";
+export * from "./project-edit.ts";
 export * from "./terminals.ts";
+export * from "./local-files.ts";
+export type {
+  ProjectMove,
+  ProjectMoveTarget,
+  ProjectOrderEntry,
+  ProjectOrderFrame,
+} from "./project-order.ts";
+export {
+  OTHER_PROGRAM_ID,
+  type Program,
+  type ProgramAssign,
+  type ProgramCreate,
+  type ProgramMembership,
+  type ProgramMove,
+  type ProgramsFrame,
+} from "./programs.ts";

@@ -5,6 +5,10 @@ import type { IndexEntry } from "@otk/protocol";
 
 Deno.test("session index owns metadata and topology across copy edits, late parents, removal and cycles", () => {
   const index = new SessionIndex();
+  const topology: [string, string | undefined][] = [];
+  const stop = index.observeTopology((id, parentID) =>
+    topology.push([id, parentID])
+  );
   const entry = (id: string, parentID?: string): IndexEntry => ({
     id,
     parentID,
@@ -38,4 +42,17 @@ Deno.test("session index owns metadata and topology across copy edits, late pare
   const values = [...index.values()];
   values[0].title = "detached";
   assertEquals(index.get("child")!.title, "child");
+  const helper = { ...entry("child", "other"), agent: "explore" };
+  index.upsert(helper);
+  index.upsert({ ...index.get("child")!, title: "Metadata only" });
+  index.upsert(entry("child", "other"));
+  assertEquals(Reflect.get(index.get("child")!, "agent"), "explore");
+  assertEquals(topology, [
+    ["child", "late"],
+    ["other", undefined],
+    ["child", "other"],
+    ["other", undefined],
+    ["other", "child"],
+  ]);
+  stop();
 });

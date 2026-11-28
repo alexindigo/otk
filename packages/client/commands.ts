@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { FailureTarget } from "@otk/protocol";
+import {
+  commandFailureFacts,
+  errorFeedback,
+  failureValue,
+} from "./failure-features.ts";
+import type { Feedback } from "./failures.ts";
 import {
   type CommandArguments,
   freezeCommandArguments,
@@ -12,10 +19,18 @@ export interface CommandContext {
   origin?: import("@otk/protocol").RequestOrigin;
   sidecar?: string;
   session?: string;
+  /** False when selection is retained behind another view, such as Settings. */
+  viewing?: boolean;
   focus?: string;
   dialog?: string;
+  /** The active binding, present only for a keyboard dispatch. */
+  shortcut?: string;
+  /** An explicit action offer must change its target, unlike ordinary re-selection. */
+  transition?: true;
   /** Prevent reentrant text commands from invoking their own input owner. */
   command?: string;
+  /** Invocation-local Send custody; not a command argument or RPC field. */
+  draftSend?: import("./drafts.ts").DraftSendCapture;
 }
 /** Data-only owner metadata; discovery visibility does not hide key labels. */
 export interface CommandMetadata {
@@ -29,7 +44,7 @@ export interface CommandMetadata {
   readonly scope?: string;
   readonly instance?: string;
   readonly source?: "builtin" | "server" | "mcp" | "skill" | "unknown";
-  /** Submissions participate in the prompt's captured send/clear lifecycle. */
+  /** Submissions participate in the prompt's captured Send lifecycle. */
   readonly kind?: "action" | "submission";
   /** An adapter contribution borrows the semantic owner's schema and behavior. */
   readonly action?: string;
@@ -38,18 +53,36 @@ export interface CommandMetadata {
 export type CommandAvailability = { available: true } | {
   available: false;
   reason: string;
+  /** A transition to the current place is not an offered action. */
+  hidden?: true;
 };
+export type ActionOutcome = { kind: "shown" } | {
+  kind: "refused" | "failed";
+  feedback: Feedback;
+};
+/** The only native action-control input: no separate handler or disabled flag. */
+export interface ActionControl {
+  availability(): CommandAvailability;
+  subscribe(listener: () => void): () => void;
+  run(): Promise<ActionOutcome>;
+}
 export interface Command<A = unknown, R = unknown> extends CommandMetadata {
   /** Feature-owned context contribution; args are the target's captured data. */
-  context?: {
-    kind: string | readonly string[];
-    title?(args: A): string;
-    confirm?(args: A): string;
-    /** One feature registration may project several invocation-specific choices. */
-    items?(args: A): { key?: string; title: string; args: A }[];
-    destructive?: boolean;
-    order?: number;
-  };
+  context?:
+    & {
+      kind: string | readonly string[];
+      title?(args: A): string;
+      confirm?(args: A): string;
+      destructive?: boolean;
+      group?: string;
+      showUnavailable?: boolean;
+      order?: number;
+    }
+    & ({ items?: undefined; arguments?: never } | {
+      /** Override only when a source target differs from generated arguments. */
+      arguments?: CommandArguments;
+      items(args: A): { key?: string; title: string; args: A }[];
+    });
   enabled?(context: CommandContext, args?: A): boolean;
   availability?(context: CommandContext, args?: A): CommandAvailability;
   run(context: CommandContext, args: A): R | Promise<R>;
@@ -116,6 +149,9 @@ export class CommandHub {
       ...commandMetadata(command),
       context: command.context && Object.freeze({
         ...command.context,
+        ...(command.context.arguments
+          ? { arguments: freezeCommandArguments(command.context.arguments) }
+          : {}),
         kind: typeof command.context.kind === "string"
           ? command.context.kind
           : Object.freeze([...command.context.kind]),
@@ -198,6 +234,66 @@ export class CommandHub {
   ): Promise<R> {
     return await this.#run<R>(id, args, context, false);
   }
+  /** Bind a control to the command owner and its consumer-observed result.
+   * Legacy run() ports remain for M6 migration; controls cannot infer success
+   * merely from an effect returning without throwing. */
+  control(id: string, args: unknown, options: {
+    target: FailureTarget;
+    /** A borrowed presentation lifetime, not another command registration. */
+    active?(): boolean;
+    shown(): boolean | Promise<boolean>;
+    unshown: string;
+    recovery: string;
+  }): ActionControl {
+    let pending: Promise<ActionOutcome> | undefined;
+    const availability = (): CommandAvailability =>
+      options.active?.() === false
+        ? { available: false, reason: "This action is no longer available." }
+        : this.availability(id, { ...this.context(), transition: true }, args);
+    return {
+      availability,
+      subscribe: (listener) => this.subscribe(listener),
+      run: () => {
+        if (pending) return pending;
+        const facts = {
+          ...commandFailureFacts({ id, title: this.#commands.get(id)?.title }),
+          target: { ...options.target },
+          recovery: options.recovery,
+        };
+        const refuse = (reason: string): ActionOutcome => ({
+          kind: "refused",
+          feedback: errorFeedback(reason, facts)!,
+        });
+        // Reserve before any user code or availability callback can reenter.
+        pending = Promise.resolve().then(async (): Promise<ActionOutcome> => {
+          try {
+            const allowed = availability();
+            if (!allowed.available) return refuse(allowed.reason);
+            const result = await this.run<unknown>(id, args, {
+              ...this.context(),
+              transition: true,
+            });
+            if (result === false || !await options.shown()) {
+              return refuse(options.unshown);
+            }
+            return { kind: "shown" };
+          } catch (cause) {
+            return {
+              kind: "failed",
+              feedback: failureValue(cause, facts) ||
+                errorFeedback(
+                  "The action was cancelled before its result was shown.",
+                  facts,
+                )!,
+            };
+          }
+        }).finally(() => {
+          pending = undefined;
+        });
+        return pending;
+      },
+    };
+  }
   async #run<R>(
     id: string,
     args: unknown,
@@ -245,7 +341,10 @@ export class CommandHub {
     return await this.#run<R>(current.id, current.args, this.context(), true);
   }
   /** Data-only menu projection; execution always rechecks the ordinary command. */
-  contextActions(target: ContextTarget): ContextAction[] {
+  contextActions(
+    target: ContextTarget,
+    includeUnavailable = false,
+  ): ContextAction[] {
     const context = this.context();
     return [...this.#commands.values()].filter((command) =>
       typeof command.context?.kind === "string"
@@ -256,28 +355,52 @@ export class CommandHub {
         Number(b.context?.destructive ?? false) ||
       (a.context?.order ?? 0) - (b.context?.order ?? 0)
     ).flatMap((command) => {
-      const items = command.context?.items?.(target.data) ??
-        (command.context?.items ? [] : [{
-          key: "",
-          title: command.context?.title?.(target.data) ?? command.title,
-          args: command.arguments?.type === "none" || !command.arguments
-            ? undefined
-            : target.data,
-        }]);
-      return items.filter((item) =>
-        this.enabled(command.id, context, item.args)
-      ).map((item) => {
+      const contribution = command.context;
+      if (contribution?.items) {
+        try {
+          validateCommandArguments(
+            contribution.arguments ?? this.metadata(command.id)!.arguments ??
+              noCommandArguments,
+            target.data,
+          );
+        } catch {
+          return [];
+        }
+      }
+      const items: { key?: string; title?: string; args: unknown }[] =
+        command.context?.items?.(target.data) ??
+          (command.context?.items ? [] : [{
+            key: "",
+            args: command.arguments?.type === "none" || !command.arguments
+              ? undefined
+              : target.data,
+          }]);
+      return items.flatMap((item) => {
+        const availability = this.availability(command.id, context, item.args);
+        if (
+          !availability.available &&
+          (availability.hidden ||
+            !includeUnavailable && !contribution?.showUnavailable)
+        ) return [];
+        // Presentation consumes the same admitted arguments as invocation. An
+        // area may exist before its target resource has finished reloading.
+        const title = item.title ?? command.context?.title?.(item.args) ??
+          command.title;
         const confirm = command.context?.confirm?.(item.args);
         const action = {
           id: command.id,
-          key: JSON.stringify([command.id, item.key ?? item.title]),
-          title: item.title,
+          key: JSON.stringify([command.id, item.key ?? title]),
+          title,
           args: item.args,
           destructive: command.context?.destructive ?? false,
+          group: contribution?.group,
+          ...(!availability.available
+            ? { unavailable: availability.reason }
+            : {}),
           ...(confirm === undefined ? {} : { confirm }),
         };
         this.#actions.set(action, { command, target });
-        return action;
+        return [action];
       });
     });
   }
@@ -352,6 +475,8 @@ export interface ContextAction {
   title: string;
   args: unknown;
   destructive: boolean;
+  group?: string;
+  unavailable?: string;
   confirm?: string;
 }
 /** Two innermost thing groups, then the nearest area; app only without a thing. */

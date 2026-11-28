@@ -5,13 +5,23 @@ import "./FieldFeedback.css" with { type: "text" };
 import FeedbackStatus from "./FeedbackStatus.tsx";
 /** The empty track remains in flow; consumers associate its ID with their field. */
 export default function FieldFeedback(
-  props: { id?: string; feedback?: Feedback; action?: boolean },
+  props: {
+    id?: string;
+    feedback?: Feedback;
+    validation?: string;
+    action?: boolean;
+    fullReason?: boolean;
+    placement?: "record";
+  },
 ): Element {
   return (
     <FeedbackStatus
       id={props.id}
       class={`otk-field-feedback${props.action ? " is-action" : ""}`}
       feedback={props.feedback}
+      validation={props.validation}
+      fullReason={props.fullReason}
+      placement={props.placement ?? "field"}
     />
   );
 }

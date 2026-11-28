@@ -11,6 +11,7 @@ import {
   digestMigrations,
   DigestStore,
   digestTurnCursor,
+  processStorage,
 } from "@otk/store";
 import { selectDigestProvider, type WorkerDigestSink } from "./providers.ts";
 import type { ProviderReadCodecs } from "@otk/harness";
@@ -33,10 +34,14 @@ import {
 } from "./publication-order.ts";
 import { DigestBatch } from "./batch.ts";
 import { DigestProgress } from "./progress.ts";
+import { diagnosticsLog } from "../diagnostics-log.ts";
 
 let progress: DigestProgress | undefined;
 let diagnostics = false;
 let progressTimer: ReturnType<typeof setInterval> | undefined;
+let storageTimer: ReturnType<typeof setInterval> | undefined;
+let storageProbePending = false;
+let stopStorage: (() => void) | undefined;
 let nativeWaiting = 0;
 let nativeUnavailable = false;
 const nativeReads: Record<string, number> = {};
@@ -174,6 +179,19 @@ async function sendRaw(
   }
   signal.throwIfAborted();
   credits--;
+  if (value.t === "catalog" && sink?.delivered) {
+    const facts = new Map(
+      sink.delivered(value.entries.map((entry) => entry.id))
+        .map((fact) => [fact.id, fact.delivered]),
+    );
+    value = {
+      ...value,
+      entries: value.entries.map((entry) => ({
+        ...entry,
+        activity: { ...entry.activity, delivered: facts.get(entry.id) },
+      })),
+    };
+  }
   post(value);
   // A completed publication is one bounded chunk, even when more credit is ready.
   await yieldChunk(signal);
@@ -308,10 +326,15 @@ async function publishAll(
 async function publishStored(
   sessionID: string,
   cached = false,
-  reserved = publicationOrder.reserve(sessionID, "background", true),
+  reserved?: DigestPublicationReservation,
 ): Promise<void> {
   const signal = execution.getStore()?.signal ?? lifetime.signal;
-  await reserved.run(signal, async () => {
+  const reservation = reserved ?? publicationOrder.reserve(
+    sessionID,
+    "background",
+    true,
+  );
+  await reservation.run(signal, async () => {
     for (;;) {
       signal.throwIfAborted();
       const row = store!.summary([sessionID])[0];
@@ -356,7 +379,16 @@ async function publishStored(
       }
       if (changed) continue;
       if (revision < (publishedRevisions.get(sessionID) ?? -1)) return;
-      for (const value of parts) await send(value, signal);
+      if (reserved) {
+        for (const value of parts) await send(value, signal);
+      } else {
+        // Earlier committed packets may still be buffered after their ordering
+        // reservation retires. Drain that prefix before sending replay directly.
+        await batches!.settle(signal);
+        // The batch drain is essential. Keep replay out of it so every credit
+        // wait resumes under this reservation's optional/donated eligibility.
+        for (const value of parts) await sendRaw(value, signal);
+      }
       publishedRevisions.set(sessionID, revision);
       return;
     }
@@ -606,12 +638,13 @@ async function start(
           },
           ioWait: nativeWait,
           retryable: sqliteBusy,
-          admission: (signal) =>
+          admission: (signal, lane) =>
             nativeReadsGate.acquire(
               signal,
               execution.getStore()?.turn.priority === "interactive",
               () =>
                 scheduler!.interruptIO(signal),
+              lane,
             ),
           work: (ms) => execution.getStore()?.turn.charge(ms),
         },
@@ -632,12 +665,22 @@ async function start(
         new DigestDb(message.statePath, [
           digestMigrations,
           selected.migrations,
-        ], { busyms: 0 }),
+        ], {
+          busyms: 0,
+          diagnostic: (message) => diagnosticsLog("info")("info", message),
+        }),
       lifetime.signal,
       policy,
       wait,
     );
     store = new DigestStore(db);
+    // A prior owner reported failed storage. Opening an existing database is a
+    // read, so do not publish healthy until this replacement commits a probe.
+    if (message.storageRecovery) db.probe();
+    stopStorage = processStorage.listen((state) =>
+      post({ t: "storage", run: run!, id: 0, state })
+    );
+    post({ t: "storage", run: run!, id: 0, state: processStorage.status() });
     sink = create();
     connection = message.connection ?? 0;
     sink.connection(connection);
@@ -664,6 +707,22 @@ async function start(
         }),
     });
     scheduler.viewers(false);
+    storageTimer = setInterval(() => {
+      if (
+        !processStorage.status().degraded || lifetime.signal.aborted ||
+        storageProbePending
+      ) return;
+      storageProbePending = true;
+      void scheduler!.execute(
+        () => Promise.resolve(processStorage.probe()),
+        lifetime.signal,
+        "interactive",
+      ).catch((error) => {
+        if (!isCancellation(error)) console.error("Storage recovery", error);
+      }).finally(() => {
+        storageProbePending = false;
+      });
+    }, policy.retryms);
     batches = new DigestBatch({
       rows: policy.publishrows,
       signal: lifetime.signal,
@@ -811,6 +870,8 @@ async function start(
     // Retained sessions are hydrated by key, never replayed as a startup catalog.
     post({ t: "accepted", run, id: message.id });
   } catch (error) {
+    clearInterval(storageTimer);
+    stopStorage?.();
     await scheduler?.stop();
     sink?.close();
     db?.close();
@@ -820,6 +881,8 @@ async function start(
   }
 }
 async function stop(message: ToWorker): Promise<void> {
+  clearInterval(storageTimer);
+  stopStorage?.();
   clearInterval(progressTimer);
   lifetime.abort();
   for (const id of servingReads.keys()) releaseServing(id);
@@ -879,7 +942,12 @@ function handle(message: ToWorker): void {
         release?: () => void;
       };
     servingReads.set(message.id, value);
-    void nativeReadsGate.acquire(controller.signal, true).then((release) => {
+    void nativeReadsGate.acquire(
+      controller.signal,
+      true,
+      undefined,
+      message.lane,
+    ).then((release) => {
       if (controller.signal.aborted) {
         release();
         return;

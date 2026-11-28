@@ -4,9 +4,13 @@ import { Show } from "solid-js";
 import StatusLight from "./StatusLight.tsx";
 import { ChevronDownIcon } from "./ChromeIcons.tsx";
 import { useComposer } from "../registries/composer.tsx";
+import { useOptionalSessionPorts } from "../registries/session.tsx";
+import { type EntityStateStore, lamp } from "@otk/client";
 export default function TakeoverHeader(
   props: {
     title: string;
+    entityKey: string;
+    entities?: EntityStateStore;
     where?: string;
     childTitle?: string;
     detail?: string;
@@ -15,9 +19,15 @@ export default function TakeoverHeader(
   },
 ) {
   const hasComposer = useComposer();
+  const session = useOptionalSessionPorts();
   return (
     <header class="otk-takeover-header">
-      <StatusLight state="blocked" />
+      <StatusLight
+        state={lamp(
+          props.entities ?? session?.entities?.(),
+          props.entityKey,
+        )}
+      />
       <h2 title={props.detail}>{props.title}</h2>
       <Show when={props.where}>
         <span class="otk-takeover-where">{props.where}</span>

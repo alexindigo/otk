@@ -9,6 +9,8 @@ import {
   OtkDb,
   Prefs,
   prefsMigrations,
+  programsMigrations,
+  ProgramStore,
   Projects,
   projectsMigrations,
   ProjectTemplates,
@@ -39,16 +41,27 @@ import {
 } from "../../../core/mod.ts";
 import { InboxFeature } from "../../../core/features/inbox.ts";
 import { NavigationDefault } from "../../../core/features/navigation-default.ts";
+import { InlineImages } from "../../../core/files/inline-images.ts";
 import { test } from "../../support/resources.ts";
 import { registerCatalogs } from "../../../core/features/catalogs.ts";
 import { createCatalogCodecs } from "@otk/protocol";
 import * as Core from "../../../core/mod.ts";
 import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { registerDigests } from "../../../core/features/digests.ts";
+import { registerProjectEdit } from "../../../core/features/project-edit.ts";
 import { permissionMigrations, PermissionStore } from "@otk/store";
 import { cfg, fixture } from "./support.ts";
 import { registerTerminals } from "../../../core/features/terminals.ts";
 import { TerminalHost } from "../../../core/terminals/host.ts";
+
+const programMethods = [
+  "programs.create",
+  "programs.rename",
+  "programs.delete",
+  "programs.move",
+  "programs.assign",
+  "programs.auto",
+] as const;
 
 function navigation(inbox: InboxFeature): NavigationDefault {
   return new NavigationDefault({
@@ -63,6 +76,7 @@ function navigation(inbox: InboxFeature): NavigationDefault {
 async function composition() {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
+    programsMigrations,
     tasksMigrations,
     seenMigrations,
     finishesMigrations,
@@ -75,6 +89,7 @@ async function composition() {
   let now = 100;
   const stores = {
     projects: new Projects(db, () => ++now),
+    programs: new ProgramStore(db),
     tasks: new Tasks(db),
     seen: new Seen(db, () => ++now),
     finishes: new Finishes(db),
@@ -129,17 +144,23 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "tasks.close",
     "tasks.removeSession",
     "projects.inactive",
+    "projects.move",
     "projects.visit",
     "projects.templates",
+    ...programMethods,
     "prefs.set",
     "layout.patch",
     "layout.location",
+    "layout.project",
+    "layout.tree",
   ];
   const prepared = [
     "tasks.create",
     "tasks.addSession",
     "tasks.sessions",
     "sessions.seen",
+    "sessions.opened",
+    "sessions.acknowledge",
     "frecency.bump",
   ];
   const reads = [
@@ -254,6 +275,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "sessionActions",
       "sessionArchive",
       "shell",
+      "shell.terminate",
       "commands",
       "history",
       "files",
@@ -270,6 +292,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "restore",
       "digests",
       "catalogs",
+      "projectEdit",
     ].map((
       name,
     ) => [name, name === "history" ? { entry: () => undefined } : {}])),
@@ -310,6 +333,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       Core.registerForms,
       Core.registerRevert,
       registerDigests,
+      registerProjectEdit,
     ]
   ) register(rpc, harness);
   const terminalRoot = await fixture();
@@ -320,6 +344,23 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     signal: new AbortController().signal,
   });
   registerTerminals(rpc, terminals);
+  const localFiles = new Core.LocalFiles({
+    home: terminalRoot,
+    deny: [],
+    roots: { roots: () => [terminalRoot] },
+  });
+  const images = cfg().images;
+  Core.registerLocalFiles(
+    rpc,
+    localFiles,
+    new InlineImages({
+      files: localFiles,
+      limits: images,
+      concurrency: images.concurrency,
+      directory: async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    }),
+  );
   const rows = [
     "tasks.create",
     "tasks.rename",
@@ -340,8 +381,10 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "session.restore",
     "session.prompt",
     "session.shell",
+    "shell.terminate",
     "session.command",
     "session.abort",
+    "session.withdraw",
     "session.get",
     "session.children",
     "sessions.list",
@@ -377,20 +420,31 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "prefs.set",
     "layout.patch",
     "layout.location",
+    "layout.project",
+    "layout.tree",
     "navigation.default",
     "inbox.get",
     "projects.list",
     "projects.add",
+    "project.settings",
+    "project.update",
     "projects.inactive",
+    "projects.move",
     "projects.visit",
     "projects.scan",
     "projects.templates",
+    ...programMethods,
     "sessions.seen",
+    "sessions.opened",
+    "sessions.acknowledge",
     "sessions.finishes",
     "digests.scope",
     "terminal.list",
     "terminal.create",
     "terminal.close",
+    "file.stat",
+    "file.preview",
+    "file.images",
   ];
   try {
     assertEquals(rows.length, new Set(rows).size);
@@ -415,10 +469,10 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 31, // Retained archive pages and terminal inventory are volatile reads.
-      native: 21,
-      local: 10,
-      "prepared-local": 6,
+      read: 35,
+      native: 24,
+      local: 19,
+      "prepared-local": 8,
       lease: 2,
     });
   } finally {
@@ -482,12 +536,32 @@ test("retained history RPC delegates an opaque page and rejects invalid or unsup
       await assertRejects(() => rpc.dispatch("history.messages", params));
     }
     assertEquals(calls.length, 1);
+    const scope = { messageIDs: ["prompt", "reply"], validate: true };
+    await rpc.dispatch("history.messages", { sessionID: "tstv1-one", scope });
+    assertEquals(calls[1], [
+      "tstv1-one",
+      { before: undefined, scope },
+      undefined,
+    ]);
+    for (
+      const invalid of [{ messageIDs: [""] }, { messageIDs: "prompt" }, {
+        messageIDs: [],
+        validate: "yes",
+      }]
+    ) {
+      await assertRejects(() =>
+        rpc.dispatch("history.messages", {
+          sessionID: "tstv1-one",
+          scope: invalid,
+        })
+      );
+    }
     const unsupported = new RpcRegistry(f.registry.context.harness, f.db);
     Core.registerSessions(unsupported, f.registry.context.harness);
     await assertRejects(() =>
       unsupported.dispatch("history.messages", { sessionID: "tstv1-one" })
     );
-    assertEquals(calls.length, 1);
+    assertEquals(calls.length, 2);
   } finally {
     f.inbox.close();
     f.db.close();
@@ -705,6 +779,14 @@ test("real metadata actions settle with their writes and replay original results
     await execute("projects.visit", { directory: "/p", active: true });
     await execute("projects.templates", { templates: ["/p/{project}"] });
     await execute("sessions.seen", { sessionID: "tstv1-two", terminal: 0 });
+    await execute("sessions.opened", { sessionID: "tstv1-two", opened: true });
+    assertEquals(
+      await execute("sessions.acknowledge", {
+        scope: "subtree",
+        sessionID: "tstv1-two",
+      }),
+      { sessions: [], closed: ["tstv1-two"] },
+    );
     await execute("prefs.set", { key: "showCost", value: false });
     await execute("layout.patch", { rightCollapsed: false });
     await execute("layout.location", {

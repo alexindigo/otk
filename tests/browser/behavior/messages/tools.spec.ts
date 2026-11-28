@@ -4,14 +4,107 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import {
   expandTool,
-  openWorkLogs,
+  openLatestWork,
   prompt,
   revealAcquired,
   runNativeTool,
+  scrollTranscript,
+  sessionStatus,
+  settledNativeReply,
   toolScript,
+  workPanel,
 } from "../../pages/transcript.ts";
 test.describe("actual tool forms", () => {
   test.use({ profile: "messages-forms" });
+  test("messages.native-work-log-omits-step-and-success-bookkeeping", {
+    tag: ["@messages"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await page.setViewportSize({ width: 1315, height: 1200 });
+    await state.product("prefs.set", { key: "expandStepMarkers", value: true });
+    await state.product("prefs.set", { key: "animationsOff", value: true });
+    const session = await state.native<{ id: string }>("/session", "POST", {
+      title: "Work log review",
+    });
+    await openSession(state, page, session.id);
+    await state.controller.call("queueScript", {
+      lease: state.lease.lease,
+      chunks: [],
+      tool: {
+        name: "bash",
+        input: { command: "pwd", description: "Find project directory" },
+      },
+    });
+    const answer =
+      "I found the project directory. The verification command exited with code 7.";
+    await toolScript(
+      state,
+      "bash",
+      {
+        command: "exit 7",
+        description: "Verify the test command",
+      },
+      answer,
+    );
+    await prompt(
+      page,
+      "Find the project directory and run the verification command.",
+    );
+    await settledNativeReply(state, session.id, answer);
+    await scrollTranscript(page, true);
+    await expect(page.locator(".otk-message-flow")).toContainText(
+      "I found the project directory.",
+    );
+    await sessionStatus(page, session.id, "idle");
+    await expect(page.locator(".otk-work-strip")).toContainText(
+      "2 actions, 1 failed",
+    );
+    const work = await openLatestWork(page);
+    await expect(work.locator("[data-tool=bash]")).toHaveCount(2);
+    await expect(work.locator("[data-tool=bash].is-error").getByRole("alert"))
+      .toContainText("Exited with code 7");
+    await expect(page.locator(".otk-turn-usage > button")).toHaveText(
+      /^3 model calls\b/,
+    );
+    await expect(page.locator(".otk-turn-time")).toHaveText(/^Worked for /);
+    if (process.env.OTK_WORK_LOG_CAPTURES === "1") {
+      for (
+        const [name, theme] of [["dark", "otk-dark"], ["linen", "otk-light"], [
+          "stone",
+          "otk-light-stone",
+        ]]
+      ) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await page.evaluate(() => document.fonts.ready);
+        await page.mouse.move(0, 0);
+        await page.screenshot({
+          path: info.outputPath(`work-log-${name}.png`),
+        });
+      }
+      console.info(
+        "Work log rows:",
+        await work.locator(
+          ".otk-work-run :is([data-tool], [data-native-record])",
+        ).count(),
+      );
+    }
+    const body = work.locator(".otk-work-run");
+    await expect(body).toHaveCount(2);
+    for (const row of await body.all()) {
+      await expect(row).not.toContainText(
+        /Step started|Step finished|Execution succeeded/,
+      );
+    }
+    await expect(
+      body.locator(
+        '[data-native-record=step], [data-native-record^="opencode-v1/step-"]',
+      ),
+    )
+      .toHaveCount(0);
+  });
   test("messages.native-failed-shell-visible-under-collapsed-defaults", {
     tag: ["@messages"],
   }, async ({ isolatedState: state, page }, info) => {
@@ -30,22 +123,24 @@ test.describe("actual tool forms", () => {
     );
     for (const reload of [false, true]) {
       if (reload) await page.reload();
-      const row = page.locator("[data-tool=bash]");
-      await expect(row).toBeVisible();
       await expect(
-        page.locator(".otk-work-log").filter({ has: row }).locator(
-          ".otk-work-fold",
-        ),
-      ).toHaveAttribute("aria-expanded", "true");
+        page.locator(".otk-messages").getByRole("alert").filter({
+          hasText: "Expected failure failed",
+        }),
+      ).toBeVisible();
+      const work = await openLatestWork(page);
+      const row = work.locator("[data-tool=bash]");
+      await expect(row).toBeVisible();
       await expect(row.locator(".otk-tool-toggle")).toHaveAttribute(
         "aria-expanded",
-        "false",
+        "true",
       );
       await expect(row.locator(".otk-tool-toggle")).toContainText(
-        "Exited with code 7",
+        "Expected failure",
       );
+      await expect(row.getByRole("alert")).toContainText("Exited with code 7");
       await expect(row).toHaveClass(/is-error/);
-      await expect(row.locator(".otk-tool-body")).toHaveCount(0);
+      await expect(row.locator(".otk-tool-body")).toBeVisible();
     }
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await state.product("prefs.set", { key: "theme", value: theme });
@@ -58,30 +153,6 @@ test.describe("actual tool forms", () => {
         path: info.outputPath(`failure-${theme}.png`),
         fullPage: true,
       });
-    }
-    // Virtualization changes the first mounted row; explicit choice belongs to one stable record.
-    // V1 owns qualified step records (NT4); V2 steps are the neutral step part.
-    const steps = state.controller.info!.version.startsWith("2.")
-      ? "[data-native-record=step]"
-      : '[data-native-record^="opencode-v1/step-"]';
-    const key = await page.locator(steps).first()
-      .evaluate((row) =>
-        row.closest("[data-virtual-key]")!.getAttribute("data-virtual-key")
-      );
-    const selector = `[data-virtual-key=${
-      JSON.stringify(key)
-    }] ${steps} > .otk-tool-state > .otk-tool-toggle`;
-    const record = page.locator(selector);
-    await expect(record).toHaveAttribute("aria-expanded", "false");
-    await state.product("prefs.set", { key: "expandRecords", value: true });
-    await revealAcquired(page, selector);
-    await expect(record).toHaveAttribute("aria-expanded", "true");
-    await record.click();
-    await expect(record).toHaveAttribute("aria-expanded", "false");
-    for (const value of [false, true]) {
-      await state.product("prefs.set", { key: "expandRecords", value });
-      await revealAcquired(page, selector);
-      await expect(record).toHaveAttribute("aria-expanded", "false");
     }
   });
   test(
@@ -130,6 +201,10 @@ test.describe("actual tool forms", () => {
     await expandTool(page, "[data-tool=read]");
     if (state.controller.info!.version.startsWith("2.")) {
       // Decisions 1/18 keep discovered instructions as a collapsed, inspectable record.
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/synthetic"]',
+      );
       const instructions = page.locator(
         '[data-native-record="opencode-v2/synthetic"]',
       ).filter({ hasText: "Loaded src/AGENTS.md" });
@@ -137,6 +212,11 @@ test.describe("actual tool forms", () => {
       const toggle = instructions.locator(".otk-tool-toggle");
       await expect(toggle).toHaveAttribute("aria-expanded", "false");
       await toggle.click();
+      // A visible heading does not acquire the virtualized prose in its body.
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/synthetic"] .otk-tool-body',
+      );
       await expect(instructions.locator(".otk-tool-body")).toContainText(
         "Instructions from: " + state.directory + "/src/AGENTS.md",
       );
@@ -144,22 +224,20 @@ test.describe("actual tool forms", () => {
         "Read the fixture only.",
       );
     } else {await expect(page.locator("[data-tool=read]")).toContainText(
-        "↳ Loaded",
+        "Loaded src/AGENTS.md",
       );}
     await runNativeTool(state, page, s.id, "read", {
       filePath: state.directory + "/src",
     });
-    await expandTool(
-      page,
-      '[data-tool=search]:has(.otk-tool-verb[title="List"])',
-    );
+    await expandTool(page, "[data-tool=search]");
+    const list = workPanel(page).locator("[data-tool=search]");
+    await expect(list.locator(".otk-tool-toggle")).toHaveText(/^List\b/);
     await expect(
-      page.locator(
-        ".otk-tool-line:has([data-search-mode=list]) .otk-tool-brief",
-      ),
+      list.filter({ has: page.locator("[data-search-mode=list]") })
+        .locator(".otk-work-tool-summary"),
     ).toContainText("2 entries");
     for (const name of ["glob", "grep"]) {
-      const raw = await runNativeTool(
+      await runNativeTool(
         state,
         page,
         s.id,
@@ -172,10 +250,10 @@ test.describe("actual tool forms", () => {
             include: "*.txt",
           },
       );
-      const selector = `[data-message="${raw.messageID}"] [data-tool]`;
+      const selector = "[data-tool=search]";
       await expandTool(page, selector);
-      const brief = page.locator(
-        `.otk-tool-line:has([data-search-mode=${name}]) .otk-tool-brief`,
+      const brief = workPanel(page).locator(
+        `${selector}:has([data-search-mode=${name}]) .otk-work-tool-summary`,
       );
       await expect(brief).toContainText("1 match");
       await expect(brief).not.toContainText("1 matches");
@@ -206,7 +284,6 @@ test.describe("tool permission/error states", () => {
   test("messages.permission-denial-error-state-contract", {
     tag: ["@messages"],
   }, async ({ isolatedState: state, page }) => {
-    await state.product("prefs.set", { key: "expandWork", value: true });
     const s = await state.native<{ id: string }>("/session", "POST", {
       title: "Tool states",
     });
@@ -226,7 +303,7 @@ test.describe("tool permission/error states", () => {
         page,
         name === "bash" ? "Ask permission" : "Ask web search permission",
       );
-      await openWorkLogs(page);
+      await openLatestWork(page);
       await expect(page.locator(`[data-tool=${name}].otk-tool-waiting`))
         .toBeAttached();
       await page.locator(".otk-permission-actions > button").nth(2).click();
@@ -234,10 +311,7 @@ test.describe("tool permission/error states", () => {
       await page.locator(".otk-permission-dock button[type=submit]").click();
       await expect(page.locator(`[data-tool=${name}][data-tool-status=denied]`))
         .toBeAttached();
-      await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
-        "data-status",
-        "idle",
-      );
+      await sessionStatus(page, s.id, "idle");
     }
     await expect(page.locator("[data-tool=websearch]")).not.toContainText(
       "count unavailable",
@@ -252,18 +326,19 @@ test.describe("tool permission/error states", () => {
     });
     await state.queue(["Missing file handled."]);
     await prompt(page, "Show a tool error");
-    await openWorkLogs(page);
-    await expect(page.locator("[data-tool=read][data-tool-status=error]"))
-      .toBeAttached();
     await expect(page.locator(".otk-message-flow")).toContainText(
       "Missing file handled.",
     );
-    await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
-      "data-status",
-      "idle",
-    );
-    await page.locator("[data-tool=read] .otk-tool-error-toggle").click();
-    await expect(page.locator(".otk-tool-error")).toContainText(
+    const failedWork = await openLatestWork(page);
+    await expect(failedWork.locator("[data-tool=read][data-tool-status=error]"))
+      .toBeAttached();
+    await sessionStatus(page, s.id, "idle");
+    const failedRead = page.locator("[data-tool=read][data-tool-status=error]");
+    await failedRead.getByRole("button", {
+      name: "Details",
+      exact: true,
+    }).click();
+    await expect(failedRead.getByRole("alert")).toContainText(
       "File not found",
     );
     await expect.poll(async () => {

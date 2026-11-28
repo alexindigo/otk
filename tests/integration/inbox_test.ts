@@ -8,7 +8,13 @@ import {
   inboxProjects,
   SidecarConnection,
 } from "@otk/client";
-import type { InboxSnapshot } from "@otk/protocol";
+import type {
+  InboxSnapshot,
+  ProgramsFrame,
+  ProjectOrderFrame,
+  ServerFrame,
+} from "@otk/protocol";
+import { OtkDb, ProjectOrderStore, projectsMigrations } from "@otk/store";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { cfg, fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
@@ -18,9 +24,11 @@ import { originFetch } from "../support/request-wire.ts";
 
 async function consumer(url: string, directory: string) {
   let latest: InboxSnapshot | undefined, socket: WebSocket | undefined;
+  const frames: ServerFrame[] = [];
   const connection = new SidecarConnection(url, {
     status() {},
     frame(frame) {
+      frames.push(structuredClone(frame));
       model.receive(frame);
       if (model.state.ready) latest = model.state.inbox;
     },
@@ -38,6 +46,7 @@ async function consumer(url: string, directory: string) {
   return {
     connection,
     model,
+    frames,
     inbox: () => latest!,
     async stop() {
       const closed = new Promise<void>((resolve) =>
@@ -48,6 +57,119 @@ async function consumer(url: string, directory: string) {
     },
   };
 }
+
+test("existing state upgrades to programs; atomic moves publish before rows and survive restart", async () => {
+  const root = await fixture();
+  const extra = join(root, "second");
+  const config = cfg();
+  // A pre-programs installation has ranked IDs but no programs migration.
+  const old = new OtkDb(join(root, "state"), [projectsMigrations], {
+    busyms: 0,
+  });
+  const order = new ProjectOrderStore(old);
+  const user = config.auth.username.toLowerCase() || "local";
+  const first = order.create(user, root), second = order.create(user, extra);
+  const initialOrder = order.list(user).map(({ id, directories }) => ({
+    id,
+    directories,
+  }));
+  old.close();
+  let app = await coreBackendFixture(root);
+  let a = await consumer(app.url, root), b = await consumer(app.url, root);
+  const last = (frames: ServerFrame[]): ProgramsFrame =>
+    frames.findLast((frame) => frame.t === "programs")!;
+  const value = ({ revision: _revision, ...value }: ProgramsFrame) => value;
+  try {
+    for (const client of [a, b]) {
+      const start = client.frames.findIndex((f) => f.t === "programs");
+      assert(start > client.frames.findIndex((f) => f.t === "welcome"));
+      assert(start < client.frames.findIndex((f) => f.t === "index.snapshot"));
+      assertEquals(value(last(client.frames)), {
+        t: "programs",
+        auto: false,
+        programs: [],
+        members: {},
+      });
+    }
+    app.app.index.projectSeeds([root, extra].map((directory, i) => ({
+      directory,
+      authority: "current" as const,
+      sessionCount: 0,
+      lastActivity: 0,
+      identities: [{
+        source: "native",
+        repoID: i === 0 ? "project" : "second",
+        recordedRoot: directory,
+        canonicalRoot: directory,
+        repository: {
+          checkout: directory,
+          root: directory,
+          evidence: "git" as const,
+          present: true,
+          remote: { key: `github.com/same/project-${i}`, owner: "same" },
+        },
+      }],
+    })));
+    const rpc = a.connection.rpc;
+    const original = await rpc.call("inbox.get", {});
+    await rpc.call("programs.auto", { value: true });
+    await waitFor(
+      () => last(b.frames)?.programs[0]?.owner,
+      (owner) => owner === "same",
+    );
+    const after = await rpc.call("inbox.get", {});
+    const withoutPrograms = ({ entities, ...inbox }: InboxSnapshot) => ({
+      ...inbox,
+      entities: Object.fromEntries(
+        Object.entries(entities ?? {}).filter(([, e]) => e.kind !== "program"),
+      ),
+    });
+    assertEquals(withoutPrograms(after.inbox), withoutPrograms(original.inbox));
+    assertEquals(
+      b.frames.findLast((f) => f.t === "projects.order")?.projects,
+      initialOrder,
+    );
+    const manual = await rpc.call("programs.create", {
+      name: "  Manual ",
+      projects: [first],
+    });
+    await waitFor(
+      () => last(b.frames)?.programs.some((p) => p.id === manual.id),
+      Boolean,
+    );
+    const begin = b.frames.length;
+    await rpc.call("programs.assign", {
+      project: first,
+      program: null,
+      after: second,
+    });
+    await waitFor(
+      () => last(b.frames)?.members[first]?.program === null,
+      Boolean,
+    );
+    const emitted = b.frames.slice(begin).filter((f) =>
+      f.t === "projects.order" || f.t === "programs"
+    );
+    assertEquals(emitted.map((f) => f.t), ["projects.order", "programs"]);
+    assertEquals(
+      emitted[0].t === "projects.order" && emitted[0].projects.map((p) => p.id),
+      [second, first],
+    );
+    const saved = value(last(b.frames));
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+    app = await coreBackendFixture(root);
+    a = await consumer(app.url, root);
+    b = await consumer(app.url, root);
+    assertEquals(value(last(a.frames)), saved);
+    assertEquals(value(last(b.frames)), saved);
+  } finally {
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+  }
+});
 
 // This test exercises multiple project creation intents. Its backend must honor
 // the directory (the shared core-only fixture deliberately returns one session).
@@ -68,7 +190,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
   try {
     const rpc = a.connection.rpc;
     assertEquals(
-      a.inbox().projects.map((p) => [p.directory, p.added, p.order]),
+      a.inbox().projects.map((p) => [p.directory, p.added]),
       [],
     );
     await a.model.openSession("tstv1-core", root);
@@ -190,10 +312,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     assertEquals(a.inbox().finishes["tstv1-core"], finish);
     assert(a.inbox().seen["tstv1-core"] >= finish);
     assertEquals(a.inbox().tasks.map((t) => t.id), [second.id]);
-    assertEquals(a.inbox().projects.map((p) => [p.directory, p.order]), [[
-      root,
-      0,
-    ], [empty, 1]]);
+    assertEquals(a.inbox().projects.map((p) => p.directory), [root, empty]);
     assertEquals(a.inbox().pathTemplates, [join(root, "{project}")]);
     await waitFor(
       async () =>
@@ -201,6 +320,125 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
           JSON.stringify(a.inbox()),
       Boolean,
     );
+  } finally {
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+  }
+});
+
+test("project order precedes rows, broadcasts moves and survives a server restart", async () => {
+  const root = await fixture();
+  const extra = join(root, "discovered"), worktree = join(root, "worktree");
+  await Deno.mkdir(extra);
+  let app = await coreBackendFixture(root);
+  let a = await consumer(app.url, root), b = await consumer(app.url, root);
+  function latest(frames: ServerFrame[]): ProjectOrderFrame | undefined {
+    return frames.findLast((frame) => frame.t === "projects.order");
+  }
+  function assertOrderBeforeRows(frames: ServerFrame[]) {
+    let admitted: Set<string> | undefined;
+    let revision = 0;
+    for (const frame of frames) {
+      if (frame.t === "projects.order") {
+        revision = frame.revision;
+        admitted = new Set(
+          frame.projects.flatMap((project) => project.directories),
+        );
+      }
+      let rows: string[] | undefined;
+      if (frame.t === "index.snapshot") {
+        rows = frame.entries.map((p) => p.directory);
+      }
+      if (frame.t === "index.patch") {
+        rows = frame.ops.flatMap((op) =>
+          op.op === "upsert" ? [op.entry.directory] : []
+        );
+      }
+      if (frame.t === "inbox.snapshot") {
+        rows = [
+          ...frame.inbox.projects.map((p) => p.directory),
+          ...Object.keys(frame.inbox.summaries ?? {}),
+          ...frame.inbox.discovered ?? [],
+        ];
+      }
+      if (frame.t === "inbox.patch") {
+        rows = frame.ops.flatMap((op) =>
+          op.op === "project.upsert"
+            ? [op.project.directory]
+            : op.op === "discovery"
+            ? op.directories
+            : []
+        );
+      }
+      if (frame.t === "inbox.summaries") {
+        rows = frame.summaries.map((p) => p.directory);
+      }
+      if (rows) {
+        assert(admitted, `No order before ${frame.t}`);
+        for (const directory of rows) {
+          assert(
+            admitted.has(directory),
+            `${frame.t}: ${directory} not admitted at revision ${revision}; admitted: ${
+              [...admitted].join(", ")
+            }`,
+          );
+        }
+      }
+    }
+  }
+  try {
+    assertOrderBeforeRows(a.frames);
+    app.app.index.projectSeeds([{
+      directory: worktree,
+      authority: "current",
+      sessionCount: 1,
+      lastActivity: 1,
+      topology: {
+        canonicalRoot: root,
+        leafDirectory: worktree,
+        repoID: "project",
+        parentDirectory: root,
+      },
+    }]);
+    const entry = app.app.index.get("tstv1-core")!;
+    app.app.index.upsert({
+      ...entry,
+      id: "tstv1-worktree",
+      directory: worktree,
+    });
+    await a.connection.rpc.call("projects.templates", {
+      templates: [join(root, "{project}")],
+    });
+    await waitFor(() => b.inbox().discovered?.includes(extra), Boolean);
+    const frame = latest(a.frames)!;
+    const original = frame.projects.find((p) => p.directories.includes(root))!;
+    const discovered = frame.projects.find((p) =>
+      p.directories.includes(extra)
+    )!;
+    assert(original.directories.includes(worktree));
+    const { revision } = await a.connection.rpc.call("projects.move", {
+      id: discovered.id,
+      before: original.id,
+    });
+    const moved = await waitFor(
+      () => latest(b.frames),
+      (frame) => frame?.revision === revision,
+    );
+    assertEquals(moved?.projects.map((p) => p.id).slice(0, 2), [
+      discovered.id,
+      original.id,
+    ]);
+    assertOrderBeforeRows(a.frames);
+    assertOrderBeforeRows(b.frames);
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+    app = await coreBackendFixture(root);
+    a = await consumer(app.url, root);
+    b = await consumer(app.url, root);
+    assertEquals(latest(a.frames)?.projects, moved?.projects);
+    assertOrderBeforeRows(a.frames);
   } finally {
     await a.stop();
     await b.stop();
@@ -267,6 +505,8 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
   const settings = cfg();
   settings.auth.type = "";
   settings.auth.username = "";
+  // Keep the login cookie valid across the two ephemeral listeners.
+  settings.auth.cookiename = "otk_inbox_restart";
   settings.server.port = 0;
   settings.state.path = join(root, "fresh-state");
   let app = await startApplication(settings, backend, root);

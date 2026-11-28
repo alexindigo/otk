@@ -2,12 +2,30 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { type OperationContext, OperationFailure } from "@otk/protocol";
 import { V2Client } from "../client.ts";
-import { V2Shells } from "../shells.ts";
+import { parkedShellResult, V2Shells } from "../shells.ts";
+
+Deno.test("user shell records park while model shell jobs queue a native continuation", () => {
+  const result = (metadata: Record<string, unknown>) => ({
+    type: "synthetic",
+    delivery: "steer",
+    payload: { metadata },
+  });
+  const shell = { source: "shell", shellID: "sh_a", state: "completed" };
+  assertEquals(parkedShellResult(result(shell)), true);
+  assertEquals(
+    parkedShellResult(result({ source: "shell", state: "error" })),
+    true,
+  );
+  assertEquals(parkedShellResult(result({ ...shell, jobID: "job_a" })), false);
+  assertEquals(parkedShellResult(result({ source: "subagent" })), false);
+  assertEquals(parkedShellResult({ ...result(shell), type: "user" }), false);
+});
 
 function info(id: string, sessionID = "ses_owner") {
   return {
     id,
     status: "running",
+    command: "printf hello",
     metadata: { sessionID },
     time: { started: 1 },
   };
@@ -30,6 +48,23 @@ Deno.test("V2 shell activity is per running identity, deduplicated and independe
     data: { info: info("sh_b") },
   });
   assertEquals(owner.sessions(), ["ses_owner"]);
+  assertEquals(owner.items("ses_owner"), [
+    {
+      id: "sh_a",
+      kind: "shell",
+      label: "Shell",
+      title: "printf hello",
+      startedAt: 1,
+    },
+    {
+      id: "sh_b",
+      kind: "shell",
+      label: "Shell",
+      title: "printf hello",
+      startedAt: 1,
+    },
+  ]);
+  assertEquals(owner.items("ses_unrelated"), []);
   owner.event({ type: "shell.exited", data: { id: "sh_a" } });
   assertEquals(owner.busy("ses_owner"), true);
   owner.event({ type: "shell.deleted", data: { id: "sh_b" } });

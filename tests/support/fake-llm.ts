@@ -2,6 +2,8 @@
 import { resources } from "./resources.ts";
 export interface Script {
   failure?: { status: number; message: string };
+  /** Fixture-only target when parent and child make concurrent requests. */
+  forPrompt?: string;
   chunks?: string[];
   reasoning?: string[];
   delay?: number;
@@ -78,19 +80,31 @@ export class FakeLlm {
               "You name conversations so the user can find them later in a list of past sessions.",
             )))
         );
-        if (
-          this.#strict && body.stream && !titleRequest && !this.#queue.length
-        ) {
+        const streamed = body.stream && !titleRequest;
+        const lastUser = Array.isArray(body.messages)
+          ? body.messages.findLast((row: { role?: string }) =>
+            row.role === "user"
+          )
+          : undefined;
+        const prompt = JSON.stringify(lastUser?.content ?? "");
+        const targeted = this.#queue.findIndex((s) =>
+          s.forPrompt !== undefined && prompt.includes(s.forPrompt)
+        );
+        const index = targeted >= 0
+          ? targeted
+          : this.#queue.findIndex((s) => !s.forPrompt);
+        if (this.#strict && streamed && index < 0) {
           this.#unexpected++;
         }
         const script: Script & {
           finish?: Promise<void>;
           beforeChunk?: (index: number) => Promise<void>;
-        } = body.stream && !titleRequest
-          ? this.#queue.shift() ?? this.#fallback
+        } = streamed
+          ? index >= 0 ? this.#queue.splice(index, 1)[0] : this.#fallback
           : { chunks: ["OTK session"] };
         const id = `chatcmpl-${crypto.randomUUID()}`;
         if (script.failure) {
+          await script.finish;
           return Response.json({
             error: {
               message: script.failure.message,

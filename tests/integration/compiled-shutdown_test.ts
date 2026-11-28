@@ -8,7 +8,8 @@ import {
 import { preparedBinary } from "../support/prepared-binaries.ts";
 import { ownedProcess } from "../support/process.ts";
 import { bounded, test } from "../support/resources.ts";
-import { freePort, waitFor } from "../support/opencode.ts";
+import { waitFor } from "../support/opencode.ts";
+import { otkEndpoint } from "../support/bound-endpoint.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 async function launch(oc: TestNative, port: number, level = "info") {
@@ -32,10 +33,16 @@ async function launch(oc: TestNative, port: number, level = "info") {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  let log = "";
+  let log = "", stdout = "", stderr = "";
   const record = (data: Uint8Array) => log += new TextDecoder().decode(data);
-  owner.child.stdout!.on("data", record);
-  owner.child.stderr!.on("data", record);
+  owner.child.stdout!.on("data", (data: Uint8Array) => {
+    stdout += new TextDecoder().decode(data);
+    record(data);
+  });
+  owner.child.stderr!.on("data", (data: Uint8Array) => {
+    stderr += new TextDecoder().decode(data);
+    record(data);
+  });
   const closed = new Promise<void>((resolve) =>
     owner.child.once("close", () => resolve())
   );
@@ -45,6 +52,12 @@ async function launch(oc: TestNative, port: number, level = "info") {
     get log() {
       return log;
     },
+    get stdout() {
+      return stdout;
+    },
+    get stderr() {
+      return stderr;
+    },
   };
 }
 
@@ -52,13 +65,27 @@ test("compiled SIGINT exits cleanly and occupied port reports only its failure",
   await preparedBinary();
   const fixture = await nativeFixture();
   try {
-    const server = await fixture.sidecar();
+    const server = await fixture.sidecar({ images: { roots: [] } });
     const contender = await launch(fixture.oc, server.port);
     await bounded("occupied port exits", contender.closed);
     const log = contender.log;
     assertEquals(contender.child.exitCode, 1, log);
-    const errors = log.trim().split("\n").filter((line) =>
-      !line.startsWith("config:")
+    assertEquals(
+      contender.stdout,
+      "",
+      "Stdout is reserved for machine protocols",
+    );
+    // WP7b requires one effective-settings diagnostic, now owned by stderr.
+    const lines = contender.stderr.trim().split("\n");
+    const settings = lines.filter((line) =>
+      line.startsWith("SQLite settings ")
+    );
+    assertEquals(settings.length, 1);
+    const value = JSON.parse(settings[0].slice("SQLite settings ".length));
+    assertEquals(value.mmap_size, 0);
+    assertEquals(typeof value.version, "string");
+    const errors = lines.filter((line) =>
+      !line.startsWith("config:") && !settings.includes(line)
     );
     assertEquals(errors, [
       `OTK: Port ${server.port} is in use; configure OTK_SERVER_PORT`,
@@ -73,6 +100,13 @@ test("compiled SIGINT exits cleanly and occupied port reports only its failure",
     await bounded("clean SIGINT exit", closed);
     assertEquals(server.process.exitCode, 0, server.log);
     assertEquals(server.process.signalCode, null, server.log);
+    const startup = server.log.split("\n").filter((line) =>
+      line.startsWith("Listening on ") || line.startsWith("inline images:")
+    );
+    assertEquals(startup, [
+      `Listening on ${server.url}/`,
+      "inline images: no allowed roots",
+    ]);
     assert(
       !/AbortError|StoppedError|warn|session digest:|\n\s+at /.test(server.log),
       server.log,
@@ -86,13 +120,8 @@ test("compiled debug logging reports each ignored real native event type once", 
   await preparedBinary();
   const fixture = await nativeFixture();
   try {
-    const port = await freePort();
-    const server = await launch(fixture.oc, port, "debug");
-    await waitFor(
-      async () => (await fetch(`http://127.0.0.1:${port}/api/health`)).json(),
-      (health) => health.ok === true,
-    );
-    const client = new WsClient(`http://127.0.0.1:${port}`);
+    const server = await launch(fixture.oc, 0, "debug");
+    const client = new WsClient((await otkEndpoint(server.child)).origin);
     await client.connect();
     await client.wait((frame) =>
       frame.t === "harness" && frame.state === "connected"
@@ -102,9 +131,23 @@ test("compiled debug logging reports each ignored real native event type once", 
       ids.push((await fixture.oc.createSession(`Debug event ${i}`)).id);
     }
     if (fixture.oc.kind === "opencode-v1") {
+      // Exercise two real ignored event types, twice each. Session creation
+      // alone can emit only events the current adapter already understands.
+      for (let i = 0; i < 2; i++) {
+        await fixture.oc.request("/tui/append-prompt", {
+          method: "POST",
+          body: { text: `Debug event ${i}` },
+        });
+        await fixture.oc.request("/tui/show-toast", {
+          method: "POST",
+          body: { message: `Debug event ${i}`, variant: "info" },
+        });
+      }
       await waitFor(
         () => server.log,
-        (log) => log.includes("harness event ignored:"),
+        (log) =>
+          log.includes("harness event ignored: tui.prompt.append") &&
+          log.includes("harness event ignored: tui.toast.show"),
       );
     } else {
       // V2 session.created is recognized; prove consumption rather than require
@@ -123,11 +166,13 @@ test("compiled debug logging reports each ignored real native event type once", 
     );
     if (fixture.oc.kind === "opencode-v1") {
       assert(ignored.length > 0, server.log);
-    } else {assertEquals(
+    } else {
+      assertEquals(
         ignored.length,
         0,
         "V2 recognized session events must not be logged as ignored",
-      );}
+      );
+    }
     assertEquals(ignored.length, new Set(ignored).size, server.log);
     assertEquals(server.child.exitCode, 0, server.log);
   } finally {

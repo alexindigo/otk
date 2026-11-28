@@ -9,6 +9,8 @@ import type { ThemeEngine } from "../theme/engine.ts";
 import FieldFeedback from "./FieldFeedback.tsx";
 import ActionSlot from "./ActionSlot.tsx";
 import { FormSelect } from "./Form.tsx";
+import ChromeMeta from "./ChromeMeta.tsx";
+import { retainForReload } from "../state/reload.tsx";
 /** Preview is locally owned; committed state and saves are supplied by the host. */
 export default function ThemePicker(props: {
   theme: ThemeEngine;
@@ -24,9 +26,16 @@ export default function ThemePicker(props: {
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal<FailureValue>("");
   let active = true, preview: ReturnType<ThemeEngine["preview"]> | undefined;
+  retainForReload("theme-picker", {
+    snapshot: selected,
+    restore(value) {
+      setSelected(String(value));
+    },
+  });
   let status: { focus(): void } | undefined, saveButton!: HTMLButtonElement;
   onSettled(() => {
     preview = props.theme.preview();
+    preview.select(selected());
     return () => {
       active = false;
       preview?.close();
@@ -113,10 +122,10 @@ export default function ThemePicker(props: {
         Light theme used by System
         <FormSelect
           name="systemLightTheme"
+          label="Light theme used by System"
           value={props.systemLightTheme}
           pending={!props.ready || pending()}
-          onChange={async (event) => {
-            const select = event.currentTarget, id = select.value;
+          onValue={async (id) => {
             if (!props.ready || pending()) return;
             setPending(true);
             onSettled(() => status?.focus());
@@ -131,39 +140,30 @@ export default function ThemePicker(props: {
               }
             } finally {
               if (active) {
-                select.value = props.systemLightTheme;
                 setPending(false);
               }
             }
           }}
+          options={lightThemes.map((theme) => ({
+            value: theme.id,
+            label: theme.label,
+          }))}
+        />
+        <Show
+          when={!lightThemes.some((theme) =>
+            theme.id === props.systemLightTheme
+          )}
         >
-          <Show
-            when={!lightThemes.some((theme) =>
-              theme.id === props.systemLightTheme
-            )}
-          >
-            <option value={props.systemLightTheme} hidden>
-              Unavailable ({props.systemLightTheme}); uses default light
-            </option>
-          </Show>
-          <For each={lightThemes} keyed={(theme) => theme.id}>
-            {(theme) => <option value={theme().id}>{theme().label}</option>}
-          </For>
-        </FormSelect>
+          <ChromeMeta>{props.systemLightTheme}; uses default light</ChromeMeta>
+        </Show>
       </label>
       <footer class="otk-theme-actions">
         <button type="button" onClick={() => void close()}>Cancel</button>
         <ActionSlot
           pending={pending()}
-          feedback={pending()
-            ? {
-              kind: "pending",
-              text: `Saving ${
-                choices.find((choice) => choice.id === selected())?.label ??
-                  "theme"
-              }…`,
-            }
-            : undefined}
+          pendingLabel={`Saving ${
+            choices.find((choice) => choice.id === selected())?.label ?? "theme"
+          }...`}
           control={(control) => status = control}
           focusAction={() => {
             if (saveButton.isConnected) saveButton.focus();

@@ -7,7 +7,13 @@ import { property } from "./syntax.ts";
 // value lists and numeric rank maps do; neither may grow a second owner.
 function priorityDefinitions(text: string): number {
   const source = new Source(text);
-  const states = new Set(["blocked", "finished", "working", "idle"]);
+  const states = new Set([
+    "blocked",
+    "finished",
+    "working",
+    "dependencies",
+    "none",
+  ]);
   return source.all.filter((node) => {
     const values = node.type === "ArrayExpression"
       ? node.elements.flatMap((e) =>
@@ -24,7 +30,7 @@ function priorityDefinitions(text: string): number {
     return new Set(values.filter((v) => states.has(v))).size > 1;
   }).length;
 }
-Deno.test("light priority has exactly one production definition in the shared inbox contract", async () => {
+Deno.test("D78: lamp and attention ranks have a single definition in the shared inbox contract", async () => {
   const definitions: string[] = [];
   for (const [path, text] of await productionSources()) {
     if (!/\.tsx?$/.test(path)) continue;
@@ -34,16 +40,18 @@ Deno.test("light priority has exactly one production definition in the shared in
   const owner = new Source(
     await Deno.readTextFile("packages/protocol/inbox.ts"),
   );
-  assert(owner.all.some((n) =>
-    n.type === "VariableDeclarator" &&
-    owner.name(n.id) === "PROJECT_STATUS_PRIORITY"
-  ));
+  assert(
+    owner.all.some((n) =>
+      n.type === "VariableDeclarator" && owner.name(n.id) === "ROLLUP_PRIORITY"
+    ),
+  );
 });
 Deno.test("priority ownership detects reordered lists and numeric rank maps without treating labels as ranks", () => {
   for (
     const copy of [
-      'const order = ["finished", "blocked", "idle", "working"];',
-      "const rank = { working: 0, finished: 1, blocked: 2, idle: 3 };",
+      'const order = ["finished", "blocked", "none", "working"];',
+      'const tieBreak = ["dependencies", "finished"];',
+      "const rank = { working: 0, finished: 1, blocked: 2, none: 3 };",
     ]
   ) assertEquals(priorityDefinitions(copy), 1);
   assertEquals(
@@ -51,5 +59,79 @@ Deno.test("priority ownership detects reordered lists and numeric rank maps with
       'const labels = {working: "Working", finished: "Finished, not seen"};',
     ),
     0,
+  );
+});
+
+const lampConsumers = new Set([
+  "core/index/entity-states.ts",
+]);
+const urgencyConsumers = new Set([
+  "core/features/navigation-default.ts",
+]);
+function crossedOwners(path: string, text: string): string[] {
+  if (path === "packages/protocol/inbox.ts") return [];
+  const symbols = new Set(
+    new Source(text).all.flatMap((node) =>
+      node.type === "Identifier"
+        ? [node.name]
+        : node.type === "StringLiteral"
+        ? [node.value]
+        : []
+    ),
+  );
+  return [
+    ...[
+      "attentionStatus",
+      "PROJECT_STATUS_PRIORITY",
+      "INBOX_STATUS_PRIORITY",
+      "URGENCY_PRIORITY",
+    ]
+      .filter((name) => symbols.has(name)),
+    ...["ROLLUP_PRIORITY", "rollupStatus"].filter((name) =>
+      symbols.has(name) && !lampConsumers.has(path)
+    ),
+    ...["urgentStatus"].filter((name) =>
+      symbols.has(name) && !urgencyConsumers.has(path)
+    ),
+  ];
+}
+Deno.test("lamp consumers cannot borrow urgency and navigation or notifications cannot borrow lamp display", async () => {
+  const violations: string[] = [];
+  for (const [path, text] of await productionSources()) {
+    if (!/\.tsx?$/.test(path)) continue;
+    for (const symbol of crossedOwners(path, text)) {
+      violations.push(`${path}: ${symbol}`);
+    }
+  }
+  assertEquals(violations, []);
+});
+Deno.test("priority boundary catches renamed imports, namespace access and ambiguous legacy aliases", () => {
+  assertEquals(
+    crossedOwners(
+      "core/features/navigation-default.ts",
+      'import {rollupStatus as pick} from "@otk/protocol";',
+    ),
+    ["rollupStatus"],
+  );
+  assertEquals(
+    crossedOwners(
+      "packages/client/notification-triggers.ts",
+      'import * as p from "@otk/protocol"; p["ROLLUP_PRIORITY"];',
+    ),
+    ["ROLLUP_PRIORITY"],
+  );
+  assertEquals(
+    crossedOwners(
+      "packages/client/tabs.ts",
+      'import {urgentStatus as lamp} from "@otk/protocol";',
+    ),
+    ["urgentStatus"],
+  );
+  assertEquals(
+    crossedOwners(
+      "packages/client/inbox.ts",
+      'export {rollupStatus as attentionStatus} from "@otk/protocol";',
+    ),
+    ["attentionStatus", "rollupStatus"],
   );
 });

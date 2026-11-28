@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub, ContextTarget } from "@otk/client";
-import { copyText } from "../clipboard.ts";
+import { copyText, sourceSelectionText } from "../clipboard.ts";
+import type { ContextInvocation } from "../components/context-target.ts";
+import { nativeTextField } from "../keyboard/ownership.ts";
 
 interface TextTarget {
   text: string;
@@ -10,21 +12,17 @@ interface ImageTarget extends TextTarget {
 }
 /** Text-field menus belong to the browser, including its spelling/dictionary UI. */
 export function nativeTextContext(path: readonly EventTarget[]): boolean {
-  return path.some((node) =>
-    node instanceof HTMLTextAreaElement ||
-    (node instanceof HTMLInputElement &&
-      ["text", "search", "tel", "url", "email", "password", "number"].includes(
-        node.type,
-      )) ||
-    (node instanceof HTMLElement && node.isContentEditable)
-  );
+  return path.some(nativeTextField);
 }
 
 /** Browser built-ins are contributed just like feature actions, never dispatched
  * by the menu view. Non-field selections are captured before focus moves. */
 export function browserContextTargets(
   path: readonly EventTarget[],
-  declared: (element: HTMLElement) => ContextTarget[] = () => [],
+  declared: (
+    element: HTMLElement,
+    invocation: ContextInvocation,
+  ) => ContextTarget[] = () => [],
   point?: { x: number; y: number },
 ): ContextTarget[] {
   if (nativeTextContext(path)) return [];
@@ -33,7 +31,8 @@ export function browserContextTargets(
   );
   const selection = document.getSelection();
   const targets: ContextTarget[] = [];
-  const selectedHere = !!selection?.toString() &&
+  const text = selection?.toString() ?? "";
+  const selectedHere = !!text && selection &&
     Array.from(
       { length: selection.rangeCount },
       (_, index) => selection.getRangeAt(index),
@@ -45,20 +44,38 @@ export function browserContextTargets(
         )
         : !!nodes[0] && selection.containsNode(nodes[0], true)
     );
-  if (selectedHere) {
-    targets.push({ kind: "selection", data: { text: selection!.toString() } });
+  const selectedText = selectedHere
+    ? sourceSelectionText(selection) ?? text
+    : "";
+  if (selectedText) {
+    targets.push({ kind: "selection", data: { text: selectedText } });
   }
+  const images: { index: number; target: ContextTarget }[] = [];
   for (const node of nodes) {
     if (node instanceof HTMLAnchorElement && node.href) {
       targets.push({ kind: "link", data: { text: node.href } });
     }
     if (node instanceof HTMLImageElement && (node.currentSrc || node.src)) {
-      targets.push({
-        kind: "image",
-        data: { text: node.currentSrc || node.src, name: node.alt || "Image" },
+      images.push({
+        index: targets.length,
+        target: {
+          kind: "image",
+          data: {
+            text: node.currentSrc || node.src,
+            name: node.alt || "Image",
+          },
+        },
       });
     }
-    targets.push(...declared(node));
+    targets.push(
+      ...declared(node, { selection: selectedText, inner: targets.slice() }),
+    );
+  }
+  // A declared file target owns its image in the ancestor path.
+  if (!targets.some((target) => target.kind === "file")) {
+    for (const { index, target } of images.reverse()) {
+      targets.splice(index, 0, target);
+    }
   }
   return targets;
 }

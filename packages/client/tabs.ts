@@ -3,41 +3,54 @@ import type {
   InboxSnapshot,
   IndexEntry,
   IndexMetadata,
+  SessionListRow,
   TaskRecord,
 } from "@otk/protocol";
-import type { SessionHierarchyNode } from "@otk/protocol";
 import {
-  aggregateStatus,
-  dependencyCount,
-  INBOX_STATUS_PRIORITY,
-  type InboxStatus,
-  rollup,
-} from "./inbox.ts";
+  entityKey,
+  entityRetainsVisibility,
+  type SessionHierarchyNode,
+  taskEntityID,
+} from "@otk/protocol";
+import type { InboxStatus, OperationAttention } from "./inbox.ts";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+  lamp,
+} from "./entity-state.ts";
+import { createStableOrder } from "./stable-order.ts";
+import { sessionTitle } from "./session-title.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
-import { groupBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+import {
+  buildTrail,
+  type TrailCrumb,
+  type TrailModel,
+} from "./task-breadcrumbs.ts";
 import {
   projectTabGroups,
   resolveTabHierarchy,
   type TabGroups,
 } from "./tab-groups.ts";
-import { attentionStatus, type OperationAttention } from "./inbox.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
 };
 export interface InboxTab {
+  dependencies?: number;
   kind: "task" | "phantom";
   id: string;
   title: string;
   sessions: string[];
   preview: boolean;
   status: InboxStatus;
-  dependencies?: number;
 }
 export interface TabInput {
   /** Invalidation identity for source-free handles from the project projection. */
   version?: number;
+  /** Source availability for standalone snapshots. Live callers borrow the
+   * entity replica's freshness; native work inventory also uses this hint. */
+  connected?: boolean;
   directory: string;
   /** Resolved checkout membership supplied by the shared project owner. */
   directories?: readonly string[];
@@ -46,10 +59,14 @@ export interface TabInput {
   context?: readonly (IndexMetadata & OperationAttention)[];
   followParent?: boolean;
   taskActivity?: Readonly<Record<string, InboxStatus>>;
+  entities?: EntityStateStore;
   inbox: InboxSnapshot;
 }
 /** Promotion needs identity and naming metadata, not a replicated status row. */
-export type TabSession = Pick<IndexEntry, "id" | "directory" | "title">;
+export type TabSession = Pick<
+  IndexEntry,
+  "id" | "directory" | "title" | "parentID"
+>;
 export interface TabSources {
   /** Read owner-current inputs at invocation, independently of view effects. */
   input(): TabInput;
@@ -64,15 +81,26 @@ export interface TabState {
   revision: number;
 }
 export interface ClientTabs {
+  trail(): TrailModel;
   state: TabState;
+  entities(): EntityStateStore;
+  tabEntityKey(tab: Pick<InboxTab, "id" | "kind">): string;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
   /** Naming for the selected task/phantom, independent of the tab population. */
   selectedTitle(): string | undefined;
   tasks(): readonly TaskRecord[];
-  crumbs(): TaskCrumb[];
+  orderRows(rows: readonly SessionListRow[]): SessionListRow[];
+  /** Pointer, keyboard and portalled interactions share this ordering lifetime. */
+  holdOrder(): () => void;
+  crumbs(): TrailCrumb[];
+  /** Open-session identity and known ancestor links, independent of activity. */
+  path(): TrailCrumb[];
+  /** Compatibility view of the trail's off-path working/blocked helpers. */
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
+  /** The owning task's title, including an unnamed (phantom) task. */
+  taskTitleFor(id: string): string | undefined;
   /** The same session membership used by this tab's supervision lamp. */
   belongsToTab(tabID: string, sessionID: string): boolean;
   sessionFor(taskID: string): string | undefined;
@@ -82,15 +110,12 @@ export interface ClientTabs {
   select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
   close(sessionID: string): void;
+  /** Persist membership without taking over the currently selected view. */
+  ensureTask(sessionID: string, options?: RequestOptions): Promise<TaskRecord>;
   pin(sessionID: string, options?: RequestOptions): Promise<TaskRecord>;
   rename<T>(
     sessionID: string,
     title: string,
-    action: () => Promise<T>,
-    options?: RequestOptions,
-  ): Promise<T>;
-  send<T>(
-    sessionID: string,
     action: () => Promise<T>,
     options?: RequestOptions,
   ): Promise<T>;
@@ -123,6 +148,17 @@ export function createTabs(
   };
   const belongs = (directory: string) =>
     (input.directories ?? [input.directory]).includes(directory);
+  let standaloneSnapshot: InboxSnapshot["entities"];
+  const standalone = createEntityStateStore({
+    read: () => standaloneSnapshot,
+    factory,
+  });
+  const entities = () => input.entities ?? standalone;
+  const groupKey = (id: string, kind: "task" | "session") =>
+    entityKey(
+      "task",
+      taskEntityID(kind, id),
+    );
   const refresh = () => {
     if (stopped) throw new Error("Project tabs are stopped");
     if (sources) model.update(sources.input());
@@ -134,13 +170,23 @@ export function createTabs(
   let mandatory = new Set<string>();
   let entries: Entry[] = [], tasks: TaskRecord[] = [];
   let derived: TabInput | undefined;
+  let derivedEntities = -1;
   let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
-  let cachedCrumbs: TaskCrumb[] = [],
+  const ordering = createStableOrder<InboxTab>(() => {
+    cachedTabs = undefined;
+    store.update((s) => s.revision++);
+  });
+  let cachedTrail: TrailModel = {
+      crumbs: [],
+      path: [],
+    },
     crumbTabs: InboxTab[] | undefined,
     crumbID: string | undefined;
   const prepare = () => {
-    if (derived === input) return;
+    const revision = entities().revision;
+    if (derived === input && derivedEntities === revision) return;
     derived = input;
+    derivedEntities = revision;
     const context = input.context ?? input.entries;
     nodes = resolveTabHierarchy(context, input.inbox.tasks, {
       project: (directory) => belongs(directory) ? input.directory : directory,
@@ -153,8 +199,10 @@ export function createTabs(
     const inherited = new Set(
       entries.map((entry) => nodes.get(entry.id)?.taskID),
     );
+    const roots = new Set(entries.map((entry) => nodes.get(entry.id)?.rootID));
     tasks = input.inbox.tasks.filter((t) =>
       belongs(t.directory) ||
+      t.sessions.some((id) => roots.has(id)) ||
       input.followParent && inherited.has(t.id)
     );
     byID = new Map(context.map((e) => [e.id, e]));
@@ -162,8 +210,11 @@ export function createTabs(
     partition = undefined;
     mandatory = new Set(
       context.filter((entry) =>
-        aggregateStatus(entry, input.inbox) !== "none" ||
-        nodes.get(entry.id)?.mandatory
+        !entry.deleted &&
+        (nodes.get(entry.id)?.mandatory ||
+          !entities().isStale && entityRetainsVisibility(
+              entities().get(entityKey("session", entry.id)),
+            ))
       ).map((entry) => entry.id),
     );
     cachedTabs = undefined;
@@ -202,20 +253,12 @@ export function createTabs(
       `${store.state.selected?.kind}/${store.state.selected?.id}/${store.state.preview}`;
     if (cachedTabs && selection === cachedSelection) return cachedTabs;
     cachedSelection = selection;
-    const { inbox, taskActivity } = input;
-    const families = new Map(
-      groups.groups.map((group) => [
-        group.id,
-        group.members.flatMap((id) => byID.has(id) ? [byID.get(id)!] : []),
-      ]),
-    );
     // Saved tasks and mandatory phantoms borrow the same disjoint partition.
-    const activity = (id: string) =>
-      byID.get(id)?.timeUpdated ?? (families.get(id) ?? []).reduce(
-        (time, entry) => Math.max(time, entry.timeUpdated),
-        0,
-      );
-    const result: InboxTab[] = tasks.map((task) => ({
+    const result: InboxTab[] = tasks.filter((task) =>
+      groups.groups.some((group) =>
+        group.kind === "task" && group.id === task.id
+      )
+    ).map((task) => ({
       kind: "task",
       id: task.id,
       title: task.name,
@@ -225,32 +268,18 @@ export function createTabs(
         )!.roots,
       ],
       preview: false,
-      dependencies: (families.get(task.id) ?? []).reduce(
-        (n, entry) => n + dependencyCount(entry, inbox),
-        0,
-      ),
-      status: attentionStatus(
-        taskActivity?.[task.id],
-        rollup(
-          families.get(task.id) ?? [],
-          inbox,
-        ),
-      ),
+      status: lamp(entities(), groupKey(task.id, "task")),
+      dependencies: entities().isStale
+        ? undefined
+        : entities().get(groupKey(task.id, "task"))?.dependencies,
     }));
-    const candidates = new Map(entries.map((entry) => [entry.id, entry]));
-    const selected = store.state.selected;
-    if (selected?.kind === "session") {
-      const root = byID.get(selected.id);
-      if (root) candidates.set(root.id, root);
-    }
-    for (const entry of candidates.values()) {
-      const owner = groups.owners.get(entry.id);
-      if (owner?.kind !== "session" || owner.id !== entry.id) continue;
-      // An ungrouped mandatory child has its own tab and its own lamp. A
-      // parent's aggregate lamp is not a substitute for that visibility.
-      const status = rollup([entry], inbox);
+    for (const owner of groups.groups) {
+      if (owner.kind !== "session") continue;
+      const entry = byID.get(owner.id);
+      if (!entry) continue;
+      const status = lamp(entities(), groupKey(owner.id, "session"));
       if (
-        status !== "none" || nodes.get(entry.id)?.mandatory ||
+        status !== "none" || owner.members.some((id) => mandatory.has(id)) ||
         store.state.preview === entry.id ||
         (store.state.selected?.kind === "session" &&
           store.state.selected.id === entry.id)
@@ -262,14 +291,20 @@ export function createTabs(
           sessions: [entry.id],
           preview: store.state.preview === entry.id,
           status,
-          dependencies: dependencyCount(entry, inbox),
+          dependencies: entities().isStale
+            ? undefined
+            : entities().get(groupKey(owner.id, "session"))?.dependencies,
         });
       }
     }
-    return cachedTabs = result.sort((a, b) =>
-      INBOX_STATUS_PRIORITY.indexOf(a.status) -
-        INBOX_STATUS_PRIORITY.indexOf(b.status) ||
-      activity(b.id) - activity(a.id) || a.id.localeCompare(b.id)
+    return cachedTabs = ordering.order(
+      result,
+      (tab) => ({
+        position: taskByID.get(tab.id)?.order,
+        created: tab.kind === "phantom"
+          ? byID.get(tab.id)?.timeCreated
+          : undefined,
+      }),
     );
   }
   const lookup = (id: string) => {
@@ -277,7 +312,7 @@ export function createTabs(
     return byID.get(id);
   };
   const rootFor = (id: string) => {
-    return grouping().owners.get(id)?.id ?? id;
+    return grouping().owners.get(id)?.id;
   };
   const taskFor = (id: string) => {
     const owner = grouping().owners.get(id);
@@ -301,15 +336,15 @@ export function createTabs(
     named?: TabSession,
     ready?: Promise<unknown>,
   ): Promise<TaskRecord> {
+    const owner = taskFor(sessionID);
+    if (owner) return Promise.resolve(owner);
+    const root = nodes.get(sessionID)?.rootID;
+    if (root && root !== sessionID) return persist(root, options);
     const directories = input.directories ?? [input.directory];
     const entry = named ??
       input.entries.find((e) => e.id === sessionID && belongs(e.directory));
-    const existing = input.inbox.tasks.find((t) =>
-      belongs(t.directory) && t.sessions.includes(sessionID)
-    );
-    if (existing) return Promise.resolve(existing);
     if (!promotions.has(sessionID)) {
-      // One reservation owns pin, send and rename, independently of index or
+      // One reservation owns persistence and rename, independently of index or
       // inbox publication. Rename supplies its captured name and native result.
       const pending = Promise.resolve().then(async () => {
         if (ready) await ready;
@@ -319,6 +354,9 @@ export function createTabs(
           session?.id !== sessionID || !directories.includes(session.directory)
         ) {
           throw new Error("Unknown project session");
+        }
+        if (session.parentID) {
+          throw new Error("Task ancestry is not available yet");
         }
         return await promote(session, options);
       });
@@ -331,6 +369,9 @@ export function createTabs(
   }
   const model: ClientTabs = {
     state: store.state,
+    entities,
+    tabEntityKey: (tab) =>
+      groupKey(tab.id, tab.kind === "task" ? "task" : "session"),
     subscribe: store.subscribe,
     tabs,
     selectedTitle() {
@@ -346,34 +387,75 @@ export function createTabs(
     tasks() {
       void store.state.revision;
       prepare();
-      return tasks;
+      const order = new Map(tabs().map((tab, i) => [tab.id, i]));
+      return tasks.filter((task) => order.has(task.id)).sort((a, b) =>
+        order.get(a.id)! - order.get(b.id)!
+      );
+    },
+    holdOrder() {
+      tabs();
+      return ordering.hold();
+    },
+    orderRows(rows) {
+      void store.state.revision;
+      return ordering.sequence("sessions", rows, (row) => row.key);
     },
     entry(id) {
       void store.state.revision;
       return lookup(id);
     },
     taskFor,
+    taskTitleFor(id) {
+      const owner = grouping().owners.get(id);
+      if (owner?.kind === "task") return taskByID.get(owner.id)?.name;
+      const published = byID.get(id)?.hierarchy;
+      if (
+        published?.followParent === !!input.followParent &&
+        published.taskTitle !== undefined
+      ) {
+        return published.taskTitle;
+      }
+      if (!owner) return undefined;
+      return sessionTitle(owner.id, byID.get(owner.id)?.title);
+    },
     belongsToTab(tabID, sessionID) {
       void store.state.revision;
       return grouping().owners.get(sessionID)?.id === tabID;
     },
     crumbs() {
       const rows = tabs(), id = store.state.selected?.id;
-      const key = `${id}/${store.state.sessionID}`;
-      if (rows === crumbTabs && key === crumbID) return cachedCrumbs;
+      const replica = entities();
+      const key =
+        `${id}/${store.state.sessionID}/${replica.revision}/${replica.isStale}`;
+      if (rows === crumbTabs && key === crumbID) return cachedTrail.crumbs;
       crumbTabs = rows;
       crumbID = key;
-      const group = grouping().groups.find((group) => group.id === id);
-      return cachedCrumbs = group
-        ? groupBreadcrumbs(group, byID, mandatory, store.state.sessionID)
-        : [];
+      const group = grouping().groups.find((group) =>
+        group.id === id && group.kind === store.state.selected?.kind
+      );
+      cachedTrail = buildTrail(group, byID, replica, store.state.sessionID);
+      return cachedTrail.crumbs;
+    },
+    trail() {
+      this.crumbs();
+      return cachedTrail;
+    },
+    path() {
+      this.crumbs();
+      return cachedTrail.path;
     },
     sessionFor,
     update(next: TabInput): void {
       if (stopped) return;
       if (next.version !== undefined && input === next) return;
       const changedProject = next.directory !== input.directory;
+      if (changedProject) ordering.reset();
       input = next;
+      if (!input.entities) {
+        standaloneSnapshot = input.inbox.entities;
+        standalone.stale(input.connected === false);
+        standalone.observe("all", "historical");
+      }
       derived = undefined;
       prepare();
       if (changedProject) selectionRevision++;
@@ -404,16 +486,17 @@ export function createTabs(
           input.entries.some((e) => e.id === id && belongs(e.directory))
         ) {
           const task = taskFor(id);
-          draft.selected = {
-            kind: task ? "task" : "session",
-            // Fix 4.2 narrows D3: an independent phantom selects itself;
-            // quiet children still select their nearest ancestor's group.
-            id: task?.id ?? rootFor(id),
-          };
+          const root = rootFor(id);
+          draft.selected = root
+            ? {
+              kind: task ? "task" : "session",
+              id: root,
+            }
+            : undefined;
           if (task) {
             remembered.set(task.id, id);
             delete draft.preview;
-          } else if (draft.preview || wasTask) draft.preview = rootFor(id);
+          } else if (draft.preview || wasTask) draft.preview = root;
         }
         if (
           draft.selected?.kind === "session" &&
@@ -462,7 +545,7 @@ export function createTabs(
           (selection.kind === "task"
             ? tab.kind === "task"
             : tab.kind === "phantom")
-        )
+        ) || selection.kind === "task" && !taskByID.has(selection.id)
       ) throw new Error("Unknown tab");
       const task = selection.kind === "task"
         ? input.inbox.tasks.find((t) => t.id === selection.id)
@@ -482,7 +565,7 @@ export function createTabs(
       store.update((draft) => {
         draft.selected = selection.kind === "task" ? { ...selection } : {
           kind: "session",
-          id: rootFor(selectedID ?? selection.id),
+          id: rootFor(selectedID ?? selection.id)!,
         };
         draft.sessionID = selectedID;
         draft.closed = draft.closed?.filter((id) => id !== selectedID);
@@ -497,10 +580,13 @@ export function createTabs(
       const task = taskFor(sessionID);
       selectionRevision++;
       store.update((draft) => {
-        draft.selected = {
-          kind: task ? "task" : "session",
-          id: task?.id ?? rootFor(sessionID),
-        };
+        const root = rootFor(sessionID);
+        draft.selected = root
+          ? {
+            kind: task ? "task" : "session",
+            id: root,
+          }
+          : undefined;
         draft.sessionID = sessionID;
         draft.closed = draft.closed?.filter((id) => id !== sessionID);
         if (task) remembered.set(task.id, sessionID);
@@ -508,13 +594,17 @@ export function createTabs(
         else draft.preview = rootFor(sessionID);
       });
     },
+    ensureTask(sessionID, options) {
+      refresh();
+      return persist(sessionID, options);
+    },
     async pin(
       sessionID: string,
       options?: RequestOptions,
     ): Promise<TaskRecord> {
-      refresh();
+      const pending = this.ensureTask(sessionID, options);
       const revision = selectionRevision;
-      const task = await persist(sessionID, options);
+      const task = await pending;
       if (!stopped && revision === selectionRevision) {
         selectionRevision++;
         store.update((draft) => {
@@ -566,18 +656,11 @@ export function createTabs(
         }
       });
     },
-    async send<T>(
-      sessionID: string,
-      action: () => Promise<T>,
-      options?: RequestOptions,
-    ): Promise<T> {
-      await this.pin(sessionID, options);
-      if (stopped) throw new Error("Project tabs are stopped");
-      return await action();
-    },
     stop() {
       if (stopped) return;
       stopped = true;
+      ordering.stop();
+      standalone.stop();
       selectionRevision++;
       for (const waiters of taskWaiters.values()) {
         for (const resolve of waiters) resolve(false);

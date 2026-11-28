@@ -31,9 +31,17 @@ for (const motion of ["on", "system", "preference"] as const) {
         const epoch = new Date("2000-01-01T00:00:00Z");
         await page.clock.install({ time: epoch });
         await page.clock.pauseAt(new Date(epoch.getTime() + 1000));
-        // Hold genuine native publications, then deliver them at a controlled
-        // browser instant. Provider/native clocks keep running independently.
-        frames.hold(() => true);
+        let blocked = false;
+        const isBlocked = (frame: typeof frames.received[number]) =>
+          frame.t === "inbox.patch" && Array.isArray(frame.ops) &&
+          frame.ops.some((op) =>
+            op.op === "entity.upsert" && op.value.kind === "session" &&
+            op.value.id === session.id && op.value.cause === "permission" &&
+            op.value.state === "blocked"
+          );
+        // Keep the browser clock frozen. Hold the authoritative blocked
+        // publication and its successors, but deliver the pending request.
+        frames.hold((frame) => blocked ||= isBlocked(frame));
         await tool(state, "bash", {
           command: "printf sv3-permission-grace",
           description: "Permission grace probe",
@@ -42,26 +50,26 @@ for (const motion of ["on", "system", "preference"] as const) {
         await state.native(`/session/${session.id}/prompt_async`, "POST", {
           parts: [{ type: "text", text: "Run the permission grace probe" }],
         });
-        await expect.poll(() =>
-          frames.held.some(({ frame }) =>
-            frame.t === "content" &&
-            (frame.event as { op?: string })?.op === "permission.upsert"
-          )
+        await expect.poll(
+          () =>
+            frames.received.some((frame) =>
+              frame.t === "content" &&
+              (frame.event as { op?: string })?.op === "permission.upsert"
+            ),
+          { intervals: [10, 20, 40] },
         ).toBe(true);
         const permissions = await state.product("permission.list", {
           sessionID: session.id,
         });
         expect(permissions).toHaveLength(1);
-        const start = await page.evaluate(() => Date.now());
-        frames.release();
+        if (settle) {
+          await state.product("permission.reply", {
+            sessionID: session.id,
+            requestID: permissions[0].id,
+            reply: "once",
+          });
+        }
         const row = page.locator(`[data-session="${session.id}"]`);
-        await expect.poll(async () => {
-          await page.clock.runFor(1);
-          return await row.textContent();
-        }).toContain("P 1");
-        const elapsed = await page.evaluate(() => Date.now()) - start;
-        expect(elapsed).toBeLessThan(400);
-        await page.clock.runFor(400 - elapsed);
         await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
         await expect(page.locator("textarea[name=prompt]")).toBeVisible();
         if (motion === "on" && !settle) {
@@ -74,18 +82,13 @@ for (const motion of ["on", "system", "preference"] as const) {
           page.locator(`[data-tab="${session.id}"] .otk-status-light`),
           page.locator(`[data-crumb="${session.id}"] .otk-status-light`),
           page.locator(
-            `[data-server="local"][data-project=${
+            `.otk-project-row[data-server="local"][data-project=${
               JSON.stringify(metadata.directory)
-            }] .otk-project-marker .otk-status-light`,
+            }] .otk-sidebar-lamp-action .otk-status-light`,
           ),
         ];
         for (const lamp of lamps) {
-          if (motion === "on") {
-            await expect(lamp).toHaveAttribute("data-state", "blocked");
-          } else {await expect(lamp).not.toHaveAttribute(
-              "data-state",
-              "blocked",
-            );}
+          await expect(lamp).not.toHaveAttribute("data-state", "blocked");
         }
         // The routing owner reserves this request for the open composer even
         // during grace: no duplicate toast may escape through the delay.
@@ -96,24 +99,24 @@ for (const motion of ["on", "system", "preference"] as const) {
           }),
         ).toHaveCount(0);
         if (settle) {
-          await state.product("permission.reply", {
-            sessionID: session.id,
-            requestID: permissions[0].id,
-            reply: "once",
-          });
           await expect.poll(() =>
             frames.received.some((frame) =>
               frame.t === "content" &&
               (frame.event as { op?: string })?.op === "permission.remove"
             )
           ).toBe(true);
-          await page.clock.runFor(200);
+          expect(frames.received.some(isBlocked)).toBe(false);
           await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
           for (const lamp of lamps) {
             await expect(lamp).not.toHaveAttribute("data-state", "blocked");
           }
         } else {
-          await page.clock.runFor(120);
+          await expect.poll(() =>
+            frames.held.some(({ frame }) => isBlocked(frame))
+          ).toBe(true);
+          frames.release();
+          // No browser time advance can manufacture or delay this state.
+          await expect(row).toContainText("P 1");
           await expect(page.locator(".otk-permission-dock")).toBeVisible();
           for (const lamp of lamps) {
             await expect(lamp).toHaveAttribute("data-state", "blocked");

@@ -2,7 +2,7 @@
 .otk-picker-content {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 0;
   outline: none;
 }
@@ -14,13 +14,13 @@
   margin: 0;
   min-height: var(--line-ui);
   box-sizing: content-box;
-  padding: 16px var(--item-inset) 4px;
+  padding: var(--space-4) var(--item-inset) var(--space-1);
   color: var(--otk-fg-2);
   font-size: var(--text-meta);
   font-weight: 500;
 }
 .otk-picker-group-heading.is-first {
-  padding-block-start: 4px;
+  padding-block-start: var(--space-1);
 }
 .otk-picker-row {
   padding-inline-end: var(--item-inset);
@@ -28,7 +28,7 @@
 .otk-picker-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
   text-align: left;
@@ -36,7 +36,7 @@
 }
 .otk-picker-option,
 .otk-picker-estimate {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 .otk-picker-option:hover {
   background: transparent;
@@ -59,11 +59,15 @@
   color: var(--otk-fg-2);
 }
 .otk-picker-empty {
-  margin: 4px var(--item-inset);
+  margin: var(--space-1) var(--item-inset);
   color: var(--otk-fg-2);
 }
 .otk-picker-row.is-unavailable .otk-picker-option {
   color: var(--otk-fg-2);
+}
+.otk-picker-estimate::before {
+  content: "";
+  height: var(--line-ui);
 }
 .otk-picker-heading {
   margin: 0;
@@ -72,9 +76,14 @@
   font-size: var(--text-ui);
   font-weight: 500;
 }
-.otk-picker-estimate::before {
-  content: "";
-  height: var(--line-ui);
+.otk-picker-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-1) var(--item-inset);
+  color: var(--otk-fg-2);
+  font-size: var(--text-meta);
 }
 .otk-picker-estimate {
   display: flex;

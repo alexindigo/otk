@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Capabilities } from "@otk/harness";
-import type { PermissionReply, PromptInput } from "@otk/protocol";
+import type {
+  PermissionReply,
+  PermissionRequest,
+  PromptInput,
+} from "@otk/protocol";
 import { fixture } from "./config.ts";
-import { coreBackendFixture } from "./core-backend.ts";
+import {
+  coreBackendFixture,
+  publishFixturePermissions,
+} from "./core-backend.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { consumerAssets } from "./consumer-builds.ts";
 import { publicUiScenario } from "./public-ui-scenario.ts";
@@ -36,6 +43,17 @@ export async function menusScenario(profile: Profile) {
     });
   };
   const capabilities: Capabilities = {};
+  const permission: PermissionRequest = {
+    id: "permission",
+    sessionID: "tstv1-core",
+    kind: "bash",
+    title: "Probe",
+    time: 1,
+    detail: { kind: "bash", command: "true" },
+    patterns: ["true"],
+    alwaysPatterns: ["true"],
+  };
+  const pendingPermissions = () => replies.length ? [] : [permission];
   if (profile === "contract-menus-hints") {
     capabilities.prompt = {
       prompt: (input) => {
@@ -51,19 +69,14 @@ export async function menusScenario(profile: Profile) {
   }
   if (profile === "contract-menus-permission") {
     capabilities.permissions = {
-      listPermissions: () =>
-        Promise.resolve([{
-          id: "permission",
-          sessionID: "tstv1-core",
-          kind: "bash",
-          title: "Probe",
-          time: 1,
-          detail: { kind: "bash", command: "true" },
-          patterns: ["true"],
-          alwaysPatterns: ["true"],
-        }]),
+      listPermissions: () => Promise.resolve(pendingPermissions()),
       replyPermission: (input) => {
         replies.push(input);
+        publishFixturePermissions(
+          f.app,
+          permission.sessionID,
+          pendingPermissions(),
+        );
         return Promise.resolve();
       },
     };
@@ -98,13 +111,23 @@ export async function menusScenario(profile: Profile) {
     : await inboxBrowserFixture(
       root,
       [],
-      profile === "contract-menus-content"
+      profile === "contract-menus-content" ||
+        profile === "contract-menus-work-reveal"
         ? { "tstv1-otk": menusMessages }
         : {},
       profile === "contract-menus-context"
         ? await consumerAssets("context")
+        : profile === "contract-menus-work-reveal"
+        ? await consumerAssets("panel")
         : undefined,
     );
+  if (capabilities.permissions) {
+    publishFixturePermissions(
+      f.app,
+      permission.sessionID,
+      pendingPermissions(),
+    );
+  }
   if ("add" in f) {
     f.add({ ...f.entries[0], id: "tstv1-second", title: "Second session" });
     for (let n = 1; n < 10; n++) {
@@ -166,6 +189,19 @@ export async function menusScenario(profile: Profile) {
         case "productRpc":
           return await c.rpc(frame.params.method, frame.params.params);
         case "scenario":
+          if (
+            "update" in f && frame.params.action === "hold" &&
+            frame.params.sessionID === "tstv1-crumb-path"
+          ) {
+            for (let n = 1; n < 10; n++) {
+              f.update(`tstv1-r2-session-${n}`, {
+                parentID: n > 1 ? `tstv1-r2-session-${n - 1}` : undefined,
+                status: "busy",
+              });
+            }
+            f.update("tstv1-otk", { parentID: "tstv1-r2-session-9" });
+            return null;
+          }
           if (
             profile === "contract-menus-hints" && frame.params.action === "hold"
           ) {

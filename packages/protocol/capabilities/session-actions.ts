@@ -39,7 +39,9 @@ export interface SessionActionsCapability {
     through?: string,
     operation?: OperationContext,
   ): Promise<ContentSession>;
-  /** Admits compaction; ordinary session events report its completion. */
+  /** Admits compaction; ordinary session events report its completion.
+   * Compaction never changes the applied selection: `model` is only the
+   * identity a harness may need when the session has no applied model. */
   compact(
     sessionID: string,
     model: ModelRef,

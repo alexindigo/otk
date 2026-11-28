@@ -66,13 +66,15 @@ export async function withSessionActivity<
   T extends {
     id: string;
     time: { created: unknown; busy?: unknown; idle?: unknown };
+    outcome?: unknown;
   },
 >(
   client: V2Client,
   raw: T,
   signal?: AbortSignal,
-): Promise<T & { activity: number }> {
+): Promise<T & { activity: number; terminalError?: unknown }> {
   let cursor: string | undefined;
+  let terminalError: unknown;
   while (true) {
     signal?.throwIfAborted();
     const page = await client.read(
@@ -83,11 +85,20 @@ export async function withSessionActivity<
           ...(cursor ? { cursor } : { order: "desc" }),
         }, { signal }),
       signal,
+      "bulk",
     );
+    const failed = page.data.find((row) =>
+      row.type === "idle" &&
+      row.outcome === "failed" && time(row.time.created) === time(raw.time.idle)
+    );
+    if (failed?.type === "idle" && raw.outcome === "failed") {
+      terminalError = failed.error;
+    }
     const message = page.data.find((row) => activityKinds.includes(row.type));
     if (message) {
       return {
         ...raw,
+        ...(terminalError ? { terminalError } : {}),
         activity: Math.max(
           time(message.time.created),
           time(

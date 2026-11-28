@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "../../../web/src/viewport.css" with { type: "text" };
 import { render } from "@solidjs/web";
-import { Shell, UiProvider, useShellPorts } from "@otk/ui";
+import { Shell, UiProvider, useCommandPorts, useShellPorts } from "@otk/ui";
 import { applicationTheme, applicationUi } from "../../../web/src/features.ts";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
@@ -12,7 +12,11 @@ theme.start();
 ui.panels.register({
   id: "external-view",
   title: "External view",
-  icon: "◇",
+  icon: () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="m12 3 9 9-9 9-9-9Z" fill="none" stroke="currentColor" />
+    </svg>
+  ),
   component: () => {
     const shell = useShellPorts();
     return (
@@ -23,10 +27,36 @@ ui.panels.register({
 ui.panels.register({
   id: "unavailable",
   title: "Unavailable view",
-  icon: "?",
+  icon: () => (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
+    </svg>
+  ),
   capability: "resources",
   component: () => <p data-unavailable>Should be hidden</p>,
 });
+const params = new URL(location.href).searchParams;
+const messageID = params.get("revealMessage"),
+  partID = params.get("revealPart");
+if (messageID && partID) {
+  ui.global.register({
+    id: "part-reveal-probe",
+    component: () => {
+      const { commands } = useCommandPorts();
+      const shell = useShellPorts();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            void commands.run("transcript.reveal", { messageID, partID })
+              .catch(shell.reportFailure)}
+        >
+          Reveal fixture part
+        </button>
+      );
+    },
+  });
+}
 render(() => (
   <UiProvider registries={ui}>
     <Shell theme={theme} api={new URL("/api/", location.href)} />

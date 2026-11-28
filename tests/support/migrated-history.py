@@ -18,22 +18,32 @@ for directory in [R/'config/opencode',project/'.opencode']:
 def req(url,body=None,auth='fixture'):
     data=None if body is None else json.dumps(body).encode()
     return json.load(urllib.request.urlopen(urllib.request.Request(url,data=data,headers={'Authorization':'Basic '+base64.b64encode(('opencode:'+auth).encode()).decode(),'Content-Type':'application/json'}),timeout=60))
-def start(version,port):
+def start(version):
     log=(R/('native-'+version+'.log')).open('w')
-    args=['/opt/otk-test/opencode/'+version+'/opencode','serve','--hostname','127.0.0.1','--port',str(port)]
+    args=['/opt/otk-test/opencode/'+version+'/opencode','serve','--hostname','127.0.0.1','--port','0']
     if version.startswith('2.'):args.append('--service')
     p=subprocess.Popen(args,env=env,cwd=project,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
     return p,log
 def stop(p,log):
-    os.killpg(p.pid,signal.SIGTERM)
+    # A native that already exited (e.g. failed startup) keeps its own error.
+    try:os.killpg(p.pid,signal.SIGTERM)
+    except ProcessLookupError:pass
     try:p.wait(timeout=20)
     except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait()
     log.close()
-p,log=start('1.19.3',49193)
+def v1_endpoint(p,log):
+    deadline=time.monotonic()+60
+    while time.monotonic()<deadline and p.poll() is None:
+        bound=re.search(r'^opencode server listening on (http://127\.0\.0\.1:[1-9]\d*)\r?\n',pathlib.Path(log.name).read_text(),re.M)
+        if bound:return bound[1]
+        time.sleep(.2)
+    raise RuntimeError('V1 did not announce its listener; see '+log.name)
+p,log=start('1.19.3')
 try:
+    v1=v1_endpoint(p,log)
     for _ in range(150):
         try:
-            session=req('http://127.0.0.1:49193/session?directory='+str(project),{'title':'INV-E legacy fixture'});break
+            session=req(v1+'/session?directory='+str(project),{'title':'INV-E legacy fixture'});break
         except Exception:
             assert p.poll() is None;time.sleep(.2)
     else:raise RuntimeError('V1 startup deadline')
@@ -79,11 +89,12 @@ db.close()
 if os.environ.get('INV_E_V1_READ')=='1':
     # Optional extra probe, not needed to exercise the actual native migration.
     # This currently times out on the seeded restart; failed logs are retained.
-    p,log=start('1.19.3',49193)
+    p,log=start('1.19.3')
     try:
+        v1=v1_endpoint(p,log)
         for _ in range(150):
             try:
-                observed=req('http://127.0.0.1:49193/session/'+sid+'/message?directory='+str(project));break
+                observed=req(v1+'/session/'+sid+'/message?directory='+str(project));break
             except urllib.error.URLError:
                 assert p.poll() is None;time.sleep(.2)
         else:raise RuntimeError('V1 reload deadline')
@@ -91,7 +102,8 @@ if os.environ.get('INV_E_V1_READ')=='1':
         native=[{**m['info'],'parts':m['parts']} for m in observed if m['info']['role']=='assistant']
     finally:stop(p,log)
 (R/'config/opencode/opencode.json').write_text('{}')
-p,log=start('2.2.6',49226)
+# The managed V2 service publishes its OS-assigned endpoint in the registration.
+p,log=start('2.2.6')
 try:
     registration=R/'state/opencode/service.json'
     for _ in range(600):

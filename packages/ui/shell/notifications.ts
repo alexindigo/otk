@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  type ApprovalModel,
   commandFailureFacts,
   type CommandHub,
+  type Disclosures,
+  type EntityStateStore,
   type EntryChanges,
   failureNote,
+  LOCAL_SIDECAR,
   type Note,
   notificationFailure,
   NotificationHub,
@@ -12,9 +14,14 @@ import {
   NotificationTriggers,
   oldestPermission,
   permissionNoteDetail,
+  permissionVisible,
   requestIdle,
   type Selection,
+  serverNote,
+  type ServerResources,
   type SidecarConnection,
+  type SidecarState,
+  storageFailureNote,
 } from "@otk/client";
 import type {
   FailureFacts,
@@ -22,13 +29,49 @@ import type {
   Preferences,
   ServerFrame,
 } from "@otk/protocol";
-import { registerBadgeChannel } from "../features/notify/badge.ts";
+import { attentionBadge } from "../features/notify/badge.ts";
 import { registerOsChannel } from "../features/notify/os.ts";
 import { registerSoundChannel } from "../features/notify/sound.ts";
 import { registerToastChannel } from "../features/notify/toast.ts";
+
+/** Retain delivery receipts, not a second copy of server continuity. */
+export function serverNotifications(hub: NotificationHub) {
+  const published = new Map<string, Note>();
+  const remove = (id: string) => {
+    const previous = published.get(id);
+    if (!previous) return;
+    published.delete(id);
+    hub.retract(previous.id);
+  };
+  return {
+    remove,
+    update(list: readonly Pick<SidecarState, "id" | "label" | "continuity">[]) {
+      const present = new Set<string>();
+      for (const sidecar of list) {
+        const { id } = sidecar;
+        const note = serverNote(sidecar, id === LOCAL_SIDECAR);
+        if (!note) continue;
+        present.add(id);
+        const previous = published.get(id);
+        if (previous && previous.dismissalKey === note.dismissalKey) {
+          if (previous.title === note.title && previous.body === note.body) {
+            continue;
+          }
+          const next = hub.replace(previous, note);
+          if (next) published.set(id, next);
+        } else published.set(id, hub.publish(note));
+      }
+      for (const id of published.keys()) {
+        if (!present.has(id)) remove(id);
+      }
+    },
+  };
+}
+
 /** The application selects channels and supplies live host/selection/RPC ports. */
 export function applicationNotifications(input: {
   commands: CommandHub;
+  disclosures?: Disclosures;
   prefs(): Preferences;
   selection(): Selection | undefined;
   viewing(): boolean;
@@ -39,7 +82,8 @@ export function applicationNotifications(input: {
     sidecar: string,
     listener: (changes: EntryChanges) => void,
   ): () => void;
-  attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
+  entities(sidecar: string): EntityStateStore;
+  locate?: ServerResources["notificationLocation"];
 }) {
   const context = () => {
     const selected = input.selection();
@@ -88,11 +132,12 @@ export function applicationNotifications(input: {
           ? target(note.sessionRef.sidecar, note.sessionRef.session)
           : undefined,
       }),
+    input.locate,
   );
-  const toast = registerToastChannel(hub),
+  const toast = registerToastChannel(hub, input.disclosures),
     os = registerOsChannel(hub),
     sound = registerSoundChannel(hub),
-    stopBadge = registerBadgeChannel(hub);
+    badge = attentionBadge();
   const candidates = new Map<string, Note>();
   const receipts = new Map<string, Note>();
   const publish = (incoming: Note, previous?: Note) => {
@@ -120,12 +165,13 @@ export function applicationNotifications(input: {
     (incoming, previous) => {
       if (incoming.kind === "permission" || incoming.kind === "question") {
         const ref = incoming.sessionRef!;
+        const idle = requestIdle(
+          input.entry(ref.sidecar, ref.session)?.timeUpdated,
+          Date.now(),
+        );
         incoming = {
           ...incoming,
-          context: requestIdle(
-            input.entry(ref.sidecar, ref.session)?.timeUpdated,
-            Date.now(),
-          ).label,
+          context: idle.lead ? idle : undefined,
         };
       }
       candidates.set(incoming.id, incoming);
@@ -138,15 +184,20 @@ export function applicationNotifications(input: {
           sessionID: ref.session,
         }).then((requests) => {
           if (candidates.get(incoming.id) !== incoming) return;
-          const request = requests[0];
+          const request = incoming.dismissalKey
+            ? requests.find((request) =>
+              incoming.dismissalKey === `question/${request.id}`
+            )
+            : requests[0];
           if (!request) return retract(incoming.id);
+          const idle = requestIdle(
+            input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
+            Date.now(),
+          );
           const enriched = {
             ...incoming,
             dismissalKey: `question/${request.id}`,
-            context: requestIdle(
-              input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
-              Date.now(),
-            ).label,
+            context: idle.lead ? idle : undefined,
           };
           candidates.set(incoming.id, enriched);
           publish(enriched, previous);
@@ -169,13 +220,21 @@ export function applicationNotifications(input: {
       }
       // Resolve action ownership before channel delivery. This schedules the input
       // tone once and constructs one OS note, without an enrichment replay.
-      void input.connection(ref.sidecar).rpc.call(
-        "permission.list",
-        { sessionID: ref.session },
+      void input.connection(ref.sidecar).readPermissions(
+        ref.session,
+        (id) => input.entry(ref.sidecar, id),
       ).then((requests) => {
         if (candidates.get(incoming.id) !== incoming) return;
         const request = oldestPermission(
-          input.attention(ref.sidecar).permissions(requests),
+          requests.filter((request) =>
+            permissionVisible(
+              input.entities(ref.sidecar),
+              request.sessionID,
+              request.id,
+            ) &&
+            (!incoming.dismissalKey ||
+              incoming.dismissalKey === `permission/${request.id}`)
+          ),
           ref.session,
           (id) => input.entry(ref.sidecar, id),
         );
@@ -183,21 +242,19 @@ export function applicationNotifications(input: {
           retract(incoming.id);
           return;
         }
+        const idle = requestIdle(
+          input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
+          Date.now(),
+        );
         const enriched: Note = request
           ? {
             ...incoming,
             dismissalKey: `permission/${request.id}`,
-            context: requestIdle(
-              input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
-              Date.now(),
-            ).label,
+            context: idle.lead ? idle : undefined,
             detail: permissionNoteDetail(request),
             actions: [...incoming.actions, {
               label: "Allow once",
-              description: requestIdle(
-                input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
-                Date.now(),
-              ).resume,
+              description: idle.resume,
               command: "permission.reply",
               args: {
                 sidecarId: ref.sidecar,
@@ -220,6 +277,9 @@ export function applicationNotifications(input: {
       });
     },
     retract,
+    undefined,
+    undefined,
+    undefined,
   );
   const update = () => {
     os.refresh();
@@ -243,13 +303,16 @@ export function applicationNotifications(input: {
     hub.refresh();
   };
   const observed = new Map<string, () => void>();
+  const servers = serverNotifications(hub);
   return {
     hub,
     toast: toast.model,
+    badge: badge.update,
     os,
     update,
     info: (text: string) => message(text),
     error: fail,
+    servers: servers.update,
     receive(sidecar: string, frame: ServerFrame) {
       if (!observed.has(sidecar)) {
         observed.set(
@@ -271,8 +334,15 @@ export function applicationNotifications(input: {
           reason: frame.message || frame.code,
         });
       }
+      if (frame.t === "storage") {
+        const note = storageFailureNote(sidecar, frame.state);
+        if (note) hub.publish(note);
+        else hub.retract(`storage/${sidecar}`);
+      }
     },
     remove(sidecar: string) {
+      servers.remove(sidecar);
+      hub.retract(`storage/${sidecar}`);
       observed.get(sidecar)?.();
       observed.delete(sidecar);
       triggers.reset(sidecar);
@@ -292,15 +362,17 @@ export function applicationNotifications(input: {
       };
     },
     stop() {
+      triggers.stop();
       for (const stop of observed.values()) stop();
       observed.clear();
       candidates.clear();
       receipts.clear();
+      servers.update([]);
       hub.stop();
       toast.stop();
       os.stop();
       sound.stop();
-      stopBadge();
+      badge.stop();
     },
   };
 }

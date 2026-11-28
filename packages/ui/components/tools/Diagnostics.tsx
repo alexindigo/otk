@@ -2,6 +2,8 @@
 import "./Diagnostics.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import type { Diagnostic } from "@otk/protocol";
+import { errorFeedback } from "@otk/client";
+import FeedbackStatus from "../FeedbackStatus.tsx";
 export default function Diagnostics(props: { items: Diagnostic[] }) {
   return (
     <Show when={props.items.length > 0}>
@@ -9,7 +11,25 @@ export default function Diagnostics(props: { items: Diagnostic[] }) {
         <For each={props.items} keyed={false}>
           {(item) => (
             <li data-severity={item().severity}>
-              {item().severity} [{item().line}:{item().col}] {item().message}
+              <Show
+                when={item().severity === "error"}
+                fallback={
+                  <>
+                    {item().severity} [{item().line}:{item().col}]{" "}
+                    {item().message}
+                  </>
+                }
+              >
+                <FeedbackStatus
+                  compact
+                  feedback={errorFeedback(item().message, {
+                    actionLabel: "Checking code",
+                    target: {
+                      label: `Line ${item().line}, column ${item().col}`,
+                    },
+                  })}
+                />
+              </Show>
             </li>
           )}
         </For>

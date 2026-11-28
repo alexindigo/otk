@@ -13,8 +13,14 @@ test("sessions.create-in-task-retains-concurrent-authoritative-membership", {
     sessions: ["tstv1-otk", "tstv1-kept"],
   });
   const frames = await wire(page);
+  await state.product("layout.patch", {
+    rightCollapsed: false,
+    rightView: "sessions",
+  });
   await page.goto(state.url + "/#/local/tstv1-otk");
-  await expect(page.locator("[data-crumb=tstv1-kept]")).toBeVisible();
+  await expect(page.locator("[data-crumb=tstv1-otk]")).toBeVisible();
+  await expect(page.locator("[data-session=tstv1-kept]")).toBeVisible();
+  await expect(page.locator("[data-crumb=tstv1-kept]")).toHaveCount(0);
   await expect(page.locator(".otk-prompt")).toBeVisible();
   frames.hold((frame) => ["inbox.snapshot", "inbox.patch"].includes(frame.t));
   await page.locator(".otk-new-session").click();
@@ -39,8 +45,15 @@ test("sessions.create-in-task-retains-concurrent-authoritative-membership", {
   ).toEqual(["tstv1-kept", "tstv1-added", created]);
   frames.release();
   await page.reload();
-  await expect(page.locator("[data-crumb=tstv1-kept]")).toBeVisible();
-  await expect(page.locator("[data-crumb=tstv1-added]")).toBeVisible();
+  await expect(page.locator(`[data-crumb="${created}"]`)).toBeVisible();
+  await expect(page.locator("[data-session=tstv1-kept]")).toBeVisible();
+  await expect(page.locator("[data-session=tstv1-added]")).toBeVisible();
+  await expect(page.locator("[data-crumb=tstv1-kept]")).toHaveCount(0);
+  await expect(page.locator("[data-crumb=tstv1-added]")).toHaveCount(0);
   await expect(page.locator("[data-crumb=tstv1-otk]")).toHaveCount(0);
-  await expect(page.locator("[data-crumb]")).toHaveCount(3);
+  await expect(page.locator("[data-crumb]")).toHaveCount(1);
+  expect(
+    (await state.product("tasks.list", { directory: state.directory }))[0]
+      .sessions,
+  ).toEqual(["tstv1-kept", "tstv1-added", created]);
 });

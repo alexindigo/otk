@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SearchCall } from "@otk/protocol";
+import { metaList } from "@otk/client";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
 import { SearchIcon } from "../ChromeIcons.tsx";
@@ -12,18 +13,19 @@ export function registerSearchTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: SearchIcon,
       verb: call.mode === "list" ? "List" : "Search",
+      runs: { noun: "search", plural: "searches" },
       copy: { path: call.path },
       target: call.path
         ? relativeTarget(call.path, context.directory, context.paths)
         : undefined,
-      summary: [
+      summary: metaList([
         call.mode !== "list" ? call.pattern : "",
         call.matches === undefined
           ? ""
           : call.mode === "list"
           ? countLabel(call.matches, "entry", "entries")
           : countLabel(call.matches, "match", "matches"),
-      ].filter(Boolean).join(" · "),
+      ]),
     }),
   );
 }

@@ -39,12 +39,17 @@ export function registerCatalogs(
     execution: {
       kind: "lease",
       lifetime: "request",
-      scope: (directory: string) => ({ directory }),
+      scope: (p: { directory: string }) => ({ directory: p.directory }),
       receipt: () => undefined,
       recover: () => Promise.resolve({ state: "reload" }),
     },
-    params: (p) => projectPath(text(p, "directory")!),
-    async handler(ctx, directory) {
+    params: (p) => ({
+      directory: projectPath(text(p, "directory")!),
+      files: (p as { files?: unknown }).files === true
+        ? true as const
+        : undefined,
+    }),
+    async handler(ctx, { directory, files }) {
       const request = ctx.request;
       if (!request || request.signal.aborted || !request.publish) {
         throw new HarnessError(
@@ -108,6 +113,13 @@ export function registerCatalogs(
           }),
         ),
       });
+      // A files-only lease retains observation; the ordinary subscription still
+      // owns publication, so borrowers never receive two copies of the catalog.
+      if (files) {
+        return metadata(
+          await port.watch(directory, () => {}, request.signal, files),
+        );
+      }
       const value = await port.watch(directory, (catalog) => {
         if (request.signal.aborted) return;
         publish({ t: "catalog.snapshot", catalog: metadata(catalog) });

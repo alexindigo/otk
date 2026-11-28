@@ -4,13 +4,16 @@ import { DatabaseSync } from "node:sqlite";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { test } from "../support/resources.ts";
 import { nativeKind, nativeVersion } from "../support/native.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { OpencodeV2Test } from "../support/opencode-v2.ts";
 import { inboxProjects, projectHierarchy } from "@otk/client";
 import type { ProjectSeed } from "@otk/harness";
 import { ProjectSummaries } from "../../core/index/project-summaries.ts";
 import { DigestBridge } from "../../core/digest/bridge.ts";
 import { cfg } from "../support/config.ts";
+import { nativeDigest } from "../support/native-testing.ts";
+import { OpencodeV1Adapter } from "@otk/harness-opencode-v1";
+import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 
 async function seeds(
   oc: OpencodeTest | OpencodeV2Test,
@@ -77,6 +80,143 @@ async function seed(oc: { directory: string }) {
   );
   await Deno.mkdir(oc.directory + ".tree/src");
 }
+
+test(`native ${nativeVersion}: project names reach summaries and survive restart`, async () => {
+  const fake = new FakeLlm();
+  const oc = nativeKind === "opencode-v2-server"
+    ? await OpencodeV2Test.start(fake, { prepare: seed })
+    : await OpencodeTest.start(fake, { bash: "ask" }, { prepare: seed });
+  const { projectID } = oc instanceof OpencodeV2Test
+    ? await oc.api.session.create({ location: { directory: oc.directory } })
+    : await oc.session<{ id: string; projectID: string }>("/session", {
+      method: "POST",
+      body: { title: "Project fixture" },
+    });
+  assert(projectID && projectID !== "global");
+  const target = { directory: oc.directory, projectID };
+  const settings = cfg();
+
+  async function withAdapter(
+    stage: string,
+    run: (
+      edit: NonNullable<OpencodeV1Adapter["capabilities"]["projectEdit"]>,
+      name: () => string | undefined,
+      trace: string[],
+    ) => Promise<void>,
+  ) {
+    const trace: string[] = [];
+    const fetcher: typeof fetch = (input, init) => {
+      const path =
+        new URL(input instanceof Request ? input.url : input).pathname;
+      if (/\/projects?(\/|$)/.test(path)) {
+        trace.push(
+          `${
+            init?.method ?? (input instanceof Request ? input.method : "GET")
+          } ${path}`,
+        );
+      }
+      return fetch(input, init);
+    };
+    const bridge = new DigestBridge({
+      ...nativeDigest(oc),
+      statePath: oc.root + "/names-" + stage,
+      policy: settings.digest,
+      publish() {},
+    });
+    const adapter = oc instanceof OpencodeV2Test
+      ? new OpencodeV2ServerAdapter(
+        {
+          serviceFile: oc.serviceFile,
+          harness: settings.harness,
+          messages: settings.messages,
+        },
+        undefined,
+        () => {},
+        fetcher,
+        bridge,
+      )
+      : new OpencodeV1Adapter(
+        {
+          ...settings,
+          harness: { ...settings.harness, db: oc.db, url: oc.url },
+        },
+        undefined,
+        fetcher,
+        bridge,
+      );
+    const summaries = new ProjectSummaries(
+      () => ({ seen: 0, finish: 0 }),
+      (row) => trace.push(`summary ${row.directory}`),
+    );
+    try {
+      await adapter.core.start({
+        connection() {},
+        indexReset() {},
+        indexUpsert() {},
+        indexRemove() {},
+        content() {},
+        invalidate() {},
+        bootstrapComplete() {},
+        projectSeeds(rows) {
+          trace.push("seed inventory");
+          summaries.seed(rows);
+        },
+        projectMetadata: (value, source) => summaries.metadata(value, source),
+      });
+      const name = () => summaries.values.get(oc.directory)?.presentation?.name;
+      await waitFor(
+        () => summaries.values.get(oc.directory)?.presentation?.id,
+        (id) => id === projectID,
+      );
+      const edit = adapter.capabilities.projectEdit;
+      assert(edit);
+      await run(edit, name, trace);
+    } finally {
+      await adapter.core.stop();
+    }
+  }
+
+  await withAdapter("before", async (edit, name, trace) => {
+    assertEquals(name() || "", "");
+    trace.length = 0;
+    assertEquals(
+      (await (await edit.prepare(target, { name: "Renamed fixture" }))()).values
+        .name,
+      "Renamed fixture",
+    );
+    await waitFor(name, (value) => value === "Renamed fixture");
+    assertEquals(trace.filter((line) => line.startsWith("PATCH ")).length, 1);
+    assertEquals(trace.filter((line) => /^GET .*\/projects?$/.test(line)), []);
+    assertEquals(trace.filter((line) => line === "seed inventory"), []);
+    assertEquals(trace.filter((line) => line.startsWith("summary ")), [
+      `summary ${oc.directory}`,
+    ]);
+    if (oc instanceof OpencodeV2Test) {
+      await oc.api.project.update({ projectID, name: "External name" });
+    } else {
+      await oc.request(`/project/${projectID}`, {
+        method: "PATCH",
+        body: { name: "External name" },
+      });
+    }
+    await waitFor(name, (value) => value === "External name");
+    assertEquals(trace.filter((line) => line.startsWith("summary ")), [
+      `summary ${oc.directory}`,
+      `summary ${oc.directory}`,
+    ]);
+    assertEquals(
+      (await (await edit.prepare(target, { name: "" }))()).values.name,
+      "",
+    );
+    await waitFor(name, (value) => !value);
+    await (await edit.prepare(target, { name: "Persisted fixture" }))();
+    await waitFor(name, (value) => value === "Persisted fixture");
+  });
+  await oc.restart();
+  await withAdapter("after", async (_edit, name) => {
+    await waitFor(name, (value) => value === "Persisted fixture");
+  });
+});
 
 function projection(seeds: ProjectSeed[]) {
   const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
@@ -165,6 +305,7 @@ test(`native ${nativeVersion}: removed worktree keeps durable identity and exact
       );
       assertEquals(
         nativeRemoved.find((r) => r.directory === nativeTree)?.availability,
+        // 2.69: stored native affiliation names its repository; it is absent.
         "removed",
       );
       assertEquals(
@@ -189,6 +330,7 @@ test(`native ${nativeVersion}: removed worktree keeps durable identity and exact
       assertEquals(after.find((r) => r.directory === tree)?.depth, 1);
       assertEquals(
         after.find((r) => r.directory === tree)?.availability,
+        // 2.69: recorded repository plus verified absence, not absence alone.
         "removed",
       );
       assertEquals(after.find((r) => r.directory === tree)?.scopes, [
@@ -294,6 +436,7 @@ test(`native ${nativeVersion}: removed worktree keeps durable identity and exact
       assertEquals(after.find((r) => r.directory === tree)?.depth, 1);
       assertEquals(
         after.find((r) => r.directory === tree)?.availability,
+        // 2.69: stored native affiliation names its repository; it is absent.
         "removed",
       );
       assertEquals(after.find((r) => r.directory === tree)?.sessionCount, 1);

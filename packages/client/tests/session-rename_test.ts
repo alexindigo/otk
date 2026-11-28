@@ -30,9 +30,12 @@ Deno.test("rename owns cancellation, unchanged titles, retry and stale completio
     "OTK has no further details",
   );
   assertEquals(
-    owner.state.error && owner.state.error.failure?.target.label,
+    owner.state.error && owner.state.error.failure?.value.facts?.target?.label,
     "Original",
   );
+  assertEquals(owner.state.error && owner.state.error.failure?.target, {
+    label: "",
+  });
   assertEquals(owner.state.editing?.origin, "chip");
   fail = false;
   const commit = owner.commit(" New ");
@@ -55,7 +58,7 @@ Deno.test("rename keeps editing until the authoritative index title arrives", as
   });
   owner.start({ sidecarId: "a", sessionID: "s", title }, "row");
   await owner.commit("New");
-  assertEquals(owner.state.pending, true);
+  assertEquals(owner.state.pendingTitle, "New");
   assertEquals(owner.state.editing?.title, "Old");
   owner.observe();
   assert(owner.state.editing);

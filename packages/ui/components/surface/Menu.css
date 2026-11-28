@@ -6,7 +6,11 @@
 }
 .otk-menu-items button {
   text-align: left;
+}
+.otk-menu-items button:not(:where(.otk-icon-button)) {
   min-height: var(--menu-row-height);
+}
+.otk-menu-items button:not(:where(.otk-pill-surface, .otk-icon-button)) {
   padding: var(--menu-block-inset) var(--menu-item-inset);
 }
 .otk-menu-items [role="group"] {
@@ -20,14 +24,8 @@
   border: 0;
   border-top: 1px solid var(--overlay-border);
 }
-.otk-menu-items .otk-menu-destructive {
-  color: var(--otk-status-error);
-}
 .otk-menu-items + [role="alert"] {
   max-width: 28rem;
   contain: inline-size;
   margin: 0;
-}
-.otk-menu-items .is-armed {
-  color: var(--otk-attention);
 }

@@ -251,15 +251,20 @@ test("menus.project-dots-shared-projection-owned-failure-and-readiness", {
     )
   ).toBe(true);
   await expect(dots.getByRole("alert")).toHaveCount(0);
+  // Issue 2.116: the shared sidebar feedback band spans artwork to metadata,
+  // leaving the tree/lamp gutter and trailing row padding outside the band.
   await expect.poll(() =>
     alert.evaluate((el) => {
-      const row = document.querySelector("#project-probe [data-project]")!
-          .getBoundingClientRect(),
-        action = document.querySelector("#project-probe .otk-project-open")!
-          .getBoundingClientRect(),
-        r = el.getBoundingClientRect();
-      return r.top >= action.bottom && r.bottom <= row.bottom &&
-        r.left >= action.left && r.right <= row.right;
+      const row = el.closest("[data-project]")!;
+      const frame = row.getBoundingClientRect();
+      const action = row.querySelector(".otk-project-open")!
+        .getBoundingClientRect();
+      const meta = row.querySelector(".otk-sidebar-meta")!
+        .getBoundingClientRect();
+      const feedback = el.getBoundingClientRect();
+      return feedback.top >= action.bottom && feedback.bottom <= frame.bottom &&
+        Math.abs(feedback.left - action.left) <= .5 &&
+        Math.abs(feedback.right - meta.right) <= .5;
     })
   ).toBe(true);
   await page.locator("#disconnect-project").evaluate((el) =>

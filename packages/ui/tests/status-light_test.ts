@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { IndexEntry } from "@otk/protocol";
+import { createEntityStateStore } from "@otk/client";
 import {
   LIGHT_STATES,
   lightDescription,
@@ -12,7 +13,7 @@ Deno.test("shared dependency descriptions show the projected count without repla
   assertEquals(lightDescription("working", 3), "Working");
   assertEquals(lightDescription("none", 0), "No known activity");
 });
-Deno.test("session lights render the supervision projection and default to No known activity", () => {
+Deno.test("session lights render entity states and default to No known activity", () => {
   const entry: IndexEntry = {
     id: "session",
     directory: "/project",
@@ -53,40 +54,50 @@ Deno.test("session lights render the supervision projection and default to No kn
   for (
     const [state, expected] of [
       ["working", "working"],
-      ["needsYou", "blocked"],
-      ["finishedUnseen", "finished"],
+      ["blocked", "blocked"],
+      ["finished", "finished"],
       ["none", "none"],
     ] as const
   ) {
-    assertEquals(
-      sessionLight(entry, {
-        seen: {},
-        finishes: {},
-        supervision: { [entry.id]: { state, terminal: 10 } },
+    const entities = createEntityStateStore({
+      read: () => ({
+        ["session:" + entry.id]: {
+          kind: "session",
+          id: entry.id,
+          state,
+          previous: state,
+          counts: { blocked: 0, working: 0, finished: 0, unseen: 0 },
+        },
       }),
-      expected,
-    );
+    });
+    try {
+      assertEquals(sessionLight(entry, entities), expected);
+      entities.stale(true);
+      assertEquals(sessionLight(entry, entities), "none");
+    } finally {
+      entities.stop();
+    }
   }
   assertEquals(LIGHT_STATES.none.label, "No known activity");
   assertEquals(Object.values(LIGHT_STATES).map((state) => state.shape), [
-    "×",
-    "◐",
-    "✓",
+    "cross",
+    "half-disc",
+    "check",
     "diamond",
-    "○",
+    "circle",
   ]);
-  assertEquals(
-    sessionLight(entry, {
-      seen: {},
-      finishes: {},
-      supervision: {
-        [entry.id]: {
-          state: "none",
-          terminal: 0,
-          dependencies: { running: 2 },
-        },
+  const entities = createEntityStateStore({
+    read: () => ({
+      [`session:${entry.id}`]: {
+        kind: "session",
+        id: entry.id,
+        state: "none",
+        previous: "none",
+        dependencies: 2,
+        counts: { blocked: 0, working: 0, finished: 0, unseen: 0 },
       },
     }),
-    "none",
-  );
+  });
+  assertEquals(sessionLight(entry, entities), "none");
+  entities.stop();
 });

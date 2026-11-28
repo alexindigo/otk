@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./DeletedSession.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import type { Draft, DraftRecovery } from "@otk/client";
+import ComposerNotice from "./ComposerNotice.tsx";
+import DraftRecoveryNotice from "./DraftRecoveryNotice.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 /** Retained facts and local/user-metadata actions only. */
 export default function DeletedSession(props: {
@@ -9,21 +12,47 @@ export default function DeletedSession(props: {
   notice: string;
   facts: { label: string; value: string; description?: string }[];
   draftNotice?: string;
+  draft?: Draft;
+  recoveries?: readonly DraftRecovery[];
   retained?: { owner: string; value: string }[];
   copy(): void;
   remove?: () => void;
   close?: () => void;
 }): import("solid-js").Element {
   return (
-    <section
+    <ScrollRegion
+      as="section"
       ref={props.ref}
-      class={[scrollRegion(), "otk-deleted-session"]}
+      class="otk-deleted-session"
       aria-label="Deleted session"
     >
       <h1>{props.title}</h1>
       <p>{props.notice}</p>
       <Show when={props.draftNotice}>
         <p role="status">{props.draftNotice}</p>
+      </Show>
+      <Show when={props.recoveries?.length}>
+        <ComposerNotice>
+          <For each={props.recoveries}>
+            {(recovery) => <DraftRecoveryNotice recovery={recovery} />}
+          </For>
+        </ComposerNotice>
+      </Show>
+      <Show when={props.draft?.input}>
+        {(text) => (
+          <label class="otk-deleted-draft">
+            Unsent draft
+            <textarea readonly value={text()} />
+          </label>
+        )}
+      </Show>
+      <Show when={props.draft?.editor?.text}>
+        {(text) => (
+          <label class="otk-deleted-draft">
+            Unsent editor text
+            <textarea readonly value={text()} />
+          </label>
+        )}
       </Show>
       <For each={props.retained ?? []} keyed={(input) => input.owner}>
         {(input) => (
@@ -56,6 +85,6 @@ export default function DeletedSession(props: {
           </button>
         </Show>
       </div>
-    </section>
+    </ScrollRegion>
   );
 }

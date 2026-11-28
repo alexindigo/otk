@@ -7,18 +7,20 @@ import {
   Show,
 } from "solid-js";
 import {
+  age,
   CommandHub,
+  createDisclosures,
+  createDrafts,
   createInbox,
   createNativeSources,
   createSessionRename,
   createSessionSubmission,
   createTabs,
   createTaskActions,
-  duration,
+  elapsed,
   exactCount,
   type MergedEntry,
-  NotificationHub,
-  relativeTime,
+  type SessionDelivery,
   type SidecarState,
 } from "@otk/client";
 import {
@@ -37,6 +39,7 @@ import {
 } from "@otk/protocol";
 import {
   ActivityIndicator,
+  attentionBadge,
   CommandProvider,
   ConnectionLight,
   createUiRegistries,
@@ -58,7 +61,6 @@ import {
   ProjectTabs,
   Prompt,
   QuestionDock,
-  registerBadgeChannel,
   registerEditTool,
   registerGenericTool,
   registerPatchTool,
@@ -67,10 +69,12 @@ import {
   registerToolPart,
   registerUnknownPart,
   RightPanel,
+  Select,
   SessionProvider,
   Setup,
   Sidebar,
   solidState,
+  TimeText,
   ToolLine,
   ToolOutput,
   ToolPath,
@@ -174,6 +178,7 @@ export function PickerLifetime(): Element {
     { key: "beta", value: "exact beta", label: "Beta choice" },
   ]);
   const [picked, setPicked] = createSignal("");
+  const [choice, setChoice] = createSignal("alpha");
   const search = new URL(location.href).searchParams.has("search");
   return (
     <CommandProvider commands={new CommandHub()}>
@@ -204,6 +209,17 @@ export function PickerLifetime(): Element {
           Update surviving choice
         </button>
         <output data-picked>{picked()}</output>
+        <Select
+          label="Choice"
+          name="choice"
+          value={choice()}
+          onValue={setChoice}
+          options={[
+            { value: "alpha", label: "Alpha" },
+            { value: "beta", label: "Beta", unavailable: "Unavailable" },
+            { value: "gamma", label: "Gamma" },
+          ]}
+        />
         <ListPicker
           label="Live catalog"
           trigger="Choose"
@@ -225,6 +241,7 @@ export function LayoutTabs(props: { onTheme(id: string): void }): Element {
   const commands = new CommandHub();
   const entries: MergedEntry[] = Array.from({ length: 12 }, (_, i) => ({
     id: `tstv1-independent-${i}`,
+    parentID: i ? `tstv1-independent-${i - 1}` : undefined,
     sidecarId: "independent",
     directory: "/independent",
     projectID: "independent",
@@ -598,29 +615,16 @@ export function LayoutControls(props: { onTheme(id: string): void }): Element {
 
 export function MetadataPolicy(): Element {
   const commands = new CommandHub();
-  const hub = new NotificationHub(
-    () => ({ channels: ["badge"] }),
-    async () => {},
-    () => {},
-  );
-  const release = registerBadgeChannel(hub);
-  hub.publish({
-    id: "attention",
-    kind: "permission",
-    title: "Needs attention",
-    sessionRef: { sidecar: "external", session: "tstv1-external" },
-    actions: [],
-  });
-  onCleanup(() => {
-    hub.stop();
-    release();
-  });
+  const badge = attentionBadge();
+  badge.update(1);
+  onCleanup(badge.stop);
   return (
     <CommandProvider commands={commands}>
       <main>
         <h1>Independent metadata consumer</h1>
         <output data-format>
-          {exactCount(1234567)} {duration(1234)} {relativeTime(0, 90_000_000)}
+          {exactCount(1234567)} <TimeText time={elapsed(1234)} />{" "}
+          <TimeText time={age(0, 90_000_000)} />
         </output>
         <PathProvider paths={{ style: "win32", separator: "\\" }}>
           <div data-path>
@@ -757,7 +761,7 @@ export function InteractionFailures(
   registerGenericTool(ui.tools);
   registerUnknownPart(ui.parts);
   registerTextPart(ui.parts);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   const [draft, setDraft] = createSignal(emptyDraft()),
     [kind, setKind] = createSignal("async");
   const reject = (source: string) => {
@@ -846,20 +850,37 @@ export function InteractionFailures(
                     id: "part",
                     label: "Extension label must not render",
                   },
-                  {
-                    kind: "tool",
-                    id: "tool",
-                    call: {
-                      tool: "consumer.unregistered",
-                      callID: "tool",
-                      status: "completed",
-                      time: {},
-                      output:
-                        "Common output survives an unregistered extension.",
-                      outputTruncated: "collision",
-                    },
-                  },
                 ],
+              }}
+              prefs={DEFAULT_PREFS}
+              permissions={[]}
+              paneWidth={736}
+              queued={false}
+              onOpenChild={() => {}}
+            />
+            {
+              /* D74: standalone native context keeps its own record fold;
+              * the assistant Work pane is not part of this public consumer. */
+            }
+            <Message
+              sidecarId="probe"
+              message={{
+                id: "tool-record",
+                sessionID: "probe",
+                role: "context",
+                time: { created: 1 },
+                parts: [{
+                  kind: "tool",
+                  id: "tool",
+                  call: {
+                    tool: "consumer.unregistered",
+                    callID: "tool",
+                    status: "completed",
+                    time: {},
+                    output: "Common output survives an unregistered extension.",
+                    outputTruncated: "collision",
+                  },
+                }],
               }}
               prefs={{ ...DEFAULT_PREFS, genericToolOutput: true }}
               permissions={[]}
@@ -880,7 +901,10 @@ export function InteractionFailures(
               prefs: () => DEFAULT_PREFS,
               dirty() {},
               act: (action) => action(),
-              submit: (action) => action(),
+              submit: async (action) => {
+                await action(undefined, () => {}, "msg_fixture");
+                return { kind: "committed", messageID: "msg_fixture" };
+              },
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             }}
@@ -888,7 +912,6 @@ export function InteractionFailures(
             <Prompt
               value={draft()}
               connected
-              busy={false}
               onChange={(update) => {
                 let next = draft();
                 setDraft((current) =>
@@ -897,7 +920,8 @@ export function InteractionFailures(
                 return next;
               }}
               onSubmit={() => Promise.resolve()}
-              onAbort={() => Promise.resolve()}
+              activity={() => ({ running: false, unstarted: 0 })}
+              onStop={() => Promise.resolve()}
             />
           </SessionProvider>
         </main>
@@ -970,12 +994,26 @@ export function ErrorBoundaries(props: { onTheme(id: string): void }): Element {
   );
 }
 
+// This alternate consumer has no native transcript. Model the successful
+// delivery boundary, while the real submission and draft owners do the work.
+export const deliverFixturePrompt: SessionDelivery["send"] = async (
+  action,
+  _entry,
+  id = "msg_fixture",
+  custody,
+) => {
+  await action(() => custody?.admit?.(id, () => {}));
+  const outcome = { kind: "committed", messageID: id } as const;
+  custody?.outcome(outcome);
+  return outcome;
+};
+
 export function SecondaryFailures(
   props: { onTheme(id: string): void },
 ): Element {
   const commands = new CommandHub(), ui = createUiRegistries();
-  const [draft, setDraft] = createSignal(emptyDraft()),
-    [sent, setSent] = createSignal(0),
+  const drafts = createDrafts(solidState);
+  const [sent, setSent] = createSignal(0),
     [diagnostic, setDiagnostic] = createSignal("");
   const inbox = createInbox(
     {
@@ -986,9 +1024,11 @@ export function SecondaryFailures(
   );
   const submit = createSessionSubmission({
     sessionID: "probe",
+    delivery: { send: deliverFixturePrompt },
     directory: () => Promise.resolve("/project"),
     inbox,
-    tabs: () => ({ send: (_id, action) => action() }),
+    tabs: () => ({ ensureTask: () => Promise.withResolvers<never>().promise }),
+    report: (error) => setDiagnostic(errorMessage(error)),
   });
   return (
     <CommandProvider commands={commands}>
@@ -1046,18 +1086,27 @@ export function SecondaryFailures(
             }}
           >
             <Prompt
-              value={draft()}
-              onChange={(change) => {
-                setDraft(change);
-                return draft();
-              }}
+              value={drafts.get("probe")}
+              onChange={drafts.writer("probe")}
+              captureSend={(draft) => drafts.captureSend("probe", draft)}
               connected
-              onSubmit={() =>
-                submit(() => {
-                  setSent((value) => value + 1);
-                  return Promise.resolve();
-                })}
-              onAbort={() => Promise.resolve()}
+              onSubmit={async (_parts, _mode, _selection, capture) => {
+                await submit(
+                  (_options, dispatch, messageID) => {
+                    dispatch();
+                    setSent((value) => value + 1);
+                    return Promise.resolve({
+                      messageID,
+                      state: "accepted",
+                    });
+                  },
+                  "composer",
+                  undefined,
+                  capture,
+                );
+              }}
+              activity={() => ({ running: false, unstarted: 0 })}
+              onStop={() => Promise.resolve()}
             />
           </SessionProvider>
         </main>
@@ -1070,6 +1119,7 @@ export function SecondaryFailures(
 export default function SharedControls(
   props: { onTheme(id: string): void },
 ): Element {
+  const tree = createDisclosures({ factory: solidState });
   const registry = createPreferences(),
     commands = new CommandHub(),
     ui = createUiRegistries();
@@ -1134,7 +1184,18 @@ export default function SharedControls(
   ui.panels.register({
     id: "probe",
     title: "Probe panel",
-    icon: "P",
+    icon: () => (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect
+          x="3"
+          y="3"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+        />
+      </svg>
+    ),
     component: () => <p>Independent panel content</p>,
   });
   ui.prompt.register({
@@ -1259,6 +1320,7 @@ export default function SharedControls(
         </div>
         <div style={{ display: "flex", height: "220px" }}>
           <ProjectInbox
+            disclosure={tree}
             projects={[]}
             duplicateName={() => false}
             servers={[]}
@@ -1287,7 +1349,10 @@ export default function SharedControls(
             prefs,
             dirty: () => {},
             act: (action) => action(),
-            submit: (action) => action(),
+            submit: async (action) => {
+              await action(undefined, () => {}, "msg_fixture");
+              return { kind: "committed", messageID: "msg_fixture" };
+            },
             history: () => Promise.resolve([]),
             attachments: (parts) => Promise.resolve(parts),
             rpc: () => Promise.reject(new Error("Unexpected RPC")),
@@ -1301,7 +1366,8 @@ export default function SharedControls(
             }}
             connected
             onSubmit={() => Promise.resolve()}
-            onAbort={() => Promise.resolve()}
+            activity={() => ({ running: false, unstarted: 0 })}
+            onStop={() => Promise.resolve()}
           />
           <Show when={mounted()}>
             <QuestionDock

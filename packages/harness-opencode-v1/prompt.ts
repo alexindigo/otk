@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeModel, nativeVariant } from "./selection.ts";
 import { fromFileUrl, relative, resolve, toFileUrl } from "@std/path";
 import {
   type AttachmentPolicy,
@@ -9,12 +10,31 @@ import {
   uploadSize,
 } from "@otk/protocol";
 import { HarnessError, type PromptCapability } from "@otk/harness";
-import type { Client } from "./client.ts";
+import { type Client, HttpFailure, NativeRequestFailure } from "./client.ts";
+import { Messages } from "./messages.ts";
 import type { Directory } from "./directory.ts";
 import type { RawPromptPart } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { attachmentMime } from "./attachment-mime.ts";
 import { submissionID } from "./submission-id.ts";
+
+// Withdrawal may stop waiting for a launch it does not own. The launch keeps
+// its own cancellation and can still establish the native admission outcome.
+async function observeLaunch(
+  launch: Promise<Response>,
+  signal: AbortSignal,
+): Promise<void> {
+  signal.throwIfAborted();
+  const interrupted = Promise.withResolvers<never>();
+  const abort = () => interrupted.reject(signal.reason);
+  signal.addEventListener("abort", abort, { once: true });
+  try {
+    await Promise.race([launch, interrupted.promise]);
+  } finally {
+    signal.removeEventListener("abort", abort);
+  }
+}
+
 export function prompt(
   client: Client,
   directory: Directory,
@@ -23,17 +43,35 @@ export function prompt(
   submitted?: (
     sessionID: string,
     messageID: string,
-    origin: import("@otk/protocol").RequestOrigin,
+    origin?: import("@otk/protocol").RequestOrigin,
   ) => void,
+  reader = new Messages(client, directory.cached),
+  dispatched: (sessionID: string, messageID: string) => boolean = () => false,
 ): PromptCapability {
+  const pending = new Map<string, Promise<Response>>();
+  const abortNative = async (
+    id: string,
+    dir: string | undefined,
+    operation?: OperationContext,
+    signal?: AbortSignal,
+  ) => {
+    await client.json(`/session/${encodeURIComponent(ids.decode(id))}/abort`, {
+      method: "POST",
+      ...(operation ? { classification: "effect" as const, operation } : {}),
+      query: { directory: dir },
+      signal,
+    });
+    cancel(id);
+  };
   return {
     async prompt(input, operation) {
       const dir = await directory.resolve(input.sessionID);
       const parts = await mapPromptParts(input.parts, dir, operation, policy);
       const origin = operation?.key.origin;
-      const messageID = submitted && origin ? submissionID() : undefined;
-      if (messageID && origin) submitted!(input.sessionID, messageID, origin);
-      await client.request(
+      const messageID = input.messageID ?? submissionID();
+      submitted?.(input.sessionID, messageID, origin);
+      const key = `${input.sessionID}/${messageID}`;
+      const request = client.request(
         `/session/${
           encodeURIComponent(ids.decode(input.sessionID))
         }/prompt_async`,
@@ -44,29 +82,110 @@ export function prompt(
             : {}),
           query: { directory: dir },
           body: {
-            ...(messageID ? { messageID } : {}),
+            messageID,
             parts,
-            variant: input.variant,
+            variant: nativeVariant(input.variant),
             agent: input.agent,
-            model: input.model
-              ? { providerID: input.model.provider, modelID: input.model.model }
-              : undefined,
+            model: input.model ? nativeModel(input.model) : undefined,
           },
         },
       );
+      pending.set(key, request);
+      try {
+        await request;
+      } finally {
+        if (pending.get(key) === request) pending.delete(key);
+      }
+      return { messageID, state: "accepted" };
     },
     async abort(id, operation) {
-      await client.json(
-        `/session/${encodeURIComponent(ids.decode(id))}/abort`,
-        {
-          method: "POST",
-          ...(operation
-            ? { classification: "effect" as const, operation }
-            : {}),
-          query: { directory: directory.cached(id) },
-        },
-      );
-      cancel(id);
+      await abortNative(id, directory.cached(id), operation);
+    },
+    async withdraw(id, messageID, operation) {
+      const request = pending.get(`${id}/${messageID}`);
+      const signal = AbortSignal.any([
+        AbortSignal.timeout(10_000),
+        ...(operation ? [operation.signal] : []),
+      ]);
+      let rounds = 0;
+      try {
+        if (request) {
+          try {
+            await observeLaunch(request, signal);
+          } catch (error) {
+            signal.throwIfAborted();
+            if (
+              error instanceof OperationFailure && error.outcome === "rejected"
+            ) return { state: "absent" };
+          }
+        }
+        const native = ids.decode(id),
+          dir = await directory.resolve(id, signal);
+        while (rounds < 3) {
+          await abortNative(id, dir, operation, signal);
+          const status = await client.json<Record<string, { type: string }>>(
+            "/session/status",
+            {
+              query: { directory: dir },
+              signal,
+            },
+          );
+          if (status[native] && status[native].type !== "idle") {
+            rounds++;
+            continue;
+          }
+          const replies = new Set<string>();
+          const users = new Set<string>();
+          for await (const { info } of reader.scan(id, dir, signal)) {
+            if (
+              info.role === "assistant" && info.parentID &&
+              info.parentID >= messageID
+            ) replies.add(info.parentID);
+            if (info.role === "user" && info.id >= messageID) {
+              users.add(info.id);
+            }
+          }
+          if (
+            users.has(messageID) &&
+            [...replies].some((parent) => users.has(parent))
+          ) return { state: "started" };
+          if (!users.has(messageID)) {
+            if (!request && !dispatched(id, messageID)) {
+              return { state: "absent" };
+            }
+            // HTTP 204 acknowledges the async handler, not the message write.
+            await new Promise<void>((resolve) => setTimeout(resolve, 100));
+            signal.throwIfAborted();
+            continue;
+          }
+          try {
+            await client.json(
+              `/session/${encodeURIComponent(native)}/message/${
+                encodeURIComponent(messageID)
+              }`,
+              {
+                method: "DELETE",
+                query: { directory: dir },
+                signal,
+                ...(operation
+                  ? { classification: "effect" as const, operation }
+                  : {}),
+              },
+            );
+            return { state: "withdrawn" };
+          } catch (e) {
+            const cause = e instanceof NativeRequestFailure ? e.original : e;
+            if (
+              !(cause instanceof HttpFailure) ||
+              cause.detail.kind !== "SessionBusyError"
+            ) throw e;
+            rounds++;
+          }
+        }
+      } catch (e) {
+        if (operation?.signal.aborted || !signal.aborted) throw e;
+      }
+      return { state: "unconfirmed" };
     },
   };
 }

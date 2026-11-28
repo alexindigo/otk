@@ -4,7 +4,14 @@
     "load": [
       "first-page_test.ts",
       "background-viewers_test.ts",
-      "view-lease_test.ts"
+      "view-lease_test.ts",
+      "browser-native_test.ts",
+      "demand-loading_test.ts",
+      "latest-native-authority_test.ts",
+      "v2-discovery_test.ts",
+      "v2-index_test.ts",
+      "worktree-topology_test.ts",
+      "storage-full_test.ts"
     ],
     "composer": [
       "attachment-mime_test.ts",
@@ -15,7 +22,12 @@
       "native-selection_test.ts",
       "shell_test.ts",
       "catalog-file-policy_test.ts",
-      "directory-catalogs_test.ts"
+      "directory-catalogs_test.ts",
+      "browser-native_test.ts",
+      "picker-scale_test.ts",
+      "v2-boundaries-native_test.ts",
+      "v2-catalogs_test.ts",
+      "send-delivery_test.ts"
     ],
     "messages": [
       "bounded_history_test.ts",
@@ -24,7 +36,16 @@
       "session-digest_test.ts",
       "enrichment-order_test.ts",
       "frame_budget_test.ts",
-      "passive-safety_test.ts"
+      "passive-safety_test.ts",
+      "demand-loading_test.ts",
+      "disclosure-failures-native_test.ts",
+      "migrated-history-native_test.ts",
+      "request-failures-native_test.ts",
+      "v1-records-native_test.ts",
+      "v2-boundaries-native_test.ts",
+      "v2-helper-scalars_test.ts",
+      "v2-transcripts_test.ts",
+      "send-delivery_test.ts"
     ],
     "sessions": [
       "supervision-native_test.ts",
@@ -34,18 +55,45 @@
       "project-location_test.ts",
       "session_actions_test.ts",
       "task-membership_test.ts",
-      "identity-batch_test.ts"
+      "identity-batch_test.ts",
+      "demand-loading_test.ts",
+      "project-identity-native_test.ts",
+      "session-hierarchy-native_test.ts",
+      "v2-delete-independent_test.ts",
+      "v2-discovery_test.ts",
+      "v2-index_test.ts",
+      "v2-notices-native_test.ts",
+      "v2-session-actions_test.ts",
+      "v2-session-create_test.ts",
+      "v2-shell-activity_test.ts",
+      "worktree-topology_test.ts",
+      "helper-delivery_test.ts"
     ],
-    "revert": ["session_actions_test.ts", "history_test.ts"],
+    "revert": [
+      "session_actions_test.ts",
+      "history_test.ts",
+      "revert-roundtrip-native_test.ts",
+      "v2-session-actions_test.ts"
+    ],
     "attention": [
       "approval-startup_test.ts",
       "supervision-native_test.ts",
       "permissions_test.ts",
       "questions_test.ts",
       "session_auto_test.ts",
-      "children_test.ts"
+      "children_test.ts",
+      "browser-native_test.ts",
+      "v2-actions_test.ts",
+      "v2-notices-native_test.ts",
+      "v2-shell-activity_test.ts",
+      "helper-delivery_test.ts"
     ],
-    "menus": ["commands_test.ts", "prefs_test.ts"],
+    "menus": [
+      "commands_test.ts",
+      "prefs_test.ts",
+      "picker-scale_test.ts",
+      "v2-catalogs_test.ts"
+    ],
     "visual": ["prefs_test.ts", "compiled-static_test.ts"],
     "transport": [
       "approval-startup_test.ts",
@@ -70,14 +118,37 @@
       "request-contract_test.ts",
       "request-restart_test.ts",
       "request-wire_test.ts",
-      "sidecar_test.ts"
+      "sidecar_test.ts",
+      "demand-loading_test.ts",
+      "failure-contract-native_test.ts",
+      "latest-native-authority_test.ts",
+      "request-failures-native_test.ts",
+      "v2-foundation_test.ts",
+      "storage-full_test.ts"
     ],
     "harness": [
       "fixture_providers_test.ts",
       "fixture-boundaries_test.ts",
       "fixture-lifetime_test.ts",
       "fixture-readiness_test.ts",
-      "provider-cache_test.ts"
+      "provider-cache_test.ts",
+      "fixture-ownership_test.ts",
+      "harness-probe_test.ts",
+      "migrated-history-native_test.ts",
+      "v1-records-native_test.ts",
+      "v2-actions_test.ts",
+      "v2-catalogs_test.ts",
+      "v2-delete-independent_test.ts",
+      "v2-discovery_test.ts",
+      "v2-fixture-readiness_test.ts",
+      "v2-foundation_test.ts",
+      "v2-helper-scalars_test.ts",
+      "v2-index_test.ts",
+      "v2-session-actions_test.ts",
+      "v2-session-create_test.ts",
+      "v2-shell-activity_test.ts",
+      "v2-transcripts_test.ts",
+      "helper-delivery_test.ts"
     ],
     "terminal": [
       "terminals_daemon_test.ts",
@@ -139,13 +210,6 @@
       "themes": "always"
     },
     {
-      "id": 7,
-      "pattern": "^packages/(native|opencode|harness|harness-opencode-v1|store|protocol)/|^core/|^(main|application)\\.ts$|^defaults/",
-      "broad": true,
-      "themes": "always",
-      "milestone": true
-    },
-    {
       "id": 8,
       "pattern": "^scripts/|^tests/(support|browser/(fixtures|pages))/|(^|/)(deno\\.(json|lock)|package(-lock)?\\.json|.*config\\.[^/]+)$|^tests/browser/(areas|quarantine)\\.json$",
       "broad": true,
@@ -159,7 +223,7 @@
     },
     {
       "id": 10,
-      "pattern": "^(docs/.*\\.md|[^/]+\\.md|LICENSE)$",
+      "pattern": "(^|/)[^/]*\\.md$|^LICENSE$",
       "areas": []
     },
     {
@@ -171,6 +235,94 @@
       "id": 12,
       "pattern": "^packages/client/(index|server-resources)\\.ts$",
       "broad": true
+    },
+    {
+      "id": 13,
+      "pattern": "^core/features/(prompt|prompt-parts|history|files|agents|models|catalogs|commands|frecency|forms)\\.ts$",
+      "areas": ["composer", "menus"]
+    },
+    {
+      "id": 14,
+      "pattern": "^core/features/(approvals|permissions|questions|request-attention|inbox|inbox-receipts)\\.ts$",
+      "areas": ["attention", "sessions"]
+    },
+    {
+      "id": 15,
+      "pattern": "^core/features/(sessions|session-actions|session-ids|session-receipts|navigation-default|project-edit|project-scan|layout|shell)\\.ts$",
+      "areas": ["sessions", "transport"]
+    },
+    {
+      "id": 16,
+      "pattern": "^core/features/revert\\.ts$",
+      "areas": ["revert", "messages"]
+    },
+    {
+      "id": 17,
+      "pattern": "^core/features/(prefs|storage|usage)\\.ts$",
+      "areas": ["visual", "menus", "sessions"]
+    },
+    {
+      "id": 18,
+      "pattern": "^core/features/(digests|digest-progress|source|resources|opencode-v2-upgrade)\\.ts$",
+      "areas": ["load", "messages", "harness"]
+    },
+    {
+      "id": 19,
+      "pattern": "^core/(index|digest)/",
+      "areas": ["load", "attention", "sessions"],
+      "milestone": true
+    },
+    {
+      "id": 20,
+      "pattern": "^core/(ws|http|requests|auth|config|static)/|^core/(service|mod|diagnostics|diagnostics-log)\\.ts$|^(main|application|harness-selection)\\.ts$",
+      "areas": ["transport", "load"],
+      "milestone": true
+    },
+    {
+      "id": 21,
+      "pattern": "^packages/store/",
+      "areas": ["sessions", "messages", "load"],
+      "milestone": true
+    },
+    {
+      "id": 22,
+      "pattern": "^packages/harness(-opencode-v1|-opencode-v2-server)?/",
+      "areas": ["harness", "messages", "sessions", "transport"],
+      "milestone": true
+    },
+    {
+      "id": 23,
+      "pattern": "^packages/protocol/(content|messages)",
+      "areas": ["messages"],
+      "milestone": true
+    },
+    {
+      "id": 24,
+      "pattern": "^packages/protocol/inbox",
+      "areas": ["attention", "sessions"],
+      "milestone": true
+    },
+    {
+      "id": 25,
+      "pattern": "^packages/protocol/requests",
+      "areas": ["transport", "composer"],
+      "milestone": true
+    },
+    {
+      "id": 26,
+      "pattern": "^packages/protocol/(preferences|catalogs|capabilities)/",
+      "areas": ["menus", "composer", "visual"],
+      "milestone": true
+    },
+    {
+      "id": 27,
+      "pattern": "^defaults/",
+      "areas": ["visual", "menus", "composer"]
+    },
+    {
+      "id": 28,
+      "pattern": "^tests/(unit|arch)/",
+      "areas": []
     }
   ]
 }

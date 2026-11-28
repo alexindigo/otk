@@ -33,7 +33,9 @@ Deno.test("unrelated request feedback is not suppressed by rollback state", () =
     kind: "pending",
     text: "Other action",
   };
-  assertEquals(revertPresentation(state, feedback), { state, feedback });
+  const result = revertPresentation(state, feedback);
+  assertEquals(result.state, state);
+  assertEquals(result.feedback, feedback);
 });
 for (const outcome of ["rejected", "unknown"] as const) {
   Deno.test(`rollback ${outcome} preserves its single FP1 failure instead of generic pending`, () => {
@@ -57,8 +59,8 @@ for (const outcome of ["rejected", "unknown"] as const) {
       error: value,
     };
     const result = revertPresentation(state, feedback);
-    assertEquals(result.feedback, feedback);
-    assertEquals(result.state.pending, undefined);
-    assertEquals(result.state.error, undefined);
+    assertEquals(result.feedback, undefined);
+    assertEquals(result.state, state);
+    assertEquals(result.state.error, value);
   });
 }

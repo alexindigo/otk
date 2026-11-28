@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
+import { expectPrimaryBlocked, send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -13,7 +13,7 @@ test.describe("live hints", () => {
       await openSession(state, page, "tstv1-core");
       const lamp = page.locator('[data-crumb="tstv1-core"] .otk-status-light');
       await expect(lamp).toHaveAttribute("data-state", "none");
-      const button = page.locator(".otk-prompt button[type=submit]");
+      const button = send(page);
       const defaultTitle =
         "Send (Enter); Shift+Enter for newline; Esc twice to interrupt";
       const reboundTitle =
@@ -38,7 +38,14 @@ test.describe("live hints", () => {
       await expect(page.locator('[data-binding="prompt.submit"] kbd'))
         .toHaveText("Ctrl+Enter");
       await expect(button).toHaveAttribute("title", reboundTitle);
-      await expect(page.locator(".otk-sidebar-commands button").first())
+      // Style7 ProjectInbox owns navigation (style7fix note; decision 54).
+      await expect(
+        page.getByRole("button", {
+          name: "Search commands",
+          exact: true,
+          includeHidden: true,
+        }),
+      )
         .toHaveAttribute("title", "Search commands (Ctrl+j)");
       await page.keyboard.press("Escape");
       await page.reload();
@@ -113,8 +120,12 @@ test.describe("live hints", () => {
     await edit.click();
     const editor = page.locator("textarea[name=editor]");
     await expect(editor).toHaveValue("Keep this prompt");
-    await expect(page.locator("dialog[open] .otk-surface-title button"))
-      .toHaveText("Close");
+    const close = page.locator("dialog[open] .otk-surface-title").getByRole(
+      "button",
+      { name: "Close Edit prompt", exact: true },
+    );
+    await expect(close.locator("svg")).toBeVisible();
+    await expect(close).toHaveText("");
     await expect(page.locator(".otk-editor p")).toHaveText(
       "Save to keep changes",
     );
@@ -142,7 +153,12 @@ test.describe("permission widget keys", () => {
     tag: ["@menus", "@isolated"],
   }, async ({ isolatedState: state, page }) => {
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    const buttons = page.locator(".otk-permission-actions button");
+    // WP7a adds local dismissal without changing the three remote actions.
+    await expect(page.locator(".otk-permission-actions [data-request-dismiss]"))
+      .toBeVisible();
+    const buttons = page.locator(
+      ".otk-permission-actions button:not([data-request-dismiss])",
+    );
     await expect(buttons).toHaveCount(3);
     expect(
       await buttons.evaluateAll((items) =>
@@ -185,7 +201,7 @@ test.describe("question widget keys", () => {
     await expect(page.locator(".otk-question-actions button").nth(1))
       .toHaveAttribute(
         "title",
-        "Skip question (Esc with question controls focused)",
+        "Reject this question without answering", // WP7a: Escape is local dismissal.
       );
     const answer = page.locator("textarea[name=question-answer]");
     await answer.fill("Keep my answer");
@@ -195,6 +211,15 @@ test.describe("question widget keys", () => {
     expect((await state.observe<{ answers: unknown[] }>()).answers).toEqual([]);
     await expect(answer).toHaveValue("Keep my answer");
     await page.keyboard.press("Escape");
+    await expect(page.locator(".otk-question-dock")).toHaveCount(0);
+    expect((await state.observe<{ answers: unknown[] }>()).answers).toEqual([]);
+    await page.getByRole("button", {
+      name: "Pending question: reopen",
+      exact: true,
+    }).click();
+    await expect(answer).toHaveValue("Keep my answer");
+    await page.getByRole("button", { name: "Skip question", exact: true })
+      .click();
     await expect.poll(async () =>
       (await state.observe<{ answers: unknown[] }>()).answers
     ).toEqual([null]);

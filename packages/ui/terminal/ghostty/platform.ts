@@ -5,10 +5,10 @@ export function isMacPlatform(platform: string): boolean {
 }
 
 export function observeResize(
-  element: Element,
+  elements: readonly Element[],
   resize: () => void,
 ): () => void {
   const observer = new ResizeObserver(resize);
-  observer.observe(element);
+  for (const element of elements) observer.observe(element);
   return () => observer.disconnect();
 }

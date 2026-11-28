@@ -1,12 +1,25 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Blocks.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
-import { For, Match, Show, Switch } from "solid-js";
+import ScrollRegion from "./ScrollRegion.tsx";
+import {
+  createContext,
+  createMemo,
+  For,
+  Match,
+  Show,
+  Switch,
+  useContext,
+} from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
-import HighlightedCode from "./Code.tsx";
+import { hrefPath, pathSegments, textRuns } from "@otk/client";
+import CodeBlock from "./CodeBlock.tsx";
+import InlineImage from "./InlineImage.tsx";
 import TaskMarker from "./TaskMarker.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
+import PathLink, { PathContext } from "./PathLink.tsx";
+import { usePathSemantics } from "./PathProvider.tsx";
+import { contextTarget } from "./context-target.ts";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;
 const inlineOf = <K extends Inline["i"]>(inline: Inline, kind: K) =>
@@ -23,18 +36,75 @@ function safeHref(href: string): string | undefined {
   }
 }
 export function Inlines(props: { items: Inline[] }) {
+  const context = useContext(PathContext);
   return (
-    <For each={props.items} keyed={false}>
+    <For
+      each={context && !context.inLink ? textRuns(props.items) : props.items}
+      keyed={false}
+    >
       {(item) => <InlineView item={item()} />}
     </For>
   );
 }
 type InlineProps<K extends Inline["i"]> = { item: Inline & { i: K } };
+const TableWrap = createContext(false);
+function InlineText(props: { text: string }) {
+  if (!useContext(TableWrap)) return <>{props.text}</>;
+  // Keep path components intact without changing the displayed/copied text.
+  // This also allows URLs to wrap between path segments, not inside them.
+  return (
+    <For each={props.text.split(/(?<=[/\\])(?=[^\s/\\])/u)} keyed={false}>
+      {(chunk, index) => <>{index > 0 && <wbr />}{chunk()}</>}
+    </For>
+  );
+}
 function TextInline(props: InlineProps<"text">) {
-  return <>{props.item.text}</>;
+  const context = useContext(PathContext);
+  if (!context || context.inLink) return <InlineText text={props.item.text} />;
+  return (
+    <For
+      each={pathSegments(
+        props.item.text,
+        context.prompt ? "prompt" : "prose",
+        context.style,
+      )}
+      keyed={false}
+    >
+      {(segment) => (
+        <Show
+          when={segment().mention}
+          fallback={<InlineText text={segment().text} />}
+        >
+          {(mention) => (
+            <PathLink mention={mention()}>
+              <InlineText text={segment().text} />
+            </PathLink>
+          )}
+        </Show>
+      )}
+    </For>
+  );
 }
 function CodeInline(props: InlineProps<"code">) {
-  return <code class="otk-prose-code">{props.item.text}</code>;
+  const context = useContext(PathContext);
+  const target = contextTarget(() => ({
+    kind: "code-span",
+    data: { text: props.item.text },
+  }));
+  const code = () => (
+    <code class="otk-prose-code" ref={target}>
+      <InlineText text={props.item.text} />
+    </code>
+  );
+  return (
+    <Show
+      when={context && !context.inLink &&
+        pathSegments(props.item.text, "code", context.style)[0]?.mention}
+      fallback={code()}
+    >
+      {(mention) => <PathLink mention={mention()}>{code()}</PathLink>}
+    </Show>
+  );
 }
 function StrongInline(props: InlineProps<"strong">) {
   return (
@@ -58,28 +128,40 @@ function DelInline(props: InlineProps<"del">) {
   );
 }
 function LinkInline(props: InlineProps<"link">) {
-  return (
-    <a
-      class="otk-prose-link"
-      href={safeHref(props.item.href)}
-      target="_blank"
-      rel="noopener noreferrer"
+  const context = useContext(PathContext);
+  const label = () => (
+    <PathContext
+      value={{
+        get streaming() {
+          return !!context?.streaming;
+        },
+        inLink: true,
+      }}
     >
       <Inlines items={props.item.inline} />
-    </a>
+    </PathContext>
+  );
+  return (
+    <Show
+      when={context && !context.inLink &&
+        hrefPath(props.item.href, context.style)}
+      fallback={
+        <a
+          class="otk-prose-link"
+          href={safeHref(props.item.href)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {label()}
+        </a>
+      }
+    >
+      {(mention) => <PathLink mention={mention()}>{label()}</PathLink>}
+    </Show>
   );
 }
 function ImageInline(props: InlineProps<"image">) {
-  return (
-    <img
-      class="otk-prose-image"
-      src={props.item.src.startsWith("data:image/")
-        ? props.item.src
-        : safeHref(props.item.src)}
-      alt={props.item.alt}
-      loading="lazy"
-    />
-  );
+  return <InlineImage src={props.item.src} alt={props.item.alt} />;
 }
 function BreakInline() {
   return <br />;
@@ -114,11 +196,20 @@ function InlineView(props: { item: Inline }) {
     </Switch>
   );
 }
-function Paragraph(props: { block: Block & { b: "paragraph" } }) {
-  return (
+function Paragraph(
+  props: { block: Block & { b: "paragraph" }; compact?: boolean },
+) {
+  const paragraph = () => (
     <p class="otk-prose-paragraph">
       <Inlines items={props.block.inline} />
     </p>
+  );
+  return (
+    <Show when={props.compact} fallback={paragraph()}>
+      <ScrollRegion axis="x" horizontalTrack="in-flow">
+        {paragraph()}
+      </ScrollRegion>
+    </Show>
   );
 }
 function Heading(props: { block: Block & { b: "heading" } }) {
@@ -139,18 +230,24 @@ function Code(
   },
 ) {
   return (
-    <HighlightedCode
-      text={props.block.text}
-      lang={props.block.lang}
-      streaming={props.streaming}
-      revealFence={props.conceal === false}
+    <CodeBlock
+      source={{
+        kind: "fence",
+        text: props.block.text,
+        lang: props.block.lang,
+        streaming: props.streaming,
+      }}
+      reveal={props.conceal === false}
     />
   );
 }
 function List(props: { block: Block & { b: "list" }; conceal?: boolean }) {
   const Tag = dynamic(() => props.block.ordered ? "ol" : "ul");
   return (
-    <Tag start={props.block.ordered ? props.block.start : undefined}>
+    <Tag
+      class="otk-prose-list"
+      start={props.block.ordered ? props.block.start : undefined}
+    >
       <For each={props.block.items} keyed={false}>
         {(item) => (
           <li class={item().task ? "otk-prose-task-item" : undefined}>
@@ -176,54 +273,61 @@ function Quote(props: { block: Block & { b: "quote" }; conceal?: boolean }) {
 }
 function Table(props: { block: Block & { b: "table" } }) {
   return (
-    <div class={[scrollRegion("x"), "otk-table-scroll"]}>
-      <table>
-        <thead>
-          <tr>
-            <For each={props.block.header} keyed={false}>
-              {(cell, index) => (
-                <th
-                  style={{ "text-align": props.block.align[index] ?? "left" }}
-                >
-                  <Inlines items={cell()} />
-                </th>
+    <TableWrap value>
+      <ScrollRegion axis="x" horizontalTrack="in-flow" class="otk-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <For each={props.block.header} keyed={false}>
+                {(cell, index) => (
+                  <th
+                    style={{ "text-align": props.block.align[index] ?? "left" }}
+                  >
+                    <Inlines items={cell()} />
+                  </th>
+                )}
+              </For>
+            </tr>
+          </thead>
+          <tbody>
+            <For each={props.block.rows} keyed={false}>
+              {(row) => (
+                <tr>
+                  <For each={row()} keyed={false}>
+                    {(cell, index) => (
+                      <td
+                        style={{
+                          "text-align": props.block.align[index] ?? "left",
+                        }}
+                      >
+                        <Inlines items={cell()} />
+                      </td>
+                    )}
+                  </For>
+                </tr>
               )}
             </For>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.block.rows} keyed={false}>
-            {(row) => (
-              <tr>
-                <For each={row()} keyed={false}>
-                  {(cell, index) => (
-                    <td
-                      style={{
-                        "text-align": props.block.align[index] ?? "left",
-                      }}
-                    >
-                      <Inlines items={cell()} />
-                    </td>
-                  )}
-                </For>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
-    </div>
+          </tbody>
+        </table>
+      </ScrollRegion>
+    </TableWrap>
   );
 }
 function Rule() {
   return <hr class="otk-prose-rule" />;
 }
 function BlockView(
-  props: { block: Block; streaming?: boolean; conceal?: boolean },
+  props: {
+    block: Block;
+    streaming?: boolean;
+    conceal?: boolean;
+    compact?: boolean;
+  },
 ) {
   return (
     <Switch>
       <Match when={blockOf(props.block, "paragraph")}>
-        {(block) => <Paragraph block={block()} />}
+        {(block) => <Paragraph block={block()} compact={props.compact} />}
       </Match>
       <Match when={blockOf(props.block, "heading")}>
         {(block) => <Heading block={block()} />}
@@ -273,35 +377,54 @@ export default function Blocks(props: {
   blocks: Block[];
   streaming?: boolean;
   conceal?: boolean;
-  compact?: boolean;
+  prompt?: boolean;
 }): import("solid-js").Element {
+  const paths = usePathSemantics();
   return (
     <div
       class={["otk-text", {
         "otk-prose-unconcealed": props.conceal === false,
-        "otk-prose-compact": props.compact,
+        "otk-prose-compact": props.prompt,
       }]}
     >
       <ContentWindow
         items={props.blocks.map((block, index) => ({ block, index }))}
         key={(row) => String(row.index)}
         label="Source blocks"
-        render={(row) => (
-          <div
-            class={["otk-prose-block", {
-              "is-compact-start": props.compact && row().index === 0,
-              "is-compact-end": props.compact &&
-                row().index === props.blocks.length - 1,
-            }]}
-          >
-            <BlockView
-              block={row().block}
-              streaming={props.streaming &&
-                row().index === props.blocks.length - 1}
-              conceal={props.conceal}
-            />
-          </div>
-        )}
+        render={(row) => {
+          const streaming = createMemo(() =>
+            !!props.streaming && row().index === props.blocks.length - 1
+          );
+          return (
+            <div
+              class={["otk-prose-block", {
+                "is-compact-start": row().index === 0,
+                "is-compact-end": row().index === props.blocks.length - 1,
+              }]}
+            >
+              <PathContext
+                value={{
+                  get streaming() {
+                    return streaming();
+                  },
+                  get style() {
+                    return paths()?.style;
+                  },
+                  get prompt() {
+                    return props.prompt;
+                  },
+                }}
+              >
+                <BlockView
+                  block={row().block}
+                  streaming={streaming()}
+                  conceal={props.conceal}
+                  compact={props.prompt}
+                />
+              </PathContext>
+            </div>
+          );
+        }}
       />
     </div>
   );

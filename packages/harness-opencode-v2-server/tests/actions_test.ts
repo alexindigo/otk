@@ -141,21 +141,59 @@ Deno.test("V2 permissions preserve asking owner and distinguish decline from exp
     requestID: "per_1",
     reply: "reject",
   }, f.operation);
-  assertEquals(f.calls[1].body, {
-    decision: "reject",
+  assertEquals(
+    f.calls.length,
+    1,
+    "A retired identity never reaches native again",
+  );
+  assertEquals(f.fences(), 1);
+  f.pending.acceptPermission({ directory: "/repo" }, {
+    id: "per_feedback",
+    sessionID: "ses_helper",
+    action: "read",
+    resources: ["README.md"],
   });
-  assertEquals(f.fences(), 2);
   await f.pending.permissions.replyPermission({
     sessionID: helper,
     requestID: "per_feedback",
     reply: "reject",
     message: "Use the read tool instead",
   }, f.operation);
-  assertEquals(f.calls[2].body, {
+  assertEquals(f.calls[1].body, {
     decision: "reject",
     message: "Use the read tool instead",
   });
 });
+for (
+  const body of [
+    { _tag: "PermissionNotFoundError", message: "settled" },
+    { message: "already settled elsewhere" },
+  ]
+) {
+  Deno.test(`V2 permission 404 retires identity across stale inventory, events and replies: ${JSON.stringify(body)}`, async () => {
+    const f = fixture(), location = { directory: "/repo" };
+    const request = {
+      id: "per_gone",
+      sessionID: "ses_helper",
+      action: "read",
+      resources: ["README.md"],
+    };
+    f.pending.acceptPermission(location, request);
+    f.response(() => Promise.resolve(Response.json(body, { status: 404 })));
+    const reply = {
+      sessionID: helper,
+      requestID: request.id,
+      reply: "once" as const,
+    };
+    await f.pending.permissions.replyPermission(reply, f.operation);
+    assertEquals(f.pending.settled("permission", request.id), true);
+    f.pending.replacePermissions(location, [request]);
+    f.pending.acceptPermission(location, request);
+    await f.pending.permissions.replyPermission(reply, f.operation);
+    assertEquals(await f.pending.permissions.listPermissions(root), []);
+    assertEquals(f.calls.length, 1);
+  });
+}
 Deno.test("V2 global-owner forms retain location and typed answers, failures retain pending drafts", async () => {
   const f = fixture();
   f.pending.replace({ directory: "/repo" }, [], [{

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  type AcknowledgeScope,
+  entityKey,
+  entityRequiresVisibility,
+  entityRetainsVisibility,
+  type EntityState,
   errorMessage,
   type InboxBaseline,
   type InboxOp,
@@ -7,10 +12,11 @@ import {
   type IndexEntry,
   type IndexMetadata,
   isSessionID,
+  type ProjectMove,
   type ProjectRecord,
   type ProjectSummary,
   type ServerFrame,
-  type Supervision,
+  taskEntityID,
   type TaskRecord,
   type ViewLease,
 } from "@otk/protocol";
@@ -18,16 +24,21 @@ import { HarnessError } from "@otk/harness";
 import type {
   Checkouts,
   Finishes,
+  ProgramStore,
   Projects,
   ProjectTemplates,
   Seen,
   StoreWrite,
   Tasks,
 } from "@otk/store";
+import { ProjectOrderStore } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
 import { ProjectSummaries } from "../index/project-summaries.ts";
 import { SessionSupervision } from "../index/supervision.ts";
+import { EntityStates } from "../index/entity-states.ts";
 import { ProjectIdentity } from "../index/project-identity.ts";
+import { ProjectOrder } from "./project-order.ts";
+import { ProjectPrograms } from "./programs.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
@@ -36,13 +47,16 @@ import {
   localExecution,
   localResultExecution,
   localWrite,
+  metadataReceipt,
   nativeEffect,
   nativeExecution,
   preparedLocalExecution,
   readExecution,
 } from "../requests/policies.ts";
 import {
+  acknowledgeReceipt,
   closedReceipt,
+  openedReceipt,
   projectReceipt,
   projectSessionReceipt,
   seenReceipt,
@@ -65,9 +79,19 @@ export interface InboxStores {
   finishes: Finishes;
   templates: ProjectTemplates;
   checkouts?: Checkouts;
+  programs?: ProgramStore;
+}
+const orderMoveReceipt = metadataReceipt("project-order-move", (value) => {
+  if (value !== true) throw new TypeError("Invalid project move receipt");
+  return true;
+});
+/** A received operation's target: its session, or its project directory. */
+interface OperationTarget {
+  kind: "session" | "directory";
+  id: string;
 }
 interface InboxMaps {
-  supervision: Map<string, Supervision>;
+  entities: Map<string, EntityState>;
   summaries: Map<string, ProjectSummary>;
   projects: Map<string, ProjectRecord>;
   tasks: Map<string, TaskRecord>;
@@ -86,11 +110,43 @@ interface InboxPublication {
 }
 /** Application-owned metadata only; the index remains the sole session owner. */
 export class InboxFeature implements FrameSource {
+  #taskScopes = new Map<string, () => ViewLease>();
+  #rootsScheduled = false;
+  #taskRoots(): void {
+    if (this.#rootsScheduled) return;
+    this.#rootsScheduled = true;
+    queueMicrotask(() => {
+      this.#rootsScheduled = false;
+      if (this.#closed) return;
+      const roots = new Map<string, string>();
+      for (const task of this.#tasks.values()) {
+        for (const id of task.sessions) {
+          const entry = this.index.snapshotEntry(id);
+          if (entry && !entry.parentID && !entry.deleted) {
+            roots.set(id, taskEntityID("task", task.id));
+          }
+        }
+      }
+      this.states.roots(roots);
+    });
+  }
   #taskProjects = new Map<string, readonly TaskRecord[]>();
+  *#listedTasks(view: ViewLease): Iterable<string> {
+    const directory = this.#directory(view);
+    if (!directory) return;
+    for (
+      const scope of this.summaries.values.get(directory)?.scopes ?? [directory]
+    ) {
+      yield* this.states.listed(this.summaries.leaf(scope));
+    }
+  }
   #projectTasks(
     directory: string,
     followParent = false,
   ): readonly TaskRecord[] {
+    const listed = new Set(
+      this.#listedTasks({ directory, epoch: 0, crumbs: [], rows: [] }),
+    );
     if (followParent) {
       const scopes = this.summaries.values.get(directory)?.scopes ??
         [directory];
@@ -102,7 +158,8 @@ export class InboxFeature implements FrameSource {
         ),
       );
       return [...this.#tasks.values()].filter((task) =>
-        scopes.includes(task.directory) || inherited.has(task.id)
+        scopes.includes(task.directory) || inherited.has(task.id) ||
+        listed.has(taskEntityID("task", task.id))
       );
     }
     let value = this.#taskProjects.get(directory);
@@ -114,7 +171,15 @@ export class InboxFeature implements FrameSource {
       );
       this.#taskProjects.set(directory, value);
     }
-    return value;
+    const local = new Set(value.map((task) => task.id));
+    return [
+      ...value,
+      ...[...listed].flatMap((identity) => {
+        if (!identity.startsWith("task/")) return [];
+        const id = identity.slice("task/".length), task = this.#tasks.get(id);
+        return task && !local.has(id) ? [task] : [];
+      }),
+    ];
   }
   #invalidateTasks(scope: string): void {
     for (const directory of this.#taskProjects.keys()) {
@@ -128,14 +193,45 @@ export class InboxFeature implements FrameSource {
   #views = new Map<string, () => InboxBaseline>();
   retained(): readonly string[] {
     return [
-      ...new Set(
-        [...this.#finishes].filter(([id, finish]) =>
-          finish > (this.#seen.get(this.user)?.get(id) ?? 0)
-        ).map(([id]) => id).concat([
-          ...this.#terminalSource?.counts.sessions.keys() ?? [],
-        ]),
-      ),
+      ...new Set([
+        ...[...this.#finishes].filter(([id]) => this.#unseen(id, this.user))
+          .map(([id]) => id),
+        ...this.#terminalSource?.counts.sessions.keys() ?? [],
+      ]),
     ];
+  }
+  #unseen(id: string, user: string): boolean {
+    const entry = this.index.getMetadata(id);
+    const published = user === this.user &&
+      this.states.get(entityKey("session", id));
+    if (published) return published.counts.unseen > 0;
+    // Before native hydration, retained history remains conservatively unseen.
+    return this.supervision.session(
+      entry ?? {
+        id,
+        directory: "",
+        projectID: "",
+        title: "",
+        archived: false,
+        timeCreated: 0,
+        timeUpdated: 0,
+        status: "idle",
+        attention: {
+          permissions: 0,
+          questions: 0,
+          childPermissions: 0,
+          childQuestions: 0,
+        },
+      },
+      this.#seenTerminal(id, user),
+      this.#finishes.get(id) ?? 0,
+    ).unseen === true;
+  }
+  #seenTerminal(id: string, user: string): number {
+    const runID = this.index.getMetadata(id)?.activity?.runID;
+    return runID
+      ? this.stores.seen.runTerminal(user, id, runID)
+      : this.#seen.get(user)?.get(id) ?? 0;
   }
   #directory(view: ViewLease): string | undefined {
     return view.directory ??
@@ -147,6 +243,17 @@ export class InboxFeature implements FrameSource {
     const directory = this.#directory(view);
     if (!directory) return [];
     const ids = new Set<string>();
+    // Mandatory family attention follows native ancestry across checkout scopes,
+    // independently of checkout-local task membership. These are scalar leases.
+    if (view.selected) {
+      for (const id of this.index.descendants(view.selected)) {
+        const entry = this.index.getMetadata(id);
+        if (
+          id !== view.selected && !entry?.deleted &&
+          entityRetainsVisibility(this.states.get(entityKey("session", id)))
+        ) ids.add(id);
+      }
+    }
     for (const task of this.#projectTasks(directory, view.tasksFollowParent)) {
       for (const id of task.sessions) ids.add(id);
     }
@@ -163,7 +270,11 @@ export class InboxFeature implements FrameSource {
           .flatMap((scope) => this.index.catalog(scope))
     ) {
       if (entry.deleted) continue;
-      if (this.navigationStatus(entry.id) !== "none") {
+      if (
+        entityRetainsVisibility(
+          this.states.get(entityKey("session", entry.id)),
+        )
+      ) {
         ids.add(entry.id);
       }
     }
@@ -175,24 +286,54 @@ export class InboxFeature implements FrameSource {
       hierarchy: this.index.hierarchy.node(entry.id, view.tasksFollowParent),
     };
   }
+  #sessionForView(id: string, selected?: string): EntityState | undefined {
+    const value = this.states.get(entityKey("session", id));
+    return value && id === selected
+      ? { ...value, composerLink: this.states.composerLink(id) }
+      : value;
+  }
   open(
     view: () => ViewLease,
     id: string,
     entries: () => ReadonlySet<string>,
   ): FrameSource {
+    this.#taskScopes.set(id, view);
     const listeners = new Set<(frame: ServerFrame) => void>();
     let revision = 0;
     let deliveredTasks = new Map<string, TaskRecord>();
+    let deliveredTaskStates = new Map<string, EntityState>();
+    let deliveredListing = this.states.listingRevision;
+    const reconcileTaskStates = (): InboxOp[] => {
+      if (!delivered) return [];
+      const ops: InboxOp[] = [], next = new Map<string, EntityState>();
+      for (const id of this.#listedTasks(view())) {
+        const key = entityKey("task", id);
+        const value = this.states.get(key);
+        if (!value || next.has(key)) continue;
+        next.set(key, value);
+        if (value !== deliveredTaskStates.get(key)) {
+          ops.push({ op: "entity.upsert", value });
+        }
+      }
+      for (const key of deliveredTaskStates.keys()) {
+        if (!next.has(key)) ops.push({ op: "entity.remove", key });
+      }
+      deliveredTaskStates = next;
+      deliveredListing = this.states.listingRevision;
+      return ops;
+    };
     type Facts = {
       seen?: number;
       finish?: number;
-      supervision?: Supervision;
+
+      entity?: EntityState;
     };
     let delivered: Map<string, Facts> | undefined;
     const facts = (id: string): Facts => ({
       seen: this.#seen.get(this.user)?.get(id),
       finish: this.#finishes.get(id),
-      supervision: this.#supervision.get(id),
+
+      entity: this.#sessionForView(id, view().selected),
     });
     // Facts follow lease admission. Each pass compares only the sessions it
     // names, so work stays proportional to changed rows, not to the lease.
@@ -214,15 +355,12 @@ export class InboxFeature implements FrameSource {
         if (current.finish !== undefined && current.finish !== before?.finish) {
           ops.push({ op: "finish", sessionID: id, time: current.finish });
         }
-        if (
-          JSON.stringify(current.supervision) !==
-            JSON.stringify(before?.supervision)
-        ) {
-          ops.push({
-            op: "supervision",
-            sessionID: id,
-            value: current.supervision ?? null,
-          });
+        if (JSON.stringify(current.entity) !== JSON.stringify(before?.entity)) {
+          ops.push(
+            current.entity
+              ? { op: "entity.upsert", value: current.entity }
+              : { op: "entity.remove", key: entityKey("session", id) },
+          );
         }
         delivered.set(id, current);
       }
@@ -272,10 +410,17 @@ export class InboxFeature implements FrameSource {
       deliveredTasks = new Map(
         inbox.tasks.map((task) => [task.id, structuredClone(task)]),
       );
+      deliveredTaskStates = new Map(
+        Object.entries(inbox.entities ?? {}).filter(([, value]) =>
+          value.kind === "task"
+        ),
+      );
+      deliveredListing = this.states.listingRevision;
       delivered = new Map([...entries()].map((id) => [id, {
         seen: inbox.seen[id],
         finish: inbox.finishes[id],
-        supervision: inbox.supervision?.[id],
+
+        entity: inbox.entities?.[entityKey("session", id)],
       }]));
       return {
         generation: this.#generation,
@@ -287,6 +432,7 @@ export class InboxFeature implements FrameSource {
     };
     this.#views.set(id, baseline);
     const stop = this.listen((frame) => {
+      if (frame.t === "inbox.settlement" && !delivered) return;
       if (frame.t !== "inbox.patch") emit(frame);
     });
     const publish = (changes: readonly InboxPublication[]) => {
@@ -302,20 +448,44 @@ export class InboxFeature implements FrameSource {
               (this.summaries.values.get(directory)?.scopes ?? [directory])
                 .includes(change.directory)
             : true
-        ).map((change) => change.value);
+        ).map((change) => change.value).filter((op) =>
+          !(op.op === "entity.upsert" && op.value.kind === "task") &&
+          !(op.op === "entity.remove" &&
+            op.key.startsWith(entityKey("task", "")))
+        );
+      const listingChanged = deliveredListing !== this.states.listingRevision;
+      for (const { value } of listingChanged ? [] : changes) {
+        if (value.op !== "entity.upsert" || value.value.kind !== "task") {
+          continue;
+        }
+        const key = entityKey("task", value.value.id);
+        if (!deliveredTaskStates.has(key)) continue;
+        deliveredTaskStates.set(key, value.value);
+        ops.push(value);
+      }
       const sessions = new Set(
         changes.flatMap((change) =>
           change.sessionID === undefined ? [] : [change.sessionID]
         ),
       );
+      if (
+        scope.selected &&
+        (listingChanged ||
+          changes.some(({ value }) =>
+            value.op === "entity.upsert" && value.value.kind === "task" ||
+            value.op === "entity.remove" && value.key.startsWith("task:")
+          ))
+      ) sessions.add(scope.selected);
       // Task projection can scan the scope's catalog, so it runs only when a
       // task itself changed, never for every publication.
       emitOps([
         ...ops,
         ...reconcileSessions(sessions, entries()),
-        ...(changes.some((change) => change.taskID !== undefined)
+        ...(listingChanged ||
+            changes.some((change) => change.taskID !== undefined)
           ? reconcileTasks()
           : []),
+        ...(listingChanged ? reconcileTaskStates() : []),
       ]);
     };
     this.#publications.add(publish);
@@ -343,7 +513,9 @@ export class InboxFeature implements FrameSource {
           }
           emitOps(reconcileSessions(leased, leased), true);
         } else emitOps(reconcileSessions(ids, entries()), true);
-        if (whole || tasksOnly) emitOps(reconcileTasks());
+        if (whole || tasksOnly) {
+          emitOps([...reconcileTasks(), ...reconcileTaskStates()]);
+        }
       });
     };
     const entriesChanged = (rows?: readonly string[]) => {
@@ -386,7 +558,7 @@ export class InboxFeature implements FrameSource {
       // moved, re-projected or deleted row can move inherited task
       // membership; those re-project tasks without scanning the lease.
       if (
-        (!previous ? !!entry.parentID : entry.parentID !== previous.parentID ||
+        (!previous || entry.parentID !== previous.parentID ||
           entry.directory !== previous.directory ||
           entry.projectID !== previous.projectID ||
           JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted))
@@ -437,6 +609,7 @@ export class InboxFeature implements FrameSource {
       close: () => {
         delivered = undefined;
         deliveredTasks.clear();
+        deliveredTaskStates.clear();
         stop();
         this.#publications.delete(publish);
         stopRows();
@@ -444,6 +617,7 @@ export class InboxFeature implements FrameSource {
         stopTasks();
         listeners.clear();
         this.#views.delete(id);
+        this.#taskScopes.delete(id);
       },
     };
   }
@@ -465,8 +639,8 @@ export class InboxFeature implements FrameSource {
   #scanVersion = 0;
   #policies: ReturnType<Projects["policies"]> = [];
   #seen = new Map<string, Map<string, number>>();
+  #opened = new Map<string, Set<string>>();
   #finishes = new Map<string, number>();
-  #supervision = new Map<string, Supervision>();
   readonly supervision = new SessionSupervision();
   #terminalSource?: Pick<TerminalTracking, "counts" | "listen" | "owners">;
   #dependencyOwners = new Set<string>();
@@ -476,7 +650,7 @@ export class InboxFeature implements FrameSource {
     source: Pick<TerminalTracking, "counts" | "listen" | "owners">,
   ): void {
     this.#terminalSource = source;
-    this.supervision.dependencies((id) => source.counts.sessions.get(id) ?? 0);
+    this.states.terminalOwners((id) => source.counts.sessions.get(id) ?? 0);
     const changed = (change: TerminalChange) => {
       if (this.#closed || this.#dependencyAbort.signal.aborted) return;
       if (change.changedCheckouts.length) {
@@ -510,7 +684,8 @@ export class InboxFeature implements FrameSource {
             return;
           }
           for (const id of ids) {
-            this.#supervise(id);
+            const entry = this.index.getMetadata(id);
+            if (entry) this.#observe(entry, entry);
             this.summaries.mark(id);
           }
           if (this.#dependencyOwners.size) {
@@ -550,33 +725,62 @@ export class InboxFeature implements FrameSource {
   /** Borrow the same per-user evidence projection as lamps and mandatory tabs. */
   navigationStatus(id: string): import("@otk/protocol").ProjectStatus {
     this.#identity();
-    return this.supervision.status(
-      this.#supervision.get(id) ?? { state: "none", terminal: 0 },
-    );
+    const value = this.states.get(entityKey("session", id));
+    return value && value.state !== "none"
+      ? value.state
+      : value?.dependencies
+      ? "dependencies"
+      : "none";
   }
-  #supervise(id: string): void {
-    const entry = this.index.getMetadata(id);
-    const value = entry &&
-      this.supervision.session(
-        entry,
-        this.#seen.get(this.user)?.get(id) ?? 0,
-        this.#finishes.get(id),
+  #settlements = new Map<string, import("@otk/protocol").SessionSettlement>();
+  #settlementPending = new Map<
+    string,
+    import("@otk/protocol").SessionSettlement | null
+  >();
+  #settlementRevision = 0;
+  #settlement(id: string, value?: import("@otk/protocol").SessionSettlement) {
+    const before = this.#settlements.get(id);
+    if (JSON.stringify(before) === JSON.stringify(value)) return;
+    if (value) this.#settlements.set(id, value);
+    else this.#settlements.delete(id);
+    this.#settlementPending.set(id, value ?? null);
+    this.#schedule();
+  }
+  /** Session rows follow the view lease. Its scalar settlement edge also
+   * drives connection-wide notification channels without acquiring a row. */
+  #entities(
+    upserts: readonly EntityState[],
+    removals: readonly string[],
+  ): void {
+    for (const value of upserts) {
+      const key = entityKey(value.kind, value.id);
+      if (value.kind === "session") {
+        this.#settlement(value.id, value.evidence?.settlement);
+      }
+      this.#capture("entities", key);
+      this.#queue(
+        `entity:${key}`,
+        { op: "entity.upsert", value },
+        value.kind === "session" ? { sessionID: value.id } : {},
       );
-    if (JSON.stringify(value) === JSON.stringify(this.#supervision.get(id))) {
-      return;
     }
-    if (value) this.#supervision.set(id, value);
-    else this.#supervision.delete(id);
-    this.#capture("supervision", id);
-    this.#queue(`supervision:${id}`, {
-      op: "supervision",
-      sessionID: id,
-      value: value ?? null,
-    }, { sessionID: id });
+    const session = entityKey("session", "");
+    for (const key of removals) {
+      if (key.startsWith(session)) this.#settlement(key.slice(session.length));
+      this.#capture("entities", key);
+      this.#queue(
+        `entity:${key}`,
+        { op: "entity.remove", key },
+        key.startsWith(session) ? { sessionID: key.slice(session.length) } : {},
+      );
+    }
   }
   #assemblies = new Set<InboxAssembly>();
   #user = "";
+  readonly states: EntityStates;
   readonly summaries: ProjectSummaries;
+  readonly projectOrder: ProjectOrder;
+  readonly programs?: ProjectPrograms;
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
@@ -591,20 +795,48 @@ export class InboxFeature implements FrameSource {
       signal?: AbortSignal,
     ) => Promise<void>,
     readonly discoveryProject?: (directory: string, active: boolean) => void,
+    entityClock?: EntityStates["clock"],
   ) {
+    this.states = new EntityStates(
+      this.supervision,
+      index,
+      (upserts, removals) => this.#entities(upserts, removals),
+      entityClock,
+      (id) => {
+        const entry = this.index.getMetadata(id);
+        if (!entry) return;
+        this.#observe(entry);
+        this.summaries.mark(id);
+      },
+      (id) => !!this.#opened.get(this.user)?.has(id),
+    );
+    const identityOwner = new ProjectIdentity(stores.checkouts);
+    const order = new ProjectOrderStore(stores.projects.db);
+    this.projectOrder = new ProjectOrder(order, identityOwner);
+    if (stores.programs) {
+      const programs = this.programs = new ProjectPrograms(
+        stores.programs,
+        order,
+        identityOwner,
+      );
+      this.#stops.push(programs.listen((user) => {
+        if (user === this.#user) this.states.programs(programs.groups(user));
+      }));
+    }
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
     this.#templates = stores.templates.list();
     this.#policies = stores.projects.policies();
     this.#finishes = new Map(Object.entries(stores.finishes.tokens()));
-    for (const { user, session, time } of stores.seen.tokens()) {
+    for (const { user, session, time, opened } of stores.seen.tokens()) {
       const marks = this.#seen.get(user) ?? new Map<string, number>();
       marks.set(session, time);
       this.#seen.set(user, marks);
+      if (opened) this.#recordOpened(user, session, true);
     }
     this.summaries = new ProjectSummaries(
       (id) => ({
-        seen: this.#seen.get(this.user)?.get(id) ?? 0,
+        seen: this.#seenTerminal(id, this.user),
         finish: this.#finishes.get(id) ?? 0,
       }),
       (summary) => {
@@ -620,22 +852,37 @@ export class InboxFeature implements FrameSource {
         this.#schedule();
       },
       this.supervision,
-      new ProjectIdentity(stores.checkouts),
+      identityOwner,
       this.index.hierarchy,
+      this.states,
+      undefined,
+      (directories, revised) => {
+        this.projectOrder.admit(this.user, directories, revised);
+        if (revised) this.programs?.identityChanged(this.user);
+      },
     );
     this.index.hierarchy.configure(
       this.summaries.identity,
       () => [...this.#tasks.values()],
-      (id) => this.navigationStatus(id) !== "none",
+      (id) =>
+        entityRequiresVisibility(this.states.get(entityKey("session", id))),
     );
     for (const project of this.#projects.values()) {
       this.summaries.ensure(project.directory);
     }
     for (const entry of index.snapshotEntries()) {
       const { digest: _digest, ...metadata } = entry;
+      this.#bindLegacyTerminal(metadata);
       this.summaries.entry(metadata);
     }
+    this.projectOrder.admit(
+      this.user,
+      [...index.snapshotEntries()].map((entry) => entry.directory),
+    );
     this.#stops.push(
+      index.observeDirectories((directories) =>
+        this.projectOrder.admit(this.user, directories)
+      ),
       index.observe((entry, previous, delta) => {
         if (
           delta &&
@@ -650,23 +897,34 @@ export class InboxFeature implements FrameSource {
         if (previous && entry.parentID !== previous.parentID) {
           this.summaries.refresh();
         }
+        if (
+          !previous || entry.parentID !== previous.parentID ||
+          JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted)
+        ) {
+          this.#taskRoots();
+        }
       }),
       index.observeRemoval((id) => {
-        this.#supervise(id);
         this.summaries.remove(id);
+        this.#taskRoots();
       }),
       index.observeAuthority((value) => {
         this.summaries.authority(value);
-        for (const entry of this.index.snapshotEntries()) {
-          this.#supervise(entry.id);
-        }
       }),
       index.observeSeeds((values) => {
         for (const entry of this.summaries.seed(values)) this.#observe(entry);
         this.index.hierarchy.invalidate();
+        this.#taskRoots();
       }),
+      index.observeProjectMetadata((project, source) =>
+        this.summaries.metadata(project, source)
+      ),
       stores.projects.listen((change) => {
         this.#identity();
+        this.projectOrder.admit(
+          change.user,
+          change.upsert.map((project) => project.directory),
+        );
         for (const project of change.upsert) {
           this.summaries.ensure(project.directory);
           const known = this.#policies.find((policy) =>
@@ -708,7 +966,6 @@ export class InboxFeature implements FrameSource {
       stores.finishes.listen(({ session, time, terminal }) => {
         if (terminal === undefined) return;
         this.#finishes.set(session, time);
-        this.#supervise(session);
         this.summaries.mark(session);
         this.#capture("finishes", session);
         this.#queue(`finish:${session}`, {
@@ -717,21 +974,23 @@ export class InboxFeature implements FrameSource {
           time,
         }, { sessionID: session });
       }),
-      stores.seen.listen(({ user, session, time, terminal }) => {
+      stores.seen.listen(({ user, session, time, terminal, opened, runID }) => {
         if (terminal === undefined) return;
         this.#identity();
         const marks = this.#seen.get(user) ?? new Map<string, number>();
-        marks.set(session, time);
+        if (!runID) marks.set(session, time);
         this.#seen.set(user, marks);
+        if (opened !== undefined) this.#recordOpened(user, session, opened);
         if (user === this.user) {
-          this.#supervise(session);
           this.summaries.mark(session);
-          this.#capture("seen", session);
-          this.#queue(`seen:${session}`, {
-            op: "seen",
-            sessionID: session,
-            time,
-          }, { sessionID: session });
+          if (!runID) {
+            this.#capture("seen", session);
+            this.#queue(`seen:${session}`, {
+              op: "seen",
+              sessionID: session,
+              time,
+            }, { sessionID: session });
+          }
         }
       }),
       stores.tasks.listen((change) => {
@@ -755,6 +1014,7 @@ export class InboxFeature implements FrameSource {
             taskID: id,
           });
         }
+        this.#taskRoots();
       }),
       stores.templates.listen(({ templates }) => {
         this.#templates = templates;
@@ -763,6 +1023,7 @@ export class InboxFeature implements FrameSource {
       }),
     );
     for (const entry of index.snapshotEntries()) this.#observe(entry);
+    this.#taskRoots();
     void this.#scan();
   }
   #discoveryProject(
@@ -787,12 +1048,37 @@ export class InboxFeature implements FrameSource {
     this.summaries.permissions(permissions);
     const changed = () => {
       this.summaries.refresh();
-      for (const entry of this.index.snapshotEntries()) {
-        this.#supervise(entry.id);
-      }
     };
     changed();
     this.#stops.push(listen(changed));
+  }
+  #operation?: {
+    value: (target: OperationTarget) => "working" | "blocked" | undefined;
+    targets: () => readonly OperationTarget[];
+  };
+  #operationInput(target: OperationTarget): void {
+    const value = this.#operation?.value(target);
+    if (target.kind === "session") this.states.operation(target.id, value);
+    else {
+      this.states.checkoutOperation(this.summaries.leaf(target.id), value);
+    }
+  }
+  /** S22: received OTK operations, borrowed by target session or, without a
+   * session, by project directory (P30 shows the ones not yet received). */
+  operationAttention(
+    value: (target: OperationTarget) => "working" | "blocked" | undefined,
+    targets: () => readonly OperationTarget[],
+    listen: (changed: (target: OperationTarget) => void) => () => void,
+  ): void {
+    this.#operation = { value, targets };
+    const changed = (target: OperationTarget) => {
+      this.#operationInput(target);
+      if (target.kind === "session") {
+        this.summaries.mark(target.id);
+      } else this.summaries.touch(target.id);
+    };
+    this.#stops.push(listen(changed));
+    for (const target of targets()) changed(target);
   }
   locationAttention(
     values: () => Readonly<Record<string, number>>,
@@ -804,6 +1090,12 @@ export class InboxFeature implements FrameSource {
   #summaryDirectories(): void {
     this.summaries.retain([...this.#projects.keys(), ...this.#discovered]);
   }
+  #recordOpened(user: string, session: string, opened: boolean): void {
+    const ids = this.#opened.get(user) ?? new Set<string>();
+    if (opened) ids.add(session);
+    else ids.delete(session);
+    this.#opened.set(user, ids);
+  }
   #identity(): void {
     const user = this.user;
     if (user === this.#user) return;
@@ -814,21 +1106,43 @@ export class InboxFeature implements FrameSource {
         project,
       ) => [project.directory, project]),
     );
+    this.projectOrder.admit(user, [
+      ...this.#projects.keys(),
+      ...this.#discovered,
+      ...this.summaries?.values.keys() ?? [],
+    ]);
     this.#generation = crypto.randomUUID();
     this.#revision = 0;
     this.#pending.clear();
     this.#summaryPending.clear();
+    this.#settlements.clear();
+    this.#settlementPending.clear();
+    this.#settlementRevision = 0;
     this.#summaryRevision = 0;
+    // A new generation re-baselines every client: no transition spans users.
+    this.states.reset();
+    if (this.programs) {
+      this.programs.identityChanged(user);
+      this.states.programs(this.programs.groups(user));
+    }
+    for (const target of this.#operation?.targets() ?? []) {
+      this.#operationInput(target);
+    }
     this.summaries?.refresh();
-    for (const entry of this.index.snapshotEntries()) this.#supervise(entry.id);
+    this.#taskRoots();
   }
   get(view?: ViewLease, leased?: ReadonlySet<string>): InboxSnapshot {
     this.#identity();
     const directory = view && this.#directory(view);
     if (view && !leased) leased = new Set();
+    const taskStates = new Set(
+      view ? this.#listedTasks(view) : [...this.#taskScopes.values()].flatMap((
+        read,
+      ) => [...this.#listedTasks(read())]),
+    );
     return {
       projects: [...this.#projects.values()].sort((a, b) =>
-        a.order - b.order || a.directory.localeCompare(b.directory)
+        a.directory.localeCompare(b.directory)
       ).map((p) => ({ ...p })),
       tasks: [
         ...(view
@@ -855,10 +1169,22 @@ export class InboxFeature implements FrameSource {
           })
           : this.#finishes,
       ),
-      supervision: Object.fromEntries(
+      // Sessions follow the lease; aggregates are per-user scalars for all views.
+      entities: Object.fromEntries(
         leased
-          ? [...this.#supervision].filter(([id]) => leased.has(id))
-          : this.#supervision,
+          ? [
+            ...[...this.states.values()].filter(([, value]) =>
+              value.kind !== "session" &&
+              (value.kind !== "task" || taskStates.has(value.id))
+            ),
+            ...[...leased].flatMap((id) => {
+              const value = this.#sessionForView(id, view?.selected);
+              return value ? [[entityKey("session", id), value] as const] : [];
+            }),
+          ]
+          : [...this.states.values()].filter(([, value]) =>
+            value.kind !== "task" || taskStates.has(value.id)
+          ),
       ),
       pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],
@@ -879,7 +1205,8 @@ export class InboxFeature implements FrameSource {
       const assembly: InboxAssembly = { dirty: new Map(), overflow: false };
       this.#assemblies.add(assembly);
       const maps: InboxMaps = {
-        supervision: new Map(),
+        entities: new Map(),
+
         summaries: new Map(),
         projects: new Map(),
         tasks: new Map(),
@@ -909,7 +1236,8 @@ export class InboxFeature implements FrameSource {
         await copy(source.tasks, maps.tasks);
         await copy(source.seen, maps.seen);
         await copy(source.finishes, maps.finishes);
-        await copy(source.supervision, maps.supervision);
+
+        await copy(source.entities, maps.entities);
         await copy(source.summaries, maps.summaries);
         this.#flush();
         if (assembly.overflow || generation !== this.#generation) continue;
@@ -917,7 +1245,11 @@ export class InboxFeature implements FrameSource {
         for (const { kind, id } of assembly.dirty.values()) {
           const target = maps[kind] as Map<
             string,
-            ProjectRecord | TaskRecord | ProjectSummary | Supervision | number
+            | ProjectRecord
+            | TaskRecord
+            | ProjectSummary
+            | EntityState
+            | number
           >;
           const value = current[kind].get(id);
           if (value === undefined) target.delete(id);
@@ -925,14 +1257,15 @@ export class InboxFeature implements FrameSource {
         }
         const inbox: InboxSnapshot = {
           projects: [...maps.projects.values()].sort((a, b) =>
-            a.order - b.order || a.directory.localeCompare(b.directory)
+            a.directory.localeCompare(b.directory)
           ),
           tasks: [...maps.tasks.values()].sort((a, b) =>
             a.order - b.order || a.id.localeCompare(b.id)
           ),
           seen: Object.fromEntries(maps.seen),
           finishes: Object.fromEntries(maps.finishes),
-          supervision: Object.fromEntries(maps.supervision),
+
+          entities: Object.fromEntries(maps.entities),
           pathTemplates: [...this.#templates],
           discovered: [...this.#discovered],
           summaries: Object.fromEntries(maps.summaries),
@@ -953,7 +1286,8 @@ export class InboxFeature implements FrameSource {
   }
   #maps(): InboxMaps {
     return {
-      supervision: this.#supervision,
+      entities: this.states.values(),
+
       summaries: this.summaries.values,
       projects: this.#projects,
       tasks: this.#tasks,
@@ -984,6 +1318,9 @@ export class InboxFeature implements FrameSource {
   close(): void {
     this.#closed = true;
     this.#dependencyAbort.abort();
+    this.states.close();
+    this.programs?.close();
+    this.projectOrder.close();
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
     this.#publications.clear();
@@ -1025,7 +1362,11 @@ export class InboxFeature implements FrameSource {
       };
       for (const listener of this.#listeners) listener(structuredClone(frame));
     }
-    if (!this.#pending.size || this.#closed) return;
+    if (this.#closed) return;
+    if (!this.#pending.size) {
+      this.#flushSettlements();
+      return;
+    }
     const changes = [...this.#pending.values()],
       ops = changes.map((change) => change.value);
     this.#pending.clear();
@@ -1040,6 +1381,21 @@ export class InboxFeature implements FrameSource {
     };
     for (const listener of this.#listeners) listener(structuredClone(frame));
     for (const listener of this.#publications) listener(changes);
+    this.#flushSettlements();
+  }
+  #flushSettlements(): void {
+    if (!this.#settlementPending.size || this.#closed) return;
+    const frame: ServerFrame = {
+      t: "inbox.settlement",
+      generation: this.#generation,
+      revision: ++this.#settlementRevision,
+      values: [...this.#settlementPending].map(([sessionID, value]) => ({
+        sessionID,
+        value,
+      })),
+    };
+    this.#settlementPending.clear();
+    for (const listener of this.#listeners) listener(structuredClone(frame));
   }
   #observe(
     entry: IndexMetadata,
@@ -1047,24 +1403,27 @@ export class InboxFeature implements FrameSource {
     tx?: StoreWrite,
   ): void {
     const s = this.stores;
+    this.#bindLegacyTerminal(entry, tx);
     const terminal = entry.activity?.terminal;
     if (
       !entry.deleted && terminal &&
       terminal > (this.#finishes.get(entry.id) ?? 0)
     ) s.finishes.observe(entry.id, terminal, tx);
-    this.#supervise(entry.id);
-    const state = this.#supervision.get(entry.id)?.state;
-    const active = state === "working" || state === "needsYou";
-    const unseen =
-      [...this.#seen.values()].some((marks) =>
-        (this.#finishes.get(entry.id) ?? 0) > (marks.get(entry.id) ?? 0)
-      ) ||
-      (this.#finishes.get(entry.id) ?? 0) >
-        (this.#seen.get(this.user)?.get(entry.id) ?? 0);
+    const supervision = this.states.session(
+      entry,
+      this.#seenTerminal(entry.id, this.user),
+      this.#finishes.get(entry.id),
+    );
+    const active = supervision.nativeActive;
+    const unseen = [...new Set([...this.#seen.keys(), this.user])].some((
+      user,
+    ) => this.#unseen(entry.id, user));
     if (
       !entry.deleted && (active || unseen) &&
       (!previous || previous.status !== entry.status ||
-        JSON.stringify(previous.attention) !== JSON.stringify(entry.attention))
+        JSON.stringify(previous.attention) !==
+          JSON.stringify(entry.attention) ||
+        JSON.stringify(previous.activity) !== JSON.stringify(entry.activity))
     ) {
       const promote = () => this.promote?.(entry.id);
       if (tx) s.projects.db.afterCommit(tx, promote);
@@ -1074,18 +1433,39 @@ export class InboxFeature implements FrameSource {
     // against that transaction's current rows, using the same activity owner.
     const leaf = this.summaries.leaf(entry.directory, entry.projectID);
     const context = this.summaries.context(leaf);
+    // A clone's old root policy remains stored for a later split. Its activity
+    // already lifts the group's presentation via the shared entity rollup.
+    if (context && this.summaries.identity.grouped(leaf)) return;
     for (const project of tx ? s.projects.policies() : this.#policies) {
       if (
         !entry.deleted &&
         (project.directory === leaf || project.directory === context ||
           project.directory === entry.directory) &&
         project.inactive &&
-        (active ||
-          (this.#finishes.get(entry.id) ?? 0) >
-            (this.#seen.get(project.user)?.get(entry.id) ?? 0))
+        (active || this.#unseen(entry.id, project.user))
       ) {
         s.projects.reactivate(project.user, project.directory, tx);
       }
+    }
+  }
+  #bindLegacyTerminal(entry: IndexMetadata, tx?: StoreWrite): void {
+    const evidence = entry.activity, proof = evidence?.legacyAcknowledgement;
+    if (
+      entry.deleted || !proof || evidence?.terminalOrigin !== "historical" ||
+      proof.terminal !== evidence.terminal || proof.runID !== evidence.runID
+    ) return;
+    if (
+      tx ||
+      [...this.#seen.values()].some((marks) =>
+        marks.get(entry.id) === proof.terminal
+      )
+    ) {
+      this.stores.seen.bindLegacyTerminal(
+        entry.id,
+        proof.terminal,
+        proof.runID,
+        tx,
+      );
     }
   }
   /** Creation and successful action bookkeeping share the persisted project owner. */
@@ -1104,6 +1484,7 @@ export class InboxFeature implements FrameSource {
     try {
       const paths = await this.scan(this.#templates);
       if (this.#closed || version !== this.#scanVersion) return;
+      this.projectOrder.admit(this.user, paths);
       this.#discovered = paths;
       this.#summaryDirectories();
     } catch (error) {
@@ -1124,6 +1505,30 @@ export class InboxFeature implements FrameSource {
         : {}),
     });
   }
+  async #validateAcknowledgement(
+    ctx: RpcContext,
+    entries: readonly { session: string; terminal: number; runID?: string }[],
+  ): Promise<void> {
+    await ctx.sessionDirectories(
+      entries.flatMap(({ session }) =>
+        this.index.getMetadata(session)?.deleted ? [] : [session]
+      ),
+    );
+    if (
+      entries.some(({ session, terminal, runID }) =>
+        terminal > (this.#finishes.get(session) ?? 0) ||
+        (!!runID && terminal <= 0)
+      )
+    ) throw new HarnessError("params", "Terminal token was not published");
+  }
+
+  #acknowledge(
+    entries: readonly { session: string; terminal: number; runID?: string }[],
+    tx: StoreWrite,
+  ): number[] {
+    return this.stores.seen.acknowledgeMany(this.user, entries, tx);
+  }
+
   register(rpc: RpcRegistry): void {
     const s = this.stores, user = () => this.user;
     const added = (ctx: RpcContext, session: ContentSession) => {
@@ -1165,6 +1570,36 @@ export class InboxFeature implements FrameSource {
       execution: readExecution(() => ({ resource: "projects" })),
       params: () => undefined,
       handler: () => s.projects.list(user()),
+    });
+    const savedOrder = () => ({ revision: this.projectOrder.revision });
+    this.programs?.register(rpc, user, () => this.projectOrder.revision);
+    rpc.register("projects.move", {
+      execution: localResultExecution(
+        (p: ProjectMove) => ({ resource: `project-order:${p.id}` }),
+        orderMoveReceipt,
+        savedOrder,
+      ),
+      params(p): ProjectMove {
+        const id = text(p, "id")!;
+        const before = text(p, "before", true), after = text(p, "after", true);
+        if (
+          (before === undefined) === (after === undefined) || before === "" ||
+          after === ""
+        ) {
+          throw new HarnessError(
+            "params",
+            "Expected exactly one project move target",
+          );
+        }
+        return before !== undefined ? { id, before } : { id, after: after! };
+      },
+      handler: (ctx, p) => {
+        localWrite(ctx, (tx) => {
+          this.projectOrder.move(user(), p, tx);
+          return true as const;
+        }, orderMoveReceipt);
+        return savedOrder();
+      },
     });
     rpc.register("projects.add", {
       execution: {
@@ -1362,6 +1797,20 @@ export class InboxFeature implements FrameSource {
       params: (p) => text(p, "id")!,
       handler: (ctx, id) => {
         localWrite(ctx, (tx) => {
+          const owner = user();
+          const opened = this.#opened.get(owner);
+          if (opened?.size) {
+            const task = s.tasks.get(id);
+            for (const root of task.sessions) {
+              // D70: a legacy child reference does not own its parent's family.
+              if (this.index.hierarchy.ancestors(root).length) continue;
+              for (const member of this.index.descendants(root)) {
+                if (opened.has(member)) {
+                  s.seen.setOpened(owner, member, false, tx);
+                }
+              }
+            }
+          }
           s.tasks.close(id, tx);
           return { taskID: id, closed: true as const };
         }, closedReceipt);
@@ -1458,18 +1907,105 @@ export class InboxFeature implements FrameSource {
         if (!Number.isSafeInteger(p.terminal) || Number(p.terminal) < 0) {
           throw new HarnessError("params", "Expected terminal token");
         }
-        return { sessionID: sessionID(p)!, terminal: Number(p.terminal) };
+        return {
+          sessionID: sessionID(p)!,
+          terminal: Number(p.terminal),
+          runID: text(p, "runID", true),
+        };
       },
-      handler: async (ctx, { sessionID: id, terminal }) => {
-        if (!this.index.get(id)?.deleted) await ctx.sessionDirectory(id);
-        if (terminal > (this.#finishes.get(id) ?? 0)) {
-          throw new HarnessError("params", "Terminal token was not published");
-        }
+      handler: async (ctx, { sessionID: id, terminal, runID }) => {
+        // The request captures the exact published run before validation can
+        // suspend. A replay for a successor, guessed key, or stale view can
+        // never turn into an acknowledgement of the current execution.
+        const value = this.states.get(entityKey("session", id));
+        const matching = value?.terminal === terminal && value?.runID === runID;
+        const entries = (runID || value?.runID) && !matching
+          ? []
+          : [{ session: id, terminal, runID }];
+        if (!entries.length) await ctx.sessionDirectory(id);
+        await this.#validateAcknowledgement(ctx, entries);
         return localWrite(
           ctx,
-          (tx) => s.seen.acknowledge(user(), id, terminal, tx),
+          (tx) => this.#acknowledge(entries, tx)[0] ?? 0,
           seenReceipt,
         );
+      },
+    });
+    rpc.register("sessions.opened", {
+      execution: {
+        ...preparedLocalExecution(
+          (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+          openedReceipt,
+        ),
+        ordering: "target",
+      },
+      params: (p) => {
+        if (typeof p.opened !== "boolean") {
+          throw new HarnessError("params", "Expected opened boolean");
+        }
+        return { sessionID: sessionID(p)!, opened: p.opened };
+      },
+      handler: async (ctx, { sessionID, opened }) => {
+        await ctx.sessionDirectory(sessionID);
+        return localWrite(ctx, (tx) => {
+          s.seen.setOpened(user(), sessionID, opened, tx);
+          return opened;
+        }, openedReceipt);
+      },
+    });
+    rpc.register("sessions.acknowledge", {
+      execution: preparedLocalExecution(
+        (p: AcknowledgeScope) =>
+          p.scope === "helpers"
+            ? { resource: p.task }
+            : { sessionID: p.sessionID },
+        acknowledgeReceipt,
+      ),
+      params: (p): AcknowledgeScope => {
+        if (p.scope === "helpers") {
+          return { scope: "helpers", task: text(p, "task")! };
+        }
+        if (p.scope === "subtree") {
+          return { scope: "subtree", sessionID: sessionID(p)! };
+        }
+        throw new HarnessError("params", "Expected helpers or subtree scope");
+      },
+      handler: async (ctx, p) => {
+        if (p.scope === "subtree") await ctx.sessionDirectory(p.sessionID);
+        const ids = p.scope === "helpers"
+          ? this.states.finishedHelpers(p.task)
+          : this.states.subtree(p.sessionID);
+        if (!ids) throw new HarnessError("params", "Task not found");
+        const sessions = ids.flatMap((sessionID) => {
+          const value = this.states.get(entityKey("session", sessionID));
+          return value?.counts.unseen && value.terminal
+            ? [{
+              sessionID,
+              terminal: value.terminal,
+              ...(value.runID ? { runID: value.runID } : {}),
+            }]
+            : [];
+        });
+        const entries = sessions.map(({ sessionID, terminal, runID }) => ({
+          session: sessionID,
+          terminal,
+          runID,
+        }));
+        const principal = user();
+        const opened = this.#opened.get(principal);
+        const retained = ids.flatMap((id) => {
+          if (!opened?.has(id)) return [];
+          const generation = s.seen.openGeneration(principal, id);
+          return generation === undefined ? [] : [{ id, generation }];
+        });
+        await this.#validateAcknowledgement(ctx, entries);
+        return localWrite(ctx, (tx) => {
+          this.#acknowledge(entries, tx);
+          const closed = retained.filter(({ id, generation }) =>
+            s.seen.releaseOpened(principal, id, generation, tx)
+          ).map(({ id }) => id);
+          return { sessions, ...(closed.length ? { closed } : {}) };
+        }, acknowledgeReceipt);
       },
     });
     rpc.register("sessions.finishes", {

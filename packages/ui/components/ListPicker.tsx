@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import type { ComponentProps } from "@solidjs/web";
 import "./ListPicker.css" with { type: "text" };
 import {
   createEffect,
@@ -12,11 +13,51 @@ import {
 import { isCancellation } from "@otk/protocol";
 import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
 import { pickerProjection } from "./picker-projection.ts";
-import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import Popover, {
+  type PopoverControl,
+  PopoverFace,
+} from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import ControlValue from "./ControlValue.tsx";
 import { ChevronDownIcon } from "./ChromeIcons.tsx";
+
+const pickerClass = (extra?: string) => `otk-list-picker ${extra ?? ""}`;
+const triggerClass = (extra?: string) => `otk-control-trigger ${extra ?? ""}`;
+
+function PickerValue(props: { children: Element }): Element {
+  return (
+    <ControlValue accessory={<ChevronDownIcon />}>
+      {props.children}
+    </ControlValue>
+  );
+}
+
+/** The trigger's intrinsic geometry without its interactive lifetime. */
+export function ListPickerFace(props: {
+  class?: string;
+  triggerClass?: string;
+  children: Element;
+}): Element {
+  return (
+    <PopoverFace
+      class={pickerClass(props.class)}
+      triggerClass={triggerClass(props.triggerClass)}
+    >
+      <PickerValue>{props.children}</PickerValue>
+    </PopoverFace>
+  );
+}
+
+export function PickerHeading(props: { children: Element }) {
+  return <h3 class="otk-picker-heading otk-control-label">{props.children}</h3>;
+}
+export function PickerStatus(
+  props: { children: Element; role?: "status" | "alert" },
+) {
+  return <div class="otk-picker-status" role={props.role}>{props.children}
+  </div>;
+}
 
 export interface PickerItem<T = string> {
   key: string;
@@ -46,6 +87,10 @@ export default function ListPicker<T = string>(props: {
   triggerColor?: string;
   trigger?: Element;
   triggerClass?: string;
+  triggerAttributes?: Pick<
+    ComponentProps<"button">,
+    "name" | "aria-describedby" | "aria-invalid"
+  >;
   groups: readonly PickerGroup<T>[];
   selected?: string;
   search?: string;
@@ -56,7 +101,7 @@ export default function ListPicker<T = string>(props: {
   class?: string;
   onPick(value: T): void;
   onOpen?(): void;
-  focusAfterPick(): void;
+  focusAfterPick?(): void;
   control?(control: ListPickerControl): void;
 }): Element {
   const id = createUniqueId();
@@ -69,7 +114,7 @@ export default function ListPicker<T = string>(props: {
   }>();
   let popover!: PopoverControl,
     window: VirtualListControl | undefined,
-    root: HTMLDivElement | undefined,
+    list: HTMLElement | undefined,
     search: HTMLInputElement | undefined;
   // Catalog projection has no query/candidate dependency. A query scans once;
   // each row then borrows indexed facts rather than rebuilding the population.
@@ -89,6 +134,12 @@ export default function ListPicker<T = string>(props: {
       key !== undefined && snapshot().items.has(key) ? [`option:${key}`] : []
     )
   );
+  const optionID = (key: string) => `${id}-${encodeURIComponent(key)}`;
+  const activeDescendant = () => {
+    const key = candidate();
+    return key === undefined ? undefined : optionID(key);
+  };
+  const focusTarget = () => props.search ? search : list;
   createEffect(
     () => opened() ? { key: candidate(), snapshot: snapshot() } : undefined,
     (current) => {
@@ -103,7 +154,7 @@ export default function ListPicker<T = string>(props: {
     },
   );
   createEffect(opened, (open) => {
-    if (open) (props.search ? search : root)?.focus();
+    if (open) focusTarget()?.focus();
   });
   createEffect(
     () => opened() ? { snapshot: snapshot(), focused: focused() } : undefined,
@@ -114,7 +165,7 @@ export default function ListPicker<T = string>(props: {
       if (
         active === target.control ||
         (!target.control.isConnected && active === document.body)
-      ) (props.search ? search : root)?.focus({ preventScroll: true });
+      ) focusTarget()?.focus({ preventScroll: true });
       setFocused(undefined);
     },
   );
@@ -145,19 +196,16 @@ export default function ListPicker<T = string>(props: {
       triggerLabel={props.triggerLabel}
       busy={props.loading}
       description={props.loading
-        ? `Loading ${props.label.toLowerCase()}…`
+        ? `Loading ${props.label.toLowerCase()}...`
         : undefined}
       applied={props.applied}
       triggerColor={props.triggerColor}
       trigger={props.trigger === undefined
         ? undefined
-        : (
-          <ControlValue accessory={<ChevronDownIcon />}>
-            {props.trigger}
-          </ControlValue>
-        )}
-      triggerClass={`otk-control-trigger ${props.triggerClass ?? ""}`}
-      class={`otk-list-picker ${props.class ?? ""}`}
+        : <PickerValue>{props.trigger}</PickerValue>}
+      triggerClass={triggerClass(props.triggerClass)}
+      triggerAttributes={props.triggerAttributes}
+      class={pickerClass(props.class)}
       control={(control) => {
         popover = control;
         props.control?.({ open: control.open });
@@ -172,7 +220,7 @@ export default function ListPicker<T = string>(props: {
         setOpened(false);
         setFocused(undefined);
         window = undefined;
-        root = undefined;
+        list = undefined;
         search = undefined;
       }}
     >
@@ -180,10 +228,6 @@ export default function ListPicker<T = string>(props: {
         <div
           class="otk-picker-content"
           aria-busy={props.loading ? "true" : "false"}
-          ref={(el) => {
-            root = el;
-          }}
-          tabindex={-1}
           onKeyDown={(event) => {
             if (event.isComposing) return;
             if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
@@ -220,9 +264,7 @@ export default function ListPicker<T = string>(props: {
               placeholder={props.search}
               value={query()}
               aria-controls={id}
-              aria-activedescendant={candidate() === undefined
-                ? undefined
-                : `${id}-${encodeURIComponent(candidate()!)}`}
+              aria-activedescendant={activeDescendant()}
               role="combobox"
               aria-expanded="true"
               aria-autocomplete="list"
@@ -237,6 +279,10 @@ export default function ListPicker<T = string>(props: {
             id={id}
             class="otk-picker-groups"
             listRole="listbox"
+            activeDescendant={props.search ? undefined : activeDescendant()}
+            focusTarget={props.search ? undefined : (el) => {
+              list = el;
+            }}
             label={props.label}
             keys={snapshot().keys}
             revision={snapshot()}
@@ -293,7 +339,7 @@ export default function ListPicker<T = string>(props: {
                     return (
                       <div
                         role="option"
-                        id={`${id}-${encodeURIComponent(item().key)}`}
+                        id={optionID(item().key)}
                         data-picker-key={item().key}
                         aria-disabled={item().unavailable ? "true" : undefined}
                         aria-posinset={row().position}
@@ -384,7 +430,7 @@ export default function ListPicker<T = string>(props: {
           <Show
             when={props.error && !props.loading && props.status === undefined}
           >
-            <FeedbackStatus error={props.error} />
+            <FeedbackStatus compact error={props.error} />
           </Show>
         </div>
       </Show>

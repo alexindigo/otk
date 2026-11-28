@@ -6,6 +6,7 @@ export interface ReleaseInput {
   draft: "kept" | "dropped";
   /** Captured draft identities being released; defaults to the current session. */
   keys?: readonly string[];
+  message?: string;
 }
 
 export interface InputGuard {
@@ -13,19 +14,85 @@ export interface InputGuard {
   retained(): { owner: string; value: string }[];
   dirty(owner: string): boolean;
   clear(): void;
-  release(input?: ReleaseInput): boolean;
-  permit(owner: string, message: string): boolean;
+  /** Commit kept custody for the selected deleted view before releasing it. */
+  keepDeleted(): void;
+  release(input?: ReleaseInput & { draft: "kept" }): true;
+  release(
+    input: ReleaseInput & { draft: "dropped" },
+  ): Promise<false | (() => void)>;
+  permit(owner: string, message: string): boolean | Promise<boolean>;
 }
+export interface InputRetention {
+  /** These owners are authoritative even when their canonical input is empty. */
+  owners: readonly string[];
+  inputs: { owner: string; value: string }[];
+  discard(): void;
+}
+/** Install the values before releasing source custody, all before publication. */
+export type ParkDeletedInput = (
+  inputs: readonly string[],
+  release: () => void,
+) => void;
+
 export function createInputGuard(
   o: {
     drafts: Drafts;
     key(): string;
-    confirm(message: string): boolean;
+    confirm(message: string): boolean | Promise<boolean>;
     retain?(): boolean;
+    /** Retained request drafts belong to their lifecycle, not mounted inputs. */
+    retention?(): InputRetention | undefined;
+    transferDeleted?(park: ParkDeletedInput): void;
   },
 ): InputGuard {
   const dirty = new Map<string, boolean>();
   const inputs = new Map<string, string>();
+  const isDirty = (owner: string, retention = o.retention?.()) =>
+    retention?.owners.includes(owner)
+      ? retention.inputs.some((input) => input.owner === owner)
+      : !!dirty.get(owner);
+  const retained = () => {
+    const retention = o.retention?.();
+    const values = new Map(
+      [...inputs].filter(([owner]) =>
+        dirty.get(owner) && !retention?.owners.includes(owner)
+      ),
+    );
+    for (const input of retention?.inputs ?? []) {
+      values.set(input.owner, input.value);
+    }
+    return [...values].map(([owner, value]) => ({ owner, value }));
+  };
+  function release(input?: ReleaseInput & { draft: "kept" }): true;
+  function release(
+    input: ReleaseInput & { draft: "dropped" },
+  ): Promise<false | (() => void)>;
+  function release(
+    input: ReleaseInput = { draft: "kept" },
+  ): true | Promise<false | (() => void)> {
+    if (input.draft === "kept") return true;
+    // Read only what the pending mutation can actually remove. Neither consent
+    // nor navigation consumes this captured draft; only committed deletion does.
+    const key = o.key(), keys = input.keys ?? [key];
+    const retention = keys.includes(key) ? o.retention?.() : undefined;
+    const losesDraft = keys.some((key) => {
+      const draft = o.drafts.current(key);
+      return !!draft.input.trim() || draft.chips.length > 0 || !!draft.editor ||
+        o.drafts.recoveries(key).length > 0;
+    });
+    const losesInput = keys.includes(key) &&
+      ([...dirty.keys()].some((owner) => isDirty(owner, retention)) ||
+        !!retention?.inputs.length);
+    return (async () => {
+      if (
+        (losesDraft || losesInput) && !await o.confirm(
+          input.message ??
+            "Discard your unsent input for the sessions being deleted?",
+        )
+      ) return false;
+      return () => retention?.discard();
+    })();
+  }
   return {
     mark(owner, value, input) {
       if (!value && dirty.get(owner) && o.retain?.()) return;
@@ -33,45 +100,22 @@ export function createInputGuard(
       if (input !== undefined) inputs.set(owner, input);
       if (!value) inputs.delete(owner);
     },
-    retained: () =>
-      [...inputs].filter(([owner]) => dirty.get(owner)).map((
-        [owner, value],
-      ) => ({ owner, value })),
-    dirty: (owner) => !!dirty.get(owner),
+    retained,
+    dirty: (owner) => isDirty(owner),
     clear() {
       dirty.clear();
       inputs.clear();
     },
-    release(input = { draft: "kept" }) {
-      // Frameworks can batch painted reads during input events. The plain
-      // current read never creates a draft while checking what would be lost.
-      const key = o.key(), keys = input.keys ?? [key];
-      const drafts = keys.map((key) => o.drafts.current(key));
-      // Stored attachments survive mode switches, even when the current mode
-      // would not submit them. Losing a draft is distinct from sendability.
-      const losesDraft = input.draft === "dropped" &&
-        drafts.some((draft) => !!draft.input.trim() || draft.chips.length > 0);
-      const losesInput = drafts.some((draft) => !!draft.editor) ||
-        (keys.includes(key) && [...dirty.values()].some(Boolean));
-      if (!losesDraft && !losesInput) return true;
-      if (
-        !o.confirm(
-          losesDraft
-            ? "Discard unsent draft and unsaved input before continuing?"
-            : "Discard unsaved editor or attention input before switching sessions?",
-        )
-      ) return false;
-      // A destructive mutation may still fail. Its caller drops drafts only
-      // after success; consent alone never consumes the draft or its editor.
-      if (input.draft === "kept") {
-        for (const key of keys) {
-          o.drafts.writer(key)((value) =>
-            value.editor ? { ...value, editor: undefined } : value
-          );
-        }
-      }
-      return true;
+    keepDeleted() {
+      const key = o.key();
+      if (!key) return;
+      if (o.transferDeleted) {
+        o.transferDeleted((inputs, release) =>
+          o.drafts.parkDeleted(key, inputs, release)
+        );
+      } else o.drafts.parkDeleted(key);
     },
-    permit: (owner, message) => !dirty.get(owner) || o.confirm(message),
+    release,
+    permit: (owner, message) => !isDirty(owner) || o.confirm(message),
   };
 }

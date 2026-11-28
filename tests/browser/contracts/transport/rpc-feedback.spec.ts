@@ -28,20 +28,24 @@ test("transport.rpc-feedback-ownership", {
   corrupt = true;
   await page.getByRole("button", { name: "Collapse projects", exact: true })
     .click();
-  await expect(page.locator(".otk-toast-message")).toHaveCount(1);
+  const failures = page.locator(".otk-toast .otk-failure-content");
+  await expect(failures).toHaveCount(1);
   await page.getByRole("button", { name: "Display options", exact: true })
     .click();
-  await page.locator('.otk-display-menu input[name="timestamps"]').click();
+  // D21 removed the clock toggle; rejected preference writes still belong here.
+  await expect(page.locator('.otk-display-menu input[name="timestamps"]'))
+    .toHaveCount(0);
+  await page.locator('.otk-display-menu input[name="thinking"]').click();
   await expect(page.locator(".otk-display-menu [role=alert]")).toBeVisible();
-  await expect(page.locator(".otk-toast-message")).toHaveCount(1);
+  await expect(failures).toHaveCount(1);
   frames.fault({
     t: "error",
     code: "fixture",
     message: "Unsolicited protocol failure",
   });
-  await expect(page.locator(".otk-toast-message")).toHaveCount(2);
+  await expect(failures).toHaveCount(2);
   await expect(
-    page.locator(".otk-toast-message").filter({
+    failures.filter({
       hasText: "Unsolicited protocol failure",
     }),
   ).toBeVisible();

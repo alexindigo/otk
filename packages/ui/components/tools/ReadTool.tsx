@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
+import { metaList } from "@otk/client";
 import type { ReadCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
@@ -13,12 +14,13 @@ export function registerReadTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: FileIcon,
       verb: "Read",
+      runs: { noun: "file", plural: "files" },
       target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
-      summary: [
+      summary: metaList([
         call.offset !== undefined ? `offset ${call.offset}` : "",
         call.limit !== undefined ? `limit ${call.limit}` : "",
-      ].filter(Boolean).join(" · "),
+      ]),
     }),
   );
 }
@@ -30,7 +32,7 @@ export default function ReadTool(
       <For each={props.call.loaded} keyed={false}>
         {(path) => (
           <div class="otk-muted">
-            ↳ Loaded <ToolPath path={path()} directory={props.directory} />
+            Loaded <ToolPath path={path()} directory={props.directory} />
           </div>
         )}
       </For>

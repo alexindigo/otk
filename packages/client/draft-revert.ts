@@ -14,6 +14,8 @@ export interface DraftRevertCapture {
   recall(content: Pick<Draft, "input" | "chips" | "mode">): void;
 }
 export interface DraftReverts {
+  snapshot(): unknown;
+  restore(value: unknown): void;
   capture(key: string, boundary?: string): DraftRevertCapture;
   restorer(
     key: string,
@@ -38,6 +40,14 @@ export function createDraftReverts(drafts: {
     revision: number;
   }>();
   return {
+    snapshot: () => [...values],
+    restore(value) {
+      for (
+        const [key, draft] of value as Iterable<
+          [string, typeof values extends Map<string, infer V> ? V : never]
+        >
+      ) values.set(key, draft);
+    },
     capture(key, boundary) {
       const write = drafts.writer(key);
       let value = values.get(key);
@@ -65,8 +75,7 @@ export function createDraftReverts(drafts: {
           write((draft) => {
             if (
               draft !== invocation ||
-              ((captured.edited || !captured.recalled) &&
-                (hasDraftContent(draft) || draft.editor))
+              captured.edited && (hasDraftContent(draft) || !!draft.editor)
             ) return draft;
             captured.recalled = true;
             return replaceDraftContent(draft, content);

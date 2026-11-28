@@ -8,6 +8,60 @@ focusBypasses(focusErrors);
 const controls =
   ':where(button, input, textarea, select, a[href], summary, [contenteditable="true"], [role="button"], [role="tab"], [role="separator"], [data-otk-focus="content"]):focus-visible:not([tabindex="-1"])';
 const compact = (text: string) => text.replace(/\s+/g, "");
+
+Deno.test("selection and surface focus returns use the focus owner", async () => {
+  const files = await uiSources();
+  for (
+    const name of [
+      "ProjectInbox",
+      "ProjectTabs",
+      "ProjectSessions",
+      "TaskTrail",
+      "TitleEditor",
+      "VirtualList",
+      "CommandMenu",
+      "ContextMenu",
+      "ActionSlot",
+      "ComposerTakeovers",
+      "surface/Dialog",
+      "surface/Menu",
+      "surface/Popover",
+    ]
+  ) {
+    const path = `packages/ui/components/${name}.tsx`;
+    const source = new Source(files.get(path)!, path);
+    const raw = source.all.filter((node) =>
+      (node.type === "MemberExpression" ||
+        node.type === "OptionalMemberExpression") &&
+      // The viewport's consumer callback is not a native DOM focus method.
+      !(name === "VirtualList" && node.object.type === "Identifier" &&
+        node.object.name === "options") &&
+      ((node.property.type === "Identifier" &&
+        node.property.name === "focus") ||
+        (node.property.type === "StringLiteral" &&
+          node.property.value === "focus"))
+    );
+    assertEquals(
+      raw.map((node) => source.text.slice(node.start!, node.end!)),
+      [],
+      path,
+    );
+  }
+});
+
+Deno.test("project row actions never reveal on plain focus", async () => {
+  const css = (await uiSources()).get(
+    "packages/ui/components/ProjectInbox.css",
+  )!;
+  for (const rule of rules(css)) {
+    if (!rule.selector.includes(".otk-project-menu")) continue;
+    assert(
+      !/:focus(?:-within)?\b(?!-visible)/.test(rule.selector),
+      rule.selector,
+    );
+  }
+});
+
 const normalized = (selector: string) =>
   compact(rules(`${selector} {}`)[0].selector).replace(
     /:where\(([^()]*)\)/g,

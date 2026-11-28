@@ -1,20 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { EmptyState } from "./View.tsx";
 import "./Sidebar.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import {
+  age,
+  createEntityStateStore,
+  type EntityStateStore,
+  label as stateLabel,
+  lamp,
   type MergedEntry,
   projectGroups,
-  relativeTime,
   sessionKey,
+  sessionWorkStatus,
   type SidecarState,
 } from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
 import StatusLight from "./StatusLight.tsx";
-import { sessionLight } from "./status-light.ts";
+import ChromeMeta from "./ChromeMeta.tsx";
+import TimeText from "./TimeText.tsx";
+import { entityKey } from "@otk/protocol";
+import SessionStateMeta from "./SessionStateMeta.tsx";
+import { onCleanup } from "solid-js";
 import { ownedAction } from "../keyboard/context.tsx";
 export function shortDirectory(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).slice(-2).join("/") ||
@@ -24,6 +33,7 @@ export default function Sidebar(
   props: {
     sidecars: SidecarState[];
     entries: MergedEntry[];
+    entities?(server: string): EntityStateStore;
     selected?: string;
     onOpen(entry: MergedEntry): void;
     onCreate(sidecarId: string, directory: string): void;
@@ -32,6 +42,9 @@ export default function Sidebar(
   },
 ): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
+  const absent = createEntityStateStore({ read: () => undefined });
+  onCleanup(() => absent.stop());
+  const entities = (server: string) => props.entities?.(server) ?? absent;
   const open = ownedAction(
     "sidebar.session.open",
     (entry: MergedEntry) => props.onOpen(entry),
@@ -69,15 +82,17 @@ export default function Sidebar(
           {props.actions}
         </nav>
       </Show>
-      <div class={[scrollRegion("y"), "otk-sidebar-scroll"]}>
+      <ScrollRegion axis="y" class="otk-sidebar-scroll">
         <For each={props.sidecars} keyed={(item) => item.id}>
           {(sidecar) => (
             <section class="otk-sidecar-group" data-sidecar={sidecar().id}>
               <h2>{sidecar().label}</h2>
-              <ConnectionBadge sidecar={sidecar()} />
-              <Show when={sidecar().error}>
-                <p class="otk-error" role="alert">{sidecar().error}</p>
-              </Show>
+              <ConnectionBadge
+                sidecar={sidecar()}
+                label={false}
+                compact
+                onSettings={props.onSettings}
+              />
               <Show
                 when={sidecar().status === "login required" ||
                   sidecar().status === "setup required"}
@@ -103,7 +118,7 @@ export default function Sidebar(
                       </h3>
                       <button
                         type="button"
-                        class="otk-new-session"
+                        class="otk-legacy-new-session"
                         aria-label={`New session in ${group().directory}`}
                         disabled={sidecar().status !== "connected"}
                         onClick={() =>
@@ -124,66 +139,45 @@ export default function Sidebar(
                         <button
                           type="button"
                           {...selection({
-                            class: "otk-session-row",
+                            class: "otk-legacy-session-row",
                             kind: "current",
                             selected: props.selected ===
                               sessionKey(entry().sidecarId, entry().id),
                           })}
                           data-session={entry().id}
-                          data-status={entry().status}
+                          data-status={sessionWorkStatus(
+                            entities(entry().sidecarId),
+                            entityKey("session", entry().id),
+                          )}
                           data-otk-selection="vertical"
                           onClick={() => void open(entry())}
                         >
                           <SelectionContent class="otk-sidebar-session-content">
                             <span class="otk-row-title">{entry().title}</span>
-                            <time
-                              datetime={new Date(entry().timeUpdated)
-                                .toISOString()}
-                            >
-                              {relativeTime(entry().timeUpdated, now())}
-                            </time>
-                            <span class="otk-row-status">
-                              <StatusLight
-                                attention={{
-                                  server: entry().sidecarId,
-                                  session: entry().id,
-                                }}
-                                state={sessionLight(entry())}
-                                event={entry().timeUpdated}
+                            <ChromeMeta>
+                              <TimeText
+                                time={age(entry().timeUpdated, now())}
                               />
-                              {entry().status === "retry"
-                                ? `retry ${entry().retry?.attempt ?? ""}`
-                                : entry().status}
-                            </span>
+                            </ChromeMeta>
+                            <ChromeMeta class="otk-row-status">
+                              <StatusLight
+                                state={lamp(
+                                  entities(entry().sidecarId),
+                                  entityKey("session", entry().id),
+                                )}
+                              />
+                              {stateLabel(
+                                lamp(
+                                  entities(entry().sidecarId),
+                                  entityKey("session", entry().id),
+                                ),
+                              )}
+                            </ChromeMeta>
                             <span class="otk-attention">
-                              <Show
-                                when={entry().attention.permissions +
-                                  entry().attention.childPermissions}
-                              >
-                                {(count) => (
-                                  <span title="Pending permissions">
-                                    P {count()}
-                                  </span>
-                                )}
-                              </Show>
-                              <Show
-                                when={entry().attention.questions +
-                                  entry().attention.childQuestions}
-                              >
-                                {(count) => (
-                                  <span title="Pending questions">
-                                    Q {count()}
-                                  </span>
-                                )}
-                              </Show>
-                              <Show when={entry().attention.error}>
-                                <span
-                                  title="The agent reported a session failure"
-                                  aria-label="Session error"
-                                >
-                                  Error
-                                </span>
-                              </Show>
+                              <SessionStateMeta
+                                entities={entities(entry().sidecarId)}
+                                entityKey={entityKey("session", entry().id)}
+                              />
                             </span>
                           </SelectionContent>
                         </button>
@@ -200,13 +194,13 @@ export default function Sidebar(
             No sessions yet. Start a session from a project.
           </EmptyState>
         </Show>
-      </div>
+      </ScrollRegion>
       <button
         type="button"
         class="otk-settings-entry"
         onClick={() => void settings()}
       >
-        Settings / sidecars
+        Settings / servers
       </button>
     </aside>
   );

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { HarnessError } from "@otk/harness";
 import type { OperationContext } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
@@ -9,37 +10,77 @@ type Location = { directory: string; workspaceID?: string };
 type Info = Awaited<
   ReturnType<OpenCodeClient["shell"]["list"]>
 >["data"][number];
+
+/** V2 parks user-shell results (including launch failures) with resume:false.
+ * A model shell's background result has a job ID and wakes the runner. */
+export function parkedShellResult(item: unknown): boolean {
+  if (
+    !item || typeof item !== "object" ||
+    Reflect.get(item, "type") !== "synthetic"
+  ) {
+    return false;
+  }
+  const payload: unknown = Reflect.get(item, "payload");
+  const meta: unknown = payload && typeof payload === "object"
+    ? Reflect.get(payload, "metadata")
+    : undefined;
+  return !!meta && typeof meta === "object" &&
+    Reflect.get(meta, "source") === "shell" &&
+    Reflect.get(meta, "jobID") === undefined &&
+    (typeof Reflect.get(meta, "shellID") === "string" ||
+      Reflect.get(meta, "state") === "error");
+}
+
 export interface RunningShell {
   id: string;
   sessionID: string;
   location: Location;
   started: number;
+  title?: string;
 }
 /** Scalar activity, independent of transcript demand and session executions. */
 export class V2Shells {
   #running = new Map<string, RunningShell>();
+  #bySession = new Map<string, Map<string, RunningShell>>();
+  #add(shell: RunningShell): void {
+    this.#running.set(shell.id, shell);
+    let rows = this.#bySession.get(shell.sessionID);
+    if (!rows) this.#bySession.set(shell.sessionID, rows = new Map());
+    rows.set(shell.id, shell);
+  }
+  #remove(id: string): void {
+    const shell = this.#running.get(id);
+    if (!shell) return;
+    this.#running.delete(id);
+    const rows = this.#bySession.get(shell.sessionID)!;
+    rows.delete(id);
+    if (!rows.size) this.#bySession.delete(shell.sessionID);
+  }
   sessions(): string[] {
-    return [
-      ...new Set([...this.#running.values()].map((shell) => shell.sessionID)),
-    ];
+    return [...this.#bySession.keys()];
   }
   busy(sessionID: string): boolean {
-    return [...this.#running.values()].some((shell) =>
-      shell.sessionID === sessionID
-    );
+    return this.#bySession.has(sessionID);
   }
   keys(sessionID: string): string[] {
-    return [...this.#running.values()].filter((shell) =>
-      shell.sessionID === sessionID
-    ).map((shell) => shell.id);
+    return [...(this.#bySession.get(sessionID)?.keys() ?? [])];
+  }
+  items(sessionID: string) {
+    return [...(this.#bySession.get(sessionID)?.values() ?? [])]
+      .map((shell) => ({
+        id: shell.id,
+        kind: "shell" as const,
+        label: "Shell",
+        title: shell.title ?? "Shell",
+        startedAt: shell.started,
+      }));
   }
   clear(): void {
     this.#running.clear();
+    this.#bySession.clear();
   }
   retire(sessionID: string): void {
-    for (const [id, shell] of this.#running) {
-      if (shell.sessionID === sessionID) this.#running.delete(id);
-    }
+    for (const id of this.keys(sessionID)) this.#remove(id);
   }
   async snapshot(
     client: V2Client,
@@ -60,7 +101,8 @@ export class V2Shells {
     return rows;
   }
   replace(rows: readonly RunningShell[]): void {
-    this.#running = new Map(rows.map((shell) => [shell.id, shell]));
+    this.clear();
+    for (const shell of rows) this.#add(shell);
   }
   #map(info: Info, location: Location): RunningShell | undefined {
     const sessionID = info.metadata.sessionID;
@@ -68,7 +110,15 @@ export class V2Shells {
       typeof sessionID !== "string" || sessionID === "global" ||
       info.status !== "running"
     ) return;
-    return { id: info.id, sessionID, location, started: info.time.started };
+    return {
+      id: info.id,
+      sessionID,
+      location,
+      started: info.time.started,
+      title: typeof info.metadata.description === "string"
+        ? info.metadata.description
+        : info.command,
+    };
   }
   event(event: V2Event): { sessionID: string; ended?: number } | undefined {
     const info = event.type === "shell.created"
@@ -83,7 +133,7 @@ export class V2Shells {
       if (!event.location || !raw.metadata || !raw.time) return;
       const shell = this.#map(raw, event.location);
       if (!shell || this.#running.has(shell.id)) return;
-      this.#running.set(shell.id, shell);
+      this.#add(shell);
       return { sessionID: shell.sessionID };
     }
     if (
@@ -105,8 +155,36 @@ export class V2Shells {
     // A session-scoped terminal is positive evidence in its own right. A lost
     // start (including bootstrap/reconnect) must not discard that endpoint.
     if (!sessionID || sessionID === "global") return;
-    this.#running.delete(id);
+    this.#remove(id);
     return { sessionID, ended: event.created };
+  }
+  /** Only a shell in the captured session's native roster can be terminated. */
+  async terminate(
+    client: V2Client,
+    id: string,
+    shellID: string,
+    operation?: OperationContext,
+  ): Promise<void> {
+    const shell = this.#bySession.get(ids.decode(id))?.get(shellID);
+    if (!shell) {
+      throw new HarnessError(
+        "shell",
+        "That shell is not running in this session.",
+      );
+    }
+    await this.#terminate(client, shell, operation);
+    // Exit/deletion events own the roster, not the caller or its HTTP receipt.
+  }
+  async #terminate(
+    client: V2Client,
+    shell: RunningShell,
+    operation?: OperationContext,
+  ): Promise<void> {
+    await client.effect(
+      (api) => api.shell.remove({ id: shell.id, location: shell.location }),
+      operation,
+      ["ShellNotFoundError"],
+    );
   }
   /** Discover every asking session's shell before mutating; never stop another session's work. */
   async interrupt(
@@ -136,11 +214,7 @@ export class V2Shells {
     await interrupt(client, id, operation);
     for (const shell of rows) {
       if (shell.sessionID !== sessionID) continue;
-      await client.effect(
-        (api) => api.shell.remove({ id: shell.id, location: shell.location }),
-        operation,
-        ["ShellNotFoundError"],
-      );
+      await this.#terminate(client, shell, operation);
     }
   }
 }

@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import {
   createBranchHistory,
   createDrafts,
   createSessionActions,
+  createSessionRevert,
+  createState,
+  emptyContent,
   emptyDraft,
+  errorFeedback,
+  type SessionState,
 } from "@otk/client";
 import type { MessagePage } from "@otk/protocol";
 import { shellFixture, shellInfo, shellTask } from "./shell-fixture.ts";
@@ -27,7 +32,9 @@ function fixture() {
   const session = () => ({
     ...shellInfo("selected"),
     ...(staged
-      ? { revert: { messageID: "boundary", messageCount: 1, files: [] } }
+      ? {
+        revert: { boundaryID: "boundary", messageIDs: ["boundary"], files: [] },
+      }
       : {}),
   });
   const options = {
@@ -63,6 +70,7 @@ function fixture() {
           source: { kind: "fixture", ref: "exact-source" },
         }],
         clock: { epoch: "archive", seq: 1 },
+        revisions: { boundary: 0 },
         from: { epoch: "archive", seq: 1 },
         version: { generation: 1, revision: 1 },
         older: null,
@@ -99,13 +107,52 @@ function fixture() {
   const history = createBranchHistory(options);
   history.select(target);
   const actions = createSessionActions({ ...f, branchHistory: history });
+  const live = createState<SessionState>({
+    selection: target,
+    content: {
+      ...emptyContent(),
+      messages: [{
+        id: "boundary",
+        sessionID: "selected",
+        role: "user",
+        time: { created: 1 },
+        parts: [],
+      }],
+    },
+    loading: false,
+    paging: false,
+    exhausted: true,
+    continuity: "ready",
+    clock: { epoch: "initial", seq: 0 },
+  });
+  const revertOwner = createSessionRevert({
+    session: live,
+    actions,
+    drafts,
+    branchHistory: history,
+    status: { working: () => false, subscribe: () => () => {} },
+  });
+  const publish = () =>
+    live.update((s) => {
+      s.clock = { epoch: staged ? "staged" : "restored", seq: 0 };
+      s.content.revert = session().revert ?? null;
+      s.content.messages = staged ? [] : [{
+        id: "boundary",
+        sessionID: "selected",
+        role: "user",
+        time: { created: 1 },
+        parts: [],
+      }];
+    });
   f.reply((_server, method) => {
     if (method === "session.revert") {
       staged = true;
+      publish();
       return Promise.resolve(session());
     }
     if (method === "session.restore") {
       staged = false;
+      publish();
       return Promise.resolve(session());
     }
     if (method === "session.get") return Promise.resolve(session());
@@ -117,6 +164,7 @@ function fixture() {
   return {
     ...f,
     history,
+    revertOwner,
     actions,
     drafts,
     held,
@@ -124,19 +172,60 @@ function fixture() {
     values,
     options,
     signals,
+    revert: async () => {
+      await revertOwner.revertTo("boundary");
+      await revertOwner.confirm();
+    },
     stage: () => {
       staged = true;
     },
-    quota: () => {
-      quota = true;
+    quota: (value = true) => {
+      quota = value;
     },
   };
 }
 
+Deno.test("background archive: group and notice Retry share retained capture and publish the same outcome", async () => {
+  const f = fixture();
+  f.quota();
+  f.held.resolve();
+  let retries = 0;
+  const retry = f.history.retryCopy;
+  f.history.retryCopy = () => {
+    retries++;
+    return retry();
+  };
+  await f.revert();
+  await turns();
+  assertEquals(f.revertOwner.state.phase, "failed");
+  assertEquals(
+    errorFeedback(f.revertOwner.state.error)?.diagnosticID,
+    errorFeedback(f.history.state.error)?.diagnosticID,
+  );
+  await f.revertOwner.retry();
+  assertEquals(retries, 1);
+  assertEquals(f.revertOwner.state.phase, "failed");
+  assertEquals(
+    errorFeedback(f.revertOwner.state.error)?.diagnosticID,
+    errorFeedback(f.history.state.error)?.diagnosticID,
+  );
+  f.quota(false);
+  await f.history.retryCopy();
+  assertEquals(retries, 2);
+  assertEquals(f.revertOwner.state.phase, "saved");
+  assertEquals(f.history.state.recovery, undefined);
+  assertEquals(
+    f.history.state.branches[0].drafts[0].value.input,
+    "Original unsent draft",
+  );
+  f.revertOwner.dispose();
+  f.resources.stop();
+});
+
 Deno.test("background archive: held save cannot delay reversible Revert, but committing Send joins it", async () => {
   const f = fixture();
   let reverted = false, sent = false;
-  const reverting = f.actions.revert(target, "boundary").then(() => {
+  const reverting = f.revert().then(() => {
     reverted = true;
   });
   let sending: Promise<unknown> | undefined;
@@ -147,7 +236,10 @@ Deno.test("background archive: held save cannot delay reversible Revert, but com
     assertEquals(f.values.size, 0);
     sending = f.actions.submission(target)(() => {
       sent = true;
-      return Promise.resolve();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "Fixture native receipt has no transcript.",
+      });
     });
     await turns();
     assertEquals(sent, false, "A committing Send must wait for preservation");
@@ -170,10 +262,23 @@ Deno.test("background archive: held save cannot delay reversible Revert, but com
   }
 });
 
+function waitForPermanence(
+  history: import("@otk/client").BranchHistory,
+): Promise<void> {
+  if (history.state.permanence) return Promise.resolve();
+  return new Promise((resolve) => {
+    const stop = history.subscribe(() => {
+      if (history.state.permanence) {
+        stop();
+        resolve();
+      }
+    });
+  });
+}
 Deno.test("background archive: quota failure is FP1-visible before a committing Send can discard history", async () => {
   const f = fixture();
   let reverted = false, sent = false;
-  const reverting = f.actions.revert(target, "boundary").then(() => {
+  const reverting = f.revert().then(() => {
     reverted = true;
   });
   try {
@@ -186,34 +291,47 @@ Deno.test("background archive: quota failure is FP1-visible before a committing 
     f.quota();
     const sending = f.actions.submission(target)(() => {
       sent = true;
-      return Promise.resolve();
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "Fixture native receipt has no transcript.",
+      });
     });
-    const rejected = assertRejects(() =>
-      sending.catch((cause) => {
-        assert(
-          f.resources.ownsFailure?.(cause),
-          "The target sink must own preservation feedback before a command can render its rejection",
-        );
-        throw cause;
-      })
+    const canceled = sending.then((outcome) =>
+      assertEquals(outcome.kind, "refused")
     );
     await turns();
     assertEquals(sent, false);
     f.held.resolve();
-    await rejected;
+    await waitForPermanence(f.history);
     const feedback = f.history.state.error;
     assert(feedback);
     const failure = feedback.failure;
     assert(failure);
-    assertEquals(failure.action, "Saving an earlier branch");
-    assert(failure.target.label);
-    assert(failure.reason.includes("localStorage is full"));
-    assert(failure.recovery?.includes("Delete a saved branch"));
+    assertEquals(failure.action, "Saving the earlier conversation");
+    assertEquals(failure.value.facts?.target?.sessionID, target.sessionID);
+    assertEquals(failure.target, { label: "" });
+    assertEquals(
+      failure.reason,
+      "The earlier conversation couldn't be saved: storage is full.",
+    );
+    assert(failure.details?.includes("localStorage is full"));
+    assert(failure.details?.includes("bytes"));
+    assert(failure.details?.includes("about 5 MB per origin"));
+    assertEquals(
+      failure.recovery,
+      "Free space, then Retry, or Keep without a saved copy.",
+    );
+    assertEquals(
+      f.options.feedback(target).current()?.diagnosticID,
+      failure.value.diagnosticID,
+    );
     assertEquals(sent, false, "No silent native commit after archive failure");
     assertEquals(
       f.drafts.current("local/selected").input,
       "Original unsent draft",
     );
+    f.history.cancelSend(target);
+    await canceled;
   } finally {
     f.held.resolve();
     await reverting;
@@ -225,7 +343,7 @@ Deno.test("background archive: Restore cancels stale capture without waiting and
   const f = fixture();
   try {
     const transaction = f.drafts.reverts.capture("local/selected");
-    await f.actions.revert(target, "boundary");
+    await f.revert();
     transaction.staged("boundary");
     await f.entered.promise;
     f.drafts.writer("local/selected")({
@@ -247,7 +365,7 @@ Deno.test("background archive: Restore cancels stale capture without waiting and
     await f.history.beforeCommit(target);
     assertEquals(f.values.size, 1, "Only the restored capture may save");
     assertEquals(f.history.state.branches[0].pending, false);
-    assertEquals(f.history.state.branches[0].replaced, false);
+    assertEquals(f.history.state.branches[0].committedAt, undefined);
     assert(
       f.history.state.branches[0].drafts.some((d) =>
         d.value.input === "Original unsent draft"
@@ -302,7 +420,7 @@ Deno.test("background archive: reloaded staged sessions reacquire preservation b
 Deno.test("background archive: background failure follows its target across selection before committing", async () => {
   const f = fixture();
   try {
-    await f.actions.revert(target, "boundary");
+    await f.revert();
     await f.entered.promise;
     f.history.select({ ...target, sessionID: "other" });
     f.quota();
@@ -312,14 +430,21 @@ Deno.test("background archive: background failure follows its target across sele
     f.history.select(target);
     assert(f.history.state.error);
     let sent = false;
-    await assertRejects(() =>
-      f.actions.submission(target)(() => {
-        sent = true;
-        return Promise.resolve();
-      })
+    const sending = f.actions.submission(target)(() => {
+      sent = true;
+      return Promise.resolve({
+        state: "unconfirmed",
+        reason: "Fixture native receipt has no transcript.",
+      });
+    });
+    const canceled = sending.then((outcome) =>
+      assertEquals(outcome.kind, "refused")
     );
+    await waitForPermanence(f.history);
     assertEquals(sent, false);
     assert(f.history.state.error);
+    f.history.cancelSend(target);
+    await canceled;
   } finally {
     f.held.resolve();
     f.resources.stop();

@@ -14,6 +14,7 @@ const promptID = "msg_1df75333f001iPxLDqjf1F59iI";
 const finalID = "msg_1df75504a001AoEU85efrkGkHO";
 const previousID = "msg_1df754ff7001cKMpXJHkrXytA5";
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,
@@ -120,6 +121,33 @@ function fixture(
   return { value, updates, entered, gate, facts, start, event, raw };
 }
 
+Deno.test("V2 API event ordering advances its scalar frontier instead of walking acquired contexts", async () => {
+  const f = fixture();
+  f.facts.source = "api:frontier";
+  try {
+    await f.value.page(sessionID);
+    for (let i = 0; i < 60; i++) {
+      await f.value.event({
+        id: `evt_frontier_${i}`,
+        type: "session.synthetic",
+        created: 1,
+        data: { sessionID: "ses_fixture", text: `Record ${i}` },
+      });
+    }
+    const rows = f.updates.flatMap((op) =>
+      op.op === "message.upsert" && op.message.id.startsWith("msg_frontier_")
+        ? [op.message]
+        : []
+    );
+    assertEquals(
+      rows.map((row) => row.sourceOrder),
+      Array.from({ length: 60 }, (_, i) => 917 + i),
+    );
+  } finally {
+    await f.value.stop();
+  }
+});
+
 Deno.test("V2 causal context: native parent survives scalar fallback in page, live and sealed replay", async () => {
   const f = fixture({ latest: "msg_fallback", unfinished: true });
   f.raw.metadata = { parentID: "msg_native_parent" };
@@ -147,7 +175,7 @@ Deno.test("V2 causal context: native parent survives scalar fallback in page, li
     );
     const next = await f.value.page(sessionID);
     const projection = createTranscriptProjection();
-    projection.replace(next.items);
+    projection.reset(next.items);
     for (const { event } of next.catchup) projection.apply(event);
     const mapped = projection.messages().find((m) => m.id === finalID);
     assert(mapped?.role === "assistant");
@@ -198,7 +226,7 @@ Deno.test("V2 causal context: captured 102-call final headers cannot split first
     f.gate.resolve();
     const page = await reading;
     const projection = createTranscriptProjection();
-    projection.replace(page.items);
+    projection.reset(page.items);
     for (const { event } of page.catchup) projection.apply(event);
     assertEquals(projection.state.replyIDs, [`reply:${promptID}`]);
     assertEquals(

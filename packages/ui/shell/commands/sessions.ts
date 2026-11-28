@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { CommandHub, Selection } from "@otk/client";
+import type { CommandContext, CommandHub, Selection } from "@otk/client";
 /** Navigation feature owns the command contracts; the consumer owns the guards. */
 export function registerSessionCommands(commands: CommandHub, actions: {
   available(input?: { sidecarId: string; directory: string }): boolean;
   create(input?: { sidecarId: string; directory: string }): Promise<void>;
-  open(input: Selection): void;
-  child(id: string): void;
+  open(input: Selection): void | boolean;
+  /** False when guarded navigation refused the transition. */
+  child(id: string): boolean;
   older(): Promise<void>;
   retry(): Promise<void>;
 }): () => void {
@@ -53,6 +54,11 @@ export function registerSessionCommands(commands: CommandHub, actions: {
       title: "Open subagent",
       category: "Session",
       arguments: { type: "string" },
+      // An Open offer for the session on screen is not a transition.
+      availability: (context, id?: string) =>
+        context.viewing !== false && context.session === id
+          ? { available: false, reason: "Already open", hidden: true }
+          : { available: true },
       run: (_ctx, id: string) => actions.child(id),
     }),
     commands.register({
@@ -85,9 +91,13 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
   close(target?: Selection): Promise<boolean>;
   eligible?(target: Selection): { live: boolean; close: boolean };
 }): () => void {
-  const shown = (target: Selection) => {
+  const shown = (
+    target: Selection,
+    context: CommandContext = commands.context(),
+  ) => {
     const current = actions.current();
-    return current?.sidecarId === target.sidecarId &&
+    return context.viewing !== false &&
+      current?.sidecarId === target.sidecarId &&
       current?.sessionID === target.sessionID;
   };
   const releases = [
@@ -110,7 +120,12 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
             : [{ key: "open", title: "Open", args: target }],
         order: 0,
       },
-      enabled: (_ctx, target?: Selection) => !!target && actions.exists(target),
+      availability: (context, target?: Selection) =>
+        !target || !actions.exists(target)
+          ? { available: false, reason: "Session unavailable" }
+          : context.transition && shown(target, context)
+          ? { available: false, reason: "Already open", hidden: true }
+          : { available: true },
       run: (_ctx, target: Selection) => actions.open(target),
     }),
     commands.register({

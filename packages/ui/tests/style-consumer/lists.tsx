@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, onSettled } from "solid-js";
-import { createSessionRename, createTabs } from "@otk/client";
+import { createSessionRename, createTabs, type MergedEntry } from "@otk/client";
 import type { ContentSession, InboxSnapshot } from "@otk/protocol";
 import ProjectTabs from "../../components/ProjectTabs.tsx";
 import CommandMenu from "../../components/CommandMenu.tsx";
+import Subagents from "../../components/Subagents.tsx";
 import { useCommandPorts } from "../../keyboard/context.tsx";
 import { solidState } from "../../state/binding.ts";
 
 export default function Scene() {
-  const directory = "/project";
   const tabs = createTabs(
     () => Promise.reject(new Error("No promotion expected")),
     solidState,
@@ -17,25 +17,30 @@ export default function Scene() {
     rename: () => Promise.resolve(),
     factory: solidState,
   });
-  const [members, setMembers] = createSignal<string[]>([]),
-    [session, setSession] = createSignal<ContentSession>();
-  const inbox = (): InboxSnapshot => ({
-    projects: [],
-    tasks: [{
-      id: "task",
-      directory,
-      name: "Task",
-      sessions: members(),
-      order: 0,
-    }],
-    seen: {},
-    finishes: {},
-    pathTemplates: [],
-  });
-  const entry = (id: string) => ({
+  const [directory, setDirectory] = createSignal("/project"),
+    [entries, setEntries] = createSignal<MergedEntry[]>([]),
+    [session, setSession] = createSignal<ContentSession>(),
+    [inbox, setInbox] = createSignal<InboxSnapshot>(localTask([]));
+  function localTask(ids: string[]): InboxSnapshot {
+    return {
+      projects: [],
+      tasks: [{
+        id: "task",
+        directory: "/project",
+        name: "Task",
+        sessions: ids,
+        order: 0,
+      }],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+    };
+  }
+  const entry = (id: string, index: number, ids: string[]): MergedEntry => ({
     id,
+    parentID: index ? ids[index - 1] : undefined,
     sidecarId: "local",
-    directory,
+    directory: "/project",
     projectID: "p",
     title: id,
     timeCreated: 1,
@@ -50,31 +55,30 @@ export default function Scene() {
       childQuestions: 0,
     },
   });
-  const entries = () => members().map(entry);
-  styleTest.lists = (ids, selected = ids[0], editing) => {
-    setMembers(ids);
+  let createdSessions = 0;
+  styleTest.createdSessions = () => createdSessions;
+  styleTest.lists = (ids, selected = ids[0], editing, publication) => {
+    const snapshot = publication?.inbox ?? localTask(ids);
+    const task = snapshot.tasks[0];
+    const rows = publication
+      ? publication.entries.map((row) => ({ ...row, sidecarId: "local" }))
+      : ids.map(entry);
+    setDirectory(task.directory);
+    setEntries(rows);
+    setInbox(snapshot);
     tabs.update({
-      directory,
-      entries: ids.map(entry),
-      inbox: {
-        ...inbox(),
-        tasks: [{
-          id: "task",
-          directory,
-          name: "Task",
-          sessions: ids,
-          order: 0,
-        }],
-      },
+      directory: task.directory,
+      entries: rows,
+      inbox: snapshot,
     });
-    tabs.select({ kind: "task", id: "task" }, selected);
+    tabs.select({ kind: "task", id: task.id }, selected);
     setSession(
       selected
         ? {
           id: selected,
-          directory,
+          directory: task.directory,
           projectID: "p",
-          title: selected,
+          title: rows.find((row) => row.id === selected)?.title ?? selected,
           time: { created: 1, updated: 1 },
           archived: false,
         }
@@ -82,7 +86,11 @@ export default function Scene() {
     );
     if (editing) {
       rename.start(
-        { sidecarId: "local", sessionID: editing, title: editing },
+        {
+          sidecarId: "local",
+          sessionID: editing,
+          title: rows.find((row) => row.id === editing)?.title ?? editing,
+        },
         "chip",
       );
     } else rename.cancel();
@@ -114,12 +122,19 @@ export default function Scene() {
         },
       })
     );
+    releases.push(commands.register({
+      id: "list.open-helper",
+      title: "Open subagent",
+      category: "Probe",
+      run: () => undefined,
+    }));
     return () => releases.forEach((release) => release());
   });
+  let home!: HTMLDivElement;
   return (
     <>
       <ProjectTabs
-        project={{ sidecarId: "local", directory }}
+        project={{ sidecarId: "local", directory: directory() }}
         model={tabs}
         entries={entries()}
         inbox={inbox()}
@@ -128,7 +143,10 @@ export default function Scene() {
         rename={rename}
         onOpen={() => true}
         onEmpty={() => true}
-        onCreateSession={() => Promise.resolve()}
+        onCreateSession={() => {
+          createdSessions++;
+          return Promise.resolve();
+        }}
         actions={{
           create: () => Promise.reject(new Error("unused")),
           rename: () => Promise.resolve(),
@@ -138,6 +156,29 @@ export default function Scene() {
           remove: () => Promise.resolve(),
         }}
       />
+      <div tabindex={-1} ref={(region) => home = region}>
+        <Subagents
+          focusHome={() => home.focus()}
+          entities={tabs.entities()}
+          // 2.152 distinguishes unknown task evidence from an empty roster.
+          task={tabs.trail().task}
+          helpers={(() => {
+            void tabs.state.revision;
+            const store = tabs.entities(), key = tabs.trail().task;
+            return key && !store.isStale ? store.get(key)?.helpers : undefined;
+          })()}
+          current={session()?.id ?? ""}
+          title={(id) => entries().find((row) => row.id === id)?.title ?? id}
+          agent={() => undefined}
+          openAction={(id) =>
+            commands.control("list.open-helper", undefined, {
+              target: { label: id },
+              shown: () => true,
+              unshown: "The subagent did not open.",
+              recovery: "Choose the subagent again",
+            })}
+        />
+      </div>
       <CommandMenu
         label="Reactive list menu"
         trigger="Actions"

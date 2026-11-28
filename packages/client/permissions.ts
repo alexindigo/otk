@@ -27,3 +27,14 @@ export function permissionTool(
     ? { ...call, files: request.detail.files }
     : call;
 }
+
+/** A tool or its delegated child can own the outstanding request. */
+export function toolWaitingForPermission(
+  call: ToolCall,
+  requests: readonly PermissionRequest[],
+): boolean {
+  return requests.some((request) =>
+    request.toolCall === call.callID ||
+    request.sessionID === call.childSessionID
+  );
+}

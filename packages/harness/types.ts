@@ -47,11 +47,80 @@ export interface HarnessSink {
   /** Complete scalar catalog/activity authority, independently of digest readiness. */
   projectAuthority?(activity: "current" | "unknown"): void;
   projectSeeds?(projects: readonly ProjectSeed[]): void;
+  /** False: the presentation cannot be placed without reconciling inventory. */
+  projectMetadata?(
+    project: ProjectMetadata,
+    source: "event" | "reply",
+  ): boolean;
   content(sessionID: string, op: ContentOp, clock?: ContentClock): void;
   bootstrapComplete(): void;
   invalidate(value: TranscriptInvalidation): void;
 }
+/** Native event delivery pressure, not a content-completeness certificate. */
+export interface EventDispatchPressure {
+  generation: number;
+  received: number;
+  handled: number;
+  queued: number;
+  queuedBytes: number;
+  oldestAgeMs: number;
+  nativeLagMs: number;
+  maxNativeLagMs: number;
+  handlerMs: number;
+  activeType?: string;
+  backpressured: boolean;
+  refresh?: { pending: number; active?: string; oldestAgeMs: number };
+}
+export type ProjectPresentation = Pick<
+  import("@otk/protocol").CatalogProject,
+  "id" | "name" | "color"
+>;
+export interface ProjectMetadata {
+  presentation: ProjectPresentation;
+  updated: number;
+  /** Native inventory guard; metadata updates must not change placement. */
+  topology: string;
+}
+/** Normalize the native PATCH/event/inventory envelope without inferring placement. */
+export function projectMetadata(
+  project: Record<string, unknown>,
+  root: "worktree" | "canonical",
+  presentation: (
+    project: { id: string; name?: string; icon?: { color: string } },
+  ) => ProjectPresentation,
+): ProjectMetadata | undefined {
+  const { id, name, icon, time, sandboxes } = project;
+  const updated = time && typeof time === "object"
+    ? Reflect.get(time, "updated")
+    : undefined;
+  const archived = time && typeof time === "object"
+    ? Reflect.get(time, "archived")
+    : undefined;
+  const color = icon && typeof icon === "object"
+    ? Reflect.get(icon, "color")
+    : undefined;
+  if (
+    typeof id !== "string" || typeof project[root] !== "string" ||
+    typeof updated !== "number" || !Number.isFinite(updated) ||
+    (archived !== undefined && typeof archived !== "number") ||
+    (name !== undefined && typeof name !== "string") ||
+    (color !== undefined && typeof color !== "string") ||
+    !Array.isArray(sandboxes) ||
+    sandboxes.some((item) => typeof item !== "string")
+  ) return;
+  return {
+    presentation: presentation({
+      id,
+      name,
+      icon: color ? { color } : undefined,
+    }),
+    updated,
+    topology: JSON.stringify([project[root], archived, [...sandboxes].sort()]),
+  };
+}
 export interface ProjectSeed {
+  presentation?: ProjectPresentation;
+  nativeProject?: Pick<ProjectMetadata, "updated" | "topology">;
   directory: string;
   /** Native facts for the core identity owner; one per distinct native owner. */
   identities?: readonly ProjectIdentityFact[];
@@ -68,6 +137,17 @@ export interface ProjectIdentityFact {
   source: string;
   repoID: string;
   canonicalRoot?: string;
+  /** Local Git evidence for one checkout, independent of the native project ID. */
+  repository?: {
+    checkout: string;
+    /** Null: the checkout is gone and this evidence names no repository. */
+    root: string | null;
+    present: boolean;
+    /** `git` reads the checkout itself; the others recover a removed one. */
+    evidence: "git" | "worktree-metadata" | "name" | "none";
+    /** Null proves no usable remote. Omitted on an unknown or failed read. */
+    remote?: { key: string; owner?: string } | null;
+  };
   /** Null means unrecorded; an empty native subpath instead proves an exact root. */
   recordedRoot?: string | null;
   historicalRoots?: readonly string[];
@@ -93,7 +173,11 @@ export interface HarnessCore {
     ids: readonly string[],
     signal?: AbortSignal,
   ): Promise<SessionIdentity[]>;
-  getSession(id: string, signal?: AbortSignal): Promise<ContentSession>;
+  getSession(
+    id: string,
+    signal?: AbortSignal,
+    purpose?: "send",
+  ): Promise<ContentSession>;
   listSessions(
     input: import("@otk/protocol").SessionListInput,
     signal?: AbortSignal,
@@ -101,14 +185,21 @@ export interface HarnessCore {
   listChildren(id: string, signal?: AbortSignal): Promise<ContentSession[]>;
   listMessages(
     id: string,
-    opts: { before?: MessageCursor; publish?(page: MessagePage): void },
+    opts: {
+      before?: MessageCursor;
+      retryRecovery?: boolean;
+      publish?(page: MessagePage): void;
+    },
     signal?: AbortSignal,
   ): Promise<MessagePage>;
   /** Bounded retained history, including rows hidden by a reversible stage.
    * This read must not publish bodies or change live transcript state. */
   snapshotMessages?(
     id: string,
-    opts: { before?: MessageCursor },
+    opts: {
+      before?: MessageCursor;
+      scope?: import("@otk/protocol").MessageSnapshotScope;
+    },
     signal?: AbortSignal,
   ): Promise<MessagePage>;
   createSession(

@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-status-light {
-  --lamp-size: 10px;
+  --lamp-size: calc(10 * var(--otk-unit));
   /* Construction stays local; semantic gel paint comes from the active theme. */
   --lamp-color: var(--status-light-none);
-  position: relative;
   display: inline-grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   width: var(--lamp-size);
   height: var(--lamp-size);
@@ -12,7 +12,7 @@
   vertical-align: middle;
 }
 .otk-status-light[data-small] {
-  --lamp-size: 8px;
+  --lamp-size: calc(8 * var(--otk-unit));
 }
 .otk-status-light[data-state=blocked] {
   --lamp-color: var(--status-light-blocked);
@@ -28,8 +28,9 @@
 }
 .otk-lamp-body,
 .otk-lamp-glow {
-  position: absolute;
-  inset: 0;
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
 }
 .otk-lamp-body {
@@ -65,12 +66,11 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--lamp-color) 40%, #000);
 }
 .otk-lamp-shape {
+  grid-area: 1 / 1;
   display: none;
 }
 .otk-lamp-dependency-shape {
   display: block;
-  width: var(--lamp-size);
-  height: var(--lamp-size);
 }
 @keyframes otk-lamp-breathe {
   0%,
@@ -99,5 +99,4 @@
 :root[data-otk-reduced-colors] .otk-lamp-shape {
   display: block;
   color: var(--otk-fg);
-  font: 600 var(--text-meta)/1 var(--font-ui);
 }

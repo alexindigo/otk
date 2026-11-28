@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sessionTreeView } from "../session-tree.ts";
+import { treePaths } from "../tree-paths.ts";
 import { assertEquals } from "@std/assert";
 import type { IndexEntry, TaskRecord } from "@otk/protocol";
 import { projectSessionHierarchy } from "@otk/protocol";
@@ -79,7 +81,7 @@ Deno.test("session tree preserves task order, parent-child paths and nearest exp
       task("root task", ["root"]),
       task("helper task", ["helper"], 1),
     ], "/project").map((g) => g.rows.map((r) => r.session.id)),
-    [["root"], ["helper", "nested"], ["other", "orphan"]],
+    [["root", "helper", "nested"], ["other", "orphan"]],
   );
 });
 Deno.test("session title search retains matching ancestry, excludes unrelated descendants and never hides cyclic or missing-parent rows", () => {
@@ -195,11 +197,13 @@ Deno.test("index partitions and hierarchy identity survive summary/status change
   const keys = index.ids("s", "/project"), other = index.ids("s", "/other");
   const tree = createSessionTree();
   const first = tree.rows(index.partition("s", "/project"), [], "/project");
+  const helper = { ...entry("one"), status: "busy" as const, agent: "explore" };
   index.receive("s", {
     t: "index.patch",
     rev: 2,
-    ops: [{ op: "upsert", entry: { ...entry("one"), status: "busy" } }],
+    ops: [{ op: "upsert", entry: helper }],
   });
+  assertEquals(Reflect.get(index.get("s", "one")!, "agent"), "explore");
   assertEquals(index.ids("s", "/project") === keys, true);
   assertEquals(index.ids("s", "/other") === other, true);
   assertEquals(
@@ -225,4 +229,74 @@ Deno.test("index partitions and hierarchy identity survive summary/status change
   assertEquals(index.ids("s", "/other"), ["one", "two"]);
   index.remove("s");
   assertEquals(index.ids("s"), []);
+});
+// The view receives a preorder from the list owner, not a mounted DOM window.
+Deno.test("session tree disclosure preserves branches, sibling rails and group identity", () => {
+  const heading = (group: string) => ({
+    key: `heading:${group}`,
+    kind: "heading" as const,
+    group,
+    title: group,
+  });
+  const row = (
+    id: string,
+    depth: number,
+    parentID?: string,
+    group = "task",
+  ) => ({
+    key: id,
+    kind: "session" as const,
+    id,
+    group,
+    title: id,
+    depth,
+    parentID,
+    position: 1,
+    size: 5,
+  });
+  const rows = [
+    heading("task"),
+    row("a", 0),
+    row("b", 1, "a"),
+    row("c", 2, "b"),
+    row("d", 0),
+    heading(""),
+    row("e", 0, undefined, ""),
+  ];
+  const scope = { sidecarId: "remote", directory: "/checkout" };
+  const expanded = sessionTreeView(rows, scope, () => true);
+  assertEquals(expanded.map((item) => item.depth), [0, 1, 2, 3, 1, 0, 1]);
+  assertEquals(expanded.map((item) => item.path), [
+    [],
+    [true],
+    [true, false],
+    [true, false, false],
+    [false],
+    [],
+    [false],
+  ]);
+  assertEquals(expanded[5].target, {
+    sidecarId: "remote",
+    kind: "ungrouped",
+    id: "/checkout",
+  });
+  const collapsed = sessionTreeView(rows, scope, (item) => item.key !== "a");
+  assertEquals(collapsed.map((item) => item.key), [
+    "heading:task",
+    "a",
+    "d",
+    "heading:",
+    "e",
+  ]);
+  assertEquals(collapsed[1].hasChildren, true);
+  assertEquals(
+    collapsed.map((item) => item.path),
+    treePaths(collapsed, (item) => item.depth),
+  );
+  assertEquals(
+    sessionTreeView(rows, scope, (item) => item.target.kind !== "task").map((
+      item,
+    ) => item.key),
+    ["heading:task", "heading:", "e"],
+  );
 });

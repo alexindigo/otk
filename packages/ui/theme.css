@@ -1,5 +1,15 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 :root {
+  /* Every dimension is measured by the browser in the same scaled CSS space. */
+  --otk-scale: 1;
+  --otk-unit: calc(1px * var(--otk-scale));
+  --space-1: calc(4 * var(--otk-unit));
+  --space-2: calc(8 * var(--otk-unit));
+  --space-3: calc(12 * var(--otk-unit));
+  --space-4: calc(16 * var(--otk-unit));
+  --space-5: calc(20 * var(--otk-unit));
+  --space-6: calc(24 * var(--otk-unit));
+  --space-8: calc(32 * var(--otk-unit));
   --bg: var(--otk-bg);
   --fg: var(--otk-fg);
   --otk-action: var(--otk-accent);
@@ -25,65 +35,70 @@
   --connection-light-error: var(--otk-connection-error);
   --font-ui: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
-  --radius-control: 8px;
-  --radius-row: 8px;
-  --radius-inline-code: 5px;
-  --radius-card: 10px;
-  --radius-bubble: 18px;
-  --radius-composer: 20px;
+  --radius-control: calc(8 * var(--otk-unit));
+  --radius-row: calc(8 * var(--otk-unit));
+  --radius-inline-code: calc(5 * var(--otk-unit));
+  --radius-card: calc(10 * var(--otk-unit));
+  --radius-bubble: calc(18 * var(--otk-unit));
+  --radius-composer: calc(20 * var(--otk-unit));
   --radius-pill: 999px;
   --overlay-bg: var(--otk-surface);
   --overlay-border: var(--otk-border);
   --overlay-radius: var(--radius-card);
-  --overlay-shadow: 0 8px 24px var(--otk-overlay);
+  --overlay-shadow: 0 calc(8 * var(--otk-unit)) calc(24 * var(--otk-unit)) var(--otk-overlay);
   --layer-content: 0;
   --layer-popover: 20;
   --layer-dialog: 40;
   --layer-toast: 60;
-  --text-ui: 13px;
-  --text-prose: 14px;
-  --text-heading: 16px;
-  --text-meta: 12px;
-  --text-minimum: 12px;
-  --line-ui: 20px;
-  --line-prose: 24px;
+  --text-ui: calc(13 * var(--otk-unit));
+  --text-prose: calc(14 * var(--otk-unit));
+  --text-heading: calc(16 * var(--otk-unit));
+  --text-meta: calc(12 * var(--otk-unit));
+  --text-minimum: calc(12 * var(--otk-unit));
+  --line-ui: calc(20 * var(--otk-unit));
+  --line-prose: calc(24 * var(--otk-unit));
   --line-heading: var(--line-prose);
   --line-meta: var(--line-ui);
   /* Prototype's 46rem at its 16px root, independent of the 13px UI root. */
-  --lane-width: 736px;
-  --item-inset: 12px;
-  --panel-inset: 20px;
+  --lane-width: calc(736 * var(--otk-unit));
+  --main-min: calc(420 * var(--otk-unit));
+  --item-inset: calc(12 * var(--otk-unit));
+  --panel-inset: calc(20 * var(--otk-unit));
   --pill-inset: var(--item-inset);
+  --pill-block-inset: var(--space-1);
+  --pill-work-inset: var(--space-2);
   /* Prototype chrome geometry, shared by the bars that reserve its corners. */
-  --rail-width: 48px;
-  --chrome-header-height: 52px;
-  --control-size: 28px;
-  --form-control-size: 32px;
-  --send-button-size: 32px;
+  --rail-width: calc(48 * var(--otk-unit));
+  --chrome-header-height: calc(52 * var(--otk-unit));
+  --control-size: calc(28 * var(--otk-unit));
+  --form-control-size: calc(32 * var(--otk-unit));
+  --send-button-size: calc(32 * var(--otk-unit));
   --control-height: var(--control-size);
   --control-border: 0px;
   --control-inner-size: calc(var(--control-height) - 2 * var(--control-border));
   --form-width: 32rem;
-  --text-display: 24px;
-  --line-display: 32px;
-  --lane-gutter: 24px;
-  --overlay-gutter: 16px;
-  --popover-gutter: 8px;
-  --icon-compact: 13px;
-  --row-compact: 30px;
-  --row-project: 32px;
+  --text-display: calc(24 * var(--otk-unit));
+  --line-display: calc(32 * var(--otk-unit));
+  --lane-gutter: calc(24 * var(--otk-unit));
+  --overlay-gutter: calc(16 * var(--otk-unit));
+  --popover-gutter: calc(8 * var(--otk-unit));
+  --icon-compact: calc(13 * var(--otk-unit));
+  --row-compact: calc(30 * var(--otk-unit));
+  --row-project: calc(32 * var(--otk-unit));
+  --avatar-compact: calc(14 * var(--otk-unit));
+  --row-title-min: 12ch;
+  --row-tool: calc(26 * var(--otk-unit));
   --diff-split-min: 1200px;
-  --corner: 12px;
-  --corner-zone: calc(var(--corner) + var(--control-size) + 8px);
-  --chrome-gap: 4px;
+  --corner: calc(12 * var(--otk-unit));
+  --chrome-gap: calc(4 * var(--otk-unit));
   --hover-open-delay: 500ms;
   --hover-close-delay: 150ms;
-  --chrome-inset: 12px;
-  --project-inset: 12px;
-  --project-gap: 8px;
-  --selection-pointer-inset: 3px;
+  --chrome-inset: calc(12 * var(--otk-unit));
+  --project-inset: calc(12 * var(--otk-unit));
+  --project-gap: calc(8 * var(--otk-unit));
+  --selection-pointer-inset: calc(3 * var(--otk-unit));
   /* Keep keyboard focus wholly inside controls, including scrollport edges. */
-  --focus-ring-offset: -2px;
+  --focus-ring-offset: calc(-2 * var(--otk-unit));
   /* Genuine Shiki css-variables categories. No tokens or worker work change. */
   --otk-syntax-foreground: var(--otk-code-variable);
   --otk-syntax-background: var(--otk-bg);
@@ -108,6 +123,12 @@
 body {
   margin: 0;
 }
+/* Expose the resolved, scaled length to the panel geometry owner. */
+@property --main-min {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
 /* Semantic grouping elements carry no browser layout of their own; the
    component that uses them owns their layout. */
 fieldset,
@@ -130,7 +151,7 @@ select {
 button {
   background: transparent;
   border: 0;
-  padding: 4px 8px;
+  padding: calc(4 * var(--otk-unit)) calc(8 * var(--otk-unit));
   border-radius: var(--radius-control);
   color: var(--control-color, var(--otk-fg-2));
   font-weight: 500;
@@ -140,10 +161,11 @@ button:hover {
   background: var(--otk-hover);
   color: var(--otk-fg);
 }
-button:active:not(:disabled) {
+button:active:not(:disabled, [data-primary-action][aria-disabled=true]) {
   transform: scale(.98);
 }
-button:disabled {
+button:disabled,
+button[data-primary-action][aria-disabled=true] {
   opacity: .5;
   cursor: default;
 }
@@ -165,7 +187,7 @@ select {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--muted);
-  padding: 8px;
+  padding: calc(8 * var(--otk-unit));
   border-radius: var(--radius-control);
 }
 a {
@@ -188,9 +210,7 @@ p {
 .otk-chip {
   display: inline-flex;
   background: var(--otk-hover);
-  padding: 4px 8px;
-  margin-right: 8px;
-  border-radius: var(--radius-pill);
+  margin-right: calc(8 * var(--otk-unit));
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -223,7 +243,6 @@ p {
   border-color: var(--otk-action);
   font-weight: 600;
 }
-input[type=checkbox],
 input[type=radio] {
   accent-color: var(--otk-fg-2);
 }
@@ -248,11 +267,15 @@ small {
   overflow-wrap: normal;
   flex-shrink: 0;
 }
+[data-inline-action] {
+  white-space: inherit;
+  overflow-wrap: inherit;
+}
 .otk-control-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: calc(8 * var(--otk-unit));
   min-width: 0;
 }
 .otk-control-grow {
@@ -274,16 +297,19 @@ small {
   flex-basis: 0;
 }
 .otk-pill {
-  height: var(--row-compact);
+  min-block-size: var(--row-compact);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 0 var(--pill-inset);
-  border-radius: var(--radius-pill);
+  gap: calc(8 * var(--otk-unit));
   font-family: var(--font-ui);
   font-size: var(--text-ui);
   line-height: 1;
+}
+/* Shared pill paint box: padding stays inside every interaction state. */
+:is(.otk-pill, .otk-chip, .otk-pill-surface) {
+  padding: var(--pill-block-inset) var(--pill-inset);
+  border-radius: var(--radius-pill);
 }
 .otk-icon-button {
   width: var(--control-size);
@@ -300,8 +326,8 @@ small {
   color: var(--otk-action-text);
 }
 .otk-chrome-icon {
-  width: 16px;
-  height: 16px;
+  width: calc(16 * var(--otk-unit));
+  height: calc(16 * var(--otk-unit));
   flex: none;
 }
 .otk-send-button {
@@ -325,7 +351,7 @@ small {
   color: var(--otk-fg);
   box-shadow: var(--otk-selected-shadow);
 }
-:root [data-otk-selection=vertical].otk-selection-item {
+:root [data-otk-selection=vertical].otk-selection-item:not([data-otk-selection-mark=external]) {
   display: grid;
   grid-template-columns: var(--selection-inset, var(--item-inset)) minmax(0,
     1fr);
@@ -335,18 +361,21 @@ small {
 }
 :root [data-otk-selection=vertical].otk-selection-item::before {
   content: "";
-  width: 3px;
-  height: 14px;
+  width: calc(3 * var(--otk-unit));
+  height: calc(14 * var(--otk-unit));
   margin-inline-start: var(--selection-pointer-inset);
   border-radius: 2px;
   background: transparent;
+}
+:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item::before {
+  content: none;
 }
 .otk-selection-content {
   display: flex;
   align-items: center;
   flex: 1;
   min-width: 0;
-  gap: 8px;
+  gap: calc(8 * var(--otk-unit));
 }
 :root [data-otk-selection=horizontal].otk-selection-item {
   display: grid;
@@ -361,14 +390,14 @@ small {
   content: "";
   grid-area: 2 / 1;
   height: 2px;
-  margin-inline: 8px;
+  margin-inline: var(--space-2);
   border-radius: 2px;
   background: transparent;
 }
 [data-otk-selection=horizontal] > .otk-selection-content {
   grid-area: 1 / 1 / -1 / -1;
   justify-content: center;
-  padding: var(--selection-padding, 4px var(--item-inset));
+  padding: var(--selection-padding, var(--space-1) var(--item-inset));
 }
 [data-otk-selection] > .otk-control-icon-selection {
   grid-area: 1 / 1 / -1 / -1;
@@ -392,38 +421,10 @@ h5,
 h6 {
   font-weight: 600;
 }
-.otk-age-0 {
-  color: var(--otk-fg);
-}
-.otk-age-1 {
-  color: var(--otk-age-1);
-}
-.otk-age-2 {
-  color: var(--otk-age-2);
-}
-.otk-age-3 {
-  color: var(--otk-age-3);
-}
 /* Applied values retain the same geometry and remain fully interactive. */
 .is-applied,
 :root button.is-applied {
   color: var(--applied-fg);
-}
-:root[data-otk-reduced-colors] :is(.otk-age-0, .otk-age-1, .otk-age-2, .otk-age-3) {
-  color: var(--otk-fg);
-  text-underline-offset: 4px;
-}
-:root[data-otk-reduced-colors] .otk-age-0 {
-  text-decoration: none;
-}
-:root[data-otk-reduced-colors] .otk-age-1 {
-  text-decoration: underline dotted;
-}
-:root[data-otk-reduced-colors] .otk-age-2 {
-  text-decoration: underline wavy;
-}
-:root[data-otk-reduced-colors] .otk-age-3 {
-  text-decoration: underline double;
 }
 :root {
   --deleted-fg: color-mix(in srgb, var(--otk-fg) 70%, var(--otk-bg));
@@ -436,7 +437,7 @@ h6 {
 /* Public compact-menu geometry shared by controls and their status cells. */
 :root {
   --menu-row-height: var(--control-size);
-  --menu-item-inset: 8px;
-  --menu-block-inset: 4px;
+  --menu-item-inset: calc(8 * var(--otk-unit));
+  --menu-block-inset: calc(4 * var(--otk-unit));
   --menu-row-gap: 0px;
 }

@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt, reply } from "../../pages/composer.ts";
-import { revealTool, shellRun } from "../../pages/transcript.ts";
+import {
+  revealAcquired,
+  revealTool,
+  shellRun,
+} from "../../pages/transcript.ts";
 
 test.use({ profile: "composer-submission" });
 for (const path of ["normal", "shell", "slash", "palette"] as const) {
   test(`composer.${path}-submission-promotes-once-and-persists-success`, {
     tag: ["@composer", "@isolated"],
-  }, async ({ isolatedState: state, page }) => {
+  }, async ({ isolatedState: state, page }, info) => {
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: `Submit ${path}`,
     });
@@ -27,6 +32,8 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
       ),
     ).toBeUndefined();
     const before = Date.now(), start = frames.sent.length;
+    const unconfirmed = state.controller.info!.version.startsWith("2.") &&
+      (path === "slash" || path === "palette");
     for (let turn = 0; turn < 2; turn++) {
       const text = `Submission ${path} turn ${turn} completed.`;
       if (path !== "shell") {
@@ -38,6 +45,12 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
           "Submission owner probe",
         );
         await page.locator('[data-command="server.command:probe"]').click();
+        if (unconfirmed) {
+          await expect(page.locator("dialog[open]")).toContainText(
+            "did not provide a way to confirm its message",
+          );
+          await page.keyboard.press("Escape");
+        }
         await expect(page.locator("dialog[open]")).toHaveCount(0);
       } else {
         if (path === "shell") {
@@ -51,23 +64,49 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
             ? `/probe turn-${turn}`
             : `SUBMISSION-NORMAL-${turn}`,
         );
-        await page.locator(".otk-prompt button[type=submit]").click();
-        await expect(prompt(page)).toHaveValue("");
+        await send(page).click();
+        if (unconfirmed) {
+          // WP1.9: uncertainty keeps the submitted input in custody, not in
+          // the fresh composer. Recovery only checks the existing send.
+          await expect(prompt(page)).toHaveValue("");
+          await expect(
+            page.getByRole("button", { name: "Check send", exact: true }),
+          ).toHaveCount(turn + 1);
+          await expect(page.locator(".otk-composer-notice")).toContainText(
+            "did not provide a way to confirm its message",
+          );
+        } else await expect(prompt(page)).toHaveValue("");
       }
       if (path === "shell") {
-        await revealTool(
-          page,
-          // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
-          `${
-            shellRun(state, "completed")
-          }:has([title*="SUBMISSION-SHELL-${turn}"])`,
-        );
+        const shellRecord = `${
+          shellRun(state, "completed")
+        }:has([title*="SUBMISSION-SHELL-${turn}"])`;
+        // D74: V2's background shell stays in the transcript; V1's bash is Work.
+        if (state.controller.info!.version.startsWith("2.")) {
+          if (turn === 0) await revealAcquired(page, shellRecord);
+          // This already-open interval admits the next shell independently.
+          // Wait for the exact new run, not the first publication of its kind.
+          await expect(page.locator(shellRecord)).toBeVisible();
+        } else await revealTool(page, shellRecord);
         await expect(
           page.locator(shellRun(state, "completed")).filter({
             hasText: `SUBMISSION-SHELL-${turn}`,
           }),
         ).toBeVisible();
       } else await reply(state, page, session.id, text);
+      if (unconfirmed && path === "slash" && turn === 0) {
+        for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          await info.attach(`send-unconfirmed-${theme}`, {
+            body: await page.screenshot({ fullPage: true }),
+            contentType: "image/png",
+          });
+        }
+      }
       const tasks = await state.product("tasks.list", {
         directory: state.directory,
       });

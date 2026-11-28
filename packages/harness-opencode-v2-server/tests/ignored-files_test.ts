@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { waitFor } from "../../../tests/support/opencode.ts";
-import { ignoredFiles } from "../ignored-files.ts";
+import { ignoredFiles } from "@otk/harness";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 
 test("V2 Git ignore authority preserves nested rules, wildcards, exceptions and NUL-delimited names", async () => {

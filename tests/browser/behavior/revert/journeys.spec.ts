@@ -22,6 +22,21 @@ async function palette(page: Page, command: string) {
   await page.locator(`[data-command="${command}"]`).click();
   await expect(page.getByRole("dialog", { name: "Commands", exact: true })).not
     .toBeVisible();
+  if (command === "session.undo") {
+    await page.getByRole("button", { name: "Confirm revert", exact: true })
+      .click();
+  }
+}
+async function expectRevert(state: TestState, page: Page, sessionID: string) {
+  await expect.poll(async () =>
+    (await state.product("session.get", { sessionID })).revert?.boundaryID
+  ).toBeTruthy();
+  const record = (await state.product("session.get", { sessionID })).revert!;
+  expect(record.messageIDs).toContain(record.boundaryID);
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-boundary",
+    record.boundaryID,
+  );
 }
 async function reply(
   state: TestState,
@@ -66,6 +81,8 @@ async function revertFiles(state: TestState, page: Page, bubble: string) {
       '[data-message-command="prompt.revert"]',
     ).click();
   }
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
 }
 
 test("revert.restore-visible-with-full-draft-and-exact-transcript", {
@@ -95,18 +112,21 @@ test("revert.restore-visible-with-full-draft-and-exact-transcript", {
   const attachments = await chips(page).allTextContents();
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
-  const strip = page.locator(".otk-rolled-back-strip");
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  const strip = page.locator(".otk-revert-group");
   const restore = strip.getByRole("button", {
     name: "Restore conversation",
     exact: true,
   });
   await expect(restore).toBeVisible();
-  await expect(page.locator(".otk-rollback-disclosure")).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
-  await expect(page.locator(".otk-rollback-details")).toHaveCount(0);
-  await expect(input).toHaveValue(draft);
+  await expect(page.locator(".otk-revert-group .otk-record-group-toggle"))
+    .toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  await expect(page.locator(".otk-revert-records")).toHaveCount(0);
+  await expect(input).toHaveValue("Original prompt");
   for (
     const [name, id] of [["dark", "otk-dark"], ["linen", "otk-light"], [
       "stone",
@@ -173,7 +193,7 @@ test("revert.undo-restore-after-navigation-and-command-surfaces", {
   await input.fill("/rest");
   await expect(page.locator(".otk-autocomplete")).toContainText("restore");
   await input.press("Enter");
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expect(input).toHaveValue("");
   await expect(page.locator(".otk-messages")).toContainText(
     "Bring back this reply.",
@@ -210,16 +230,14 @@ test("revert.shared-directory-native-rollback-restore-other-edit", {
   expect(await readFile(path, "utf8")).toBe("B\n");
   await openSession(state, page, a.id);
   await revertFiles(state, page, ".otk-user-bubble");
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "1 prompt rolled back",
-  );
+  await expectRevert(state, page, a.id);
   await expect(readFile(path, "utf8")).rejects.toMatchObject({
     code: "ENOENT",
   });
   expect(await state.native(`/session/${b.id}/message`)).toEqual(transcript);
-  await page.locator(".otk-rollback-disclosure").click();
-  await page.locator(".otk-rollback-footer button").click();
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await page.locator(".otk-revert-restore").click();
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   expect(await readFile(path, "utf8")).toBe("B\n");
   expect(await state.native(`/session/${b.id}/message`)).toEqual(transcript);
   expect(dialogs).toEqual([]);
@@ -242,8 +260,16 @@ test("revert.restore-settles-origin-draft-after-leaving-during-native-clear", {
   await action(state, "hold", "unrevert");
   await page.getByRole("button", { name: "Restore conversation", exact: true })
     .click();
-  await expect(page.locator(".otk-rollback-status[role=status]"))
+  await expect(page.locator(".otk-revert-group"))
     .toContainText("Restoring");
+  for (const name of ["Restore conversation", "Dismiss revert"]) {
+    await expect(
+      page.locator(".otk-revert-group").getByRole("button", {
+        name,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  }
   await openSession(state, page, other.id);
   await input.fill("Other draft stays");
   await action(state, "release");
@@ -313,8 +339,7 @@ test("revert.restore-settles-origin-draft-after-cancelled-reconciliation", {
     ).toBe(true);
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
     await expect(
-      page.getByRole("complementary", { name: "Rolled-back prompts" })
-        .getByRole("status"),
+      page.locator(".otk-revert-group"),
     ).toContainText("Restoring");
     await info.attach("confirmed-clear-before-view-cancellation", {
       body: JSON.stringify({
@@ -331,7 +356,7 @@ test("revert.restore-settles-origin-draft-after-cancelled-reconciliation", {
     frames.release();
     await expect(input).toHaveValue("Other draft stays");
     await openSession(state, page, source.id);
-    await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+    await expect(page.locator(".otk-revert-group")).toHaveCount(0);
     await expect(input).toHaveValue("");
     await expect(page.locator(".otk-messages")).toContainText(
       "Native conversation restored.",
@@ -370,50 +395,52 @@ test("revert.files-conversation-copy-reload-restore-and-commit", {
   const bubble = `[data-message="${id}"] .otk-user-bubble`;
   await revealAcquired(page, bubble);
   await revertFiles(state, page, bubble);
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "2 prompts rolled back",
-  );
+  await expectRevert(state, page, s.id);
   // Decisions 1/20: native controls before the first prompt stay visible.
   await expectNoConversation(state, page);
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "before\n",
   );
-  await page.locator(".otk-rollback-disclosure").click();
-  await expect(page.locator(".otk-rollback-prompt")).toHaveCount(2);
-  await expect(page.locator(".otk-rollback-details")).toContainText(
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await expect(page.locator(".otk-revert-records [data-role=user]"))
+    .toHaveCount(2);
+  await expect(page.locator(".otk-revert-records")).toContainText(
     "revert.txt",
   );
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
     origin: state.url,
   });
-  await page.getByRole("button", {
-    name: "Copy rolled-back prompt",
-    exact: true,
-  }).first().click();
+  await page.locator(".otk-revert-records .otk-user-bubble").first().evaluate(
+    (element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = globalThis.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    },
+  );
+  await page.keyboard.press("Control+c");
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe("Run edit");
   await page.reload();
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "2 prompts rolled back",
-  );
-  await expect(page.locator(".otk-rollback-disclosure")).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
-  await page.locator(".otk-rollback-disclosure").click();
-  await page.locator(".otk-rollback-footer button").click();
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expectRevert(state, page, s.id);
+  await expect(page.locator(".otk-revert-group .otk-record-group-toggle"))
+    .toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await page.locator(".otk-revert-restore").click();
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expectRestoredPrompts(state, page, s.id, 2);
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "after\n",
   );
   await revealAcquired(page, bubble);
   await revertFiles(state, page, bubble);
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "2 prompts rolled back",
-  );
+  await expectRevert(state, page, s.id);
   await reply(state, page, s.id, "Take a new direction", "New direction.");
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   expect(
     (await state.native<{ info: { role: string } }[]>(
       `/session/${s.id}/message`,
@@ -435,18 +462,19 @@ test("revert.pending-error-owned-feedback-retry", {
   await action(state, "freeze");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   // Preparation and admitted requests hand progress between existing owners.
   // Assert the one visible rollback status, not either owner's private class.
   await expect(
-    page.locator(".otk-composer-notice [role=status]").filter({
-      hasText: "Rolling back",
-    }),
+    page.locator(".otk-revert-group").filter({ hasText: "Reverting" }),
   )
-    .toContainText("Rolling back");
+    .toContainText("Reverting");
   await action(state, "release");
-  await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
-    1,
-  );
+  await expect(page.locator(".otk-revert-confirmation [role=alert]"))
+    .toHaveCount(
+      1,
+    );
   const request = traffic.sent.filter((item) =>
     item.frame.method === "session.revert"
   ).at(-1)!.frame;
@@ -456,22 +484,20 @@ test("revert.pending-error-owned-feedback-retry", {
   expect(result.ok).toBe(false);
   expect(result.error.facts?.reason).toBeTruthy();
   expect(result.error.facts?.status).toBe(409);
-  const failure = page.locator(".otk-composer-notice [role=alert]");
+  const failure = page.locator(".otk-revert-confirmation [role=alert]");
   // FP1 retains the producer's public reason instead of per-code fixed copy.
   await expect(failure).toContainText(result.error.facts!.reason!);
   await expect(failure).toContainText("HTTP 409");
-  await expect(
-    failure.getByRole("link", { name: "Rollback feedback", exact: true }),
-  )
-    .toHaveAttribute("href", `#/local/${s.id}`);
-  await expect(page.locator(".otk-rollback-status")).toHaveCount(0);
+  await expect(failure.locator(".otk-failure-target")).toHaveCount(0);
+  expect(result.error.facts?.target).toMatchObject({ sessionID: s.id });
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expect(page.locator("[data-role=user]")).toHaveCount(1);
   await action(state, "thaw");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "1 prompt rolled back",
-  );
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
+  await expectRevert(state, page, s.id);
   await expect(page.locator(".otk-composer-notice [role=alert]")).toHaveCount(
     0,
   );
@@ -494,10 +520,10 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
   }
   const input = page.locator("textarea[name=prompt]");
   await prompt(page, "/undo");
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(input).toHaveValue("Second prompt");
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "1 prompt rolled back",
-  );
+  await expectRevert(state, page, s.id);
   await page.keyboard.press("Control+k");
   await expect(page.locator('[data-command="session.undo"]')).toBeVisible();
   await expect(page.locator('[data-command="session.redo"]')).toBeVisible();
@@ -506,10 +532,10 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
   );
   await page.keyboard.press("Escape");
   await prompt(page, "/undo");
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(input).toHaveValue("First prompt");
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "2 prompts rolled back",
-  );
+  await expectRevert(state, page, s.id);
   await action(state, "hold", "unrevert");
   await prompt(page, "/redo");
   // Observe the held native restore, rather than racing pre-dispatch archive
@@ -519,26 +545,24 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
       .mutations.includes("unrevert")
   ).toBe(true);
   await expect(
-    page.locator(".otk-composer-notice [role=status]").filter({
+    page.locator(".otk-revert-group").filter({
       hasText: "Restoring",
     }),
   )
     .toContainText("Restoring");
   await action(state, "release");
   await expect(input).toHaveValue("");
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   // Redo restores both prompts. Visible native idle records (decision 1, plus
   // the one native adds on unrevert) can move the first out of the mounted
   // window, so prove both from acquired messages and reveal each bubble.
   await expectRestoredPrompts(state, page, s.id, 2);
   await input.fill("Keep this edited draft");
   await palette(page, "session.undo");
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "1 prompt rolled back",
-  );
-  await expect(input).toHaveValue("Keep this edited draft");
+  await expectRevert(state, page, s.id);
+  await expect(input).toHaveValue("Second prompt");
   await palette(page, "session.redo");
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expect(input).toHaveValue("Keep this edited draft");
   await state.controller.call("queueScript", {
     lease: state.lease.lease,
@@ -561,16 +585,14 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
     (await state.observe<{ transport: { mutations: string[] } }>()).transport
       .mutations.length;
   await palette(page, "session.undo");
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    "1 prompt rolled back",
-  );
+  await expectRevert(state, page, s.id);
   await expect(input).toHaveValue("Interrupt this prompt");
   expect(
     (await state.observe<{ transport: { mutations: string[] } }>()).transport
       .mutations.slice(before),
   ).toEqual(["abort", "revert"]);
   await palette(page, "session.redo");
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expect(input).toHaveValue("");
   expect(dialogs).toEqual([]);
 });

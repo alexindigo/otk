@@ -237,6 +237,40 @@ Deno.test("mutating native ports forward the context and scoped launches join ac
   assertEquals(completed, true);
 });
 
+for (const mode of ["command", "shell"] as const) {
+  Deno.test(`V1 ${mode} without context cannot return a receipt before native admission`, async () => {
+    const launched = Promise.withResolvers<void>();
+    const admitted = Promise.withResolvers<void>();
+    const rejection = new Error("Native refused the launch");
+    void admitted.promise.catch(() => {});
+    const launch = () => {
+      launched.resolve();
+      return { admitted: admitted.promise, settled: Promise.resolve() };
+    };
+    const client = new Client({
+      url: "http://fixture",
+      username: "",
+      password: "",
+      db: "",
+      heartbeattimeout: 25,
+      reconnectmax: 30,
+      requestms: 5,
+    });
+    const directory = {
+      validate: () => Promise.resolve([]),
+      cached: () => "/p",
+      resolve: () => Promise.resolve("/p"),
+    };
+    const input = { sessionID: "opcv1-s", command: "work", agent: "build" };
+    const outcome = mode === "command"
+      ? commands(client, directory, launch).command({ ...input, arguments: "" })
+      : shell(client, directory, launch).shell(input);
+    await launched.promise;
+    admitted.reject(rejection);
+    await assertRejects(() => outcome, Error, rejection.message);
+  });
+}
+
 Deno.test("native catalog readers propagate cancellation through directory preparation and HTTP", async () => {
   const controller = new AbortController(),
     observed: (AbortSignal | undefined | null)[] = [];

@@ -3,6 +3,7 @@ import "./TurnUsage.css" with { type: "text" };
 import { createSignal, onCleanup, Show } from "solid-js";
 import {
   countLabel,
+  metaList,
   reportedTokens,
   type TurnUsage as Usage,
   usageCost,
@@ -33,20 +34,17 @@ export default function TurnUsage(props: {
     if (!value) {
       return props.summary?.state === "unavailable"
         ? "Usage unavailable"
-        : "Digesting\u2026";
+        : "Digesting...";
     }
     const tokens = reportedTokens(value.tokens);
-    return `${countLabel(value.calls, "model call")} · ${
+    return metaList([
+      countLabel(value.calls, "model call"),
       tokens === undefined
         ? "Tokens unavailable"
-        : countLabel(tokens, "token", undefined, usageTokens(tokens))
-    }${
-      props.showCost
-        ? ` · ${
-          value.cost === null ? "Cost unavailable" : usageCost(value.cost)
-        }`
-        : ""
-    }`;
+        : countLabel(tokens, "token", undefined, usageTokens(tokens)),
+      props.showCost &&
+      (value.cost === null ? "Cost unavailable" : usageCost(value.cost)),
+    ]);
   };
   const label = () =>
     `Turn usage: ${summary()}${
@@ -56,12 +54,22 @@ export default function TurnUsage(props: {
         }`
         : ""
     }`;
+  const summaryLabel = () => (
+    <>
+      <span class="otk-turn-usage-full">{summary()}</span>
+      <span
+        class="otk-turn-usage-compact"
+        data-label="Usage"
+        aria-hidden="true"
+      />
+    </>
+  );
   return (
     <Show
       when={!!props.open}
       fallback={
         <span class="otk-control-label" role="group" aria-label={label()}>
-          {summary()}
+          {summaryLabel()}
         </span>
       }
     >
@@ -80,7 +88,7 @@ export default function TurnUsage(props: {
               popover = value;
               props.control?.({ open: () => popover.open() });
             }}
-            trigger={<span>{summary()}</span>}
+            trigger={summaryLabel()}
             onOpen={() => {
               setOpened(true);
               release ??= props.open?.();

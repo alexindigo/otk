@@ -19,6 +19,10 @@ import {
 } from "@otk/harness-opencode-v1";
 import { StreamBuffers } from "@otk/content";
 
+// The native's project directory exists: a missing one has no known repository.
+const idle = Deno.makeTempDirSync({ prefix: "demand-project-" });
+globalThis.addEventListener("unload", () => Deno.removeSync(idle));
+
 test("@load @messages @transport idle prefetch serves the next older batch with zero native HTTP or SQL reads", async () => {
   const native = await nativeFixture(1, true, 30);
   native.settings.messages.prefetchms = 1000;
@@ -198,7 +202,7 @@ async function nativeFixture(
   const sessions = Array.from({ length: population }, (_, i) => ({
     id: `ses_idle${i}`,
     projectID: "idle",
-    directory: "/idle",
+    directory: idle,
     title: `Idle ${i}`,
     time: { created: 1, updated: Date.now() - i },
   }));
@@ -206,7 +210,7 @@ async function nativeFixture(
   const db = sql ? new DatabaseSync(file) : undefined;
   if (db) {
     db.exec(
-      "CREATE TABLE project(id TEXT PRIMARY KEY,worktree TEXT); INSERT INTO project VALUES('idle','/idle'); CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT); CREATE INDEX session_list ON session(directory,time_updated DESC,id DESC)",
+      `CREATE TABLE project(id TEXT PRIMARY KEY,worktree TEXT); INSERT INTO project VALUES('idle','${idle}'); CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT); CREATE INDEX session_list ON session(directory,time_updated DESC,id DESC)`,
     );
     const insert = db.prepare(
       // Match native collection ordering without changing fixture insert shapes.
@@ -236,7 +240,7 @@ async function nativeFixture(
   const emit = (type: string, properties: unknown) => {
     const data = new TextEncoder().encode(
       `data: ${
-        JSON.stringify({ directory: "/idle", payload: { type, properties } })
+        JSON.stringify({ directory: idle, payload: { type, properties } })
       }\n\n`,
     );
     for (const stream of streams) stream.enqueue(data);
@@ -247,7 +251,7 @@ async function nativeFixture(
       const url = new URL(request.url), path = url.pathname;
       requests.set(path, (requests.get(path) ?? 0) + 1);
       if (path === "/project") {
-        return Response.json([{ id: "idle", worktree: "/idle" }]);
+        return Response.json([{ id: "idle", worktree: idle }]);
       }
       if (path === "/global/health") {
         return Response.json({
@@ -353,6 +357,8 @@ async function nativeFixture(
   settings.auth.type = "none";
   settings.server.port = 0;
   settings.state.path = join(root, "state");
+  // The fake owns V1 HTTP, events and SQL regardless of ambient discovery.
+  settings.harness.type = "opencode-v1";
   settings.harness.url = `http://127.0.0.1:${server.addr.port}`;
   settings.harness.db = sql ? file : join(root, "absent.db");
   settings.digest = {
@@ -479,7 +485,7 @@ test("@load @sessions @messages metadata demand stops newest-first at its bounda
       null,
     );
     await bridge.read("sessions.list", {
-      directory: "/idle",
+      directory: idle,
       query: "Idle 1",
       limit: 1,
     }, { owner: "normal-list", priority: "user", signal });
@@ -561,7 +567,7 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     const first = await snapshot();
     // Topology is now additive; scalar authority and no-population reads stay exact.
     const direct: import("@otk/protocol").ProjectSummaryFacts = {
-      directory: "/idle",
+      directory: idle,
       hasSessions: true,
       status: "none",
       sessionCount: 1,
@@ -572,17 +578,17 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
       ),
       authority: "current",
     };
-    assertObjectMatch(first.summaries!["/idle"], {
+    assertObjectMatch(first.summaries![idle], {
       ...direct,
       topology: {
         repoID: "idle",
-        canonicalRoot: "/idle",
-        leafDirectory: "/idle",
+        canonicalRoot: idle,
+        leafDirectory: idle,
       },
-      scopes: ["/idle"],
+      scopes: [idle],
       direct,
     });
-    assertEquals(first.summaries!["/idle"].scopes, ["/idle"]);
+    assertEquals(first.summaries![idle].scopes, [idle]);
     assertEquals(first.projects, []);
     assertEquals(
       [...app.index.values()].length,
@@ -594,11 +600,11 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     }
     noPopulation();
     await client.rpc("projects.inactive", {
-      directory: "/idle",
+      directory: idle,
       inactive: true,
     });
     assertEquals(
-      (await snapshot()).projects.find((p) => p.directory === "/idle")
+      (await snapshot()).projects.find((p) => p.directory === idle)
         ?.inactive,
       true,
     );
@@ -609,8 +615,8 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     await waitFor(
       snapshot,
       (value) =>
-        value.summaries?.["/idle"]?.status === "working" &&
-        !value.projects.find((p) => p.directory === "/idle")?.inactive,
+        value.summaries?.[idle]?.status === "working" &&
+        !value.projects.find((p) => p.directory === idle)?.inactive,
     );
     native.emit("message.updated", {
       info: {
@@ -627,7 +633,7 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
     });
     await waitFor(
       snapshot,
-      (value) => value.summaries?.["/idle"]?.status === "finished",
+      (value) => value.summaries?.[idle]?.status === "finished",
     );
     await client.close();
     await app.stop();
@@ -644,7 +650,7 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
       (value) => value === "connected",
     );
     assertEquals(
-      (await snapshot()).summaries?.["/idle"]?.status,
+      (await snapshot()).summaries?.[idle]?.status,
       "finished",
       "never-demanded unseen work survives restart",
     );
@@ -659,11 +665,11 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
       terminal: 20,
     });
     const page = await client.rpc<SessionListPage>("sessions.list", {
-      directory: "/idle",
+      directory: idle,
     });
     assertEquals(page.items.length, 1);
     assertEquals(
-      (await snapshot()).summaries?.["/idle"]?.sessionCount,
+      (await snapshot()).summaries?.[idle]?.sessionCount,
       1,
       "keyed hydration does not add population",
     );
@@ -686,7 +692,7 @@ test("@load @sessions @attention project-only cold and warm startup seeds an unt
       0,
       "warm startup does not replay retained catalog",
     );
-    assertEquals((await snapshot()).summaries?.["/idle"]?.hasSessions, true);
+    assertEquals((await snapshot()).summaries?.[idle]?.hasSessions, true);
     noPopulation();
     console.info("Q1 PROOF", {
       templates: 130,
@@ -718,13 +724,13 @@ test("@load @sessions @transport project demand returns 20 of 500, bounded SQL i
   });
   const client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
   try {
-    await client.connect("/idle");
+    await client.connect(idle);
     await waitFor(
       () => app.connections.harnessState,
       (state) => state === "connected",
     );
     const page = await client.rpc<SessionListPage>("sessions.list", {
-      directory: "/idle",
+      directory: idle,
     });
     assertEquals(page.items.length, 20);
     assertEquals(page.load.state, "complete");
@@ -739,7 +745,7 @@ test("@load @sessions @transport project demand returns 20 of 500, bounded SQL i
     await waitFor(reads, (value) => value >= 1);
     await waitFor(reads, (value) => value === 2);
     const second = await client.rpc<SessionListPage>("sessions.list", {
-      directory: "/idle",
+      directory: idle,
       before: page.older,
     });
     assertEquals(second.items.length, 20);
@@ -759,7 +765,7 @@ test("@load @sessions @transport project demand returns 20 of 500, bounded SQL i
     for (let i = 0; i < 5000; i++) insert.run(`unrelated_${i}`);
     native.db!.exec("COMMIT");
     const filtered = await client.rpc<SessionListPage>("sessions.list", {
-      directory: "/idle",
+      directory: idle,
       query: "Idle",
     });
     assertEquals(
@@ -777,7 +783,7 @@ test("@load @sessions @transport project demand returns 20 of 500, bounded SQL i
     );
     assertIdentityFields(remembered, [{
       id: "opcv1-ses_idle499",
-      directory: "/idle",
+      directory: idle,
     }]);
     assertEquals(reads(), before, "point validation never enumerates a list");
     console.info(
@@ -848,7 +854,7 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
   };
   try {
     // Q1 removes startup admission; demand one unfinished entry to retain this proof's single-chunk fence.
-    await app.backend.core.listSessions({ directory: "/idle", limit: 1 });
+    await app.backend.core.listSessions({ directory: idle, limit: 1 });
     await waitFor(() => [...app.index.values()].length, (n) => n === 1);
     assertEquals(
       native.reads(),
@@ -866,7 +872,7 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
       },
       () => client.rpc("layout.patch", {}),
       async () => {
-        client.lease({ directory: "/idle", crumbs: [], rows: [] });
+        client.lease({ directory: idle, crumbs: [], rows: [] });
         await client.rpc("prefs.get", {});
       },
       () => {
@@ -972,7 +978,7 @@ for (const background of [false, true]) {
     const app = await start(native.settings);
     try {
       // Q1 removes startup admission; seed this Q2 scheduling proof through explicit list demand.
-      await app.backend.core.listSessions({ directory: "/idle", limit: 6 });
+      await app.backend.core.listSessions({ directory: idle, limit: 6 });
       await waitFor(() => [...app.index.values()].length, (n) => n === 6);
       native.emit("session.status", {
         sessionID: "ses_idle0",

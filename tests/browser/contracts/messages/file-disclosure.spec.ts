@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork } from "../../pages/transcript.ts";
 
 test.describe("file-change preference", () => {
   test.use({ profile: "contract-messages-collapse" });
@@ -10,7 +10,7 @@ test.describe("file-change preference", () => {
   }, async ({ isolatedState: state, page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await expect(page.locator(".otk-tool-line")).toHaveCount(4);
     await expect(page.locator(".otk-turn-usage > button")).toBeAttached();
     const check = async (open: boolean) => {
@@ -41,11 +41,12 @@ test.describe("file-change preference", () => {
       true,
     );
     for (const tool of ["edit", "patch"]) {
-      await expect(page.locator(`[data-tool=${tool}] .otk-tool-target`))
+      const row = page.locator(`.otk-work-run:has([data-tool=${tool}])`);
+      await expect(row.locator(".otk-work-run-preview"))
         .toHaveText(`${tool}.ts`);
-      await expect(page.locator(`[data-tool=${tool}] .otk-tool-add`))
+      await expect(row.locator(".otk-work-add"))
         .toHaveText("+1");
-      await expect(page.locator(`[data-tool=${tool}] .otk-tool-del`))
+      await expect(row.locator(".otk-work-del"))
         .toHaveText("−1");
     }
     for (const tool of ["edit", "write", "patch"]) {
@@ -62,7 +63,7 @@ test.describe("file-change preference", () => {
       "const written = true;",
     );
     await page.reload();
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await check(false);
     await page.locator(".otk-display-menu > button").click();
     await expect(page.locator("input[name=collapseFileChanges]")).not
@@ -74,7 +75,7 @@ test.describe("file-change preference", () => {
       false,
     );
     await page.reload();
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await check(true);
     await page.locator("[data-tool=edit] .otk-tool-toggle").click();
     await state.product("prefs.set", {
@@ -94,7 +95,7 @@ test.describe("file-change preference", () => {
     await expect(page.locator("[data-tool=patch] .otk-tool-body"))
       .toBeVisible();
     await page.reload();
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await check(true);
     await state.product("prefs.set", {
       key: "collapseFileChanges",
@@ -102,7 +103,7 @@ test.describe("file-change preference", () => {
     });
     await check(false);
     await page.reload();
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await check(false);
   });
 });
@@ -134,9 +135,10 @@ for (const picker of [false, true]) {
             : ".otk-prompt-context > span",
         ).first(),
       ).toHaveText("Default agent");
-      await expect(page.locator(".otk-composer-model-name")).toHaveText(
-        "Default model",
-      );
+      await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+        .toHaveText(
+          "Default model",
+        );
       if (picker) {
         await expect(page.locator(".otk-agent-picker > button"))
           .toHaveAttribute("aria-label", "Agent: Default agent");
@@ -155,8 +157,9 @@ for (const picker of [false, true]) {
           lease: state.lease.lease,
           action: "release",
         });
-        await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-          "1 prompt rolled back",
+        await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+          "data-boundary",
+          "user",
         );
       }
     });

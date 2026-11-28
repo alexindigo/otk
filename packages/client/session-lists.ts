@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
-  IntentIdentity,
   ServerFrame,
   SessionListInput,
   SessionListPage,
   SessionStructure,
 } from "@otk/protocol";
 import type { Rpc } from "./rpc.ts";
+import type { ClientIntent } from "./requests.ts";
 import { SESSION_LIST_SIZE, sessionListKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import { createProgress } from "./progress.ts";
@@ -28,6 +28,7 @@ export function createSessionLists(
     revision: number;
     generation?: string;
     visible?: readonly string[];
+    order?: () => readonly string[];
     dirty?: boolean;
     covered?: boolean;
     retained: Map<string, SessionStructure>;
@@ -39,7 +40,7 @@ export function createSessionLists(
       goal: number;
     };
     pending?: {
-      intent: IntentIdentity;
+      intent: ClientIntent;
       epoch: number;
       abort: AbortController;
       before?: string;
@@ -146,6 +147,7 @@ export function createSessionLists(
           directory: info.directory,
           parentID: info.parentID,
           title: info.title,
+          timeCreated: info.time.created,
           hierarchy: info.hierarchy,
         });
       }
@@ -222,7 +224,7 @@ export function createSessionLists(
   const advance = (list: List) => {
     if (!list.active || list.loading || !list.older || list.pending) return;
     const visible = new Set(list.visible ?? []);
-    if (list.items.slice(-5).some((item) => visible.has(item.id))) {
+    if (list.order?.().slice(-5).some((id) => visible.has(id))) {
       read(list, true);
     }
   };
@@ -260,6 +262,7 @@ export function createSessionLists(
       return list;
     },
     more: (list: List) => read(list, true),
+    confirmed: (list: List) => !!list.covered && !list.dirty && !list.loading,
     progress: (list: List) =>
       progress.display(sessionListKey(list.input), "Loading sessions"),
     structures(
@@ -276,6 +279,7 @@ export function createSessionLists(
             id: item.id,
             directory: item.directory,
             title: item.title,
+            timeCreated: item.timeCreated,
             parentID: item.parentID,
             hierarchy: item.hierarchy,
           });
@@ -288,8 +292,13 @@ export function createSessionLists(
       projections.set(list, { source: list.structures, context, value });
       return value;
     },
-    viewport(list: List, keys: readonly string[]) {
+    viewport(
+      list: List,
+      keys: readonly string[],
+      order: () => readonly string[] = () => list.items.map((item) => item.id),
+    ) {
       list.visible = keys;
+      list.order = order;
       advance(list);
     },
     activate(input: SessionListInput | readonly SessionListInput[]) {
@@ -332,9 +341,7 @@ export function createSessionLists(
         const pending = list.pending;
         if (
           !pending || frame.epoch !== pending.epoch ||
-          frame.request.key !== pending.intent.key ||
-          frame.request.clientID !== pending.intent.clientID ||
-          frame.request.window !== pending.intent.window
+          !rpc.requests.matches(pending.intent, frame.request)
         ) continue;
         if (frame.load.revision <= pending.revision) continue;
         if (frame.data.offset === 0) pending.chunks = [];

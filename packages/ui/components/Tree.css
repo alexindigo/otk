@@ -1,0 +1,311 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+:root {
+  --tree-indent: calc(19 * var(--otk-unit));
+  --tree-box-size: calc(9 * var(--otk-unit));
+  --tree-icon-size: var(--icon-compact);
+  --tree-default-row-height: calc(var(--tree-icon-size) * 2);
+  --selection-mark: calc(3 * var(--otk-unit));
+}
+/* The disclosure, artwork, content and paint share one row grid. */
+.otk-tree-node {
+  min-inline-size: 0;
+}
+:where(.otk-tree-node) {
+  --tree-row-gap: 0px;
+}
+.otk-tree-region {
+  display: block;
+}
+.otk-tree-lane.is-through > .otk-tree-through-paint,
+.otk-tree-junction.is-through > .otk-tree-through-paint,
+.otk-tree-junction:is(.is-tee, .is-elbow) .otk-tree-upper,
+.otk-tree-junction.is-tee :is(.otk-tree-lower, .otk-tree-lane-extension),
+.otk-tree-node-lane.is-stem :is(.otk-tree-stem-paint, .otk-tree-lane-extension) {
+  inline-size: 1px;
+  background-image: repeating-linear-gradient(to bottom, var(--otk-fg-3) 0 1px,
+    transparent 1px 2px);
+  background-size: 1px 2px;
+}
+.otk-tree-upper,
+.otk-tree-lower {
+  grid-column: 2;
+  justify-self: center;
+}
+.otk-tree-upper {
+  grid-row: 1;
+}
+.otk-tree-lower {
+  grid-row: 3;
+}
+.otk-tree-connector {
+  grid-area: 2 / 3;
+  align-self: center;
+  block-size: 1px;
+  background-image: repeating-linear-gradient(to right, var(--otk-fg-3) 0 1px,
+    transparent 1px 2px);
+  background-size: 2px 1px;
+}
+.otk-tree-selection {
+  place-self: stretch start;
+  display: grid;
+  align-items: center;
+}
+.otk-tree-selection-mark {
+  inline-size: var(--selection-mark);
+  block-size: calc(14 * var(--otk-unit));
+  border-radius: 2px;
+  background: transparent;
+}
+.otk-tree-node.has-selection > .otk-tree-heading > .otk-tree-selection > .otk-tree-selection-mark {
+  background: var(--otk-fg);
+}
+
+.otk-tree-row {
+  --tree-line: var(--tree-height, var(--tree-default-row-height));
+  display: grid;
+  grid-template-columns:
+    [edge-start] var(--tree-edge, 0px)
+    [edge-end lanes-start] auto
+    [lanes-end junction-start trigger-start] var(--tree-indent)
+    [junction-end node-start] var(--tree-indent)
+    [node-end] var(--tree-caption-gap, 0px)
+    [label-start] minmax(0, max-content)
+    [label-end trigger-end trail-start] minmax(var(--tree-trail-min, 0px), 1fr)
+    [trail-end];
+  grid-template-rows: [line-start] var(--tree-line)
+    [line-end extension-start] auto [extension-end feedback-start] auto
+    [feedback-end];
+}
+.otk-tree-node.has-selection-slot > .otk-tree-row {
+  --tree-edge: var(--selection-mark);
+}
+.otk-tree-row.is-outgoing {
+  direction: rtl;
+  --tree-heading-flow: row-reverse;
+}
+.otk-tree-row.is-outgoing :is(.otk-tree-slot, .otk-tree-trigger > :nth-child(3)) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.otk-tree-row > .otk-tree-selection {
+  grid-column: edge;
+  grid-row: line;
+}
+.otk-tree-lanes {
+  grid-column: lanes;
+  grid-row: line-start / feedback-end;
+  display: flex;
+  pointer-events: none;
+}
+.otk-tree-lane {
+  display: grid;
+  flex: 0 0 var(--tree-indent);
+  inline-size: var(--tree-indent);
+  justify-items: center;
+}
+.otk-tree-lane.is-through > .otk-tree-through-paint {
+  justify-self: center;
+}
+.otk-tree-row > .otk-tree-junction {
+  display: grid;
+  grid-column: junction;
+  grid-row: line-start / feedback-end;
+  grid-template-columns: 1fr var(--tree-junction-size, 0px) 1fr;
+  grid-template-rows: subgrid;
+  pointer-events: none;
+}
+.otk-tree-junction-line > :is(.otk-tree-upper, .otk-tree-lower) {
+  background-size: 1px 2px;
+}
+.otk-tree-row > .otk-tree-junction.has-trigger {
+  --tree-junction-size: var(--tree-box-size);
+}
+.otk-tree-junction-line {
+  grid-column: 1 / -1;
+  grid-row: line;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: 1fr var(--tree-junction-size, 0px) 1fr;
+}
+.otk-tree-junction:not(.is-tee, .is-elbow) .otk-tree-connector {
+  visibility: hidden;
+}
+.otk-tree-row.is-outgoing .otk-tree-junction-line > .otk-tree-connector {
+  background-image: repeating-linear-gradient(to left, var(--otk-fg-3) 0 1px,
+    transparent 1px 2px);
+}
+.otk-tree-junction > .otk-tree-lane-extension {
+  grid-column: 2;
+  grid-row: extension-start / feedback-end;
+  justify-self: center;
+}
+.otk-tree-trigger-slot {
+  grid-column: junction;
+  grid-row: line;
+  display: grid;
+  place-items: center;
+  /* Let the label handle the compact box's existing hit target. */
+  pointer-events: none;
+}
+.otk-tree-trigger-slot > * {
+  pointer-events: auto;
+}
+/* A surface may span the art, content and feedback (hover, focus, click),
+   but borrows both axes. The row remains the only owner of all tracks. */
+.otk-tree-row > .otk-tree-frame {
+  grid-column: node-start / trail-end;
+  grid-row: line-start / feedback-end;
+  display: grid;
+  grid-template: subgrid / subgrid;
+  gap: 0;
+  align-items: stretch;
+  min-inline-size: 0;
+}
+.otk-tree-node-lane {
+  grid-column: node;
+  grid-row: line-start / feedback-end;
+  display: grid;
+  grid-template-rows: subgrid;
+  justify-items: center;
+}
+.otk-tree-node-line {
+  grid-row: line;
+  justify-self: stretch;
+  display: grid;
+  grid-template-rows: 1fr auto 1fr;
+  justify-items: center;
+}
+.otk-tree-node-slot {
+  grid-row: 2;
+  display: grid;
+  place-items: center;
+  color: var(--otk-fg-3);
+  font-size: var(--tree-icon-size);
+}
+.otk-tree-node-slot > svg,
+.otk-tree-trigger > :nth-child(2) > svg {
+  inline-size: var(--tree-icon-size);
+  block-size: var(--tree-icon-size);
+}
+.otk-tree-node-lane.is-stem .otk-tree-stem-paint {
+  grid-row: 3;
+  justify-self: center;
+}
+.otk-tree-node-lane.is-stem > .otk-tree-lane-extension {
+  grid-row: extension-start / feedback-end;
+  justify-self: center;
+}
+.otk-tree-frame > .otk-tree-label {
+  grid-column: label-start / trail-end;
+  grid-row: line-start / extension-end;
+  min-inline-size: 0;
+}
+.otk-tree-row:not(.has-node, .align-label) .otk-tree-frame > .otk-tree-label {
+  grid-column: node-start / trail-end;
+}
+.otk-tree-feedback-slot {
+  grid-column: label-start / trail-end;
+  grid-row: feedback;
+  min-inline-size: 0;
+}
+.otk-tree-row.has-feedback-gutter > .otk-tree-frame > .otk-tree-feedback-slot {
+  grid-column: node-start / trail-end;
+  display: grid;
+  grid-template-columns: subgrid;
+  column-gap: 0;
+}
+.otk-tree-row.is-compact {
+  grid-template-columns: [edge-start] var(--space-2)
+    [edge-end node-start label-start] minmax(0, 1fr)
+    [node-end label-end trail-end] var(--space-2);
+}
+.otk-tree-row.is-compact > :is(.otk-tree-lanes, .otk-tree-junction, .otk-tree-trigger-slot),
+.otk-tree-row.is-compact .otk-tree-node-lane :is(.otk-tree-stem-paint, .otk-tree-lane-extension),
+.otk-tree-row.is-compact.has-node .otk-tree-label {
+  display: none;
+}
+
+.otk-tree-node:not(.is-flat) > .otk-tree-row .otk-tree-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(var(--tree-line, var(--tree-default-row-height)),
+    auto);
+  align-content: start;
+}
+.otk-tree-node:not(.is-flat) > .otk-tree-row:is(.has-node, .align-label) {
+  --tree-caption-gap: var(--space-2);
+}
+.otk-tree-row.is-gap {
+  --tree-line: 0px;
+  block-size: var(--tree-row-gap, 0px);
+  grid-template-rows: [line-start] 0 [line-end extension-start] 0
+    [extension-end feedback-start] minmax(0, 1fr) [feedback-end];
+  pointer-events: none;
+}
+.otk-tree-junction > .otk-tree-through-paint {
+  grid-column: 2;
+  grid-row: line-start / feedback-end;
+  justify-self: center;
+}
+.otk-tree-row > .otk-tree-trigger {
+  grid-column: trigger;
+  grid-row: line;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-template-rows: subgrid;
+  align-items: center;
+  min-inline-size: 0;
+  padding: 0;
+  inline-size: auto;
+  justify-self: stretch;
+  column-gap: normal;
+}
+.otk-tree-trigger > :nth-child(1) {
+  grid-column: junction;
+  place-self: center;
+  min-block-size: 0;
+}
+.otk-tree-trigger > :nth-child(2) {
+  grid-column: node;
+  place-self: center;
+  display: grid;
+  place-items: center;
+  color: var(--otk-fg-3);
+  font-size: var(--tree-icon-size);
+}
+.otk-tree-trigger > :nth-child(3) {
+  grid-column: label;
+  align-self: stretch;
+  min-inline-size: 0;
+  padding-inline-end: var(--space-2);
+}
+.otk-tree-row.is-outgoing > .otk-tree-trigger > :nth-child(3) {
+  text-align: end;
+  padding-inline: var(--space-2) 0;
+}
+.otk-tree-row.has-span-trigger .otk-tree-node-line {
+  grid-template-rows: 1fr var(--tree-icon-size) 1fr;
+}
+.otk-tree-row.has-span-trigger {
+  --tree-trail-min: min-content;
+}
+.otk-tree-frame > .otk-tree-trail-slot {
+  grid-column: trail;
+  grid-row: line;
+  min-inline-size: 0;
+}
+.otk-tree-frame:has(> .otk-tree-trail-slot) > .otk-tree-label {
+  grid-column-end: label-end;
+}
+.otk-tree-row.has-span-trigger > .otk-tree-frame {
+  pointer-events: none;
+}
+.otk-tree-row.has-span-trigger :is(.otk-tree-trail-slot, .otk-tree-feedback-slot) {
+  pointer-events: auto;
+}
+.otk-tree-detail-slot {
+  grid-column: label-start / trail-end;
+  grid-row: extension;
+  min-inline-size: 0;
+  pointer-events: auto;
+}

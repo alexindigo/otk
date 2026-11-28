@@ -10,12 +10,15 @@ import {
   type PromptCapability,
   type PromptInput,
   type PromptPart,
+  type PromptReceipt,
   uploadSize,
+  type WithdrawReceipt,
 } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { interrupt } from "./interrupt.ts";
-import { selectionModel } from "./selection.ts";
+import { Messages } from "./messages.ts";
+import { applySelection } from "./selection.ts";
 import { submissionID } from "./submission-id.ts";
 type NativeInput = Parameters<OpenCodeClient["session"]["prompt"]>[0];
 type Prepared = Pick<NativeInput, "text" | "files" | "agents">;
@@ -253,11 +256,12 @@ export class V2Prompt implements PromptCapability {
       messageID: string,
       origin: import("@otk/protocol").RequestOrigin,
     ) => Promise<void>,
+    readonly reader: Messages = new Messages(client),
   ) {}
   async prompt(
     input: PromptInput,
     operation?: OperationContext,
-  ): Promise<void> {
+  ): Promise<PromptReceipt> {
     const native = ids.decode(input.sessionID),
       client = this.client();
     const work = client.sequence(native, async () => {
@@ -266,6 +270,7 @@ export class V2Prompt implements PromptCapability {
       const session = await client.read(
         (api) => api.session.get({ sessionID: native }),
         operation?.signal,
+        "control",
       );
       const prepared = await preparePrompt(
         input.parts,
@@ -273,56 +278,52 @@ export class V2Prompt implements PromptCapability {
         this.policy,
         operation?.signal,
       );
-      const model = await selectionModel(client, session, input, operation);
-      if (input.agent !== undefined && input.agent !== session.agent) {
-        await client.effect(
-          (api) =>
-            api.session.switchAgent({ sessionID: native, agent: input.agent! }),
-          operation,
-        );
-        await operation?.checkpoint("prompt-selection", {
-          kind: "prompt-selection",
-          value: { sessionID: input.sessionID, agent: input.agent },
-        });
-      }
-      if (
-        model &&
-        (model.providerID !== session.model?.providerID ||
-          model.id !== session.model?.id ||
-          (model.variant ?? "default") !==
-            (session.model?.variant ?? "default"))
-      ) {
-        await client.effect(
-          (api) => api.session.switchModel({ sessionID: native, model }),
-          operation,
-        );
-        await operation?.checkpoint("prompt-selection", {
-          kind: "prompt-selection",
-          value: {
-            sessionID: input.sessionID,
-            model: { provider: model.providerID, model: model.id },
-            ...(model.variant === undefined ? {} : { variant: model.variant }),
-            ...(input.agent === undefined ? {} : { agent: input.agent }),
-          },
-        });
-      }
+      await applySelection(
+        client,
+        session,
+        input,
+        operation,
+        async (raw, change) => {
+          await operation?.checkpoint("prompt-selection", {
+            kind: "prompt-selection",
+            value: change === "agent"
+              ? { sessionID: input.sessionID, agent: input.agent }
+              : {
+                sessionID: input.sessionID,
+                model: {
+                  provider: raw.model!.providerID,
+                  model: raw.model!.id,
+                },
+                ...(raw.model!.variant === undefined
+                  ? {}
+                  : { variant: raw.model!.variant }),
+                ...(input.agent === undefined ? {} : { agent: input.agent }),
+              },
+          });
+        },
+      );
       const origin = operation?.key.origin;
-      const id = this.submitted && origin ? submissionID() : undefined;
-      if (id && origin) await this.submitted!(input.sessionID, id, origin);
+      const id = input.messageID ?? submissionID();
+      if (this.submitted && origin) {
+        await this.submitted(input.sessionID, id, origin);
+      }
       await client.effect(
         (api) =>
           api.session.prompt({
             sessionID: native,
-            ...(id ? { id } : {}),
+            id,
             ...prepared,
           }),
         operation,
       );
+      // The native prompt endpoint durably enqueues this identity. Delivery into
+      // its conversation is a later event, not an RPC completion fact.
+      return { messageID: id, state: "queued" as const };
     }, operation);
     const tail = work.then(() => {}, () => {});
     this.#tails.set(native, tail);
     try {
-      await work;
+      return await work;
     } finally {
       if (this.#tails.get(native) === tail) this.#tails.delete(native);
     }
@@ -330,6 +331,42 @@ export class V2Prompt implements PromptCapability {
   abort(id: string, operation?: OperationContext): Promise<void> {
     if (this.interruptSession) return this.interruptSession(id, operation);
     return interrupt(this.client(), id, operation);
+  }
+  withdraw(
+    id: string,
+    messageID: string,
+    operation?: OperationContext,
+  ): Promise<WithdrawReceipt> {
+    const native = ids.decode(id), client = this.client();
+    return client.sequence(native, async () => {
+      const signal = operation?.signal ?? client.signal;
+      const queued = await this.reader.inbox(id, signal);
+      if (queued.state !== "available") return { state: "unconfirmed" };
+      const held = queued.items.some((item) => item.id === messageID);
+      if (held) {
+        await client.effect(
+          (api) =>
+            api.session.inbox.cancel({ sessionID: native, inboxID: messageID }),
+          operation,
+        );
+        const remaining = await this.reader.inbox(id, signal);
+        if (
+          remaining.state !== "available" ||
+          remaining.items.some((item) => item.id === messageID)
+        ) {
+          return { state: "unconfirmed" };
+        }
+      }
+      try {
+        await this.reader.get(id, messageID, signal);
+        return { state: "started" };
+      } catch (error) {
+        if (
+          !(error instanceof OperationFailure) || error.facts?.status !== 404
+        ) throw error;
+        return { state: held ? "withdrawn" : "absent" };
+      }
+    }, operation);
   }
   async stop(): Promise<void> {
     await Promise.allSettled([...this.#tails.values()]);

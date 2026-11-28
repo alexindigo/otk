@@ -1,26 +1,58 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ComponentProps } from "@solidjs/web";
-import type { Element } from "solid-js";
-import { nativeAttributes } from "./native-attributes.ts";
-import ControlValue from "./ControlValue.tsx";
-import { ChevronDownIcon } from "./ChromeIcons.tsx";
+import { type Element, Show } from "solid-js";
+import ListPicker from "./ListPicker.tsx";
 import "./Select.css" with { type: "text" };
-/** One native focus/value target with a noninteractive shared accessory cell. */
-export default function Select(
-  props: ComponentProps<"select"> & { containerClass?: string },
-): Element {
-  const native = nativeAttributes(() => ({
-    ...props,
-    containerClass: undefined,
-  }));
+
+export interface SelectProps {
+  label: string;
+  name?: string;
+  value?: string;
+  options: readonly { value: string; label: string; unavailable?: string }[];
+  onValue(value: string): void;
+  readonly?: boolean;
+  containerClass?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: "true";
+}
+
+/** Select's value participates in native forms; its UI belongs to ListPicker. */
+export default function Select(props: SelectProps): Element {
+  const value = () => props.value ?? props.options[0]?.value ?? "";
+  const label = () =>
+    props.options.find((item) => item.value === value())?.label ?? value();
   return (
     <span class={["otk-select", props.containerClass]}>
-      <select {...native.attributes} ref={[props.ref, native.ref]}>
-        {props.children}
-      </select>
-      <span class="otk-select-decoration" aria-hidden="true">
-        <ControlValue accessory={<ChevronDownIcon />} />
-      </span>
+      <input type="hidden" name={props.name} value={value()} />
+      <Show
+        when={!props.readonly}
+        fallback={
+          <input
+            class="otk-select-value"
+            readonly
+            value={label()}
+            aria-label={props.label}
+            aria-describedby={props["aria-describedby"]}
+          />
+        }
+      >
+        <ListPicker
+          label={props.label}
+          triggerLabel={`${props.label}: ${label()}`}
+          trigger={label()}
+          triggerClass="otk-select-trigger"
+          triggerAttributes={{
+            "aria-describedby": props["aria-describedby"],
+            "aria-invalid": props["aria-invalid"],
+            name: props.name,
+          }}
+          selected={value()}
+          groups={[{
+            key: "options",
+            items: props.options.map((item) => ({ ...item, key: item.value })),
+          }]}
+          onPick={props.onValue}
+        />
+      </Show>
     </span>
   );
 }

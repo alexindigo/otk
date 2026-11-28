@@ -10,16 +10,38 @@ import {
 } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import {
+  type CodeBlockSource,
   createTranscriptInteraction,
+  type DisclosureIdentity,
   type NativeSourceOwner,
+  recordKindKey,
   type TranscriptInteraction,
+  type TranscriptOwner,
+  type TranscriptReply,
 } from "@otk/client";
-import type { DisclosureCategory, Preferences } from "@otk/protocol";
+import type { DisclosureCategory } from "@otk/protocol";
 import { copyText } from "../clipboard.ts";
+import {
+  DisclosureFocusHome,
+  DisclosuresProvider,
+  useDisclosures,
+} from "../components/Disclosure.tsx";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
   return copyText(value);
+}
+
+/** A paged-in reply may have copyable content before its visible fragments. */
+export function replySourceIncomplete(
+  records: Pick<TranscriptOwner, "projection">,
+  reply: TranscriptReply,
+  exhausted: boolean,
+): boolean {
+  const message = reply.message;
+  return message.role === "assistant" && !exhausted &&
+    (!records.projection.boundary(message.replyTo ?? message.id)?.firstID ||
+      !records.projection.materialized(reply.firstID));
 }
 
 /** Shared target data is extensible without importing a message or tool view. */
@@ -35,6 +57,8 @@ export interface ContentIdentity {
   directory?: string;
 }
 export interface ContentTarget extends ContentIdentity {
+  code?: CodeBlockSource;
+  runText?: string;
   lastID?: string;
   completed?: boolean;
   queued?: boolean;
@@ -55,7 +79,13 @@ interface ContentActions {
 }
 const Identity = createContext<ContentIdentity>({});
 const Actions = createContext<ContentActions | null>(null);
-const Interaction = createContext<TranscriptInteraction | null>(null);
+type RecordPlacement = NonNullable<DisclosureIdentity["placement"]>;
+const Interaction = createContext<
+  {
+    owner: TranscriptInteraction;
+    placement: RecordPlacement;
+  } | null
+>(null);
 type SourceReader = (
   ref: string,
 ) => NativeSourceOwner;
@@ -64,22 +94,41 @@ const Sources = createContext<SourceReader | null>(null);
 export function useNativeSource(): SourceReader | null {
   return useContext(Sources);
 }
+/** Record surfaces share their source resource and lifetime, not fold intent. */
+export function TranscriptRecords(props: {
+  interaction: TranscriptInteraction;
+  placement: RecordPlacement;
+  nativeSource?: SourceReader;
+  children: Element;
+}): Element {
+  return (
+    <Sources value={props.nativeSource ?? null}>
+      <Interaction
+        value={{ owner: props.interaction, placement: props.placement }}
+      >
+        {props.children}
+      </Interaction>
+    </Sources>
+  );
+}
 /** A saved presentation cannot borrow a live transcript's source reader, action
  * ports, visibility observer or disclosure identities. It has no native demand. */
 export function TranscriptSnapshot(props: { children: Element }): Element {
   const interaction = createTranscriptInteraction();
   return (
-    <Sources value={null}>
-      <Actions value={null}>
-        <Visibility value={null}>
-          <Interaction value={interaction}>{props.children}</Interaction>
-        </Visibility>
-      </Actions>
-    </Sources>
+    <Actions value={null}>
+      <Visibility value={null}>
+        <TranscriptRecords interaction={interaction} placement="transcript">
+          <DisclosuresProvider owner={interaction.disclosures}>
+            {props.children}
+          </DisclosuresProvider>
+        </TranscriptRecords>
+      </Visibility>
+    </Actions>
   );
 }
 export function contentGeneration() {
-  const interaction = useContext(Interaction);
+  const interaction = useContext(Interaction)?.owner;
   return (id: string) => interaction?.generation(id) ?? id;
 }
 const Visibility = createContext<
@@ -101,34 +150,30 @@ export function sourceRegion(messageID: () => string) {
     setElement(element);
   };
 }
-/** The client resolves defaults; this binding only publishes an explicit intent. */
-export function retainedDisclosure(
-  kind: string,
-  category: DisclosureCategory | (() => DisclosureCategory),
-  prefs: () => Partial<Preferences> = () => ({}),
-  identity = useContentIdentity(),
-  required: () => boolean = () => false,
-) {
-  const interaction = useContext(Interaction) ?? createTranscriptInteraction();
-  const id = identity.partID ?? identity.ownerID ?? identity.messageID ?? kind;
-  const choice = interaction.disclosure(
-    key(identity) + ":" + kind,
-    interaction.generation(id),
-  );
-  const [revision, setRevision] = createSignal(0);
-  const expanded = () => {
-    revision();
-    return choice.expanded(
-      typeof category === "function" ? category() : category,
-      prefs(),
-      required(),
-    );
+/** Reuse the transcript owner's scope and generations for each presentation. */
+export function transcriptDisclosureIdentity() {
+  const identity = useContentIdentity();
+  const interaction = useContext(Interaction);
+  return (options?: {
+    owner?: string;
+    category?: DisclosureCategory;
+    content?: ContentIdentity;
+  }) => {
+    const content = options?.content ?? identity;
+    const owner = options?.owner;
+    const id = options?.category && owner
+      ? recordKindKey(owner, options.category)
+      : owner ?? key(content);
+    const generation = owner ?? content.partID ?? content.ownerID ??
+      content.messageID ?? id;
+    return interaction?.owner.identify(
+      id,
+      interaction.owner.generation(generation),
+      interaction.placement,
+    ) ?? { scope: "standalone", id };
   };
-  return [expanded, (open: boolean) => {
-    choice.set(open);
-    setRevision((value) => value + 1);
-  }] as const;
 }
+
 const key = (identity: ContentIdentity) =>
   JSON.stringify([
     identity.sidecarId,
@@ -153,20 +198,10 @@ export function contentOwner(
   const actions = useContext(Actions);
   onSettled(() => actions?.bind(identity(), owner));
 }
-/** One feature owner per transcript, independent of message/part population. */
-export function TranscriptContext(
-  props: {
-    children: Element;
-    interaction?: TranscriptInteraction;
-    nativeSource?: SourceReader;
-    visibility?(
-      element: HTMLElement,
-      messageID: string,
-    ): (() => void) | undefined;
-  },
-): Element {
+/** Shared by the shell's conversation and Work pane, or owned by a standalone view. */
+export function TranscriptActions(props: { children: Element }): Element {
+  if (useContext(Actions)) return props.children;
   const ports = useCommandPorts();
-  const interaction = props.interaction ?? createTranscriptInteraction();
   const owners = new Map<string, ContentOwner>();
   const [revision, setRevision] = createSignal(0);
   const owner = (target?: ContentIdentity) => {
@@ -177,8 +212,6 @@ export function TranscriptContext(
     const [kind, title] of [
       ["prompt", "Copy prompt"],
       ["reply", "Copy reply"],
-      ["code", "Copy code"],
-      ["diff", "Copy code"],
     ]
   ) {
     ownedCommand(ports, {
@@ -235,32 +268,59 @@ export function TranscriptContext(
     run: (_ctx, target: ContentTarget) => owner(target)?.usage?.(),
   });
   return (
+    <Actions
+      value={{
+        bind: (identity, value) => {
+          const id = key(identity);
+          if (owners.has(id)) {
+            throw new Error(
+              "Duplicate transcript action owner",
+            );
+          }
+          owners.set(id, value);
+          setRevision((value) => value + 1);
+          return () => {
+            if (owners.get(id) !== value) return;
+            owners.delete(id);
+            setRevision((value) => value + 1);
+          };
+        },
+      }}
+    >
+      {props.children}
+    </Actions>
+  );
+}
+
+/** View-local visibility and focus; record actions can span sibling surfaces. */
+export function TranscriptContext(props: {
+  children: Element;
+  interaction?: TranscriptInteraction;
+  nativeSource?: SourceReader;
+  focusHome?: () => void;
+  visibility?(
+    element: HTMLElement,
+    messageID: string,
+  ): (() => void) | undefined;
+}): Element {
+  const shared = useDisclosures();
+  const interaction = props.interaction ??
+    createTranscriptInteraction(shared ?? undefined);
+  return (
     <Visibility value={props.visibility ?? null}>
-      <Sources value={props.nativeSource ?? null}>
-        <Interaction value={interaction}>
-          <Actions
-            value={{
-              bind: (identity, value) => {
-                const id = key(identity);
-                if (owners.has(id)) {
-                  throw new Error(
-                    "Duplicate transcript action owner",
-                  );
-                }
-                owners.set(id, value);
-                setRevision((value) => value + 1);
-                return () => {
-                  if (owners.get(id) !== value) return;
-                  owners.delete(id);
-                  setRevision((value) => value + 1);
-                };
-              },
-            }}
-          >
-            {props.children}
-          </Actions>
-        </Interaction>
-      </Sources>
+      <TranscriptRecords
+        interaction={interaction}
+        placement="transcript"
+        nativeSource={props.nativeSource}
+      >
+        <TranscriptActions>
+          <DisclosuresProvider owner={interaction.disclosures}>
+            <DisclosureFocusHome value={props.focusHome ?? null}>
+              {props.children}
+            </DisclosureFocusHome>
+          </DisclosuresProvider>
+        </TranscriptActions>
+      </TranscriptRecords>
     </Visibility>
   );
 }

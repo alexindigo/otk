@@ -6,23 +6,41 @@ import type {
   PermissionReply,
   PromptPart,
 } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
+import { sessionRunning } from "./entity-state.ts";
+import type { SessionActivity } from "./primary-action.ts";
 import type { CurrentClient } from "./current.ts";
 import { liveSessionInfo, sessionKey } from "./index.ts";
 import type { PromptChoices } from "./prompt-selection.ts";
-import { projectName } from "./project-navigation.ts";
 import type { ServerResources } from "./server-resources.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import {
   createSessionSubmission,
   type SessionSubmission,
 } from "./session-submission.ts";
-import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
+import { familySelection, sessionFamily } from "./session-tree.ts";
 import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
 import { prepareAttachments } from "./attachment-batches.ts";
-import type { BranchHistory } from "./branch-history.ts";
+import type { BranchHistory, BranchSendPermit } from "./branch-history.ts";
+import {
+  createSessionDelivery,
+  type SessionDelivery,
+} from "./session-delivery.ts";
+import { createState, type StateFactory } from "./state.ts";
+import type { DraftSendCapture } from "./drafts.ts";
+import { pendingMessage, pendingMessageID } from "./pending-send.ts";
+import {
+  refusedSend,
+  requireCommittedSend,
+  type SendOutcome,
+} from "./send-outcome.ts";
 
 export interface SessionActions {
+  delivery(target: Selection): SessionDelivery;
+  dispose(): void;
+  stop(target?: Selection): Promise<void>;
+  activity(target?: Selection): SessionActivity;
   rpc(target: Selection): InboxRpc["call"];
   eligibility(
     target: Selection,
@@ -40,7 +58,11 @@ export interface SessionActions {
   submission(target: Selection): SessionSubmission;
   group(target: Selection): IntentGroup;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
-  prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
+  prompt(
+    parts: PromptPart[],
+    selection: PromptChoices,
+    capture?: DraftSendCapture,
+  ): Promise<SendOutcome>;
   abort(target?: Selection, options?: RequestOptions): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
   archive(target: Selection, archived: boolean): Promise<ContentSession>;
@@ -66,13 +88,76 @@ export interface SessionActions {
 /** Session-bound operations capture their target before asynchronous resolution. */
 export function createSessionActions(o: {
   resources: ServerResources;
-  session: Pick<ClientSession, "state">;
+  session:
+    & Pick<ClientSession, "state">
+    & Partial<Pick<ClientSession, "transcripts">>;
+  factory?: StateFactory;
+  promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   current: CurrentClient;
-  branchHistory?: Pick<BranchHistory, "prepare" | "beforeCommit" | "settled">;
+  revertReady?(target: Selection): Promise<void> | undefined;
+  branchHistory?:
+    & Pick<BranchHistory, "prepare" | "beforeCommit" | "restored">
+    & Partial<Pick<BranchHistory, "beforeSend">>;
   /** Wrap the common submission lifetime, including shell/native commands. */
   submitted?<T>(target: Selection, action: () => Promise<T>): Promise<T>;
 }): SessionActions {
   const { resources, session, current } = o;
+  // Native boundary changes and committing submissions share this admission
+  // boundary. A Send cannot inspect an old native stage while Revert is in flight.
+  const mutations = new Map<string, Promise<void>>();
+  const changeBoundary = (
+    target: Selection,
+    action: () => Promise<ContentSession>,
+  ) => {
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    const result = Promise.resolve(mutations.get(key)).then(action);
+    // Waiters borrow settlement, not the result of someone else's action.
+    const settled = result.then(() => {}, () => {}).finally(() => {
+      if (mutations.get(key) === settled) mutations.delete(key);
+    });
+    mutations.set(key, settled);
+    return result;
+  };
+  const boundaryReady = (target: Selection): Promise<void> | undefined => {
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    const reconciliation = o.revertReady?.(target);
+    if (!mutations.has(key) && !reconciliation) return;
+    return (async () => {
+      while (mutations.has(key)) await mutations.get(key);
+      await reconciliation;
+    })();
+  };
+  const deliveries = new Map<string, SessionDelivery>();
+  const delivery = (target: Selection) => {
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    let value = deliveries.get(key);
+    if (!value) {
+      value = createSessionDelivery({
+        target: { ...target },
+        factory: o.factory,
+        title: () => resources.entry(target.sidecarId, target.sessionID)?.title,
+        transcript: () => session.transcripts?.get(target),
+        interruptLateStart: () => {
+          if (working(target)) {
+            void actions.abort(target).catch((cause) => {
+              resources.sidecars.connection(target.sidecarId).rpc.feedback(
+                target.sessionID,
+              ).fail(cause);
+            });
+          }
+        },
+        withdraw: (messageID) =>
+          resources.sidecars.connection(target.sidecarId).rpc.call(
+            "session.withdraw",
+            { sessionID: target.sessionID, messageID },
+            { owner: target.sessionID },
+          ),
+        committed: o.promptCommitted,
+      });
+      deliveries.set(key, value);
+    }
+    return value;
+  };
   const selectedEntry = (): IndexEntry | undefined => {
     const target = session.state.selection;
     return target
@@ -81,6 +166,15 @@ export function createSessionActions(o: {
   };
   const info = (): ContentSession | undefined =>
     liveSessionInfo(session.state.info, selectedEntry());
+  const taskFor = (target: Selection, id = target.sessionID) => {
+    const value = resources.entry(target.sidecarId, id) ??
+      resources.entry(target.sidecarId, target.rootID ?? target.sessionID);
+    if (!value) return undefined;
+    const project = { sidecarId: target.sidecarId, directory: value.directory };
+    const tabs = resources.tabs(project);
+    tabs.update(resources.tabSnapshot(project));
+    return tabs.taskFor(id);
+  };
   const directory = async (target: Selection): Promise<string> => {
     const known = resources.entry(target.sidecarId, target.sessionID);
     if (known) return known.directory;
@@ -114,32 +208,45 @@ export function createSessionActions(o: {
       return action(path);
     }, visit);
   };
-  const submission = (target: Selection): SessionSubmission =>
+  const ensureTarget = (target: Selection) => {
+    if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
+      throw new Error("This session was deleted from the agent service");
+    }
+  };
+  const submission = (
+    target: Selection,
+    captured?: IntentGroup,
+    permit?: BranchSendPermit,
+  ): SessionSubmission =>
     createSessionSubmission({
       sessionID: target.sessionID,
+      delivery: delivery(target),
       group: () =>
-        new IntentGroup(
-          resources.sidecars.connection(target.sidecarId).rpc.intent(),
-        ),
+        captured ??
+          new IntentGroup(
+            resources.sidecars.connection(target.sidecarId).rpc.intent(),
+          ),
       directory: () => directory(target),
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
         resources.tabs({ sidecarId: target.sidecarId, directory }),
-      wrap: (action) => {
-        const admit = () => {
-          if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
-            return Promise.reject(
-              new Error("This session was deleted from the agent service"),
+      beforeDispatch: () => ensureTarget(target),
+      wrap: (action, capture) => {
+        const admit = async () => {
+          ensureTarget(target);
+          const changing = boundaryReady(target);
+          if (changing) await changing;
+          const allowed = permit ??
+            await o.branchHistory?.beforeSend?.(target, capture?.draft);
+          if (!permit) {
+            await o.branchHistory?.beforeCommit(
+              target,
+              undefined,
+              allowed,
+              capture?.draft,
             );
           }
-          return (async () => {
-            await o.branchHistory?.beforeCommit(target);
-            try {
-              return await action();
-            } finally {
-              await o.branchHistory?.settled(target);
-            }
-          })();
+          return await action();
         };
         return o.submitted ? o.submitted(target, admit) : admit();
       },
@@ -162,11 +269,84 @@ export function createSessionActions(o: {
         )).items,
     );
   };
-  const working = (target: Selection) => {
-    const status = resources.entry(target.sidecarId, target.sessionID)?.status;
-    return !!status && status !== "idle";
-  };
-  return {
+  const working = (target: Selection) =>
+    sessionRunning(
+      resources.inbox(target.sidecarId).entities,
+      entityKey("session", target.sessionID),
+    );
+  const stopping = new Map<string, Promise<void>>();
+  const stopChanges = (o.factory ?? createState)({ revision: 0 });
+  const publishStop = () => stopChanges.update((state) => state.revision++);
+  const actions: SessionActions = {
+    delivery,
+    dispose() {
+      for (const owner of deliveries.values()) owner.stop();
+      deliveries.clear();
+    },
+    activity(target = session.state.selection) {
+      if (!target) return { running: false, unstarted: 0 };
+      void stopChanges.state.revision;
+      return {
+        running: working(target),
+        unstarted: delivery(target).state.unstarted.length,
+        stopping: stopping.has(sessionKey(target.sidecarId, target.sessionID)),
+      };
+    },
+    async stop(target = current.context().selection) {
+      const key = sessionKey(target.sidecarId, target.sessionID);
+      const currentStop = stopping.get(key);
+      if (currentStop) return await currentStop;
+      const work = Promise.withResolvers<void>();
+      stopping.set(key, work.promise);
+      publishStop();
+      void (async () => {
+        const withdrawing = delivery(target).withdraw();
+        let initial: Promise<PromiseSettledResult<void>> | undefined;
+        const interruptRunning = () => {
+          if (!initial && working(target)) {
+            initial = actions.abort(target).then(
+              () => ({ status: "fulfilled", value: undefined }),
+              (reason) => ({ status: "rejected", reason }),
+            );
+          }
+        };
+        // Some native RPCs settle only after execution. While waiting for the
+        // receipt, interrupt a run as soon as its authoritative evidence arrives.
+        const release = resources.inbox(target.sidecarId).entities
+          .observeChanges(
+            interruptRunning,
+          );
+        let sends: Awaited<typeof withdrawing>;
+        try {
+          interruptRunning();
+          sends = await withdrawing;
+        } finally {
+          release();
+        }
+        const interrupt = await initial;
+        if (
+          sends.some((send) => send.state === "started") ||
+          (sends.some((send) => send.state === "unconfirmed") &&
+            working(target))
+        ) await actions.abort(target);
+        if (interrupt?.status === "rejected") throw interrupt.reason;
+        if (sends.some((send) => send.restored)) {
+          resources.sidecars.connection(target.sidecarId).rpc.feedback(
+            target.sessionID,
+          ).fail({
+            kind: "info",
+            text:
+              "Stopped before it started. Your message is back in the composer.",
+          });
+        }
+      })().then(work.resolve, work.reject);
+      try {
+        await work.promise;
+      } finally {
+        stopping.delete(key);
+        publishStop();
+      }
+    },
     rpc: (target) => (method, params, input) =>
       resources.sidecars.connection(target.sidecarId).rpc.call(
         method,
@@ -265,18 +445,16 @@ export function createSessionActions(o: {
     },
     async compact(target, model) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      const changing = boundaryReady(target);
+      if (changing) await changing;
       await act(
         target,
         async () => {
           await o.branchHistory?.beforeCommit(target);
-          try {
-            return await rpc.call("session.compact", {
-              sessionID: target.sessionID,
-              model,
-            });
-          } finally {
-            await o.branchHistory?.settled(target);
-          }
+          return await rpc.call("session.compact", {
+            sessionID: target.sessionID,
+            model,
+          });
         },
       );
     },
@@ -309,49 +487,115 @@ export function createSessionActions(o: {
     },
     revert(target, messageID, options, code = false) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
-      return act(
-        target,
-        async () => {
-          const result = await rpc.call(
-            code ? "session.revertCode" : "session.revert",
-            {
-              sessionID: target.sessionID,
-              messageID,
-            },
-            options,
-          );
-          // Staging is reversible. Preservation gates the next committing send,
-          // while its owner retains any background failure through FP1.
-          if (result.revert) {
-            void o.branchHistory?.prepare(target, messageID).catch(() => {});
-          }
-          return result;
-        },
-      );
+      return changeBoundary(target, () =>
+        act(
+          target,
+          async () => {
+            const result = await rpc.call(
+              code ? "session.revertCode" : "session.revert",
+              {
+                sessionID: target.sessionID,
+                messageID,
+              },
+              options,
+            );
+            return result;
+          },
+        ));
     },
     restore(target, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
-      return act(
-        target,
-        async () => {
-          const result = await rpc.call("session.restore", {
-            sessionID: target.sessionID,
-          }, options);
-          await o.branchHistory?.settled(target, true);
-          return result;
-        },
-      );
+      return changeBoundary(target, () =>
+        act(
+          target,
+          async () => {
+            const result = await rpc.call("session.restore", {
+              sessionID: target.sessionID,
+            }, options);
+            o.branchHistory?.restored(target);
+            return result;
+          },
+        ));
     },
-    async prompt(parts, selection) {
-      const { selection: target, rpc } = current.context();
-      await submission(target)(async (options) => {
-        await rpc.call("session.prompt", {
-          sessionID: target.sessionID,
-          mode: "normal",
-          parts: await attachments(parts, target.sidecarId),
-          ...selection,
-        }, options);
-      });
+    async prompt(parts, selection, capture) {
+      try {
+        const { selection: target, rpc } = current.context();
+        const group = new IntentGroup(rpc.intent());
+        const intent = group.options("send", target.sessionID).intent!;
+        const messageID = pendingMessageID(intent);
+        const message = pendingMessage(
+          messageID,
+          target.sessionID,
+          parts,
+        );
+        const send = async (
+          captured: IntentGroup,
+          draft?: DraftSendCapture,
+        ): Promise<SendOutcome> => {
+          try {
+            const changing = boundaryReady(target);
+            if (changing) await changing;
+            const permit = o.branchHistory?.beforeSend
+              ? await o.branchHistory.beforeSend(target, draft?.draft)
+              : undefined;
+            return await submission(target, captured, permit)(
+              async (options, dispatch) => {
+                const prepared = await attachments(parts, target.sidecarId);
+                const transcript = session.transcripts?.get(target);
+                const pending = transcript?.projection.entry(messageID)?.send;
+                if (pending && pending.phase !== "committed") {
+                  transcript?.send?.({
+                    ...pending,
+                    message: {
+                      ...pending.message,
+                      parts: pendingMessage(
+                        messageID,
+                        target.sessionID,
+                        prepared,
+                      ).parts,
+                    },
+                  });
+                }
+                if (permit) {
+                  await o.branchHistory?.beforeCommit(
+                    target,
+                    undefined,
+                    permit,
+                    draft?.draft,
+                  );
+                }
+                dispatch();
+                return await rpc.call("session.prompt", {
+                  sessionID: target.sessionID,
+                  messageID,
+                  mode: "normal",
+                  parts: prepared,
+                  ...selection,
+                }, options);
+              },
+              "composer",
+              {
+                intent,
+                message,
+                phase: "pending",
+                retry: () => {
+                  void send(new IntentGroup(rpc.intent())).then(
+                    requireCommittedSend,
+                  ).catch((cause) => {
+                    rpc.feedback(target.sessionID).fail(cause);
+                  });
+                },
+              },
+              draft,
+            );
+          } catch (cause) {
+            return refusedSend(cause);
+          }
+        };
+        return await send(group, capture);
+      } catch (cause) {
+        return refusedSend(cause);
+      }
     },
     async abort(target = current.context().selection, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
@@ -372,6 +616,8 @@ export function createSessionActions(o: {
     },
     async question(input) {
       const { selection: target, rpc } = current.context();
+      const settled = resources.sidecars.connection(target.sidecarId)
+        .attention?.settlement("question", input.requestID);
       const asking =
         session.state.content.questions.find((request) =>
           request.id === input.requestID
@@ -388,37 +634,32 @@ export function createSessionActions(o: {
       };
       await act(
         target,
-        () =>
-          input.answers
-            ? rpc.call(
+        async () => {
+          if (input.answers) {
+            await rpc.call(
               "question.reply",
               { ...input, answers: input.answers },
               options,
-            )
-            : rpc.call("question.reject", input, options),
+            );
+          } else await rpc.call("question.reject", input, options);
+          settled?.();
+        },
       );
     },
     location(target, id) {
       const value = resources.entry(target.sidecarId, id);
-      const task = familyTask(
-        resources.inbox(target.sidecarId).state.inbox.tasks,
-        [id, target.rootID ?? target.sessionID],
-      );
-      return [value && projectName(value.directory), task?.name ?? value?.title]
+      const task = taskFor(target, id) ??
+        (value
+          ? undefined
+          : taskFor(target, target.rootID ?? target.sessionID));
+      return [
+        value && resources.checkoutLabel(target.sidecarId, value.directory),
+        task?.name ?? value?.title,
+      ]
         .filter(Boolean).join(", ");
     },
     inTask(target) {
-      const value = resources.entry(target.sidecarId, target.sessionID);
-      if (!value) return false;
-      if (value.hierarchy) return !!value.hierarchy.taskID;
-      return !!familyTask(
-        resources.inbox(target.sidecarId).state.inbox.tasks,
-        sessionFamily(
-          target.sessionID,
-          (id) => resources.entry(target.sidecarId, id),
-        ),
-        value.directory,
-      );
+      return !!taskFor(target);
     },
     family: (selection) =>
       familySelection(
@@ -436,4 +677,5 @@ export function createSessionActions(o: {
       };
     },
   };
+  return actions;
 }

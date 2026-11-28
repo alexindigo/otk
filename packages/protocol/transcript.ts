@@ -70,6 +70,8 @@ export interface ClockedContent {
 }
 export interface MessagePage {
   sessionID: string;
+  /** Body revision witnesses for exact-ID archive reads, within clock.epoch. */
+  revisions?: Record<string, number>;
   version: TranscriptVersion;
   clock: ContentClock;
   from: ContentClock;
@@ -83,14 +85,30 @@ export interface MessagePage {
     { summary?: Derived<UsageSummary>; boundary: ReplyBoundary }
   >;
   helpers: Record<string, HelperSummary>;
-  recovering: { messageID: string; partID: string; generation: number }[];
+  recovering: {
+    messageID: string;
+    partID: string;
+    generation: number;
+    state?: "recovering" | "unavailable";
+  }[];
 }
 export interface MessagePageInput {
   sessionID: string;
   before?: MessageCursor;
+  /** Explicit user retry, never implied by paging or baseline acquisition. */
+  retryRecovery?: boolean;
+}
+export interface MessageSnapshotScope {
+  messageIDs: string[];
+  /** Witness-only validation: never acquire bodies, prompts or sources. */
+  validate?: boolean;
+}
+export interface MessageSnapshotInput extends MessagePageInput {
+  scope?: MessageSnapshotScope;
 }
 /** Values come only from the composing application's layered config. */
 export interface MessagePolicy {
+  bridgepages: number;
   prefetchms: number;
   prefetchbytes: number;
   coolms: number;
@@ -108,6 +126,7 @@ export function messagePolicy(value: unknown): MessagePolicy {
   }
   const object = value as Record<string, unknown>;
   const keys = [
+    "bridgepages",
     "prefetchms",
     "prefetchbytes",
     "coolms",
@@ -137,6 +156,7 @@ export function messagePolicy(value: unknown): MessagePolicy {
     );
   }
   return {
+    bridgepages: Number(object.bridgepages),
     prefetchms: Number(object.prefetchms),
     prefetchbytes: Number(object.prefetchbytes),
     coolms: Number(object.coolms),

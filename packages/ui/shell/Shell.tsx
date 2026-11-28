@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { copyText } from "../clipboard.ts";
-import { errorFeedback } from "@otk/client";
-import FeedbackStatus from "../components/FeedbackStatus.tsx";
+import { bindSourceSelectionCopy, copyText } from "../clipboard.ts";
+import {
+  attentionCount,
+  createModelRecency,
+  globalAttention,
+  requireCommittedSend,
+} from "@otk/client";
 import PaneState from "../components/PaneState.tsx";
 import GlobalSurfaces from "../components/GlobalSurfaces.tsx";
 import ProgressStatus from "../components/ProgressStatus.tsx";
+import { clockTitle } from "../components/Clock.tsx";
 import "./Shell.css" with { type: "text" };
-import { scrollRegion } from "../components/ScrollRegion.tsx";
+import ChromeMeta from "../components/ChromeMeta.tsx";
+import ScrollRegion from "../components/ScrollRegion.tsx";
 import {
   createEffect,
   createMemo,
@@ -15,9 +21,20 @@ import {
   onSettled,
   Show,
 } from "solid-js";
+import { Portal } from "@solidjs/web";
 import { DEFAULT_PREFS } from "@otk/protocol";
-import { CommandHub, LOCAL_SIDECAR, shellTitle } from "@otk/client";
-import { registerPreferenceCommands } from "@otk/client";
+import {
+  canRenameProject,
+  CommandHub,
+  FeedbackFailure,
+  historyTarget,
+  LOCAL_SIDECAR,
+  shellTitle,
+} from "@otk/client";
+import {
+  registerPreferenceCommands,
+  terminalRunFailureOwned,
+} from "@otk/client";
 import {
   registerSessionCommands,
   registerSessionTargetCommands,
@@ -25,18 +42,23 @@ import {
 import { registerAttentionCommands } from "./commands/attention.ts";
 import { registerApprovalCommands } from "./commands/approvals.ts";
 import { registerSessionActionCommands } from "./commands/session-actions.ts";
+import { registerCodeBlockCommands } from "../features/code-blocks.tsx";
+import { registerFileCommands } from "../features/file-paths.tsx";
+import { registerWorkCommands } from "../features/work.tsx";
 import { applicationNotifications } from "./notifications.ts";
+import { registerServerCommands } from "./commands/server.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
 import { createShellState } from "../state/shell.ts";
+import { createPanelPresentation } from "../state/panel-presentation.ts";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
-import { createToggles } from "../components/Toggles.ts";
+import { focusControl } from "../keyboard/focus.ts";
 import DisplayMenu from "../components/DisplayMenu.tsx";
 import Login from "../components/Login.tsx";
 import NotificationSettings from "../components/NotificationSettings.tsx";
 import { paintVisualPreferences } from "../features/visual.ts";
 import { ProjectSettings } from "../features/projects.tsx";
-import SessionView from "../components/SessionView.tsx";
+import SessionView, { transcriptStatus } from "../components/SessionView.tsx";
 import Settings from "../components/Settings.tsx";
 import Setup from "../components/Setup.tsx";
 import type { ThemeEngine } from "../theme/engine.ts";
@@ -45,21 +67,28 @@ import VisualSettings from "../components/VisualSettings.tsx";
 import TranscriptSettings from "../components/TranscriptSettings.tsx";
 import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
+import HistoryButtons from "../components/HistoryButtons.tsx";
 import RightPanel from "../components/RightPanel.tsx";
 import ProjectTabs from "../components/ProjectTabs.tsx";
-import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
+import ProjectLocation from "../features/project-chip.tsx";
+import {
+  ArrowLeftIcon,
+  PanelLeftIcon,
+  PanelRightIcon,
+} from "../components/ChromeIcons.tsx";
 import { SessionProvider } from "../registries/session.tsx";
+import { useUiRegistries } from "../registries/context.tsx";
 import { sessionPorts } from "./session-ports.ts";
 import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
 import type { SessionContextTarget } from "../features/session-context.ts";
 import DeletedSession from "../components/DeletedSession.tsx";
-import { deletedFacts } from "@otk/client";
+import { deletedFacts, sessionEvidence, sessionRunning } from "@otk/client";
+import { entityKey } from "@otk/protocol";
 import { contextTarget } from "../components/context-target.ts";
-import { AttentionProvider } from "../registries/attention.tsx";
 import { insertChip } from "../components/prompt/model.ts";
 import { createTerminalConnectionOwner } from "../terminal/connections.ts";
-import { attentionPresentation } from "../state/attention-grace.ts";
+import { confirmAction } from "../features/dialogs.tsx";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
@@ -67,29 +96,44 @@ export default function Shell(
     theme: ThemeEngine;
     api: URL;
     policy?: import("@otk/protocol").ClientRequestPolicy;
+    build?: string;
   },
 ): import("solid-js").Element {
+  const { parts, panels } = useUiRegistries();
+  const confirmCommand = (message: string): Promise<boolean> =>
+    confirmAction(commands, message);
   const {
+    reload,
     resources,
     session,
     drafts,
+    deletedRecoveries,
     branchHistory,
     actions,
     rename,
+    projectRename,
     revert,
     forkNotes,
     guard,
     navigation,
     listInteraction,
+    disclosures,
+    work,
+    toggles,
     interact,
-    confirmCommand,
-  } = createShellState({ api: props.api, policy: props.policy });
+  } = createShellState({
+    api: props.api,
+    parts,
+    policy: props.policy,
+    build: props.build,
+    confirm: confirmCommand,
+    promptCommitted: (message) => recentModel(message),
+  });
   const {
     sidecars,
     inbox,
     approvals,
     entry,
-    attention,
     entries,
     tabs: tabsFor,
   } = resources;
@@ -101,22 +145,66 @@ export default function Shell(
     terminalConnections.update,
   );
   onCleanup(terminalConnections.stop);
-  const toggles = createToggles(resources.setPreference);
-  const attentionPaint = attentionPresentation(
-    resources,
-    () => toggles.state.prefs.animationsOff,
-  );
+  onCleanup(bindSourceSelectionCopy());
+  const recentModel = createModelRecency({
+    get: () => toggles.state.prefs["models.recent"],
+    set: (value) => resources.setPreference("models.recent", value),
+    fail: (cause) => navigation.fail(cause),
+  });
   const settings = () => navigation.state.settings;
   const error = () => navigation.state.error;
   const project = () => navigation.state.project;
   const { fail, navigate, openProject } = navigation;
+  const target = (direction: "back" | "forward") =>
+    historyTarget(
+      navigation.state.history,
+      direction,
+      ({ sidecarId, sessionID }) => {
+        const entry = resources.connected(sidecarId) &&
+          resources.entry(sidecarId, sessionID);
+        if (!entry) return;
+        return {
+          title: entry.title,
+          project: resources.checkoutLabel(
+            sidecarId,
+            resources.projectDirectory?.(
+              sidecarId,
+              entry.directory,
+              entry.projectID,
+            ) ?? entry.directory,
+          ),
+          deleted: !!entry.deleted,
+        };
+      },
+      ({ sidecarId, directory }) =>
+        resources.checkoutLabel(sidecarId, directory),
+    );
+  const backTarget = createMemo(() => target("back"));
+  const forwardTarget = createMemo(() => target("forward"));
   const [dialog, setDialog] = createSignal("");
   const [now, setNow] = createSignal(Date.now());
-  let root!: HTMLDivElement;
+  const [root, setRoot] = createSignal<HTMLDivElement>();
+  const [leftRail, setLeftRail] = createSignal<HTMLElement>();
+  const layout = () => toggles.state.prefs.shellLayout;
+  const presentation = createPanelPresentation({ app: root, leftRail, layout });
+  const sheet = () => presentation.mode() === "sheet";
+  const panelToggleTitle = () =>
+    sheet()
+      ? "Back to conversation"
+      : layout().rightCollapsed
+      ? "Open right panel"
+      : "Collapse right panel";
+  const [transcriptLayer, setTranscriptLayer] = createSignal<HTMLDivElement>();
+  const mountTranscriptLayer = (stage: HTMLDivElement) => {
+    setTranscriptLayer(stage);
+    return () =>
+      setTranscriptLayer((current) => current === stage ? undefined : current);
+  };
   const commands = new CommandHub(
     () => ({
       sidecar: session.state.selection?.sidecarId,
       session: session.state.selection?.sessionID,
+      viewing: !settings(),
       dialog: dialog() || (draft().editor ? "editor" : ""),
       focus: keyboard.focus(),
     }),
@@ -131,17 +219,90 @@ export default function Shell(
     fail,
     /Mac|iPhone|iPad/.test(navigator.platform),
   );
+  const leaveSheet = async () => {
+    if (sheet()) await commands.run("layout.panel.toggle");
+  };
+  let main: HTMLElement | undefined;
+  let panelToggle: HTMLButtonElement | undefined;
+  let sheetOrigin: HTMLElement | undefined;
+  let movedToSheet = false;
+  createEffect(
+    () => ({ sheet: sheet(), focused: document.activeElement }),
+    ({ sheet, focused }, previous) => {
+      if (sheet === previous?.sheet) return;
+      if (sheet) {
+        sheetOrigin =
+          focused instanceof HTMLElement && focused !== document.body
+            ? focused
+            : undefined;
+        // The covered conversation and the retired rail can no longer hold focus.
+        movedToSheet = !sheetOrigin || main?.contains(sheetOrigin) === true ||
+          !sheetOrigin.isConnected;
+        if (movedToSheet) focusControl(panelToggle, { preventScroll: true });
+      } else if (previous?.sheet) {
+        if (movedToSheet || document.activeElement === document.body) {
+          if (
+            !focusControl(sheetOrigin, { preventScroll: true }) &&
+            commands.enabled("prompt.focus")
+          ) {
+            void commands.run("prompt.focus").catch(fail);
+          }
+        }
+        sheetOrigin = undefined;
+        movedToSheet = false;
+      }
+    },
+  );
+  createEffect(
+    () => {
+      const checkout = project(), selected = session.state.selection;
+      return JSON.stringify([
+        checkout?.sidecarId,
+        checkout?.directory,
+        selected?.sidecarId,
+        selected?.sessionID,
+        checkout && tabsFor(checkout).state.selected?.id,
+      ]);
+    },
+    (current, previous) => {
+      if (previous !== undefined && current !== previous) {
+        keyboard.focusOwner.navigationChanged();
+      }
+    },
+  );
   const notifications = applicationNotifications({
     commands,
+    disclosures,
     prefs: () => toggles.state.prefs,
     selection: () => session.state.selection,
     viewing: () => !settings(),
     transcript: () => !branchHistory.state.opened,
     connection: (id) => sidecars.connection(id),
     entry,
-    attention,
+    entities: resources.entities,
+    locate: resources.notificationLocation,
     observeEntries: resources.observeEntries,
   });
+  createEffect(
+    () =>
+      toggles.state.prefs["notify.badge"]
+        ? globalAttention(
+          sidecars.state.list.flatMap(({ id }) =>
+            resources.connected(id) ? [resources.entities(id)] : []
+          ),
+        )
+        : 0,
+    notifications.badge,
+  );
+  createEffect(
+    () =>
+      sidecars.state.list.map(({ id, label, continuity }) => ({
+        id,
+        label,
+        continuity,
+      })),
+    (list) => notifications.servers(list),
+  );
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {
       if (accepted) notifications.receive(id, frame);
@@ -229,8 +390,12 @@ export default function Shell(
     () => [
       toggles.state.prefs.reducedColors,
       toggles.state.prefs.animationsOff,
+      toggles.state.prefs.textSize,
     ],
-    () => paintVisualPreferences(toggles.state.prefs),
+    () => {
+      paintVisualPreferences(toggles.state.prefs);
+      presentation.measure();
+    },
   );
   createEffect(
     () => toggles.state.prefs.keymap,
@@ -238,10 +403,48 @@ export default function Shell(
   );
   onCleanup(
     commands.register({
+      id: "history.back",
+      title: "Go back",
+      category: "Navigation",
+      availability: () =>
+        backTarget().enabled
+          ? { available: true }
+          : { available: false, reason: backTarget().label },
+      run: () => navigation.traverse("back"),
+    }),
+  );
+  onCleanup(
+    commands.register({
+      id: "history.forward",
+      title: "Go forward",
+      category: "Navigation",
+      availability: () =>
+        forwardTarget().enabled
+          ? { available: true }
+          : { available: false, reason: forwardTarget().label },
+      run: () => navigation.traverse("forward"),
+    }),
+  );
+  const historyControl = (direction: "back" | "forward") =>
+    commands.control(`history.${direction}`, undefined, {
+      target: { label: "Session history" },
+      // This command resolves true only after navigation applies the browser's
+      // matching entry. CommandHub rejects false before consulting this port.
+      shown: () => true,
+      unshown: "History navigation was declined.",
+      recovery: "Try moving through history again.",
+    });
+  const historyBack = historyControl("back"),
+    historyForward = historyControl("forward");
+  onCleanup(
+    commands.register({
       id: "settings.open",
       title: "Settings",
       category: "Connections",
-      run: navigation.showSettings,
+      run: async () => {
+        await leaveSheet();
+        navigation.showSettings();
+      },
     }),
   );
   onCleanup(
@@ -282,6 +485,19 @@ export default function Shell(
           ? info()?.archived
           : undefined),
     archive: actions.archive,
+    savedCopies: (target) => branchHistory.finished(target).length,
+    openSavedCopies: (target) => {
+      const newest = branchHistory.finished(target)[0];
+      if (!newest) return;
+      const selected = session.state.selection;
+      if (
+        (selected?.sidecarId !== target.sidecarId ||
+          selected.sessionID !== target.sessionID) &&
+        !navigation.navigate(target)
+      ) return;
+      branchHistory.select(target);
+      branchHistory.open(newest.id);
+    },
     available: (target) =>
       actions.eligibility(target).live &&
       resources.connected(target.sidecarId) &&
@@ -289,6 +505,16 @@ export default function Shell(
     rename,
     working: actions.working,
     helpers: (target) => Math.max(0, actions.familyEntries(target).length - 1),
+    attention: (target) =>
+      attentionCount(
+        inbox(target.sidecarId).entities,
+        entityKey("session", target.sessionID),
+      ),
+    clearAttention: (target) =>
+      inbox(target.sidecarId).clearAttention({
+        scope: "subtree",
+        sessionID: target.sessionID,
+      }),
     remove: navigation.remove,
     current: () => {
       const target = session.state.selection, value = info();
@@ -334,6 +560,7 @@ export default function Shell(
         "Discard unsaved permission input before enabling auto-approve for this session and its helpers?",
       ),
   }));
+  onCleanup(registerServerCommands(commands, (id) => sidecars.connection(id)));
   onCleanup(registerSessionCommands(commands, {
     available: navigation.available,
     create: navigation.create,
@@ -353,6 +580,17 @@ export default function Shell(
     pin: navigation.pin,
     close: navigation.close,
   }));
+  onCleanup(
+    registerCodeBlockCommands(commands, (id) => sidecars.connection(id)),
+  );
+  onCleanup(
+    registerFileCommands(
+      commands,
+      (id) => sidecars.connection(id),
+      resources.fileFacts,
+    ),
+  );
+  let openFileMenu: ((element: HTMLElement) => void) | undefined;
   onCleanup(commands.register({
     id: "session.title.copy",
     title: "Copy session title",
@@ -384,14 +622,19 @@ export default function Shell(
       actions.eligibility(target).member,
     run: (_ctx, target: SessionContextTarget) => actions.removeFromTask(target),
   }));
-  const projects = createMemo(() =>
-    resources.projects(now(), toggles.state.prefs.projectAgeing)
-  );
+  const projects = createMemo(() => resources.projects(now()));
   const originalTitle = document.title;
   createEffect(
-    () => [info()?.title, project()] as const,
-    ([title, selected]) => {
-      document.title = shellTitle(title, selected);
+    () => {
+      const selected = project();
+      return shellTitle(
+        info()?.title,
+        selected &&
+          resources.checkoutLabel(selected.sidecarId, selected.directory),
+      );
+    },
+    (title) => {
+      document.title = title;
     },
   );
   onCleanup(() => {
@@ -399,7 +642,7 @@ export default function Shell(
   });
   onSettled(() => {
     const stopNotifications = notifications.start(),
-      stopKeyboard = keyboard.start();
+      stopKeyboard = keyboard.start(document, () => !!session.state.selection);
     const unbindPalette = keyboard.keymap.bind({
       id: "palette.open",
       command: "palette.open",
@@ -433,7 +676,6 @@ export default function Shell(
       resources.stop();
     };
   });
-  const layout = () => toggles.state.prefs.shellLayout;
   const saveLayout = resources.layout;
   for (const side of ["projects", "panel"] as const) {
     const collapsed = () =>
@@ -441,7 +683,7 @@ export default function Shell(
     const title = () =>
       side === "projects"
         ? (collapsed() ? "Expand projects" : "Collapse projects")
-        : (collapsed() ? "Open right panel" : "Collapse right panel");
+        : panelToggleTitle();
     onCleanup(commands.register({
       id: `layout.${side}.toggle`,
       title: title(),
@@ -456,30 +698,70 @@ export default function Shell(
         ),
     }));
   }
+  registerWorkCommands({ commands }, {
+    work,
+    panels,
+    selection: () => session.state.selection,
+    ready: () =>
+      toggles.state.ready && !settings() && !branchHistory.state.opened &&
+      session.state.view !== "deleted",
+    lastMessageID: (turn) =>
+      session.transcript?.state.repliesByID[turn]?.lastID,
+    layout,
+    saveLayout,
+    panelPresentation: presentation.mode,
+  });
   return (
-    <AttentionProvider ports={attentionPaint}>
+    <>
       <CommandProvider
         commands={commands}
         keyboard={keyboard}
-        failureOwned={resources.ownsFailure}
+        failureOwned={(cause) =>
+          resources.ownsFailure?.(cause) || terminalRunFailureOwned(cause)}
       >
         <ShellProvider
+          reload={reload}
           ports={{
+            now,
             theme: props.theme,
             toggles,
             usage: session.usage,
             rename,
+            projectRename,
             transcript: {
               messages: () => session.state.content.messages,
+              records: () => {
+                void session.state.content;
+                return session.transcript;
+              },
               exhausted: () => session.state.exhausted,
               paging: () => session.state.paging || session.state.loading,
+              answered: () =>
+                !session.state.loading && session.state.continuity === "ready",
               older: () => session.older(),
+              reveal: async (messageID) => {
+                const target = session.state.selection;
+                await leaveSheet();
+                if (target === session.state.selection) {
+                  await commands.run("transcript.reveal", { messageID });
+                }
+              },
             },
             servers: () => sidecars.state.list,
             forms: resources.forms,
+            filePaths: {
+              facts: resources.fileFacts,
+              api: (id) => sidecars.connection(id).base,
+              entry: resources.entry,
+              retainSessionReference: resources.retainSessionReference,
+              entities: resources.entities,
+              openMenu: (element) => openFileMenu?.(element),
+              fail,
+            },
             connection: (id) => sidecars.connection(id),
             inbox,
             approvals,
+            reportFailure: fail,
             openProject,
             addToPrompt: (text, label) => {
               const write = drafts.writer(draftKey());
@@ -498,23 +780,22 @@ export default function Shell(
             entries,
             entry,
             projectEntries: resources.projectEntries,
+            projectLabel: resources.projectLabel,
             projectMetadata: resources.projectMetadata,
             metadataEntry: resources.metadataEntry,
-            sessionRows: resources.sessionRows,
-            sessionRowsReady: resources.sessionRowsReady,
-            sessionRowsLoading: resources.sessionRowsLoading,
-            sessionRowsStatus: resources.sessionRowsStatus,
+            sessionCollection: resources.sessionCollection,
+            holdTaskOrder: resources.holdTaskOrder,
             visibleRows: resources.visibleRows,
             projectProgress: resources.projectProgress,
             listInteraction,
+            disclosures,
+            work,
             selection: () => session.state.selection,
           }}
         >
           <div
             class="otk-app"
-            ref={(element) => {
-              root = element;
-            }}
+            ref={setRoot}
             onInput={(event) => {
               if (event.isTrusted && !settings()) interact();
             }}
@@ -527,385 +808,534 @@ export default function Shell(
             onKeyDown={(event) => {
               if (event.isTrusted && !settings()) interact();
             }}
+            data-left-collapsed={String(layout().leftCollapsed)}
             data-right-collapsed={String(layout().rightCollapsed)}
           >
-            <Show when={toggles.state.ready}>
-              <button
-                type="button"
-                class="otk-icon-button otk-corner otk-corner-left"
-                aria-label={layout().leftCollapsed
-                  ? "Expand projects"
-                  : "Collapse projects"}
-                aria-expanded={layout().leftCollapsed ? "false" : "true"}
-                title={layout().leftCollapsed
-                  ? "Expand projects"
-                  : "Collapse projects"}
-                onClick={() =>
-                  void commands.run("layout.projects.toggle").catch(fail)}
-              >
-                <PanelLeftIcon />
-              </button>
-              <button
-                type="button"
-                class="otk-icon-button otk-corner otk-corner-right otk-panel-collapse"
-                aria-label={layout().rightCollapsed
-                  ? "Open right panel"
-                  : "Collapse right panel"}
-                aria-expanded={layout().rightCollapsed ? "false" : "true"}
-                title={layout().rightCollapsed
-                  ? "Open right panel"
-                  : "Collapse right panel"}
-                onClick={() =>
-                  void commands.run("layout.panel.toggle").catch(fail)}
-              >
-                <PanelRightIcon />
-              </button>
-            </Show>
             <ProjectInbox
+              ref={setLeftRail}
+              disclosure={disclosures}
+              collapseToggle={
+                <Show when={toggles.state.ready}>
+                  <button
+                    type="button"
+                    class="otk-icon-button otk-corner otk-corner-left"
+                    aria-label={layout().leftCollapsed
+                      ? "Expand projects"
+                      : "Collapse projects"}
+                    aria-expanded={layout().leftCollapsed ? "false" : "true"}
+                    title={layout().leftCollapsed
+                      ? "Expand projects"
+                      : "Collapse projects"}
+                    onClick={() =>
+                      void commands.run("layout.projects.toggle").catch(fail)}
+                  >
+                    <PanelLeftIcon />
+                  </button>
+                </Show>
+              }
+              history={
+                <HistoryButtons
+                  back={backTarget()}
+                  forward={forwardTarget()}
+                  backAction={historyBack}
+                  forwardAction={historyForward}
+                  onFeedback={(outcome) => {
+                    if (outcome.kind === "failed") {
+                      fail(
+                        new FeedbackFailure(outcome.feedback),
+                      );
+                    }
+                  }}
+                />
+              }
               projects={projects()}
               duplicateName={resources.duplicateProjectName}
+              projectLabel={resources.projectLabel}
+              projectRename={projectRename}
+              canRename={(row) =>
+                canRenameProject(
+                  row,
+                  resources.server(row.sidecarId)?.capabilities ?? [],
+                )}
+              entities={resources.entities}
               servers={sidecars.state.list}
               selected={project()}
               prefs={toggles.state.prefs}
               ready={toggles.state.ready}
+              projectsReady={resources.projectsReady()}
               onOpen={openProject}
+              onAttention={navigation.openAttention}
               onInactive={resources.inactive}
+              onMove={resources.moveProject}
               onLayout={saveLayout}
             />
-            <main class="otk-main">
-              <Show when={error()}>
-                <FeedbackStatus
-                  class="otk-global-error"
-                  feedback={errorFeedback(error())}
-                />
-              </Show>
-              <Show
-                when={settings()}
-                fallback={
+            <div class={["otk-stage", { "is-sheet": sheet() }]}>
+              <main class="otk-main" ref={(el) => main = el} inert={sheet()}>
+                <div class="otk-main-content">
+                  <Show when={navigation.state.selectionNotice}>
+                    <div class="otk-selection-notice" role="status">
+                      <ChromeMeta
+                        title={navigation.state.selectionNotice}
+                        class="otk-control-label"
+                      >
+                        {navigation.state.selectionNotice}
+                      </ChromeMeta>
+                    </div>
+                  </Show>
                   <Show
-                    when={local().status !== "setup required"}
+                    when={settings()}
                     fallback={
-                      <div class={[scrollRegion(), "otk-auth-view"]}>
-                        <Setup
-                          onSetup={(input) =>
-                            sidecars.connection(LOCAL_SIDECAR).setup(input)}
-                        />
-                      </div>
-                    }
-                  >
-                    <Show
-                      when={local().status !== "login required"}
-                      fallback={
-                        <div class={[scrollRegion(), "otk-auth-view"]}>
-                          <Login
-                            label={local().label}
-                            authType={local().authType}
-                            onLogin={(input) =>
-                              sidecars.connection(LOCAL_SIDECAR).login(input)}
-                          />
-                        </div>
-                      }
-                    >
-                      <Show when={project()} keyed>
-                        {(owner) => (
-                          <>
-                            <ProjectTabs
-                              reserveTrailing={layout().rightCollapsed}
-                              project={owner}
-                              model={tabsFor(owner)}
-                              currentEntry={(id) =>
-                                resources.entry(owner.sidecarId, id)}
-                              inbox={inbox(owner.sidecarId).state.inbox}
-                              entry={actions.selectedEntry()}
-                              eligible={(target) =>
-                                actions.eligibility(target).live}
-                              catalog={session.models?.state.available
-                                ? session.models.state.value
-                                : undefined}
-                              showCost={toggles.state.prefs.showCost}
-                              session={info()}
-                              rename={rename}
-                              displayMenu={
-                                <DisplayMenu
-                                  prefs={toggles.state.prefs}
-                                  ready={toggles.state.ready}
-                                  error={toggles.state.error}
-                                  onSet={(key, value) =>
-                                    commands.run("prefs.set", { key, value })}
-                                />
-                              }
-                              ready={resources.connected(owner.sidecarId)}
-                              onOpen={(id) => {
-                                return navigate({
-                                  sidecarId: owner.sidecarId,
-                                  sessionID: id,
-                                });
-                              }}
-                              onEmpty={navigation.projectHome}
-                              onCreateSession={(task) =>
-                                navigation.createIn(
-                                  owner.sidecarId,
-                                  owner.directory,
-                                  task,
-                                )}
-                              actions={resources.taskActions(owner)}
-                            />
-                            <ProgressStatus
-                              class="otk-shell-progress"
-                              text={session.transcript?.state.load?.state ===
-                                    "loading" &&
-                                  !session.state.loading &&
-                                  session.transcript.progress?.().busy
-                                ? session.transcript.progress().text
-                                : resources.progress(owner.sidecarId).busy
-                                ? resources.progress(owner.sidecarId).text
-                                : ""}
-                            />
-                          </>
-                        )}
-                      </Show>
                       <Show
-                        when={session.state.selection}
-                        keyed
+                        when={local().status !== "setup required"}
                         fallback={
-                          <div class="otk-welcome">
-                            <PaneState>
-                              <h1>
-                                {project()
-                                  ? "Choose a session"
-                                  : "Open Terminal Kit"}
-                              </h1>
-                              <p>
-                                {project()
-                                  ? "Open Sessions in the right panel, or start a new session."
-                                  : "Choose a project to supervise its sessions."}
-                              </p>
-                            </PaneState>
-                          </div>
+                          <ScrollRegion class="otk-auth-view">
+                            <Setup
+                              onSetup={(input) =>
+                                sidecars.connection(LOCAL_SIDECAR).setup(input)}
+                            />
+                          </ScrollRegion>
                         }
                       >
                         <Show
-                          when={session.state.view !== "deleted" &&
-                            session.state.catalogReady !== false}
+                          when={local().status !== "login required"}
                           fallback={
-                            <Show when={session.state.deleted}>
-                              {(entry) => (
-                                <DeletedSession
-                                  title={entry().title}
-                                  ref={contextTarget(() => ({
-                                    kind: "session",
-                                    area: true,
-                                    data: {
-                                      ...session.state.selection!,
-                                      title: entry().title,
-                                      directory: entry().directory,
-                                    },
-                                  }))}
-                                  notice={`${
-                                    entry().deleted?.how === "otk"
-                                      ? "Deleted through OTK"
-                                      : "Deleted from the agent service"
-                                  } on ${
-                                    new Date(entry().deleted!.at)
-                                      .toLocaleString()
-                                  }`}
-                                  facts={deletedFacts(
-                                    entry(),
-                                    toggles.state.prefs.showCost,
-                                    (time) => new Date(time).toLocaleString(),
+                            <ScrollRegion class="otk-auth-view">
+                              <Login
+                                label={local().label}
+                                authType={local().authType}
+                                onLogin={(input) =>
+                                  sidecars.connection(LOCAL_SIDECAR).login(
+                                    input,
                                   )}
-                                  retained={guard.retained()}
-                                  draftNotice={draft().input ||
-                                      draft().chips.length || draft().editor
-                                    ? "Your unsent draft is retained. This session can no longer receive messages."
-                                    : undefined}
-                                  copy={() =>
-                                    void commands.run("session.title.copy", {
-                                      ...session.state.selection!,
-                                      title: entry().title,
-                                      directory: entry().directory,
-                                    }).catch(fail)}
-                                  remove={actions.eligibility(
-                                      session.state.selection!,
-                                    ).member
-                                    ? () =>
-                                      void commands.run(
-                                        "session.task.remove",
-                                        session.state.selection,
-                                      ).catch(fail)
-                                    : undefined}
-                                  close={() =>
-                                    void commands.run("session.close").catch(
-                                      fail,
-                                    )}
-                                />
-                              )}
-                            </Show>
+                              />
+                            </ScrollRegion>
                           }
                         >
-                          <SessionProvider
-                            ports={sessionPorts({
-                              target: session.state.selection!,
-                              resources,
-                              actions,
-                              session,
-                              guard,
-                              prefs: () => toggles.state.prefs,
-                              permissionVisible: attentionPaint.permission,
-                            })}
-                          >
-                            <SessionView
-                              sidecarId={session.state.selection?.sidecarId}
-                              revert={session.state.content.revert}
-                              rollback={revert}
-                              branchHistory={branchHistory}
-                              strip={revert.strip(session.state.content)}
-                              busy={!!session.state.selection &&
-                                ["busy", "retry"].includes(
-                                  entry(
-                                    session.state.selection.sidecarId,
-                                    session.state.selection.sessionID,
-                                  )?.status ?? "",
-                                )}
-                              retryState={session.state.selection
-                                ? entry(
-                                  session.state.selection.sidecarId,
-                                  session.state.selection.sessionID,
-                                )?.retry
-                                : undefined}
-                              child={!!session.state.selection?.rootID ||
-                                !!info()?.parentID}
-                              siblings={session.state.siblings}
-                              onOpenChild={(id) =>
-                                void commands.run("session.child", id)}
-                              permissions={session.state.content.permissions}
-                              prefs={toggles.state.prefs}
-                              info={info()}
-                              label={selectedSidecar()?.label || "Server"}
-                              transcript={session.transcript}
-                              latestPrompt={session.state.latestPrompt}
-                              continuity={session.state.continuity}
-                              usageOwner={session.usage}
-                              entry={actions.selectedEntry()}
-                              openUsage={resources.declares(
-                                  session.state.selection!.sidecarId,
-                                  "usage",
-                                ) &&
-                                  actions.eligibility(session.state.selection!)
-                                    .live
-                                ? (turnID) => {
-                                  const target = {
-                                    ...session.state.selection!,
-                                    turnID,
-                                  };
-                                  const release = session.usage.retain(target);
-                                  void session.usage.load(target);
-                                  return release;
+                          <Show when={project()} keyed>
+                            {(owner) => (
+                              <>
+                                <ProjectTabs
+                                  project={owner}
+                                  projectChip={
+                                    <ProjectLocation
+                                      directory={owner.directory}
+                                      sidecarId={owner.sidecarId}
+                                      catalog={resources.declares(
+                                          owner.sidecarId,
+                                          "catalogs",
+                                        )
+                                        ? resources.directoryCatalog(
+                                          owner.sidecarId,
+                                          owner.directory,
+                                        )
+                                        : undefined}
+                                    />
+                                  }
+                                  model={tabsFor(owner)}
+                                  currentEntry={(id) =>
+                                    resources.entry(owner.sidecarId, id)}
+                                  inbox={inbox(owner.sidecarId).state.inbox}
+                                  entry={actions.selectedEntry()}
+                                  eligible={(target) =>
+                                    actions.eligibility(target).live}
+                                  catalog={session.models?.state.available
+                                    ? session.models.state.value
+                                    : undefined}
+                                  showCost={toggles.state.prefs.showCost}
+                                  session={info()}
+                                  rename={rename}
+                                  displayMenu={
+                                    <DisplayMenu
+                                      prefs={toggles.state.prefs}
+                                      ready={toggles.state.ready}
+                                      error={toggles.state.error}
+                                      onSet={(key, value) =>
+                                        commands.run("prefs.set", {
+                                          key,
+                                          value,
+                                        })}
+                                    />
+                                  }
+                                  ready={resources.connected(owner.sidecarId)}
+                                  onOpen={(id) => {
+                                    return navigate({
+                                      sidecarId: owner.sidecarId,
+                                      sessionID: id,
+                                    });
+                                  }}
+                                  onEmpty={navigation.projectHome}
+                                  onCreateSession={(task) =>
+                                    navigation.createIn(
+                                      owner.sidecarId,
+                                      owner.directory,
+                                      task,
+                                    )}
+                                  actions={resources.taskActions(owner)}
+                                />
+                                <ProgressStatus
+                                  class="otk-shell-progress"
+                                  text={transcriptStatus({
+                                    loading: session.state.loading,
+                                    paging: session.state.paging,
+                                    continuity: session.state.continuity,
+                                    transcript: session.transcript,
+                                  }) ||
+                                    (resources.progress(owner.sidecarId).busy
+                                      ? resources.progress(owner.sidecarId).text
+                                      : "")}
+                                />
+                              </>
+                            )}
+                          </Show>
+                          <Show
+                            when={session.state.selection}
+                            keyed
+                            fallback={
+                              <Show
+                                when={project()}
+                                fallback={
+                                  <div class="otk-welcome">
+                                    <PaneState>
+                                      <h1>Open Terminal Kit</h1>
+                                      <p>
+                                        Choose a project to supervise its
+                                        sessions.
+                                      </p>
+                                    </PaneState>
+                                  </div>
                                 }
-                                : undefined}
-                              usageError={(turnID) =>
-                                session.usage.error({
-                                  ...session.state.selection!,
-                                  turnID,
-                                })}
-                              catalog={session.models?.state.available
-                                ? session.models.state.value
-                                : undefined}
-                              loading={session.state.loading}
-                              paging={session.state.paging}
-                              exhausted={session.state.exhausted}
-                              error={session.state.error}
-                              sessionError={session.state.content.error}
-                              errorState={session.state.content.errorState}
-                              draft={draft()}
-                              forkNote={forkNotes.get(draftKey())}
-                              onDismissForkNote={() =>
-                                forkNotes.dismiss(draftKey())}
-                              connected={selectedSidecar()?.status ===
-                                "connected"}
-                              onOlder={() => commands.run("session.older")}
-                              onRetry={() => commands.run("session.retry")}
-                              onDraft={drafts.writer(draftKey())}
-                              onPrompt={(parts, _mode, selection) =>
-                                actions.prompt(parts, selection)}
-                              onAbort={actions.abort}
-                            />
-                          </SessionProvider>
+                              >
+                                {(owner) => {
+                                  // A default lookup chooses a route, not what
+                                  // the Sessions collection is known to contain.
+                                  const state = createMemo(() =>
+                                    navigation.state.projectSelection ===
+                                        "unavailable"
+                                      ? "unavailable"
+                                      : resources.projectContents(owner())
+                                  );
+                                  return (
+                                    <Show when={state() !== "items"}>
+                                      <div class="otk-welcome otk-project-hero">
+                                        <PaneState>
+                                          <h1 class="otk-control-label">
+                                            {state() === "loading"
+                                              ? resources.checkoutLabel(
+                                                owner().sidecarId,
+                                                owner().directory,
+                                              )
+                                              : state() === "unavailable"
+                                              ? "Sessions unavailable"
+                                              : "Choose a session"}
+                                          </h1>
+                                          <div class="otk-project-hero-detail">
+                                            <Show
+                                              when={state() === "loading"}
+                                              fallback={
+                                                <p>
+                                                  {state() === "unavailable"
+                                                    ? "Reconnect or choose a different project."
+                                                    : "Open Sessions in the right panel, or start a new session."}
+                                                </p>
+                                              }
+                                            >
+                                              <ProgressStatus text="Loading sessions..." />
+                                            </Show>
+                                          </div>
+                                        </PaneState>
+                                      </div>
+                                    </Show>
+                                  );
+                                }}
+                              </Show>
+                            }
+                          >
+                            {(target) => (
+                              <Show
+                                when={session.state.view !== "deleted" &&
+                                  session.state.catalogReady !== false}
+                                fallback={
+                                  <Show when={session.state.deleted}>
+                                    {(entry) => (
+                                      <DeletedSession
+                                        title={entry().title}
+                                        ref={contextTarget(() => ({
+                                          kind: "session",
+                                          area: true,
+                                          data: {
+                                            ...target,
+                                            title: entry().title,
+                                            directory: entry().directory,
+                                          },
+                                        }))}
+                                        notice={`${
+                                          entry().deleted?.how === "otk"
+                                            ? "Deleted through OTK"
+                                            : "Deleted from the agent service"
+                                        } on ${
+                                          clockTitle(entry().deleted!.at)
+                                        }`}
+                                        facts={deletedFacts(
+                                          entry(),
+                                          toggles.state.prefs.showCost,
+                                          clockTitle,
+                                        )}
+                                        retained={guard.retained()}
+                                        draft={draft()}
+                                        recoveries={deletedRecoveries(target)}
+                                        draftNotice={draft().input ||
+                                            draft().chips.length ||
+                                            draft().editor
+                                          ? "Your unsent draft is retained. This session can no longer receive messages."
+                                          : undefined}
+                                        copy={() =>
+                                          void commands.run(
+                                            "session.title.copy",
+                                            {
+                                              ...target,
+                                              title: entry().title,
+                                              directory: entry().directory,
+                                            },
+                                          ).catch(fail)}
+                                        remove={actions.eligibility(target)
+                                            .member
+                                          ? () =>
+                                            void commands.run(
+                                              "session.task.remove",
+                                              target,
+                                            ).catch(fail)
+                                          : undefined}
+                                        close={() =>
+                                          void commands.run("session.close")
+                                            .catch(
+                                              fail,
+                                            )}
+                                      />
+                                    )}
+                                  </Show>
+                                }
+                              >
+                                <SessionProvider
+                                  ports={sessionPorts({
+                                    target,
+                                    resources,
+                                    actions,
+                                    session,
+                                    guard,
+                                    prefs: () => toggles.state.prefs,
+                                    tabs: () => {
+                                      const owner = project();
+                                      return owner ? tabsFor(owner) : undefined;
+                                    },
+                                  })}
+                                >
+                                  <SessionView
+                                    work={work}
+                                    mountTranscriptLayer={mountTranscriptLayer}
+                                    sidecarId={target.sidecarId}
+                                    revert={session.state.content.revert}
+                                    rollback={revert}
+                                    branchHistory={branchHistory}
+                                    strip={revert.strip(session.state.content)}
+                                    busy={sessionRunning(
+                                      resources.inbox(target.sidecarId)
+                                        .entities,
+                                      entityKey("session", target.sessionID),
+                                    )}
+                                    retryState={sessionEvidence(
+                                      resources.inbox(target.sidecarId)
+                                        .entities,
+                                      entityKey("session", target.sessionID),
+                                    )?.retry}
+                                    child={!!target.rootID ||
+                                      !!info()?.parentID}
+                                    onOpenChild={(id) =>
+                                      void commands.run("session.child", id)
+                                        .catch(
+                                          fail,
+                                        )}
+                                    permissions={session.state.content
+                                      .permissions}
+                                    prefs={toggles.state.prefs}
+                                    info={info()}
+                                    label={selectedSidecar()?.label || "Server"}
+                                    transcript={session.transcript}
+                                    latestPrompt={session.state.latestPrompt}
+                                    continuity={session.state.continuity}
+                                    usageOwner={session.usage}
+                                    entry={actions.selectedEntry()}
+                                    openUsage={resources.declares(
+                                        target.sidecarId,
+                                        "usage",
+                                      ) &&
+                                        actions.eligibility(target).live
+                                      ? (turnID) => {
+                                        const turn = { ...target, turnID };
+                                        const release = session.usage.retain(
+                                          turn,
+                                        );
+                                        void session.usage.load(turn);
+                                        return release;
+                                      }
+                                      : undefined}
+                                    usageError={(turnID) =>
+                                      session.usage.error({
+                                        ...target,
+                                        turnID,
+                                      })}
+                                    catalog={session.models?.state.available
+                                      ? session.models.state.value
+                                      : undefined}
+                                    loading={session.state.loading}
+                                    paging={session.state.paging}
+                                    exhausted={session.state.exhausted}
+                                    error={session.state.error}
+                                    sessionError={session.state.content.error}
+                                    diagnostics={session.state.content
+                                      .errorState}
+                                    draft={draft()}
+                                    forkNote={forkNotes.get(draftKey())}
+                                    onDismissForkNote={() =>
+                                      forkNotes.dismiss(draftKey())}
+                                    connected={resources.linked(
+                                      target.sidecarId,
+                                    )}
+                                    onOlder={() =>
+                                      commands.run("session.older")}
+                                    onRetry={() =>
+                                      commands.run("session.retry")}
+                                    onDraft={drafts.writer(draftKey())}
+                                    captureSend={(draft) =>
+                                      drafts.captureSend(draftKey(), draft)}
+                                    draftRecoveries={drafts.recoveries(
+                                      draftKey(),
+                                    )}
+                                    onPrompt={(
+                                      parts,
+                                      _mode,
+                                      selection,
+                                      capture,
+                                    ) =>
+                                      actions.prompt(parts, selection, capture)
+                                        .then(
+                                          requireCommittedSend,
+                                        )}
+                                    activity={() => actions.activity()}
+                                    onStop={() => actions.stop()}
+                                  />
+                                </SessionProvider>
+                              </Show>
+                            )}
+                          </Show>
                         </Show>
                       </Show>
-                    </Show>
+                    }
+                  >
+                    <Settings
+                      appearance={
+                        <>
+                          <VisualSettings
+                            prefs={toggles.state.prefs}
+                            ready={toggles.state.ready}
+                            onSet={(key, value) =>
+                              commands.run("prefs.set", { key, value })}
+                          />
+                          <ProjectSettings />
+                        </>
+                      }
+                      notifications={
+                        <NotificationSettings
+                          prefs={toggles.state.prefs}
+                          ready={toggles.state.ready}
+                          browser={notifications.os}
+                          onSet={(key, value) =>
+                            commands.run("prefs.set", { key, value })}
+                        />
+                      }
+                      transcript={
+                        <TranscriptSettings
+                          prefs={toggles.state.prefs}
+                          ready={toggles.state.ready}
+                          onSet={(key, value) =>
+                            commands.run("prefs.set", { key, value })}
+                        />
+                      }
+                      sidecars={sidecars.state.list}
+                      discovery={sidecars.state.discovery}
+                      addition={sidecars.state.addition}
+                      onEditAdd={sidecars.editAdd}
+                      onCancelAdd={sidecars.cancelAdd}
+                      onAdd={(url, label) =>
+                        resources.add(url, label).then(() => {
+                          notifications.info("Server added");
+                        })}
+                      onRemove={(id) => navigation.removeServer(id)}
+                      onLogin={(id, input) =>
+                        sidecars.connection(id).login(input)}
+                      onSetup={(input) =>
+                        sidecars.connection(LOCAL_SIDECAR).setup(input)}
+                      onClose={() => void commands.run("settings.close")}
+                    />
+                  </Show>
+                  <GlobalSurfaces />
+                </div>
+              </main>
+              <RightPanel
+                presentation={presentation.mode()}
+                collapseToggle={
+                  <Show when={toggles.state.ready}>
+                    <button
+                      ref={(el) => panelToggle = el}
+                      type="button"
+                      class={[
+                        "otk-corner otk-corner-right otk-panel-collapse",
+                        sheet() ? "otk-corner-back" : "otk-icon-button",
+                      ]}
+                      aria-label={panelToggleTitle()}
+                      aria-expanded={layout().rightCollapsed ? "false" : "true"}
+                      title={panelToggleTitle()}
+                      onClick={() =>
+                        void commands.run("layout.panel.toggle").catch(fail)}
+                    >
+                      <Show when={sheet()} fallback={<PanelRightIcon />}>
+                        <ArrowLeftIcon />
+                        <span class="otk-control-label">
+                          {panelToggleTitle()}
+                        </span>
+                      </Show>
+                    </button>
                   </Show>
                 }
-              >
-                <Settings
-                  appearance={
-                    <>
-                      <VisualSettings
-                        prefs={toggles.state.prefs}
-                        ready={toggles.state.ready}
-                        onSet={(key, value) =>
-                          commands.run("prefs.set", { key, value })}
-                      />
-                      <ProjectSettings />
-                    </>
-                  }
-                  notifications={
-                    <NotificationSettings
-                      prefs={toggles.state.prefs}
-                      ready={toggles.state.ready}
-                      browser={notifications.os}
-                      onSet={(key, value) =>
-                        commands.run("prefs.set", { key, value })}
-                    />
-                  }
-                  transcript={
-                    <TranscriptSettings
-                      prefs={toggles.state.prefs}
-                      ready={toggles.state.ready}
-                      onSet={(key, value) =>
-                        commands.run("prefs.set", { key, value })}
-                    />
-                  }
-                  sidecars={sidecars.state.list}
-                  discovery={sidecars.state.discovery}
-                  addition={sidecars.state.addition}
-                  onEditAdd={sidecars.editAdd}
-                  onCancelAdd={sidecars.cancelAdd}
-                  onAdd={(url, label) =>
-                    resources.add(url, label).then(() => {
-                      notifications.info("Server added");
-                    })}
-                  onRemove={(id) => navigation.removeServer(id)}
-                  onLogin={(id, input) => sidecars.connection(id).login(input)}
-                  onSetup={(input) =>
-                    sidecars.connection(LOCAL_SIDECAR).setup(input)}
-                  onClose={() => void commands.run("settings.close")}
+                layout={layout()}
+                ready={toggles.state.ready}
+                supports={(capability) =>
+                  resources.advertised(project()?.sidecarId ?? "", capability)}
+                onLayout={saveLayout}
+              />
+            </div>
+            <Show when={root()}>
+              <Portal mount={transcriptLayer() ?? root()}>
+                <Toasts
+                  layout={transcriptLayer() ? "layer" : undefined}
+                  model={notifications.toast}
+                  entities={resources.entities}
+                  detail={permissionNotificationDetail}
+                  onMore={() => void saveLayout({
+                    rightCollapsed: false,
+                    rightView: "sessions",
+                  })
+                    .catch(fail)}
                 />
-              </Show>
-              <GlobalSurfaces />
-            </main>
-            <RightPanel
-              layout={layout()}
-              ready={toggles.state.ready}
-              supports={(capability) =>
-                resources.advertised(project()?.sidecarId ?? "", capability)}
-              onLayout={saveLayout}
-            />
-            <Toasts
-              model={notifications.toast}
-              detail={permissionNotificationDetail}
-              onMore={() =>
-                void saveLayout({
-                  rightCollapsed: false,
-                  rightView: "sessions",
-                })
-                  .catch(fail)}
-            />
+              </Portal>
+            </Show>
             <DialogHost onChange={setDialog} />
-            <ContextMenu root={root} />
+            <ContextMenu
+              root={root()!}
+              control={(openFor) => openFileMenu = openFor}
+            />
           </div>
         </ShellProvider>
       </CommandProvider>
-    </AttentionProvider>
+    </>
   );
 }

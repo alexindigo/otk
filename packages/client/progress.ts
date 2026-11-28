@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProgressFacts } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
-import { humanDuration } from "./format.ts";
+import { elapsed, remaining } from "./format.ts";
 
 export interface ProgressDisplay {
   busy: boolean;
   text: string;
+  stalled?: boolean;
   rate?: number;
   eta?: [number, number];
 }
-const remaining = (seconds: number) =>
-  humanDuration(Math.max(1, Math.ceil(seconds / 60)) * 60_000);
 function waiting(reason: string | undefined, page: boolean): string {
   if (reason === "queued behind current work") {
     return page
@@ -75,7 +74,7 @@ export class ProgressEstimate {
     const busy = facts.phase !== "ready";
     if (!busy) return { busy: false, text: "" };
     const elapsedMs = Math.max(0, now - facts.started),
-      elapsed = humanDuration(elapsedMs);
+      elapsedText = elapsed(elapsedMs).text;
     const page = facts.phase === "reading" || facts.phase === "queued";
     const stalled = now - facts.advanced >= 45000;
     const count = facts.eligible === null
@@ -84,8 +83,11 @@ export class ProgressEstimate {
     if (stalled) {
       return {
         busy,
+        stalled,
         text: page
-          ? `Still loading ${label.replace(/^Loading /, "")} (${elapsed}): ${
+          ? `Still loading ${
+            label.replace(/^Loading /, "")
+          } (${elapsedText}): ${
             waiting(
               facts.wait ?? (facts.phase === "queued"
                 ? "queued behind current work"
@@ -94,7 +96,7 @@ export class ProgressEstimate {
             )
           }`
           : `${label}: ${count}. No progress for ${
-            humanDuration(now - facts.advanced)
+            elapsed(now - facts.advanced).text
           }, ${waiting(facts.wait, false)}`,
       };
     }
@@ -107,17 +109,15 @@ export class ProgressEstimate {
         ? [left / (rate + spread), left / Math.max(rate * 0.2, rate - spread)]
         : [left / rate, left / rate];
     }
+    const low = eta && remaining(eta[0] * 1000, "minute").text;
+    const high = eta && remaining(eta[1] * 1000, "minute").text;
     const estimate = eta
-      ? eta[0] === eta[1]
-        ? `, about ${remaining(eta[0])} left`
-        : remaining(eta[0]) === remaining(eta[1])
-        ? `, about ${remaining(eta[0])} left`
-        : `, about ${remaining(eta[0])}-${remaining(eta[1])} left`
+      ? low === high ? `, about ${low} left` : `, about ${low}-${high} left`
       : "";
     return {
       busy,
       text: page
-        ? `${label}...${elapsedMs >= 10000 ? ` ${elapsed}` : ""}`
+        ? `${label}...${elapsedMs >= 10000 ? ` ${elapsedText}` : ""}`
         : `${label}: ${count}${estimate}`,
       rate,
       eta,

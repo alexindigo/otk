@@ -22,6 +22,7 @@ import {
 } from "@otk/protocol";
 const id = ids.encode("ses_fixture");
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,
@@ -573,7 +574,7 @@ Deno.test("V2 all native message kinds are context or controls, never fake real 
   });
   assertEquals(mapped.length, rows.length);
   const projection = createTranscriptProjection();
-  projection.replace(mapped);
+  projection.reset(mapped);
   projection.busy(true);
   assertEquals([...projection.state.queuedIDs], []);
   assertEquals(
@@ -611,7 +612,7 @@ Deno.test("V2 real-user anchors and selection follow seq, not copied clocks or f
   assertEquals(facts.contexts.msg_fork_14.replyTo, "msg_fork_13");
   assertEquals(facts.metadata.prompt?.agent, "plan");
   const projection = createTranscriptProjection();
-  projection.replace(
+  projection.reset(
     [...rows].reverse().flatMap((r) => {
       const m = mapMessage(r, id, facts.contexts[r.id]);
       return m ? [m] : [];
@@ -741,6 +742,135 @@ Deno.test("V2 live terminal text replaces deltas, preserving stable part identit
   assertEquals(JSON.stringify(last.part.blocks).includes("hellohello"), false);
   assertEquals(last.part.id, partID("msg_live", "text", 0));
   await t.stop();
+});
+for (const kind of ["text", "reasoning"] as const) {
+  Deno.test(`V2 acquired ${kind} checkpoint cannot consume the live start that owns append source`, async () => {
+    const raw = assistant("msg_checkpoint", 3);
+    delete raw.time.completed;
+    raw.content = kind === "text"
+      ? [{ type: "text", text: "" }]
+      : [{ type: "reasoning", text: "", time: { created: 3 } }];
+    const projection = createTranscriptProjection();
+    const api = {
+      session: {
+        inbox: { list: () => Promise.resolve([]) },
+        get: () =>
+          Promise.resolve({
+            id: "ses_fixture",
+            projectID: "project",
+            location: { directory: "/project" },
+            time: { created: 1, updated: 3 },
+          }),
+      },
+      message: { list: () => Promise.resolve({ data: [raw], cursor: {} }) },
+    };
+    const client = {
+      service: { version: "2.2.6" },
+      read: <T>(run: (api: unknown) => Promise<T>) => run(api),
+    } as unknown as V2Client;
+    const t = new Transcript({
+      client: () => client,
+      policy,
+      facts: () =>
+        Promise.resolve(factsFrom([scalarMessage(raw, 1)], [raw.id])),
+      content: (_id, op) => projection.apply(op),
+      invalidated() {},
+      diagnostic() {},
+    });
+    t.subscriptions(id, 1);
+    try {
+      projection.reset((await t.page(id)).items);
+      await t.event({
+        type: "session.step.started",
+        created: 3,
+        data: {
+          sessionID: "ses_fixture",
+          assistantMessageID: raw.id,
+          agent: "build",
+          model: { providerID: "fake", id: "scripted" },
+          started: 3,
+        },
+      });
+      const data = {
+        sessionID: "ses_fixture",
+        assistantMessageID: raw.id,
+        ordinal: 0,
+      };
+      await t.event({ type: `session.${kind}.started`, created: 4, data });
+      await t.event({
+        type: `session.${kind}.delta`,
+        created: 5,
+        data: { ...data, delta: "Visible before terminal" },
+      });
+      // A duplicate native start must not reset the already-owned append source.
+      await t.event({ type: `session.${kind}.started`, created: 4, data });
+      t.buffers.checkpoint(id, (_id, op) => projection.apply(op));
+      assert(
+        JSON.stringify(projection.messages()).includes(
+          "Visible before terminal",
+        ),
+      );
+      assertEquals(t.recovery.snapshot(id), []);
+    } finally {
+      await t.stop();
+    }
+  });
+}
+Deno.test("V2 page acquisition observes a failed recovery without retrying or hiding its failure", async () => {
+  let reads = 0;
+  const failed = Promise.withResolvers<void>();
+  const api = {
+    session: {
+      inbox: { list: () => Promise.resolve([]) },
+      get: () =>
+        Promise.resolve({
+          id: "ses_fixture",
+          projectID: "project",
+          location: { directory: "/project" },
+          time: { created: 1, updated: 3 },
+        }),
+      message: {
+        get: () => {
+          reads++;
+          return Promise.reject(new Error("Unavailable checkpoint"));
+        },
+      },
+    },
+    message: {
+      list: () => Promise.resolve({ data: [], cursor: {} }),
+    },
+  };
+  const client = {
+    service: { version: "2.2.6" },
+    read: <T>(run: (api: unknown) => Promise<T>) => run(api),
+  } as unknown as V2Client;
+  const t = new Transcript({
+    client: () => client,
+    policy,
+    facts: () => Promise.resolve(factsFrom([], [])),
+    content: (_id, op) => {
+      if (op.op === "stream.recovery" && op.state === "unavailable") {
+        failed.resolve();
+      }
+    },
+    invalidated() {},
+    diagnostic() {},
+  });
+  t.subscriptions(id, 1);
+  try {
+    t.recovery.touch(id, "msg_missing", "text");
+    await failed.promise;
+    const page = await t.page(id);
+    assertEquals(reads, 1);
+    assertEquals(page.recovering[0].state, "unavailable");
+    await t.page(id);
+    assertEquals(reads, 1);
+    t.recovery.retry(id);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(reads, 2);
+  } finally {
+    await t.stop();
+  }
 });
 Deno.test("V2 retry reopens the same message only with explicit new-start authority", async () => {
   const projection = createTranscriptProjection(), ledger = new UsageLedger(id);
@@ -959,7 +1089,7 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
   });
   t.subscriptions(id, 1);
   try {
-    projection.replace((await t.page(id)).items);
+    projection.reset((await t.page(id)).items);
     block = true;
     const reading = t.page(id);
     await entered.promise;
@@ -982,7 +1112,7 @@ Deno.test("V2 stale completed page cannot retire a newer retry or restore its fi
       ),
       false,
     );
-    projection.replace(page.items);
+    projection.reset(page.items);
     for (const { event } of page.catchup) projection.apply(event);
     assertEquals(
       projection.messages()[0].parts.some((p) =>

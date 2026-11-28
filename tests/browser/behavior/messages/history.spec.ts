@@ -5,7 +5,12 @@ import { randomUUID } from "node:crypto";
 import type { Json } from "../../../support/fixture-control.ts";
 import { readFile } from "node:fs/promises";
 import { wire } from "../../fixtures/wire.ts";
-import { openWorkLogs, prompt, toolScript } from "../../pages/transcript.ts";
+import {
+  prompt,
+  revealTool,
+  sessionStatus,
+  toolScript,
+} from "../../pages/transcript.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 
 test(
@@ -108,8 +113,19 @@ test("messages.revert-files-counted-strip-reload", {
     lease: state.lease.lease,
     files: { "revert.txt": "before\n" },
   });
+  const v2 = state.controller.info!.version.startsWith("2."),
+    controls = ["agent-switched", "model-switched"].map((type) => ({
+      id: "msg_" + randomUUID().replaceAll("-", ""),
+      type,
+      ...(type === "agent-switched"
+        ? { agent: "build" }
+        : { model: { providerID: "fake", id: "scripted" } }),
+    }));
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Revert rendering",
+    // The contract preserves two pre-prompt native controls. Seed those exact
+    // records instead of assuming Send must switch already-applied defaults.
+    ...(v2 ? { messages: controls } : {}),
   });
   const frames = await wire(page);
   await openSession(state, page, session.id);
@@ -119,13 +135,10 @@ test("messages.revert-files-counted-strip-reload", {
     newString: "after",
   }, "Finished edit.");
   await prompt(page, "Run edit");
-  await openWorkLogs(page);
+  await revealTool(page, "[data-tool=edit][data-tool-status=completed]");
   await expect(page.locator("[data-tool=edit][data-tool-status=completed]"))
     .toHaveCount(1);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "after\n",
   );
@@ -145,19 +158,19 @@ test("messages.revert-files-counted-strip-reload", {
   await expect.poll(() =>
     frames.received.some((frame) => {
       const event = frame.event as
-        | { op?: string; messageCount?: number }
+        | { op?: string; boundaryID?: string }
         | undefined;
       const page = frame.outcome as {
         ok?: boolean;
-        result?: { session?: { revert?: { messageCount: number } } };
+        result?: { session?: { revert?: { boundaryID: string } } };
       } | undefined;
       return frame.t === "content" && event?.op === "session.revert" &&
-          event.messageCount === 1 ||
-        page?.ok === true && page.result?.session?.revert?.messageCount === 1;
+          event.boundaryID === user ||
+        page?.ok === true && page.result?.session?.revert?.boundaryID === user;
     })
   ).toBe(true);
-  await expect(page.locator(".otk-rolled-back-strip")).toContainText(
-    "1 prompt rolled back",
+  await expect(page.locator(".otk-revert-group")).toContainText(
+    "Reverted from",
   );
   // Decisions 1/20 preserve pre-prompt native controls; revert removes real prompts/replies.
   const reverted = async () => {
@@ -166,26 +179,32 @@ test("messages.revert-files-counted-strip-reload", {
         "[data-message][data-role=user], [data-message][data-role=assistant]",
       ),
     ).toHaveCount(0);
-    if (state.controller.info!.version.startsWith("2.")) {
+    if (v2) {
       await expect(page.locator("[data-message][data-role=context]"))
         .toHaveCount(2);
-      for (const kind of ["agent-switched", "model-switched"]) {
-        await expect(page.locator(`[data-native-record="opencode-v2/${kind}"]`))
-          .toBeVisible();
+      for (const control of controls) {
+        await expect(page.locator(`[data-message="${control.id}"]`))
+          .toContainText(
+            control.type === "agent-switched" ? "build" : "scripted",
+          );
+        await expect(
+          page.locator(`[data-native-record="opencode-v2/${control.type}"]`),
+        ).toBeVisible();
       }
     } else await expect(page.locator("[data-message]")).toHaveCount(0);
   };
   await reverted();
-  await page.locator(".otk-rollback-disclosure").click();
-  await expect(page.locator(".otk-rollback-details")).toContainText(
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await expect(page.locator(".otk-revert-records")).toContainText(
     "revert.txt",
   );
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "before\n",
   );
   await page.reload();
-  await expect(page.locator(".otk-rolled-back-strip")).toContainText(
-    "1 prompt rolled back",
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-boundary",
+    user,
   );
   await reverted();
 });
@@ -213,16 +232,26 @@ isolatedTest.describe("configured message details", () => {
       .toBeAttached();
     await prompt(page, "Queued prompt");
     await expect(page.locator(".otk-queued")).toBeVisible();
-    const agent = page.locator(".otk-message-agent");
+    const agent = page.locator(".otk-reply-start .otk-entity-pill");
     // Streaming can move the footer away from a stationary pointer. Keyboard
     // focus retains the same reveal state independently of that layout change.
     await agent.focus();
     await page.keyboard.press("Tab");
     await page.keyboard.press("Shift+Tab");
     await expect(agent).toBeFocused();
+    // 2.105 WP6 moves the chip into muted footer metadata, but the shared
+    // EntityPill keeps the regular foreground when it has keyboard focus.
+    const foreground = await agent.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--otk-fg)";
+      el.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
     await expect(agent).toHaveCSS(
       "color",
-      "rgb(107, 172, 255)",
+      foreground,
     );
     await expect(page.locator("[data-role=user]").first()).toHaveCSS(
       "border-left-width",
@@ -236,18 +265,23 @@ isolatedTest.describe("configured message details", () => {
     );
     await expect(page.locator(".otk-queued")).toHaveCount(0);
     await expect.poll(() =>
-      page.locator(".otk-message-footer").evaluateAll((footers) =>
+      page.locator("[data-role=assistant] .otk-message-footer").evaluateAll((
+        footers,
+      ) =>
         footers.length > 0 &&
-        footers.every((footer) =>
-          footer.textContent!.includes("build") &&
-          /\ds/.test(footer.textContent!)
-        )
+        footers.every((footer) => /\ds/.test(footer.textContent!))
       )
     ).toBe(true);
-    const footers = await page.locator(".otk-message-footer").allTextContents();
+    const footers = await page.locator(
+      "[data-role=assistant] .otk-message-footer",
+    ).allTextContents();
     expect(
-      footers.every((footer) => footer.includes("build") && /\ds/.test(footer)),
+      footers.every((footer) => /\ds/.test(footer)),
     ).toBe(true);
+    await expect(page.locator(".otk-reply-start .otk-entity-pill")).toHaveText([
+      "build",
+      "build",
+    ]);
     await expect(
       page.locator(".otk-messages p").filter({ hasText: /^(step|unknown)$/ }),
     ).toHaveCount(0);

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { nativeModel } from "./selection.ts";
 import { HarnessError, type ShellCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 import type { ErrorRequest } from "./errors.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import { submissionID } from "./submission-id.ts";
 export interface NativeLaunch {
   admitted: Promise<void>;
   settled: Promise<void>;
@@ -14,6 +16,16 @@ export type Launch = (
   path: string,
   options: Parameters<Client["request"]>[1],
 ) => NativeLaunch | void;
+
+/** Every successful receipt requires native admission, even without a request owner. */
+export async function awaitLaunch(
+  launch: NativeLaunch | void,
+  scoped: boolean,
+) {
+  if (!launch) return;
+  if (scoped) await Promise.all([launch.admitted, launch.settled]);
+  else await launch.admitted;
+}
 export function shell(
   client: Client,
   directory: Directory,
@@ -21,6 +33,7 @@ export function shell(
 ): ShellCapability {
   return {
     async shell(input, operation) {
+      const messageID = input.messageID ?? submissionID();
       const dir = await directory.resolve(input.sessionID);
       const agent = input.agent ??
         (await client.json<{ name: string; hidden?: boolean; mode: string }[]>(
@@ -43,20 +56,15 @@ export function shell(
           classification: "effect",
           ...(operation ? { operation } : {}),
           body: {
+            messageID,
             command: input.command,
             agent,
-            ...(input.model
-              ? {
-                model: {
-                  providerID: input.model.provider,
-                  modelID: input.model.model,
-                },
-              }
-              : {}),
+            ...(input.model ? { model: nativeModel(input.model) } : {}),
           },
         },
       );
-      if (operation && launched) await launched.settled;
+      await awaitLaunch(launched, !!operation);
+      return { messageID, state: "started" };
     },
   };
 }

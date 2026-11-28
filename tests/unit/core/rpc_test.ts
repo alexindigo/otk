@@ -270,7 +270,7 @@ test("each optional registration contributes only its present capability and cor
     "usage",
   ] as const;
   const methods = [
-    ["session.prompt", "session.abort"],
+    ["session.prompt", "session.abort", "session.withdraw"],
     ["session.shell"],
     ["commands.list", "session.command"],
     ["history.prompt", "history.list", "history.attachments"],
@@ -330,9 +330,19 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       prompt: (input) => record("prompt", input),
       abort: (id) => record("abort", id),
     },
-    shell: { shell: (input) => record("shell", input) },
+    shell: {
+      shell: (input) =>
+        record("shell", input).then(() => ({
+          messageID: "shell",
+          state: "accepted" as const,
+        })),
+    },
     commands: {
-      command: (input) => record("command", input),
+      command: (input) =>
+        record("command", input).then(() => ({
+          messageID: "command",
+          state: "accepted" as const,
+        })),
       listCommands: () => Promise.resolve([]),
     },
     history: {
@@ -406,6 +416,11 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         { sessionID: "tstv1-s", limit: 1.5 },
         "Unknown message page parameter",
       ],
+      [
+        "session.messages",
+        { sessionID: "tstv1-s", retryRecovery: "true" },
+        "Invalid response retry intent",
+      ],
       ["session.create", { directory: "" }, "Expected directory string"],
       ["session.prompt", { parts: [] }, "parts required"],
       ["session.prompt", {
@@ -478,7 +493,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         command: "pwd",
         model,
       }),
-      null,
+      { messageID: "shell", state: "accepted" },
     );
     assertEquals(
       await rpc.dispatch("session.command", {
@@ -487,7 +502,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         parts: [],
         model,
       }),
-      null,
+      { messageID: "command", state: "accepted" },
     );
     assertEquals(
       await rpc.dispatch("find.files", { sessionID: "tstv1-s" }),
@@ -531,6 +546,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       }],
       ["prompt", {
         sessionID: "tstv1-s",
+        messageID: undefined,
         parts,
         mode: "normal",
         model,

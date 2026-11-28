@@ -1,51 +1,80 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Feedback } from "@otk/client";
-import { type Element, Show } from "solid-js";
-import { ComposerNoticeRow } from "./ComposerNotice.tsx";
-import { ActivityIcon, CloseIcon } from "./ChromeIcons.tsx";
+import { errorFeedback, type Feedback } from "@otk/client";
+import { createMemo, type Element, Show } from "solid-js";
+import { ComposerNoticeRow, noticeDismiss } from "./ComposerNotice.tsx";
+import { ActivityIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
-import FailureContent from "./FailureContent.tsx";
+import FailureContent, { type FailureFeedbackRow } from "./FailureContent.tsx";
 
 /** Content only: its consumer owns the one joined notice frame and target. */
 export default function OperationFeedback(
   props: {
     feedback: Feedback;
-    icon?: Element;
+    icon?: () => Element;
     control?(control: { focus(): void }): void;
+    focusHome?(): void;
     onReveal?(messageID: string): void;
+    onDismiss?(): void;
+    dismissLabel?: string;
   },
 ): Element {
-  return (
+  const feedback = createMemo(() => errorFeedback(props.feedback)!);
+  const dismiss = () => props.onDismiss ?? props.feedback.dismiss;
+  let frame: { focus(): void } | undefined;
+  const row = (content: FailureFeedbackRow) => (
     <ComposerNoticeRow
       focusable
-      control={props.control}
-      icon={props.icon ??
-        (props.feedback.kind === "error" ? <CloseIcon /> : <ActivityIcon />)}
+      control={(control) => {
+        frame = control;
+        props.control?.(control);
+      }}
+      icon={content.icon}
       {...feedbackState({
-        feedback: props.feedback,
+        feedback: feedback(),
         class: "otk-operation-feedback",
       })}
-      trailing={
-        <Show when={props.feedback.action}>
-          <button type="button" onClick={() => props.feedback.action?.run()}>
-            {props.feedback.action?.label}
-          </button>
-        </Show>
-      }
+      actions={dismiss()
+        ? [
+          ...content.actions,
+          noticeDismiss(props.dismissLabel ?? "Dismiss notice", dismiss()!),
+        ]
+        : content.actions}
     >
-      {props.feedback.failure
-        ? (
-          <FailureContent
-            failure={props.feedback.failure}
-            onReveal={props.onReveal}
-          />
-        )
-        : (
+      {content.label}
+    </ComposerNoticeRow>
+  );
+  return (
+    <Show
+      when={feedback().failure}
+      fallback={row({
+        icon: () => props.icon?.() ?? <ActivityIcon />,
+        label: (
           <span class="otk-control-label" title={props.feedback.text}>
             {props.feedback.text}
           </span>
-        )}
-    </ComposerNoticeRow>
+        ),
+        get actions() {
+          return props.feedback.action
+            ? [{ key: "recover", ...props.feedback.action }]
+            : [];
+        },
+      })}
+    >
+      {(failure) => (
+        <FailureContent
+          failure={failure()}
+          action={feedback().action}
+          onReveal={props.onReveal}
+          icon={props.icon}
+          placement="feedback"
+          focusHome={() => {
+            frame?.focus();
+            if (document.activeElement === document.body) props.focusHome?.();
+          }}
+          row={row}
+        />
+      )}
+    </Show>
   );
 }

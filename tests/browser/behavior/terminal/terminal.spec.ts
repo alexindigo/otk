@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
-import { openSession } from "../../fixtures/wire.ts";
 import { messages, prompt } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 import { nativeIdle } from "../../pages/transcript.ts";
-import type { TestState } from "../../fixtures/test-state.ts";
+import {
+  cleanup,
+  observe,
+  open,
+  tabs,
+  text,
+  viewport,
+} from "../../pages/terminal.ts";
 import type { Page } from "@playwright/test";
 
-const viewport = (page: Page) =>
-  page.locator('.otk-terminal .otk-tabs-panel[data-active="true"] canvas');
-const tabs = (page: Page) =>
-  page.getByRole("tablist", { name: "Terminals", exact: true }).getByRole(
-    "tab",
-  );
-const text = (page: Page) =>
-  viewport(page).getAttribute("aria-label").then((value) => value ?? "");
+// Full-screen programs need rows in the dock even after it yields half the
+// session pane to the transcript. Keep reload/checkpoint tests in the dock.
+const fullScreenProgramViewport = { width: 1440, height: 1440 };
+
 // Read the renderer, including offscreen scrollback, through its native wheel
 // and accessibility ports. No private renderer state or clipboard is consulted.
 async function screenAndScrollback(page: Page): Promise<string> {
@@ -51,51 +54,12 @@ async function command(page: Page, value: string) {
   await page.keyboard.type(value);
   await page.keyboard.press("Enter");
 }
-async function open(state: TestState, page: Page, title: string) {
-  const session = await state.native<{ id: string }>("/session", "POST", {
-    title,
-  });
-  await openSession(state, page, session.id);
-  await page.getByRole("button", { name: "Open terminal", exact: true })
-    .click();
-  await expect(tabs(page)).toHaveCount(1);
-  await expect(viewport(page)).toBeVisible();
-  await expect.poll(() => text(page)).not.toBe("Terminal output");
-  return session.id;
-}
-async function cleanup(state: TestState, sessionID: string) {
-  const list = await state.product("terminal.list", {
-    sessionID,
-  });
-  for (const { id } of list) {
-    await state.product("terminal.close", { sessionID, terminalID: id });
-  }
-}
-function observe(page: Page) {
-  const data = {
-    sockets: 0,
-    attaches: 0,
-    detaches: 0,
-    input: [] as string[],
-    restores: [] as string[],
-  };
-  page.on("websocket", (socket) => {
-    if (new URL(socket.url()).pathname !== "/api/terminal") return;
-    data.sockets++;
-    socket.on("framereceived", ({ payload }) => {
-      if (typeof payload === "string") {
-        const message = JSON.parse(payload);
-        if (message.t === "snapshot") data.restores.push(message.restore);
-      }
-    });
-    socket.on("framesent", ({ payload }) => {
-      if (typeof payload === "string") {
-        if (JSON.parse(payload).t === "attach") data.attaches++;
-        if (JSON.parse(payload).t === "detach") data.detaches++;
-      } else data.input.push(payload.subarray(4).toString("utf8"));
-    });
-  });
-  return data;
+
+// Focus the input directly after reconnect. Clicking a live full-screen app
+// sends mouse bytes; btop 1.3.2 can consume a following key in the same read.
+function quitRestoredBtop(page: Page) {
+  return page.getByRole("textbox", { name: "Terminal input", exact: true })
+    .press("q");
 }
 
 test("terminal.repeated-lag-shows-disconnected-and-explicit-reconnect", {
@@ -254,6 +218,7 @@ test(
 test("terminal.less-forward-back-search-and-main-screen-return", {
   tag: "@terminal",
 }, async ({ state, page }) => {
+  await page.setViewportSize(fullScreenProgramViewport);
   const id = await open(state, page, "Terminal less");
   try {
     await command(page, "printf 'before-%s\\n' less");
@@ -378,7 +343,7 @@ test(
       })
         .click();
       await state.queue(["Terminal selection received."]);
-      await page.locator(".otk-prompt button[type=submit]").click();
+      await send(page).click();
       await expect(page.locator("[data-role=user]")).toContainText(
         "terminal-```-selected-output",
       );
@@ -500,6 +465,14 @@ test(
       await expect(
         page.getByRole("region", { name: "Terminal", exact: true }),
       ).toBeVisible();
+      // The wire observer sees Escape leave Chromium, not the PTY consume it.
+      // Join the shell's input stream before closing it on the control socket.
+      await page.keyboard.press("Control+c");
+      await command(page, "printf 'input-%s\\n' settled");
+      await expect(viewport(page)).toHaveAttribute(
+        "aria-label",
+        /input-settled/,
+      );
     } finally {
       await cleanup(state, id);
     }
@@ -510,6 +483,7 @@ test(
   "terminal.btop-full-screen-panels-and-quit",
   { tag: "@terminal" },
   async ({ state, page }) => {
+    await page.setViewportSize(fullScreenProgramViewport);
     const id = await open(state, page, "Terminal btop");
     try {
       await command(page, "printf 'before-%s\\n' btop");
@@ -581,7 +555,11 @@ test("terminal.composer-toggle-detaches-without-closing-the-shell", {
 });
 
 for (
-  const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]
+  const size of [
+    { width: 1280, height: 720 },
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+  ]
 ) {
   test(`terminal.dock-and-editor-geometry-${size.width}x${size.height}`, {
     tag: "@terminal",
@@ -608,7 +586,7 @@ for (
         `PS1='geometry$ '; printf '\\033]0;%s\\007' '${title}'`,
       );
       await expect(tabs(page).first()).toHaveAttribute("title", title);
-      await expect.poll(() =>
+      const geometry = () =>
         page.evaluate(() => {
           const box = document.querySelector(".otk-terminal")!
             .getBoundingClientRect();
@@ -616,17 +594,33 @@ for (
             .getBoundingClientRect();
           const transcript = document.querySelector(".otk-transcript-viewport")!
             .getBoundingClientRect();
+          const pane = document.querySelector(".otk-session-content")!
+            .getBoundingClientRect();
           return {
+            dockHeight: box.height,
+            paneHeight: pane.height,
+            transcriptHeight: transcript.height,
             aligned: Math.abs(box.left - composer.left) <= .5 &&
               Math.abs(box.right - composer.right) <= .5,
-            height:
-              Math.abs(box.height - Math.round(innerHeight * 2 / 3)) <= .5 ||
-              transcript.height <= .5,
-            flow: box.bottom <= composer.top + .5 && composer.top >= 0 &&
+            // 2.105 WP7 / 2.110 review: fill half the content pane without
+            // borrowing from the transcript or counting the composer.
+            dockFits: Math.abs(box.height - pane.height / 2) <= 2,
+            transcriptFits: transcript.height + .02 >= pane.height / 2,
+            flow: transcript.bottom <= box.top + .5 &&
+              box.bottom <= composer.top + .5 && composer.top >= 0 &&
               composer.bottom <= innerHeight + .5,
           };
-        })
-      ).toEqual({ aligned: true, height: true, flow: true });
+        });
+      await expect.poll(geometry).toMatchObject({
+        aligned: true,
+        dockFits: true,
+        transcriptFits: true,
+        flow: true,
+      });
+      const { dockHeight, paneHeight, transcriptHeight } = await geometry();
+      console.log(
+        `DOCK-GEOMETRY ${size.width}x${size.height} dock=${dockHeight} pane=${paneHeight} transcript=${transcriptHeight}`,
+      );
       await page.getByRole("button", { name: "Edit prompt", exact: true })
         .click();
       const editor = page.getByRole("dialog", {
@@ -756,6 +750,10 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
       "aria-label",
       /expansion-filler-80/,
     );
+    // Portal movement updates the canvas bounds before the PTY acknowledges
+    // its new grid. Start each scrollback walk on the canonical grid.
+    await expect.poll(() => wire.grids.length).toBeGreaterThan(0);
+    const dockGrid = wire.grids.at(-1)!;
     expect(await screenAndScrollback(page)).toContain("before-expansion");
     const engines = await page.evaluate(() =>
       Reflect.get(globalThis, "__terminalEngines")
@@ -767,6 +765,9 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
       .click();
     const dialog = page.getByRole("dialog", { name: "Terminal", exact: true });
     await expect(dialog).toBeVisible();
+    await expect.poll(() => wire.grids.at(-1)!.rows).toBeGreaterThan(
+      dockGrid.rows,
+    );
     expect(await screenAndScrollback(page)).toContain("before-expansion");
     await expect(
       dialog.getByRole("textbox", { name: "Terminal input", exact: true }),
@@ -785,6 +786,7 @@ test("terminal.expand-collapse-retains-renderer-channel-and-escape-ownership", {
     await dialog.getByRole("button", { name: "Close Terminal", exact: true })
       .click();
     await expect(dialog).toHaveCount(0);
+    await expect.poll(() => wire.grids.at(-1)).toEqual(dockGrid);
     expect(await screenAndScrollback(page)).toContain("before-expansion");
     await expect(
       page.getByRole("textbox", { name: "Terminal input", exact: true }),
@@ -809,6 +811,7 @@ test(
   "terminal.btop-reload-restores-same-live-screen",
   { tag: "@terminal" },
   async ({ state, page }) => {
+    await page.setViewportSize(fullScreenProgramViewport);
     const wire = observe(page),
       id = await open(state, page, "Terminal btop reload");
     try {
@@ -842,8 +845,7 @@ test(
           (canvas as HTMLCanvasElement).toDataURL()
         )
       ).not.toBe(previous);
-      await viewport(page).click({ position: { x: 8, y: 8 } });
-      await page.keyboard.press("q");
+      await quitRestoredBtop(page);
       await expect(viewport(page)).toHaveAttribute("aria-label", /\$\s*$/);
       expect(await screenAndScrollback(page)).toContain("before-reload");
       await command(page, "printf 'reload-%s\\n' returned");
@@ -860,6 +862,7 @@ test(
 test("terminal.truncated-replay-falls-back-to-live-btop-checkpoint", {
   tag: "@terminal",
 }, async ({ state, page }) => {
+  await page.setViewportSize(fullScreenProgramViewport);
   const wire = observe(page),
     id = await open(state, page, "Terminal truncated replay");
   try {
@@ -884,8 +887,7 @@ test("terminal.truncated-replay-falls-back-to-live-btop-checkpoint", {
         (canvas as HTMLCanvasElement).toDataURL()
       )
     ).not.toBe(before);
-    await viewport(page).click({ position: { x: 8, y: 8 } });
-    await page.keyboard.press("q");
+    await quitRestoredBtop(page);
     // A truncated active-screen checkpoint cannot preserve the inactive screen.
     await expect(viewport(page)).toHaveAttribute("aria-label", /\$\s*$/);
     expect(await screenAndScrollback(page)).not.toContain("truncated-ready");

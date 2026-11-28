@@ -144,7 +144,7 @@ test(
         "right:0;bottom:0",
       ]
     ) {
-      await page.locator(".otk-tabs-project").evaluate((el, edges) => {
+      await page.locator(".otk-project-chip-trigger").evaluate((el, edges) => {
         const node = el as HTMLElement;
         node.tabIndex = 0;
         node.style.cssText = "position:fixed;width:160px;height:40px;" + edges;
@@ -153,7 +153,7 @@ test(
       await page.keyboard.press("ContextMenu");
       await expect(page.locator(menu + " [role=menuitem]").first())
         .toBeFocused();
-      g = await geometry(page, menu, ".otk-tabs-project");
+      g = await geometry(page, menu, ".otk-project-chip-trigger");
       contained(g);
       expect(g.rows.length).toBeGreaterThan(0);
       expect(g.rows.every((row) => row.visible && row.hit)).toBe(true);
@@ -166,6 +166,9 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
+    // D74: measure the Display trigger in the exposed conversation.
+    await page.getByRole("button", { name: "Collapse right panel" }).click();
+    await expect(page.locator(".otk-right-rail")).toBeVisible();
     await page.evaluate(() => document.fonts.ready.then(() => true));
     for (const [width, height] of [[1280, 657], [720, 360]]) {
       await page.setViewportSize({ width, height });
@@ -197,7 +200,9 @@ test(
         );
         contained(g);
         expect(g.body.scroll).toBeGreaterThan(g.body.height);
-        await page.locator(".otk-display-menu :popover-open .otk-surface-body")
+        await page.locator(
+          ".otk-display-menu :popover-open > .otk-surface > .otk-surface-scroll > .otk-surface-body",
+        )
           .evaluate((el) => el.scrollTop = el.scrollHeight);
         expect(
           await page.locator(

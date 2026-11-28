@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
+import { pick, rightClick } from "../../pages/menus.ts";
 
 test.use({ profile: "revert-native" });
 test("revert.saved-view-does-not-acknowledge-unseen-live-finishes", {
@@ -19,6 +20,8 @@ test("revert.saved-view-does-not-acknowledge-unseen-live-finishes", {
   await expect(row).toHaveAttribute("data-status", "idle");
   await page.locator(".otk-user-bubble").focus();
   await page.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Restore conversation", exact: true }),
   ).toBeVisible();
@@ -31,8 +34,8 @@ test("revert.saved-view-does-not-acknowledge-unseen-live-finishes", {
     "data-state",
     "none",
   );
-  await page.getByRole("button", { name: /Unrevert: .*saved earlier branch/ })
-    .click();
+  await rightClick(page, ".otk-messages");
+  await pick(page, "Saved conversation copies (1)");
   await state.queue(["New live finish not yet read."]);
   await prompt(page, "Run in the live session while I read the earlier branch");
   await expect(row).toHaveAttribute("data-status", "idle");

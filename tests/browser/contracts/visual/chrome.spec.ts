@@ -133,7 +133,7 @@ test(
     await expect(page.locator('[data-tab="tstv1-row-action-phantom"]'))
       .toBeVisible();
     const row = page.locator('[data-project$="/projects/otk"]'),
-      menu = row.locator(".otk-project-menu"),
+      menu = row.locator(".otk-sidebar-control"),
       trigger = row.locator(".otk-popover-trigger");
     await page.mouse.move(600, 500);
     await page.locator("body").evaluate(() =>
@@ -141,21 +141,23 @@ test(
     );
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("0");
-    const before = await row.locator(".otk-project-trailing").boundingBox();
+    const before = await row.locator(".otk-sidebar-meta").boundingBox();
     await row.hover();
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
     await expect.poll(() =>
-      row.locator("time").evaluate((el) => getComputedStyle(el).opacity)
+      row.locator(".otk-sidebar-meta-track").evaluate((el) =>
+        getComputedStyle(el).opacity
+      )
     ).toBe("0");
-    expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
+    expect(await row.locator(".otk-sidebar-meta").boundingBox()).toEqual(
       before,
     );
     await page.mouse.move(600, 500);
     await row.locator(".otk-project-open").focus();
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
-    expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
+    expect(await row.locator(".otk-sidebar-meta").boundingBox()).toEqual(
       before,
     );
     await page.keyboard.press("Tab");
@@ -189,7 +191,7 @@ test(
         ? page.locator(":popover-open")
         : page.locator("dialog[open]");
       await expect(surface).toBeVisible();
-      await expect(surface.locator(".otk-surface")).toHaveCount(1);
+      await expect(surface.locator(":scope > .otk-surface")).toHaveCount(1);
       await page.keyboard.press("Escape");
       await expect(surface).toHaveCount(0);
       await expect(trigger).toBeFocused();
@@ -217,7 +219,13 @@ test(
   "visual.task-form-submission-real-owner-and-more-exact-partition-navigation",
   tags,
   async ({ isolatedState: state, page }) => {
-    await openSession(state, page, "tstv1-otk");
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "hold",
+      sessionID: "tstv1-crumb-path",
+    });
+    await page.goto(`${state.url}/#/local/tstv1-otk`);
+    await expect(page.locator(".otk-breadcrumb-row")).toBeVisible();
     await page.locator(".otk-task-new").click();
     await page.locator("input[name=taskName]").fill("Created Dark");
     await page.locator("dialog[open] button[type=submit]").click();
@@ -227,10 +235,20 @@ test(
     });
     expect(tasks.filter((t) => t.name === "Created Dark")).toHaveLength(1);
     const observed = await state.observe<
-        { entries: { id: string; directory: string; title: string }[] }
+        {
+          entries: {
+            id: string;
+            directory: string;
+            title: string;
+            parentID?: string;
+          }[];
+        }
       >(),
       entries = observed.entries.filter((e) => e.directory === state.directory),
-      ids = entries.map((e) => e.id);
+      ids = [
+        ...entries.filter((e) => e.id !== "tstv1-otk").map((e) => e.id),
+        "tstv1-otk",
+      ];
     await state.product("tasks.sessions", {
       id: tasks.find((t) => t.name === "Created Dark")!.id,
       sessions: ids,
@@ -241,23 +259,43 @@ test(
     });
     await page.setViewportSize({ width: 800, height: 800 });
     await page.goto(state.url + "/#/local/tstv1-otk");
-    await page.locator(".otk-folded-crumbs > button").click();
+    await page.locator(".otk-subagents > button").click();
     await expect(
-      page.locator(".otk-folded-crumbs [data-overflow-target]").first(),
+      page.locator(".otk-subagents [data-subagent]").first(),
     ).toBeVisible();
     const visible = await page.locator("[data-crumb]").evaluateAll((els) =>
         els.filter((el) => !el.closest("[hidden]")).map((el) =>
           el.getAttribute("data-crumb")!
         )
       ),
-      hidden = await page.locator(".otk-folded-crumbs [data-overflow-target]")
+      hidden = await page.locator(".otk-subagents [data-subagent]")
         .evaluateAll((els) =>
-          els.map((el) => el.getAttribute("data-overflow-target")!)
+          els.map((el) => el.getAttribute("data-subagent")!)
         );
-    expect(visible.length + hidden.length).toBe(ids.length);
-    expect(hidden).toEqual(ids.filter((id) => !visible.includes(id)));
-    const target = hidden[0];
-    await page.locator(`.otk-folded-crumbs [data-overflow-target="${target}"]`)
+    // D67 follows native parent links, not task membership or index order.
+    // D66 lists active descendants independently of that ancestry.
+    const byID = new Map(entries.map((entry) => [entry.id, entry]));
+    const ancestry: string[] = [];
+    for (let current = byID.get("tstv1-otk"); current;) {
+      expect(ancestry).not.toContain(current.id);
+      ancestry.unshift(current.id);
+      current = current.parentID ? byID.get(current.parentID) : undefined;
+    }
+    expect(ancestry).toHaveLength(ids.length);
+    expect(visible).toEqual(ancestry);
+    expect(new Set([...visible, ...hidden]).size).toBe(ancestry.length);
+    // The quiet open leaf stays in D67 ancestry, not in D66's active set.
+    // The separate Subagents menu owns its order, not the ancestry trail.
+    expect([...hidden].sort()).toEqual(ancestry.slice(1, -1).sort());
+    expect(
+      ids.filter((id) => !visible.includes(id)).every((id) =>
+        hidden.includes(id)
+      ),
+    ).toBe(true);
+    const target = ancestry[1];
+    await page.locator(
+      `.otk-subagents [data-subagent="${target}"] .otk-subagent-name`,
+    )
       .click();
     await expect(page).toHaveURL(new RegExp("/" + target + "$"));
     await expect(page.locator(`[data-crumb="${target}"]`)).toHaveAttribute(

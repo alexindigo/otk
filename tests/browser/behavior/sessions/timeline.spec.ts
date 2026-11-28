@@ -77,19 +77,20 @@ test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
   await expect(page.locator('[data-context-command="prompt.revert"]'))
     .toBeVisible();
   expect((await page.getByRole("menuitem").allTextContents()).slice(0, 2))
-    .toEqual(["Copy prompt", "Revert to here"]);
+    .toEqual(["Copy prompt", "Revert from here"]);
   await page.keyboard.press("Escape");
   await row.locator(".otk-timeline-reveal").click();
   await row.locator('[data-message-command="prompt.revert"]').click();
+  await page.getByRole("button", { name: "Confirm revert", exact: true })
+    .click();
   await expect(page.locator("[data-timeline-prompt]")).toHaveCount(0);
-  await expect(page.locator(".otk-rolled-back-strip strong")).toHaveText(
-    // Content-proven prompts on both harnesses: V1's compaction marker user
-    // row is not a prompt (NT4, FX9), as V2 compaction is its own record.
-    "3 prompts rolled back",
+  await expect(page.locator(".otk-revert-group")).toHaveAttribute(
+    "data-boundary",
+    ids[0],
   );
-  await page.locator(".otk-rollback-disclosure").click();
-  await page.locator(".otk-rollback-footer button").click();
-  await expect(page.locator(".otk-rolled-back-strip")).toHaveCount(0);
+  await page.locator(".otk-revert-group .otk-record-group-toggle").click();
+  await page.locator(".otk-revert-restore").click();
+  await expect(page.locator(".otk-revert-group")).toHaveCount(0);
   await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
   await page.reload();
   await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
@@ -138,6 +139,14 @@ test(
       "Historical prompt 0",
     );
     await page.goto(
+      `${state.url}/#project/local/${encodeURIComponent(state.directory)}`,
+    );
+    // Cold project entry resolves its default session (decisions 7/56).
+    await expect(page).toHaveURL(`${state.url}/#/local/${s.id}`);
+    await expect(pane).toHaveAttribute("data-prompt-count", "105");
+    await page.keyboard.press("Control+k");
+    await page.locator('[data-command="session.close"]').click();
+    await expect(page).toHaveURL(
       `${state.url}/#project/local/${encodeURIComponent(state.directory)}`,
     );
     await expect(pane).toContainText("Open a session to see its prompts.");

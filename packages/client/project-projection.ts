@@ -1,28 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type {
-  InboxSnapshot,
-  ProjectRecord,
-  ProjectSummary,
-  TaskRecord,
+import {
+  entityKey,
+  type InboxSnapshot,
+  type ProjectRecord,
+  type ProjectSummary,
+  type TaskRecord,
 } from "@otk/protocol";
+import {
+  emphasis,
+  entityState,
+  type EntityStateStore,
+} from "./entity-state.ts";
 import { createSessionTree } from "./session-tree.ts";
 import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
 import {
-  ageing,
-  aggregateStatus,
-  attentionStatus,
-  dependencyCount,
-  INBOX_STATUS_PRIORITY,
   type InboxChanges,
   type InboxProject,
   type InboxStatus,
   projectDirectory,
-  unread,
-  visitTime,
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
-import { projectName } from "./project-navigation.ts";
+import { checkoutLabel, projectLabel } from "./project-names.ts";
+import { projectPlacement } from "./project-placement.ts";
+import { sidebarTimer } from "./sidebar-timer.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
@@ -36,7 +37,9 @@ export function createProjectProjection(o: {
   inbox?(): InboxSnapshot;
   taskActivity?(): Readonly<Record<string, InboxStatus>>;
   factory?: StateFactory;
-  membership?(directory: string, present: boolean): void;
+  labelChanged?(directory: string, label: string | undefined): void;
+  /** The connection's entity states: the only source of row attention. */
+  entities?(): EntityStateStore;
 }) {
   const clock = (o.factory ?? createState)({
     revision: 0,
@@ -48,23 +51,15 @@ export function createProjectProjection(o: {
   const sessions = new Map<string, {
     entry: MergedMetadata;
     directory: string;
-    status: InboxStatus;
-    unread: boolean;
-    dependencies: number;
   }>();
   const repoSessions = new Map<string, Set<string>>();
   const projects = new Map<string, {
     members: Map<string, MergedMetadata>;
-    counts: Record<InboxStatus, number>;
-    unread: number;
-    dependencies: number;
     record?: ProjectRecord;
     summary?: ProjectSummary;
     discovered: boolean;
-    operation?: InboxStatus;
     ids?: string;
     row?: ProjectProjectionRow;
-    time?: string;
     metadata?: MergedMetadata[];
     structure?: MergedMetadata[];
     tasks: TaskRecord[];
@@ -86,6 +81,12 @@ export function createProjectProjection(o: {
     void clock.state.revision;
     return projectDirectory(directory, summaries, repoID);
   };
+  const facts = (directory: string) => {
+    void clock.state.keys[directory];
+    return summaries[directory];
+  };
+  const label = (directory: string) =>
+    checkoutLabel(directory, facts(directory));
   const scopes = (directory: string): readonly string[] => {
     void clock.state.keys[directory];
     const p = projects.get(directory);
@@ -98,20 +99,13 @@ export function createProjectProjection(o: {
       ]),
     ].sort();
   };
-  let operationStates: ReadonlyMap<string, InboxStatus> = new Map();
   const visible = new Set<string>();
   const ensure = (directory: string) => {
     let p = projects.get(directory);
     if (!p) {
       p = {
         members: new Map(),
-        counts: Object.fromEntries(
-          INBOX_STATUS_PRIORITY.map((status) => [status, 0]),
-        ) as Record<InboxStatus, number>,
-        unread: 0,
-        dependencies: 0,
         discovered: false,
-        operation: operationStates.get(directory),
         tasks: [],
         tree: createSessionTree(),
         activity: {},
@@ -140,8 +134,11 @@ export function createProjectProjection(o: {
       if (visible.has(directory) !== present) {
         if (present) visible.add(directory);
         else visible.delete(directory);
-        o.membership?.(directory, present);
       }
+      o.labelChanged?.(
+        directory,
+        present ? checkoutLabel(directory, p.summary) : undefined,
+      );
     }
     clock.update((draft) => {
       draft.revision++;
@@ -155,14 +152,7 @@ export function createProjectProjection(o: {
     for (const id of ids) {
       const before = sessions.get(id), entry = o.entry(id);
       const directory = entry && resolve(entry.directory, entry.projectID);
-      const status = entry && aggregateStatus(entry, inbox);
-      const dependencies = entry ? dependencyCount(entry, inbox) : 0;
-      const unseen = !!entry && unread(entry, inbox);
-      if (
-        before?.entry === entry && before?.status === status &&
-        before?.unread === unseen && before?.directory === directory &&
-        before?.dependencies === dependencies
-      ) continue;
+      if (before?.entry === entry && before?.directory === directory) continue;
       changed.add(id);
       if (before) {
         repoSessions.get(before.entry.projectID)?.delete(id);
@@ -173,9 +163,6 @@ export function createProjectProjection(o: {
           entry.parentID !== before.entry.parentID ||
           entry.title !== before.entry.title
         ) p.structure = undefined;
-        p.counts[before.status]--;
-        p.unread -= Number(before.unread);
-        p.dependencies -= before.dependencies;
         if (!entry || directory !== before.directory) {
           p.members.delete(id);
           p.ids = undefined;
@@ -195,16 +182,7 @@ export function createProjectProjection(o: {
         }
         if (!p.members.has(id)) p.ids = undefined;
         p.members.set(id, entry);
-        p.counts[status!]++;
-        p.unread += Number(unseen);
-        p.dependencies += dependencies;
-        sessions.set(id, {
-          entry,
-          directory: directory!,
-          status: status!,
-          unread: unseen,
-          dependencies,
-        });
+        sessions.set(id, { entry, directory: directory! });
         dirty.add(directory!);
       } else sessions.delete(id);
       catalog = undefined;
@@ -235,10 +213,27 @@ export function createProjectProjection(o: {
     }
     return p.activity;
   };
+  const projectIdentity = (directory: string, repoID?: string) => {
+    const leaf = resolve(directory, repoID), summary = facts(leaf);
+    const root = summary?.topology?.canonicalRoot;
+    const canonical = root && root !== leaf ? facts(root) : undefined;
+    const color = (canonical ?? summary)?.presentation?.color;
+    return {
+      name: canonical ? label(root!) : projectLabel(leaf, summary),
+      ...(color && { color }),
+    };
+  };
   return {
     update,
     resolve,
     scopes,
+    label(directory: string) {
+      return label(resolve(directory));
+    },
+    projectLabel(directory: string) {
+      return projectIdentity(directory).name;
+    },
+    projectIdentity,
     entry(id: string) {
       void entryClock.state.keys[id];
       return sessions.get(id)?.entry;
@@ -264,6 +259,9 @@ export function createProjectProjection(o: {
           },
           get inbox() {
             return o.inbox?.() ?? inbox;
+          },
+          get entities() {
+            return o.entities?.();
           },
         };
       }
@@ -381,7 +379,7 @@ export function createProjectProjection(o: {
         for (const id of repoSessions.get(repo) ?? []) ids.add(id);
       }
       if (!changes || changes.baseline) {
-        for (const field of ["seen", "finishes", "supervision"] as const) {
+        for (const field of ["seen", "finishes"] as const) {
           for (
             const id of new Set([
               ...Object.keys(inbox[field] ?? {}),
@@ -400,83 +398,70 @@ export function createProjectProjection(o: {
           ...next,
           seen: { ...next.seen },
           finishes: { ...next.finishes },
-          supervision: { ...next.supervision },
         };
       } else {for (const id of ids) {
           for (const field of ["seen", "finishes"] as const) {
             if (next[field][id] === undefined) delete inbox[field][id];
             else inbox[field][id] = next[field][id];
           }
-          inbox.supervision ??= {};
-          if (next.supervision?.[id]) {
-            inbox.supervision[id] = next.supervision[id];
-          } else delete inbox.supervision[id];
         }}
       update(ids, dirty);
     },
-    operations(states: ReadonlyMap<string, InboxStatus>) {
-      const resolved = new Map<string, InboxStatus>();
-      for (const [directory, status] of states) {
-        const leaf = resolve(directory);
-        resolved.set(leaf, attentionStatus(resolved.get(leaf), status));
-      }
-      states = resolved;
+    /** Rows re-read the entity states the inbox accepted for them. */
+    entities(keys: readonly string[] | "all") {
       const dirty = new Set<string>();
-      for (
-        const directory of new Set([
-          ...operationStates.keys(),
-          ...states.keys(),
-        ])
-      ) {
-        const p = projects.get(directory), next = states.get(directory);
-        if (!p) continue;
-        if (p.operation !== next) {
-          p.operation = next;
+      const prefix = entityKey("project", "");
+      for (const directory of projects.keys()) {
+        if (keys === "all" || keys.includes(prefix + directory)) {
           dirty.add(directory);
         }
       }
-      operationStates = states;
       publish(dirty);
     },
     directories() {
       void clock.state.revision;
       return [...visible];
     },
-    row(directory: string, now: number, thresholds?: readonly number[]) {
+    row(directory: string, now: number) {
       void clock.state.keys[directory];
       const p = projects.get(directory);
       if (!p) return undefined;
       const summary = p.summary;
+      const parent = summary?.topology?.parentDirectory;
+      const parentLabel = parent ? label(parent) : undefined;
       const summaryReady = summary !== undefined;
-      const status = attentionStatus(
-        p.operation,
-        ...(summaryReady ? [summary.status ?? "none"] : [
-          ...INBOX_STATUS_PRIORITY.filter((s) => p.counts[s] > 0),
-        ]),
-      );
-      // Evidence only: an unknown population adds no unseen finish.
-      const unread = (summary?.unseenCount ?? 0) > 0 || p.unread > 0 ||
-        summary?.status === "finished";
+      // Decision 62: the project entity is the row's state; absent or stale
+      // state is grey (D6).
+      const store = o.entities?.(), key = entityKey("project", directory);
+      const status = store ? entityState(store, key) : "none";
+      const entity = store && !store.isStale ? store.get(key) : undefined;
+      const dependencies = entity?.dependencies;
+      const unread = store ? emphasis(store, key) : false;
       const record = p.record;
-      // Decision 55: a removed checkout's part of the project is archived,
-      // unless it still has live evidence, running dependencies or needs the user.
-      const archived = summary?.availability === "removed" &&
-        !!summary.topology?.parentDirectory &&
-        status !== "working" && status !== "blocked" &&
-        status !== "dependencies" && !(summary.dependencies ?? p.dependencies);
-      const inactive = archived || !!record?.inactive && status === "none";
+      const archived = summary?.archived === true;
+      const inactive = !!record?.inactive && status === "none";
       const hasSessions = summary?.hasSessions ??
         (summary?.sessionCount != null
           ? summary.sessionCount > 0
           : p.members.size > 0 || summaryReady);
-      const time = inactive && record
-        ? record.inactiveAt ?? record.lastVisit
-        : now;
-      const text = record ? visitTime(record.lastVisit, time) : "";
-      const age = record ? ageing(record.lastVisit, time, thresholds) : 0;
-      const key = `${text}/${age}`;
-      if (!p.row || p.time !== key) {
-        p.time = key;
+      const placement = projectPlacement({
+        lifecycle: summary,
+        status,
+        dependencies,
+        liveWork: entity?.liveWork,
+        inactive: !!record?.inactive,
+        hasSessions,
+      });
+      const timer = sidebarTimer(status, entity?.runStartedAt, now, record);
+      if (
+        !p.row || p.row.timer?.kind !== timer?.kind ||
+        p.row.timer?.time.iso !== timer?.time.iso ||
+        p.row.timer?.time.spoken !== timer?.time.spoken ||
+        p.row.status !== status ||
+        p.row.section !== placement.section ||
+        p.row.unread !== unread || p.row.dependencies !== dependencies ||
+        p.row.parentLabel !== parentLabel
+      ) {
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
           ...(record ?? {
@@ -484,41 +469,29 @@ export function createProjectProjection(o: {
             added: false,
             inactive: false,
             lastVisit: 0,
-            order: p.summary
-              ? -(p.summary.lastActivity ?? 0)
-              : p.members.size
-              ? -Math.max(...[...p.members.values()].map((e) => e.timeUpdated))
-              : 0,
           }),
           source: record ? "tracked" : p.summary?.hasSessions ||
               (p.summary?.sessionCount ?? p.members.size) > 0 ||
               (p.summary?.sessionCount === null && summaryReady)
             ? "index"
             : "template",
-          group: inactive
-            ? "inactive"
-            : hasSessions || status !== "none"
-            ? "active"
-            : "discovered",
+          ...placement,
+          group: placement.section === "live" ? "active" : placement.section,
           inactive,
+          archived,
           status,
-          dependencies: summaryReady
-            ? summary.dependencies ?? 0
-            : p.dependencies,
+          dependencies,
           unread,
-          visitText: text,
-          ageing: age,
+          unseenCount: store && !store.isStale
+            ? store.get(key)?.counts.unseen ?? 0
+            : null,
+          timer,
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,
           topology: p.summary?.topology,
           availability: p.summary?.availability,
-          ...(p.summary?.topology?.parentDirectory
-            ? {
-              depth: 1,
-              parentLabel: projectName(p.summary.topology.parentDirectory),
-            }
-            : {}),
+          ...(parent ? { depth: 1, parentLabel } : {}),
         };
       }
       return p.row;

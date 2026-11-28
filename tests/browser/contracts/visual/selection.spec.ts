@@ -7,20 +7,30 @@ test.use({ profile: "contract-visual-inbox" });
 test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
   tag: ["@visual", "@isolated"],
 }, async ({ isolatedState: state, page, context }) => {
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+    sessionID: "tstv1-crumb-path",
+  });
   const { entries } = await state.observe<
       { entries: { id: string; directory: string }[] }
     >(),
     ids = entries.filter((e) => e.directory === state.directory).map((e) =>
       e.id
     );
-  await state.product("tasks.create", {
+  const task = await state.product("tasks.create", {
     directory: state.directory,
     name: "Selection chain",
     sessions: ids,
   });
+  const otherTasks = await Promise.all(
+    ["Next task", "Later task"].map((name) =>
+      state.product("tasks.create", { directory: state.directory, name })
+    ),
+  );
   await state.product("layout.patch", { rightCollapsed: false });
   await page.goto(state.url + "/#/local/tstv1-otk");
-  await expect(page.locator(".otk-folded-crumbs")).toBeVisible();
+  await expect(page.locator(".otk-subagents")).toBeVisible();
   await expect(page.locator(".otk-session-row[aria-current=page]"))
     .toBeVisible();
   const cdp = await context.newCDPSession(page),
@@ -37,7 +47,9 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
       if (item.orientation === "vertical") {
         expect([item.w, item.h]).toEqual([3, 14]);
         expect(item.centred).toBeLessThanOrEqual(.5);
-        expect(item.start).toBe(3);
+        // Style7 finding 5 places Tree's mark outside the row highlight.
+        // notes/2026-11-21-style7fix.md; decisions 33/54 retain state/paint ownership.
+        expect(item.start).toBe(item.external ? 0 : 3);
       } else {
         expect(item.h).toBe(2);
         expect([item.start, item.end, item.bottom]).toEqual([8, 8, 0]);
@@ -65,12 +77,30 @@ test("visual.selection-marks-real-boxes-state-and-reduced-colours", {
       ).toBe(reduced);
       await observe(".otk-project-inbox [data-otk-selection]", 4);
       await observe(".otk-project-sessions [data-otk-selection]", 10);
-      await observe(".otk-project-tabs [data-otk-selection]", 3);
+      const tabs = page.getByRole("tablist", {
+        name: "Tasks and active sessions",
+      });
+      await expect(tabs.getByRole("tab", { selected: true })).toHaveAttribute(
+        "data-tab",
+        task.id,
+      );
+      for (const other of otherTasks) {
+        await expect(tabs.getByRole("tab", { name: other.name }))
+          .toHaveAttribute("aria-selected", "false");
+      }
+      await observe(".otk-task-list [role=tab][data-otk-selection]", 3);
+      const trail = page.getByRole("navigation", { name: "Task sessions" });
+      await expect(trail.locator("[data-crumb]")).toHaveCount(12);
+      await expect(trail.locator('[aria-current="page"]')).toHaveAttribute(
+        "data-crumb",
+        "tstv1-otk",
+      );
+      await expect(trail.locator("[data-otk-selection]")).toHaveCount(0);
       await observe(".otk-panel-icons [data-otk-selection]", 1);
-      await page.locator(".otk-folded-crumbs > button").click();
+      await page.locator(".otk-subagents > button").click();
       await expect(page.locator(":popover-open")).toBeVisible();
       await observe(
-        ".otk-folded-crumbs .otk-menu-items [data-otk-selection]",
+        ".otk-subagents .otk-menu-items [data-otk-selection]",
         1,
       );
       await page.keyboard.press("Escape");

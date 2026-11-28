@@ -11,6 +11,7 @@ import { configCatalogCodec } from "./config.ts";
 import { questionsCatalogCodec } from "./questions.ts";
 import { filesCatalogCodec } from "./files.ts";
 import { modelCatalogCodec } from "./models.ts";
+import { projectCatalogCodec, repositoryCatalogCodec } from "./project.ts";
 /** Shipped feature composition; the transport accepts an injected open codec map. */
 export function createCatalogCodecs(): CatalogCodecs {
   return {
@@ -23,5 +24,7 @@ export function createCatalogCodecs(): CatalogCodecs {
     questions: questionsCatalogCodec,
     files: filesCatalogCodec,
     models: modelCatalogCodec,
+    project: projectCatalogCodec,
+    repository: repositoryCatalogCodec,
   };
 }

@@ -41,13 +41,13 @@ Deno.test("queued messages exclude their answering assistant and disappear after
 Deno.test("revert op owns banner state and explicit clearing", () => {
   const state = reduce(emptyContent(), {
     op: "session.revert",
-    messageID: "u",
-    messageCount: 2,
+    boundaryID: "u",
+    messageIDs: ["u", "reply"],
     files: [{ path: "a", additions: 1, deletions: 1 }],
   });
-  assertEquals(state.revert?.messageCount, 2);
+  assertEquals(state.revert?.messageIDs, ["u", "reply"]);
   assertEquals(
-    reduce(state, { op: "session.revert", messageCount: 0, files: [] }).revert,
+    reduce(state, { op: "session.revert", messageIDs: [], files: [] }).revert,
     null,
   );
 });

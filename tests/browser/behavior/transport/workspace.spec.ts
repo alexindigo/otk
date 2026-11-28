@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  expectPrimaryBlocked,
-  send as composerSend,
-} from "../../pages/primary-action.ts";
+import { send as composerSend } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { expectPublicSession } from "../../pages/auth.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { prompt, sendPrompt } from "../../pages/composer.ts";
 import { scrollTranscript, wheelTranscript } from "../../pages/transcript.ts";
 
 const markdown = [
@@ -143,7 +141,9 @@ test("transport.incremental-markdown", {
     await page.locator(".otk-session-crumb[aria-current] .otk-crumb-title")
       .textContent()
   ).toBe(
-    await page.locator(`[data-session="${id}"] .otk-row-title`).textContent(),
+    // Style7 shared ListRow label slot (style7fix note; decision 3).
+    await page.locator(`[data-session="${id}"] .otk-sidebar-title-text`)
+      .textContent(),
   );
 });
 
@@ -167,11 +167,13 @@ test("transport.interrupt-confirmation", {
   await expect(
     page.locator(".otk-prompt [data-interrupt-confirmation][role=status]"),
   ).toHaveText("Esc again to interrupt");
-  await expectPrimaryBlocked(composerSend(page), "Write a message");
+  await expect(composerSend(page)).toHaveAccessibleName("Stop");
+  await expect(composerSend(page)).toBeEnabled();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".otk-message-footer")).toContainText(
-    "interrupted",
-  );
+  await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+    .toContainText(
+      "interrupted",
+    );
   await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
     "data-status",
     "idle",
@@ -196,10 +198,29 @@ isolatedTest.describe("native stream recovery", () => {
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Recovery",
     });
+    const frames = await wire(page);
     await openSession(state, page, session.id);
     const gate = await state.queue(markdown, "stepped");
-    await page.locator("textarea[name=prompt]").fill("Stream then recover");
-    await page.locator("textarea[name=prompt]").press("Enter");
+    await prompt(page).fill("Stream then recover");
+    // The shortened V1 watchdog can reconnect during startup. A ready view or
+    // an initial connected snapshot does not prove the current stream booted.
+    await expect.poll(() => {
+      let bootstrapped = false;
+      for (let i = frames.received.length - 1; i >= 0; i--) {
+        const frame = frames.received[i];
+        if (frame.t === "bootstrap.complete") bootstrapped = true;
+        if (frame.t === "harness") {
+          return frame.state === "connected" &&
+            (info.project.name !== "oc-1.19.3" || bootstrapped);
+        }
+      }
+      return false;
+    }).toBe(true);
+    await sendPrompt(page);
+    await expect.poll(() =>
+      frames.sent.filter(({ frame }) => frame.method === "session.prompt")
+        .length
+    ).toBe(1);
     await state.release(gate.gate);
     await expect(page.locator("[data-role=assistant] .otk-text")).toContainText(
       "Streaming",
@@ -334,7 +355,7 @@ test(
       "held",
     );
     await page.locator("textarea[name=prompt]").fill(
-      "Stay above the new response",
+      "My send follows the new response",
     );
     await page.locator("textarea[name=prompt]").press("Enter");
     await expect(page.locator(`[data-session="${session.id}"]`))
@@ -349,12 +370,14 @@ test(
     ).toBe(true);
     await expect(page.locator(`[data-session="${session.id}"]`))
       .toHaveAttribute("data-status", "idle");
-    const after = await viewport.evaluate((el) => ({
-      top: el.scrollTop,
-      gap: el.scrollHeight - el.clientHeight - el.scrollTop,
-    }));
-    expect(Math.abs(before - after.top)).toBeLessThan(2);
-    expect(after.gap).toBeGreaterThan(100);
+    // Own-send intentionally transfers reader authority to latest (WP14).
+    await expect.poll(() => viewport.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(before);
+    await expect.poll(() =>
+      viewport.evaluate((el) =>
+        el.scrollHeight - el.clientHeight - el.scrollTop
+      )
+    ).toBeLessThan(2);
     await viewport.hover();
     await page.mouse.wheel(0, 100000);
     await expect.poll(() =>

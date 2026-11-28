@@ -5,9 +5,9 @@ import { expect, type Locator, type Page } from "@playwright/test";
 export const PRIMARY_ACTION = "[data-primary-action]";
 /** Composer and takeover hosts that may each contain one primary action. */
 export const PRIMARY_HOSTS = ".otk-prompt,.otk-takeover";
-/** UI rule 3: unavailable secondary controls hide; only the primary may be disabled. */
+/** Rule 3; D71 explicitly keeps the two unavailable history arrows visible. */
 export const DISABLED_SECONDARY =
-  `:is(:disabled,[aria-disabled=true]):not(${PRIMARY_ACTION})`;
+  `:is(:disabled,[aria-disabled=true]):not(${PRIMARY_ACTION},.otk-history > button[aria-label="No earlier session in this tab"],.otk-history > button[aria-label="No later session in this tab"])`;
 
 export interface PrimaryFact {
   visible: boolean;
@@ -83,7 +83,7 @@ export async function expectPrimaryBlocked(
   await expect(control).toBeDisabled();
   await expect(control).toHaveAttribute("aria-description", reason);
 }
-/** The ordinary composer Send, located by its declared marker. */
+/** The composer's primary control, whether it currently offers Send or Stop. */
 export const send = (page: Page): Locator =>
   page.locator(`.otk-prompt ${PRIMARY_ACTION}`);
 

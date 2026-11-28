@@ -3,12 +3,44 @@ import {
   type FailureFacts,
   OperationFailure,
   type PublicFailure,
+  REQUEST_WINDOW_EXPIRED_FACTS,
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
+import { storageProblem } from "@otk/store";
+
+export function storageFailure(
+  problem: "full" | "io",
+  diagnosticID: string = crypto.randomUUID(),
+): PublicFailure {
+  return {
+    code: `storage.${problem}`,
+    retry: "same-intent",
+    diagnosticID,
+    facts: {
+      actionLabel: "Saving changes",
+      reason: problem === "full"
+        ? "Storage is full: OTK can't save changes. Free disk space; OTK resumes automatically."
+        : "Storage is unavailable: OTK can't save changes. Restore disk access; OTK resumes automatically.",
+    },
+  };
+}
 /** Explicit semantic failures only; arbitrary exceptions remain diagnostic causes. */
 export class ExecutionFailure extends Error {
   constructor(readonly failure: Omit<PublicFailure, "diagnosticID">) {
-    super("Request rejected");
+    super(
+      failure.code === "request.expired"
+        ? "Request window expired"
+        : "Request rejected",
+    );
+    if (failure.code === "request.expired") {
+      this.failure = {
+        ...failure,
+        facts: {
+          ...REQUEST_WINDOW_EXPIRED_FACTS,
+          ...failure.facts,
+        },
+      };
+    }
   }
 }
 export function publicFailure(
@@ -22,6 +54,11 @@ export function publicFailure(
   try {
     report(diagnosticID, cause);
   } catch { /* Diagnostics cannot change an outcome. */ }
+  const problem = storageProblem(cause);
+  if (problem) {
+    const failure = storageFailure(problem, diagnosticID);
+    return { ...failure, facts: { ...context, ...failure.facts } };
+  }
   return {
     ...(cause instanceof ExecutionFailure
       ? cause.failure
@@ -51,6 +88,10 @@ export function publicFailure(
         ? cause.facts
         : undefined),
       ...(cause instanceof OperationFailure ? { outcome: cause.outcome } : {}),
+      ...(cause instanceof HarnessError &&
+          (cause.code === "method" || cause.code === "params")
+        ? { outcome: "rejected" as const }
+        : {}),
     },
   };
 }

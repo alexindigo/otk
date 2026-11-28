@@ -122,7 +122,7 @@ for (
           updated: 2,
           revision: 0,
         },
-        { rows: 20, until: performance.now() + 1000 },
+        { rows: 20, until: Infinity },
         new AbortController().signal,
       );
       const total = derivedValue(deltas.at(-1)?.summary.total);

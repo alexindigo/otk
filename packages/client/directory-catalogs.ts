@@ -20,6 +20,7 @@ export interface DirectoryCatalogLease {
   readonly state: DirectoryCatalogState;
   subscribe(listener: () => void): () => void;
   ready(kind?: keyof DirectoryCatalogKinds): Promise<void>;
+  retainFiles?(): () => void;
   warm(kinds: readonly (keyof DirectoryCatalogKinds)[]): Promise<void>;
   refresh(): Promise<void>;
   view<K extends keyof DirectoryCatalogKinds>(
@@ -48,6 +49,11 @@ interface Resource {
   notify(): void;
   subscribe(listener: () => void): () => void;
   watch?: { result: Promise<DirectoryCatalog>; release(): void };
+  files?: {
+    refs: number;
+    operation?: { result: Promise<unknown>; release(): void };
+    controller: AbortController;
+  };
   work?: Promise<void>;
   refreshes: Map<string, Promise<void>>;
   controller: AbortController;
@@ -69,6 +75,9 @@ export function createDirectoryCatalogs(o: {
   watch(
     directory: string,
   ): { result: Promise<DirectoryCatalog>; release(): void };
+  retainFiles?(
+    directory: string,
+  ): { result: Promise<unknown>; release(): void };
   demand(
     directory: string,
     kinds: (keyof DirectoryCatalogKinds)[],
@@ -112,6 +121,23 @@ export function createDirectoryCatalogs(o: {
     await r.work;
     if (!r.alive || active && !active()) return;
     if (version !== r.version) return demand(r, kinds, intent, active);
+    const files = kinds.length === 1 && kinds[0] === "files"
+      ? r.files
+      : undefined;
+    const fileSignal = files?.controller.signal;
+    if (files) {
+      try {
+        await files.operation?.result;
+      } catch (cause) {
+        if (!r.alive || active && !active()) return;
+        if (version !== r.version) return demand(r, kinds, intent, active);
+        if (fileSignal?.aborted) return;
+        throw cause;
+      }
+      if (!r.alive || active && !active()) return;
+      if (version !== r.version) return demand(r, kinds, intent, active);
+      if (fileSignal?.aborted) return;
+    }
     const generation = r.current.catalog?.generation;
     const selected: (keyof DirectoryCatalogKinds)[] = [],
       joined: Promise<void>[] = [];
@@ -140,7 +166,12 @@ export function createDirectoryCatalogs(o: {
     if (selected.length) {
       let work: Promise<void>;
       try {
-        work = o.demand(r.directory, selected, intent, r.controller.signal);
+        work = o.demand(
+          r.directory,
+          selected,
+          intent,
+          fileSignal ?? r.controller.signal,
+        );
       } catch (cause) {
         work = Promise.reject(cause);
       }
@@ -156,8 +187,9 @@ export function createDirectoryCatalogs(o: {
     try {
       await Promise.all(joined);
     } catch (cause) {
-      if (!r.alive) return;
+      if (!r.alive || active && !active()) return;
       if (version !== r.version) return demand(r, kinds, intent, active);
+      if (fileSignal?.aborted) return;
       // Availability and native replacement belong to the kind stream, not a
       // second RPC outcome. Follow its replacement or expose its published error.
       if (generation !== r.current.catalog?.generation) return;
@@ -196,15 +228,37 @@ export function createDirectoryCatalogs(o: {
       if (current && current.revision > (old?.revision ?? -1)) {
         r.staging.delete(kind);
       }
-      if (current && current.value === undefined && old?.value !== undefined) {
+      if (current && current.value === undefined) {
+        // Native readiness and delivery of a complete value are different
+        // boundaries. A header cannot admit a consumer before its chunks, or
+        // certify the last-good value as the replacement's complete revision.
+        const complete = previous?.generation === catalog.generation &&
+          old?.state === "ready" && old.revision === current.revision &&
+          old.value !== undefined;
         (values as Record<string, CatalogValue<unknown>>)[kind] = {
           ...current,
-          value: old.value,
+          state: current.state === "ready" && !complete
+            ? "digesting"
+            : current.state,
+          ...(old?.value === undefined ? {} : { value: old.value }),
         };
       }
     }
     r.current.catalog = { ...catalog, values };
     r.notify();
+  };
+  const stopFiles = (r: Resource) => {
+    r.files?.controller.abort();
+    r.files?.operation?.release();
+  };
+  const watchFiles = (r: Resource) => {
+    if (!r.files) return;
+    stopFiles(r);
+    r.files.controller = new AbortController();
+    r.files.operation = o.retainFiles?.(r.directory);
+    void r.files.operation?.result.catch(
+      () => {/* readiness owns the error */},
+    );
   };
   const watch = (r: Resource) => {
     const at = ++r.version;
@@ -219,6 +273,7 @@ export function createDirectoryCatalogs(o: {
     r.staging.clear();
     const operation = o.watch(r.directory);
     r.watch = operation;
+    watchFiles(r);
     r.work = operation.result.then((value) => {
       if (r.alive && at === r.version) install(r, value);
     })
@@ -240,6 +295,8 @@ export function createDirectoryCatalogs(o: {
     r.alive = false;
     r.version++;
     r.controller.abort();
+    stopFiles(r);
+    r.files = undefined;
     r.watch?.release();
     r.watch = undefined;
     r.staging.clear();
@@ -337,6 +394,7 @@ export function createDirectoryCatalogs(o: {
       resource.refs++;
       let alive = true;
       const releases = new Set<() => void>();
+      const fileReleases = new Set<() => void>();
       const subscribe = (f: () => void) => {
         const stop = resource.subscribe(f);
         releases.add(stop);
@@ -354,21 +412,21 @@ export function createDirectoryCatalogs(o: {
       });
       const ready = async (kind?: keyof DirectoryCatalogKinds) => {
         if (!alive || !resource.alive) return;
+        const files = kind === "files" ? resource.files : undefined;
+        const active = () => alive && (!files || resource.files === files);
         await Promise.race([
-          kind
-            ? demand(resource, [kind], "consumer", () => alive)
-            : resource.work,
+          kind ? demand(resource, [kind], "consumer", active) : resource.work,
           released.promise,
         ]);
         if (
-          !kind || !alive || !resource.alive ||
+          !kind || !active() || !resource.alive ||
           !resource.current.catalog?.values[kind] ||
           resource.current.catalog.values[kind]?.state !== "digesting"
         ) return;
         await new Promise<void>((resolve) => {
           const stop = subscribe(() => {
             if (
-              !alive || !resource.alive ||
+              !active() || !resource.alive ||
               resource.current.catalog?.values[kind]?.state !== "digesting"
             ) {
               stop();
@@ -381,6 +439,27 @@ export function createDirectoryCatalogs(o: {
         state: resource.state,
         subscribe,
         ready,
+        retainFiles: () => {
+          if (!alive || !resource.alive) return () => {};
+          if (!resource.files) {
+            resource.files = { refs: 0, controller: new AbortController() };
+            watchFiles(resource);
+          }
+          const files = resource.files;
+          files.refs++;
+          const release = () => {
+            if (
+              !fileReleases.delete(release) || --files.refs !== 0 ||
+              resource.files !== files
+            ) return;
+            stopFiles(resource);
+            resource.files = undefined;
+            resource.demands.delete("files");
+            resource.notify();
+          };
+          fileReleases.add(release);
+          return release;
+        },
         warm: (kinds) =>
           alive ? demand(resource, kinds, "warm") : Promise.resolve(),
         refresh: () => alive ? refresh(resource) : Promise.resolve(),
@@ -430,6 +509,7 @@ export function createDirectoryCatalogs(o: {
         release() {
           if (!alive) return;
           alive = false;
+          for (const release of fileReleases) release();
           released.resolve();
           // Wake kind readiness before releasing this borrower's callbacks.
           resource.notify();

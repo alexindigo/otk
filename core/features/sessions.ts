@@ -194,11 +194,14 @@ export function register(
     );
     signal.throwIfAborted();
     const result: SessionListPage = {
-      items: value.items.map(({ id, directory, parentID, title }) => ({
+      items: value.items.map((
+        { id, directory, parentID, title, timeCreated },
+      ) => ({
         id,
         directory,
         parentID,
         title,
+        timeCreated,
         ...(hierarchy
           ? {
             hierarchy: hierarchy.node(
@@ -234,25 +237,36 @@ export function register(
       }, createdReceipt.encode)
       : (created?.(value.directory), value);
   rpc.register("session.get", {
-    execution: readExecution((id: string) => ({ sessionID: id })),
-    params: (p) => sessionID(p)!,
-    handler: async (ctx, id) => {
+    execution: readExecution((p: { id: string }) => ({ sessionID: p.id })),
+    params: (p) => {
+      if (p.purpose !== undefined && p.purpose !== "send") {
+        throw new HarnessError("params", "Invalid session read purpose");
+      }
+      return {
+        id: sessionID(p)!,
+        purpose: p.purpose === "send" ? "send" as const : undefined,
+      };
+    },
+    handler: async (ctx, { id, purpose }) => {
       const load = begin(ctx, { kind: "session-metadata", sessionID: id }, {
         kind: "metadata",
       }, { kind: "session-metadata", session: null });
       const session = await ctx.harness.core.getSession(
         id,
         ctx.execution?.signal,
+        purpose,
       );
-      await hierarchy?.prepare(
-        [session],
-        (ids, signal) => ctx.harness.core.identities(ids, signal),
-        ctx.execution?.signal,
-      );
+      if (!purpose) {
+        await hierarchy?.prepare(
+          [session],
+          (ids, signal) => ctx.harness.core.identities(ids, signal),
+          ctx.execution?.signal,
+        );
+      }
       ctx.execution?.signal.throwIfAborted();
       return {
         ...session,
-        ...(hierarchy
+        ...(hierarchy && !purpose
           ? {
             hierarchy: hierarchy.node(
               id,
@@ -288,8 +302,15 @@ export function register(
     })),
     params(p) {
       if (
-        Object.keys(p).some((key) => key !== "sessionID" && key !== "before")
+        Object.keys(p).some((key) =>
+          key !== "sessionID" && key !== "before" && key !== "retryRecovery"
+        )
       ) throw new HarnessError("params", "Unknown message page parameter");
+      if (
+        p.retryRecovery !== undefined && typeof p.retryRecovery !== "boolean"
+      ) {
+        throw new HarnessError("params", "Invalid response retry intent");
+      }
       const before = text(p, "before", true);
       if (
         before !== undefined &&
@@ -298,6 +319,7 @@ export function register(
       return {
         sessionID: sessionID(p)!,
         before,
+        retryRecovery: p.retryRecovery as boolean | undefined,
       };
     },
     cancelled: (p, request) =>
@@ -319,6 +341,7 @@ export function register(
         );
         const page = await ctx.harness.core.listMessages(p.sessionID, {
           before: p.before,
+          retryRecovery: p.retryRecovery,
           publish(page) {
             signal?.throwIfAborted();
             if (!ctx.execution?.key) return;
@@ -361,7 +384,9 @@ export function register(
     })),
     params(p) {
       if (
-        Object.keys(p).some((key) => key !== "sessionID" && key !== "before")
+        Object.keys(p).some((key) =>
+          key !== "sessionID" && key !== "before" && key !== "scope"
+        )
       ) {
         throw new HarnessError("params", "Unknown history page parameter");
       }
@@ -372,7 +397,25 @@ export function register(
       ) {
         throw new HarnessError("params", "Invalid history cursor length");
       }
-      return { sessionID: sessionID(p)!, before };
+      const scope = p.scope;
+      if (
+        scope !== undefined && (!scope || typeof scope !== "object" ||
+          !Array.isArray(Reflect.get(scope, "messageIDs")) ||
+          !Reflect.get(scope, "messageIDs").every((id: unknown) =>
+            typeof id === "string" && id.length > 0
+          ) ||
+          (Reflect.get(scope, "validate") !== undefined &&
+            typeof Reflect.get(scope, "validate") !== "boolean"))
+      ) {
+        throw new HarnessError("params", "Expected archive message identities");
+      }
+      return {
+        sessionID: sessionID(p)!,
+        before,
+        scope: scope as
+          | import("@otk/protocol").MessageSnapshotScope
+          | undefined,
+      };
     },
     handler(ctx, p) {
       const read = ctx.harness.core.snapshotMessages;
@@ -385,7 +428,7 @@ export function register(
       return read.call(
         ctx.harness.core,
         p.sessionID,
-        { before: p.before },
+        { before: p.before, ...(p.scope ? { scope: p.scope } : {}) },
         ctx.execution?.signal,
       );
     },

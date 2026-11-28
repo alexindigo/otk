@@ -17,29 +17,31 @@ export function registerTerminalPrompt(prompt: PromptRegistry): void {
           ctx.sessionID(),
           solidState,
         );
-      const open = ownedCommand(ctx, {
-        id: "prompt.terminal",
+      const command = "prompt.terminal";
+      ownedCommand(ctx, {
+        id: command,
         title: "Toggle terminal",
         category: "Prompt",
         context: { kind: "composer", order: 31 },
         enabled: () => !ctx.props.suspended,
         run: () => box().toggle(),
       });
+      const label = () =>
+        box().mode === "closed" ? "Open terminal" : "Hide terminal";
+      const action = ctx.commands.control(command, undefined, {
+        target: { label: "Terminal" },
+        shown: () => true, // The box owner synchronously accepts the toggle.
+        unshown: "The terminal box did not change.",
+        recovery: "Try toggling the terminal box again",
+      });
       return {
-        actions: () => (
-          <button
-            type="button"
-            class="otk-icon-button"
-            aria-label={box().mode === "closed"
-              ? "Open terminal"
-              : "Hide terminal"}
-            title={box().mode === "closed" ? "Open terminal" : "Hide terminal"}
-            aria-expanded={box().mode !== "closed" ? "true" : "false"}
-            onClick={() => void open().catch(ctx.fail)}
-          >
-            <TerminalIcon />
-          </button>
-        ),
+        action: () => ({
+          key: "terminal",
+          label,
+          icon: () => <TerminalIcon />,
+          control: action,
+          expanded: () => box().mode !== "closed",
+        }),
       };
     },
   });

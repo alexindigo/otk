@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-failure-signal {
+  border-inline-start: 2px solid var(--danger);
+  padding-inline-start: var(--space-3);
+}
+.otk-failure-signal.is-informational {
+  border-inline-start-color: var(--otk-fg-3);
+}
+.otk-failure-signal.is-gutter {
+  border: 0;
+  padding-inline-start: 0;
+  box-shadow: inset 2px 0 0 var(--danger);
+}
+.otk-failure-signal.is-gutter.is-informational {
+  box-shadow: inset 2px 0 0 var(--otk-fg-3);
+}

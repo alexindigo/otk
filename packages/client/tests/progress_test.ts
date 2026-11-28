@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 import { createProgress, ProgressEstimate } from "../progress.ts";
 import type { ProgressFacts } from "@otk/protocol";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 const facts = (completed = 0, activeMs = 0): ProgressFacts => ({
   generation: "one",
   phase: "summaries",
@@ -36,7 +37,7 @@ Deno.test("progress estimates steady work from active time, never from waiting",
   assertEquals(stalled.eta, undefined);
   for (
     const copy of [
-      "No progress for 1 min",
+      "No progress for 1m",
       "opencode isn't responding",
       "10 of 100",
     ]
@@ -53,15 +54,15 @@ Deno.test("progress estimates steady work from active time, never from waiting",
   );
   assertEquals(
     page.display("Loading messages", 20000).text,
-    "Loading messages... 20 s",
+    "Loading messages... 20s",
   );
   assertEquals(
     page.display("Loading messages", 61000).text,
-    "Still loading messages (1 min): waiting for opencode to respond",
+    "Still loading messages (1m 1s): waiting for opencode to respond",
   );
   assertEquals(
     page.display("Loading sessions", 61000).text,
-    "Still loading sessions (1 min): waiting for opencode to respond",
+    "Still loading sessions (1m 1s): waiting for opencode to respond",
   );
 });
 Deno.test("progress shares human durations for long stalls, page elapsed time and ETA", () => {
@@ -69,18 +70,18 @@ Deno.test("progress shares human durations for long stalls, page elapsed time an
   owner.update(facts());
   assertEquals(
     owner.display("Indexing sessions", 1036863_000).text,
-    "Indexing sessions: 0 of 100. No progress for 12 days, waiting for more information",
+    "Indexing sessions: 0 of 100. No progress for 12d 1m 2s, waiting for more information",
   );
   owner.update({ ...facts(), phase: "reading" });
   assertEquals(
     owner.display("Loading messages", 1036863_000).text,
-    "Still loading messages (12 days): waiting for more information",
+    "Still loading messages (12d 1m 3s): waiting for more information",
   );
   owner.update({ ...facts(), generation: "eta" });
   owner.update({ ...facts(1, 86400_000), generation: "eta" });
   assertEquals(
     owner.display("Indexing sessions", 1000).text,
-    "Indexing sessions: 1 of 100, about 99 days left",
+    "Indexing sessions: 1 of 100, about 99d left",
   );
 });
 Deno.test("progress gives bursty rates a range and resets on generation replacement", () => {
@@ -100,20 +101,23 @@ Deno.test("progress gives bursty rates a range and resets on generation replacem
     "Indexing sessions: 22 found",
   );
 });
-Deno.test("progress coalesces burst publication and retires its clock when work is ready", async () => {
+Deno.test("progress coalesces burst publication and retires its clock when work is ready", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const owner = createProgress();
   let publications = 0;
   const release = owner.subscribe(() => publications++);
   try {
     for (let i = 0; i < 20; i++) owner.receive("scope", facts(i, i * 100));
     assertEquals(publications, 0);
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    clock.runNext();
     assertEquals(publications, 1);
     owner.reset("scope");
     owner.receive("scope", { ...facts(20, 2000), phase: "ready" });
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    clock.runNext();
     assertEquals(publications, 2);
     assertEquals(owner.display("scope", "Summaries").rate, undefined);
+    assertEquals(clock.pending, 0);
   } finally {
     release();
     owner.stop();

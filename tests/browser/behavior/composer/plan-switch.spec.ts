@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send as composerSend } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
+import { sessionStatus, workPanel } from "../../pages/transcript.ts";
 
 test.use({ profile: "composer-plan" });
 test(
@@ -18,9 +20,9 @@ test(
     });
     const frames = await wire(page);
     const footer = async (agent: string, variant: string) => {
-      await expect(page.locator(".otk-composer-agent")).toHaveText(
-        agent === "plan" ? "Plan" : "Build",
-      );
+      await expect(
+        page.locator(".otk-composer-agent:not(.otk-overflow-measure *)"),
+      ).toHaveText(agent === "plan" ? "Plan" : "Build");
       await expect(page.locator(".otk-variant-picker > button > span"))
         .toHaveText(variant === "low" ? "Low" : "High");
     };
@@ -47,7 +49,7 @@ test(
     };
     const send = async (text: string) => {
       await prompt(page).fill(text);
-      await page.locator(".otk-prompt button[type=submit]").click();
+      await composerSend(page).click();
     };
     const nativeUser = async (text: string, agent: string, variant: string) => {
       await expect.poll(async () =>
@@ -179,7 +181,7 @@ test(
       await footer("build", "high");
       await page.reload();
       await openSession(state, page, session.id);
-      await footer("plan", "low");
+      await footer("build", "high");
       return;
     }
     await openSession(state, page, session.id);
@@ -224,9 +226,17 @@ test(
     await expect(page.locator(".otk-question-dock .otk-question-options"))
       .toBeVisible();
     await answer(1);
-    await expect(page.locator("[data-tool-status=denied]")).toBeVisible();
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    // D74: the reply owns the failure summary, its Work view owns the tool.
+    await page.getByRole("alert", { name: /^plan_exit failed:/ })
+      .getByRole("button", { name: "Show in Work log", exact: true }).click();
+    await expect(
+      workPanel(page).locator(
+        '[data-tool="external"][data-tool-status="denied"]',
+      ).filter({
+        has: page.getByRole("button", { name: "plan_exit", exact: true }),
+      }),
+    ).toBeVisible();
+    await sessionStatus(page, session.id, "idle");
     await footer("plan", "low");
     await nativeUser("P5 keep refining the plan", "plan", "low");
     const observation = await state.observe<
@@ -261,6 +271,6 @@ test(
     await footer("build", "high");
     await page.reload();
     await openSession(state, page, session.id);
-    await footer("plan", "low");
+    await footer("build", "high");
   },
 );

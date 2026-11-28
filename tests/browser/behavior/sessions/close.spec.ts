@@ -66,22 +66,27 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await activity(state, "tstv1-otk", "hold");
   await expect(page.locator(`[data-tab="${task.id}"] .otk-status-light`))
     .toHaveAttribute("data-state", "working");
-  page.once("dialog", (d) => d.dismiss());
+  const originalURL = page.url();
+  const confirmation = page.getByRole("dialog", {
+    name: "Confirm action",
+    exact: true,
+  });
   await sessionContext(page, ".otk-user-bubble", "session.close");
+  await confirmation.getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(page).toHaveURL(originalURL);
   expect(
     (await state.product("tasks.list", { directory: state.directory }))[0]
       .sessions,
   ).toEqual(["tstv1-otk"]);
-  let message = "";
-  page.once("dialog", (d) => {
-    message = d.message();
-    void d.accept();
-  });
   await sessionContext(page, ".otk-user-bubble", "session.close");
   // There is no idle state; the phantom lasts while evidence or an unseen finish does.
-  expect(message).toContain(
-    "phantom tab while it has known activity or an unseen finish",
+  await expect(confirmation).toContainText(
+    "task will stay visible while it has known activity or an unseen finish",
   );
+  await confirmation.getByRole("button", { name: "Continue", exact: true })
+    .click();
   await expect(page).toHaveURL(/#project\//);
   await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));
   expect(
@@ -91,13 +96,16 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await state.product("layout.patch", { rightCollapsed: true });
   await page.reload();
   await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));
-  // Reloading the project page now resolves its working session (decision 7).
-  await expect(page).toHaveURL(/tstv1-otk$/);
+  // Back/Forward plan §3, rows 3 and 7: reload keeps an explicitly opened
+  // project page; only a pending project-default entry resolves a session.
+  await expect(page).toHaveURL(/#project\//);
   await expect(page.locator(".otk-right-panel")).toBeHidden();
-  // Return to the original closed-view setup before observing the finish.
-  // Closing an opened working session must still retain its mandatory phantom.
-  page.once("dialog", (d) => d.accept());
+  // Reopen the mandatory phantom and prove it survives closing again.
+  await page.locator('[data-tab="tstv1-otk"]').click();
+  await expect(page).toHaveURL(/tstv1-otk$/);
   await sessionContext(page, '[data-tab="tstv1-otk"]', "session.close");
+  await confirmation.getByRole("button", { name: "Continue", exact: true })
+    .click();
   await expect(page).toHaveURL(/#project\//);
   await visibleOnScreen(page.locator('[data-tab="tstv1-otk"]'));
   await activity(state, "tstv1-otk", "release");

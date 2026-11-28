@@ -14,6 +14,8 @@ import {
   PluginStore,
   Prefs,
   prefsMigrations,
+  programsMigrations,
+  ProgramStore,
   Projects,
   projectsMigrations,
   ProjectTemplates,
@@ -32,6 +34,8 @@ import {
   type FrameSource,
   frecencyOptions,
   IndexStore,
+  LocalFiles,
+  operatorConfigDirectory,
   prefsOptions,
   registerAgents,
   registerCommands,
@@ -40,6 +44,7 @@ import {
   registerFrecency,
   registerHistory,
   registerLayout,
+  registerLocalFiles,
   registerModels,
   registerPermissions,
   registerPrefs,
@@ -61,13 +66,17 @@ import { PermissionFeature } from "./core/features/approvals.ts";
 import { RequestAttention } from "./core/features/request-attention.ts";
 import { registerDigests } from "./core/features/digests.ts";
 import { NavigationDefault } from "./core/features/navigation-default.ts";
+import { registerProjectEdit } from "./core/features/project-edit.ts";
 import {
   createCatalogCodecs,
   registerCatalogs,
 } from "./core/features/catalogs.ts";
 import type { SectionObserver } from "./core/diagnostics.ts";
+import { diagnosticsLog } from "./core/diagnostics-log.ts";
 import { TerminalHost } from "./core/terminals/host.ts";
 import { TerminalMux } from "./core/terminals/mux.ts";
+import { InlineImages } from "./core/files/inline-images.ts";
+import { ImageRoots } from "./core/files/image-roots.ts";
 import { terminalDataDirectory } from "./core/terminals/env.ts";
 import { registerTerminals } from "./core/features/terminals.ts";
 
@@ -90,6 +99,7 @@ export async function startApplication(
     environment?: Readonly<Record<string, string>>;
   } = {},
 ): Promise<CoreServer> {
+  const diagnostic = options.diagnostic ?? diagnosticsLog(cfg.log.level);
   const environment = Object.freeze({
     ...options.environment ?? Deno.env.toObject(),
   });
@@ -97,6 +107,7 @@ export async function startApplication(
     prefsMigrations,
     frecencyMigrations,
     projectsMigrations,
+    programsMigrations,
     checkoutsMigrations,
     tasksMigrations,
     seenMigrations,
@@ -106,7 +117,7 @@ export async function startApplication(
     sessionReferenceMigrations,
     requestsMigrations,
     pluginStorageMigrations,
-  ], cfg.storage);
+  ], { ...cfg.storage, diagnostic: (message) => diagnostic("info", message) });
   const sources: FrameSource[] = [...options.sources ?? []];
   let terminals: TerminalHost | undefined;
   let terminalSockets: TerminalMux | undefined;
@@ -128,6 +139,7 @@ export async function startApplication(
     const inbox = new InboxFeature(
       {
         projects: new Projects(store),
+        programs: new ProgramStore(store),
         tasks: new Tasks(store),
         seen: new Seen(store),
         finishes: new Finishes(store),
@@ -151,8 +163,15 @@ export async function startApplication(
       prefs,
       new NavigationDefault({
         hierarchy: index.hierarchy,
-        scopes: (directory) =>
-          inbox.summaries.values.get(directory)?.scopes ?? [directory],
+        scopes: (directory, repository) => {
+          const summary = inbox.summaries.values.get(directory);
+          if (!repository || summary?.topology?.canonicalRoot !== directory) {
+            return summary?.scopes ?? [directory];
+          }
+          return [...inbox.summaries.values.values()].filter((row) =>
+            row.topology?.canonicalRoot === directory
+          ).flatMap((row) => row.scopes ?? [row.directory]);
+        },
         entries: (directory) => index.catalog(directory),
         status: (id) => inbox.navigationStatus(id),
       }),
@@ -173,6 +192,7 @@ export async function startApplication(
       (directory, tx) => inbox.activate(directory, tx),
     );
     registerPrompt(rpc, backend);
+    registerProjectEdit(rpc, backend);
     registerShell(rpc, backend);
     registerCommands(rpc, backend);
     registerHistory(rpc, backend);
@@ -236,6 +256,29 @@ export async function startApplication(
       publishRows: cfg.digest.publishrows,
     });
     registerTerminals(rpc, terminals);
+    const home = environment.HOME ?? "";
+    const files = new LocalFiles({
+      home,
+      roots: new ImageRoots({
+        templates: cfg.images.roots,
+        home,
+        identity: inbox.summaries.identity,
+      }),
+      deny: [
+        cfg.state.path,
+        operatorConfigDirectory(environment),
+        environment.OTK_CONFIG,
+      ]
+        .filter((path): path is string => !!path),
+    });
+    const inlineImages = new InlineImages({
+      files,
+      limits: cfg.images,
+      concurrency: cfg.images.concurrency,
+      directory: async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    });
+    registerLocalFiles(rpc, files, inlineImages);
     inbox.terminalDependencies(terminals.tracking);
     terminalSockets = new TerminalMux(
       terminals,
@@ -253,12 +296,24 @@ export async function startApplication(
       staticRoot,
       index,
       sources,
+      projectOrder: inbox.projectOrder,
+      programs: inbox.programs,
       diagnostics: options.diagnostics,
       diagnostic: options.diagnostic,
       signal: options.signal,
       requested: options.requested,
       terminals: terminalSockets,
+      inlineImages,
     });
+    const principal = () => cfg.auth.username.toLowerCase() || "local";
+    inbox.operationAttention(
+      (target) => core.requests.operation(principal(), target),
+      () => core.requests.operationTargets(principal()),
+      (changed) =>
+        core.requests.listenOperations((owner, target) => {
+          if (owner === principal()) changed(target);
+        }),
+    );
     let stopping: Promise<void> | undefined;
     return {
       ...core,

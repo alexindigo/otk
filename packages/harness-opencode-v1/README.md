@@ -6,12 +6,22 @@ anchors. Mixed messages retain their prompt and carry each synthetic expansion
 as an outgoing part. Snapshot, live projection, worker SQL and API fallback
 share this evidence contract. Bookkeeping, compaction, interruption, delegation,
 retry and unknown records remain visible with their native source; task result
-envelopes share one decoder and render as blocks. Malformed optional child
-relationships never invalidate their containing record: task envelopes fall back
-to exact outgoing context, and tool metadata keeps its source without a child
-link. Record deltas return their coherent header/parts snapshot independently of
-cache retention; missing headers use bounded recovery. Unavailable optional
-revert SQL likewise leaves the existing API fallback active.
+envelopes share one decoder, supply neutral helper count nouns and render as
+blocks. Malformed optional child relationships never invalidate their containing
+record: task envelopes fall back to exact outgoing context, and tool metadata
+keeps its source without a child link. Record deltas return their coherent
+header/parts snapshot independently of cache retention; missing headers use
+bounded recovery. Unavailable optional revert SQL likewise leaves the existing
+API fallback active.
+
+`delivery.ts` classifies completed task envelopes and received synthetic result
+envelopes inside the worker. Running launch envelopes, failed calls and missing
+or mismatched child identities never acknowledge a result. A received failure
+report can acknowledge its proven run. Invocation clocks and native terminal
+history distinguish foreground runs; ambiguous synthetic correlation stays
+unacknowledged. The private digest index stores receipt scalars and resumable
+coverage only, never legacy envelope bodies. Source/revision-fenced backfill
+shares the existing SQLite owner, read admission and credited publication.
 
 `V1RecordRetention` owns the versioned V1 request/outcome and retry schema.
 Application composition injects an isolated `PluginStorage` through
@@ -51,14 +61,11 @@ Point and live-page metadata overlay current SessionErrors after native/revert
 info acquisition. Unchanged native baselines do not freeze error observations,
 and error changes do not invalidate bodies, prefetch or Source resources.
 
-`FailureAttempts` owns launch admission by attempt identity. HTTP success or
-failure and the first native report settle admission immediately; cancellation,
-new prompts, deletion and disposal retire it. Settled native-report identities
-only deduplicate an already observed reason/cause or exact event replay; they
-are never a pending session-wide match for an unrelated late error. Each HTTP
-continuation retains its own captured attempt key, so an older settlement cannot
-consume a newer attempt. Native prompt identity and retained chronological
-records remain separate from this ephemeral correlation lifecycle.
+`FailureAttempts` owns native report replay and reason/cause deduplication
+within the observed turn. New admissions, cancellation, new prompts, deletion
+and disposal retire that turn's deduplication state. An HTTP continuation owns
+its launch record by its captured request token. A V1 session error names the
+session, not that request, so it never uses the launch record or its origin.
 
 Prompt, shell and command admission share one causal-association reset,
 retaining only the creation watermark. Only newly observed native prompt facts
@@ -415,7 +422,7 @@ second timeout.
 
 HTTP results publish a header before requested parts, share the stream owner's
 generation clock, and never seed appends or fabricate output receipt clocks. The
-browser shows “Refreshing response…” until a full native part event or a
+browser shows "Refreshing response..." until a full native part event or a
 terminal checkpoint supplies authority. Failed checkpoints expose unavailable
 state and explicit Retry response; a distinct authoritative header can retry,
 but deltas cannot. Unsubscribe, cutoff, epoch retirement, removal, disposal,

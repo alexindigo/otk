@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureValue } from "@otk/client";
+import { attachmentFailure } from "@otk/client";
 import { onSettled } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import {
@@ -17,44 +17,46 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
     id: "attachments",
     create: (ctx) => {
       let picker!: HTMLInputElement;
-      const attach = ownedCommand(ctx, {
-        id: "prompt.attach",
+      const command = "prompt.attach";
+      ownedCommand(ctx, {
+        id: command,
         title: "Attach files",
         category: "Prompt",
         context: { kind: "composer", order: 30 },
-        enabled: () => !ctx.props.suspended,
+        enabled: () => !ctx.collapsed() && !ctx.props.suspended,
         run: () => picker.click(),
       });
       onSettled(() => () => {
-        picker.value = "";
+        if (picker) picker.value = "";
       });
       return {
-        actions: () => (
-          <>
-            <input
-              ref={(element) => {
-                picker = element;
-              }}
-              type="file"
-              multiple
-              hidden
-              aria-label="Attachments"
-              onChange={(event) => {
-                const files = Array.from(event.currentTarget.files ?? []);
-                event.currentTarget.value = "";
-                void ctx.acceptFiles(files).catch(ctx.fail);
-              }}
-            />
-            <button
-              type="button"
-              aria-label="Attach files"
-              title="Attach files"
-              class="otk-icon-button"
-              onClick={() => void attach().catch(ctx.fail)}
-            >
-              <AttachIcon />
-            </button>
-          </>
+        action: () => ({
+          key: "attach",
+          needsInput: true,
+          label: () => "Attach files",
+          icon: () => <AttachIcon />,
+          control: ctx.commands.control(command, undefined, {
+            target: { label: "Attachments" },
+            shown: () => true,
+            unshown: "The file picker did not open.",
+            recovery: "Try opening the file picker again",
+          }),
+        }),
+        overlay: () => (
+          <input
+            ref={(element) => {
+              picker = element;
+            }}
+            type="file"
+            multiple
+            hidden
+            aria-label="Attachments"
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              event.currentTarget.value = "";
+              void ctx.acceptFiles(files).catch(ctx.fail);
+            }}
+          />
         ),
         beforeInput: () => (
           <Chips
@@ -143,11 +145,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
             } catch (error) {
               patch({
                 pending: false,
-                error: failureValue(error, {
-                  actionLabel: "Reading attachment",
-                  target: ctx.failureTarget?.() ??
-                    { sessionID: ctx.sessionID() },
-                }),
+                error: attachmentFailure(error, file.name),
               });
             }
           }

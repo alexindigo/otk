@@ -2,6 +2,13 @@
 /** SQLite storage and caller-composed feature migrations, without app policy. */
 export { OtkDb, type StoreWrite } from "./db.ts";
 export {
+  processStorage,
+  StorageAvailability,
+  StorageFailure,
+  storageProblem,
+} from "./availability.ts";
+export type { StorageProblem, StorageStatus } from "./availability.ts";
+export {
   pluginStorageMigrations,
   PluginStore,
 } from "./features/plugin-storage.ts";
@@ -31,6 +38,8 @@ export { sessionReferenceMigrations } from "./features/session-references.ts";
 export {
   type CheckoutAuthority,
   type CheckoutRecord,
+  type CheckoutRemote,
+  type CheckoutRemoteAnchor,
   Checkouts,
   checkoutsMigrations,
 } from "./features/checkouts.ts";
@@ -72,3 +81,5 @@ export {
   frecencyMigrations,
   type FrecencyOptions,
 } from "./features/frecency.ts";
+export { ProjectOrderStore } from "./features/project-order.ts";
+export { programsMigrations, ProgramStore } from "./features/programs.ts";

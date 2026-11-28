@@ -1,0 +1,97 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-trail {
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.otk-trail-floor {
+  visibility: hidden;
+  block-size: 0;
+  overflow: clip;
+}
+.otk-trail-link,
+.otk-trail-measure {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-inline-size: 0;
+}
+.otk-trail-link {
+  inline-size: 100%;
+}
+/* The same box is measured, linked and edited. Its inset also gives the
+   shared focus ring room and spaces either side of each separator. */
+.otk-session-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  block-size: var(--control-size);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--otk-fg-3);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.otk-session-crumb.is-current {
+  color: var(--otk-fg);
+  font-weight: 500;
+}
+.otk-trail-separator {
+  display: flex;
+  align-items: center;
+  flex: none;
+  color: var(--otk-fg-3);
+}
+.otk-trail-separator > svg {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
+.otk-trail-compact-title {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+.otk-trail-title {
+  text-underline-offset: 0.2em;
+}
+.otk-session-crumb.is-current .otk-trail-title {
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min)));
+}
+.otk-trail-title-floor {
+  display: block;
+  max-inline-size: var(--row-title-min);
+}
+.otk-trail-first,
+.otk-trail-ellipsis {
+  flex: none;
+}
+.otk-trail-ellipsis {
+  white-space: pre;
+}
+.otk-trail-tail {
+  display: flex;
+  justify-content: flex-end;
+  min-inline-size: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+}
+.otk-trail-tail > span {
+  flex: none;
+}
+a.otk-session-crumb:is(:hover, :focus-visible) {
+  color: var(--otk-fg);
+}
+a.otk-session-crumb:is(:hover, :focus-visible) .otk-trail-title {
+  text-decoration: underline;
+}
+.otk-trail-link.is-paged {
+  inline-size: max-content;
+}
+.otk-trail-link.is-paged > .otk-session-crumb {
+  flex: none;
+  inline-size: 100cqi;
+  scroll-snap-align: start;
+}

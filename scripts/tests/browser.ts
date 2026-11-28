@@ -2,6 +2,7 @@
 import { join } from "@std/path";
 import { readBuild, sourceTree } from "./prepare.ts";
 import { nativeLane } from "./lanes.ts";
+import { releasedPort } from "../../tests/support/listener-ownership.ts";
 
 const tree = await sourceTree();
 const scale = Deno.args.includes("--scale");
@@ -61,10 +62,6 @@ const env = {
   OTK_TEST_RUN_ROOT: root,
   OTK_TEST_UNIT_INVENTORY: inventory,
   OTK_TEST_DENO_VERSION: Deno.version.deno,
-  // Nested acceptance invocations belong to the same allocator lifetime. A new
-  // evidence/run root must not let them lease an in-flight parent's port again.
-  OTK_TEST_PORTS_ROOT: Deno.env.get("OTK_TEST_PORTS_ROOT") ??
-    join(root, "ports"),
   OTK_TEST_GUEST: guest,
   OTK_TEST_NATIVE_SHA256: receipt.native.sha256,
 };
@@ -147,23 +144,17 @@ try {
             await new Promise<void>((resolve) => setTimeout(resolve, 25));
           }
         }
+        const ports = [];
         for (const port of owned?.ports ?? []) {
-          let connection: Deno.TcpConn;
-          try {
-            connection = await Deno.connect({ hostname: "127.0.0.1", port });
-          } catch (error) {
-            if (error instanceof Deno.errors.ConnectionRefused) continue;
-            throw error;
-          }
-          connection.close();
-          throw new Error(`Owned port survived cleanup: ${port}`);
+          ports.push(await releasedPort(port, unit));
         }
         cleanupProof.push({
           unit,
           ...owned,
           cgroupEmpty: true,
           processesGone: true,
-          portsClosed: true,
+          ports,
+          portsReleased: true,
         });
       } catch (error) {
         errors.push(error);

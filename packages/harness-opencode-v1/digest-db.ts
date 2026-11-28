@@ -7,10 +7,11 @@ import { opencodeV1SessionID as ids } from "./ids.ts";
 import {
   nativeMetadata as metadata,
   runningDirectories,
-  terminalProjection,
+  sessionProjection,
   terminalSessions,
 } from "./db-hints.ts";
 import { promptEvidenceSQL } from "./records.ts";
+import { inheritedVariant } from "./selection.ts";
 
 /** Allowlisted message header projection. Native identities stay native here. */
 export interface DigestHeader {
@@ -117,7 +118,9 @@ export class DigestNativeDb {
   catalog(after: string, limit: number): SessionMetadata[] {
     this.observe?.("catalog");
     return this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE id>? ORDER BY id LIMIT ?`,
+      `SELECT ${
+        sessionProjection(this.db)
+      } FROM session s WHERE id>? ORDER BY id LIMIT ?`,
     ).all(after, limit).map(metadata);
   }
   /** Ownership proofs read the API's current identities, not an older paged list. */
@@ -143,7 +146,7 @@ export class DigestNativeDb {
       values.push(before.updated, before.id);
     }
     const rows = this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE ${
+      `SELECT ${sessionProjection(this.db)} FROM session s WHERE ${
         filters.join(" AND ")
       } ORDER BY time_updated DESC,id DESC LIMIT ?`,
     ).all(...values, limit).map(metadata);
@@ -172,7 +175,9 @@ export class DigestNativeDb {
     limit: number,
   ): SessionMetadata[] {
     const rows = this.db.prepare(
-      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived,${terminalProjection()} FROM session WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?`,
+      `SELECT ${
+        sessionProjection(this.db)
+      } FROM session s WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?`,
     ).all(
       JSON.stringify(directories),
       before?.updated ?? null,
@@ -186,8 +191,8 @@ export class DigestNativeDb {
   lookup(sessions: readonly string[]): SessionMetadata[] {
     this.observe?.("identity");
     return this.db.prepare(
-      `SELECT s.id,s.parent_id,s.directory,s.project_id,s.title,s.time_created,s.time_updated,s.time_archived,${
-        terminalProjection("s")
+      `SELECT ${
+        sessionProjection(this.db)
       } FROM session s JOIN json_each(?) wanted ON wanted.value=s.id ORDER BY s.id`,
     ).all(JSON.stringify(sessions.map(ids.decode))).map(metadata);
   }
@@ -327,8 +332,21 @@ export class DigestNativeDb {
         `SELECT m.id,json_extract(m.data,'$.agent') AS agent,json_extract(m.data,'$.model.providerID') AS provider,json_extract(m.data,'$.model.modelID') AS model,json_extract(m.data,'$.model.variant') AS variant FROM message m WHERE m.session_id=? AND (? IS NULL OR m.id<?) AND json_valid(m.data) AND json_extract(m.data,'$.role')='user' AND ${evidence} ORDER BY json_extract(m.data,'$.time.created') DESC,m.id DESC LIMIT 1`,
       ).get(session, cutoff ?? null, cutoff ?? null);
     const anchor = latest(promptEvidenceSQL());
-    const prompt: Record<string, unknown> | undefined = anchor &&
-      { ...latest("1"), id: anchor.id };
+    const record = (row: Record<string, unknown>) => ({
+      id: String(row.id),
+      model: {
+        providerID: row.provider,
+        modelID: row.model,
+        variant: row.variant,
+      },
+    });
+    const authority = anchor && latest("1");
+    const prompt: Record<string, unknown> | undefined = anchor && authority &&
+      {
+        ...authority,
+        id: anchor.id,
+        variant: inheritedVariant(record(authority), record(anchor)),
+      };
     const rows = this.db.prepare(
       "WITH headers AS (SELECT m.id,coalesce(json_extract(m.data,'$.parentID'),m.id) AS turn,json_extract(m.data,'$.time.created') AS created,json_extract(m.data,'$.time.completed') AS completed FROM message m JOIN json_each(?) wanted ON wanted.value=coalesce(json_extract(m.data,'$.parentID'),m.id) WHERE m.session_id=? AND (? IS NULL OR m.id<?) AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant'), ranked AS (SELECT *,row_number() OVER(PARTITION BY turn ORDER BY created,id) AS first_rank,row_number() OVER(PARTITION BY turn ORDER BY created DESC,id DESC) AS last_rank FROM headers) SELECT turn,max(CASE WHEN first_rank=1 THEN id END) AS first_id,max(CASE WHEN last_rank=1 THEN id END) AS last_id,min(completed IS NOT NULL) AS complete FROM ranked GROUP BY turn",
     ).all(JSON.stringify(turns), session, cutoff ?? null, cutoff ?? null);

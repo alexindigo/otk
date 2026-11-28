@@ -6,10 +6,37 @@ import {
   type RequestOptions,
 } from "@otk/client";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
+import { entityKey } from "@otk/protocol";
 
 Deno.test("repeated delete joins its captured interrupt and deletion before asynchronous preparation", async () => {
   const f = shellFixture();
-  f.entries("local", [{ ...shellEntry("selected"), status: "busy" }]);
+  f.entries("local", [shellEntry("selected")]);
+  const counts = { working: 0, blocked: 0, finished: 0, unseen: 0 };
+  f.resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "run",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      ...f.resources.inbox("local").state.inbox,
+      entities: {
+        [entityKey("session", "selected")]: {
+          id: "selected",
+          kind: "session",
+          state: "working",
+          previous: "none",
+          counts: { ...counts, working: 1 },
+          evidence: {
+            work: true,
+            nativeRun: true,
+            permissions: 0,
+            questions: 0,
+            descendants: counts,
+          },
+        },
+      },
+    },
+  });
   const rpc = f.resources.sidecars.connection("local").rpc;
   const call = rpc.call.bind(rpc), options: RequestOptions[] = [];
   rpc.call = (method, params, input) => {
@@ -38,15 +65,20 @@ Deno.test("submission allocates distinct promotion send and visit keys before as
   f.entries("local", [shellEntry("selected")]);
   const rpc = f.resources.sidecars.connection("local").rpc;
   const call = rpc.call.bind(rpc), options: RequestOptions[] = [];
+  const bookkeeping = Promise.withResolvers<void>();
   rpc.call = (method, params, input) => {
     if (input && !(input instanceof AbortSignal)) options.push(input);
+    if (options.length === 3) bookkeeping.resolve();
     return call(method, params, input);
   };
   const actions = createSessionActions(f);
   await actions.submission({ sidecarId: "local", sessionID: "selected" })(
-    (input?: RequestOptions) =>
-      rpc.call("session.abort", { sessionID: "selected" }, input),
+    (input, dispatch) => {
+      dispatch();
+      return rpc.call("session.abort", { sessionID: "selected" }, input);
+    },
   );
+  await bookkeeping.promise;
   assertEquals(options.length, 3);
   assert(options.every((o) => o.intent?.key && o.owner === "selected"));
   assertEquals(new Set(options.map((o) => o.intent?.key)).size, 3);

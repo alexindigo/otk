@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./SavedBranches.css" with { type: "text" };
+import { clockTitle } from "./Clock.tsx";
 import { createMemo, For, Show } from "solid-js";
 import {
+  age,
   branchDraftLabels,
   type BranchHistory,
-  errorFeedback,
+  type Feedback,
+  isReplaced,
   savedBranchProjection,
   savedPromptDraft,
 } from "@otk/client";
@@ -13,16 +16,71 @@ import { ComposerNoticeRow } from "./ComposerNotice.tsx";
 import { RevertIcon } from "./ChromeIcons.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import Message from "./Message.tsx";
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import VirtualList from "./VirtualList.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import FittedActions, { type FittedAction } from "./FittedActions.tsx";
+import TimeText from "./TimeText.tsx";
 import { TranscriptSnapshot } from "../features/transcript-context.tsx";
+export function RevertSendChoice(
+  props: { owner: BranchHistory; feedback?: Feedback },
+): import("solid-js").Element {
+  const choice = () => props.owner.state.permanence;
+  const perform = (action: () => Promise<void>) => {
+    void action().catch((cause) => props.owner.fail(cause));
+  };
+  return (
+    <Show when={choice()}>
+      {(pending) => (
+        <div class="otk-permanence-choice">
+          <Show when={props.feedback}>
+            {(value) => <OperationFeedback feedback={value()} />}
+          </Show>
+          <ComposerNoticeRow>
+            <FittedActions
+              items={[
+                {
+                  key: "save",
+                  label: pending().saving ? "Saving copy..." : "Save copy",
+                  disabled: pending().saving ||
+                    !!props.owner.preservationWarning(),
+                  title: props.owner.preservationWarning(),
+                  run: () => perform(() => props.owner.saveCopy()),
+                },
+                {
+                  key: "send",
+                  label: "Send anyway",
+                  disabled: pending().saving,
+                  run: () => perform(() => props.owner.sendAnyway()),
+                },
+                {
+                  key: "cancel",
+                  label: "Cancel",
+                  run: () => props.owner.cancelSend(),
+                },
+              ]}
+            />
+          </ComposerNoticeRow>
+        </div>
+      )}
+    </Show>
+  );
+}
 
 export function SavedBranchNotice(
-  props: { owner: BranchHistory; failureVisible?: boolean },
+  props: {
+    owner: BranchHistory;
+    feedback?: Feedback;
+    recoveryVisible?: boolean;
+    statusVisible?: boolean;
+  },
 ) {
   const state = () => props.owner.state;
+  const dismiss = (diagnosticID: string | undefined) =>
+    diagnosticID && !state().recovery && !state().permanence && !state().choice
+      ? () => props.owner.dismissError(diagnosticID)
+      : undefined;
   const perform = (action: () => void) => {
     try {
       action();
@@ -32,24 +90,25 @@ export function SavedBranchNotice(
   };
   return (
     <>
-      <Show when={props.failureVisible !== false && state().error}>
-        <OperationFeedback feedback={errorFeedback(state().error)!} />
+      <Show when={props.feedback}>
+        {(value) => (
+          <OperationFeedback
+            feedback={value()}
+            onDismiss={dismiss(value().diagnosticID)}
+          />
+        )}
       </Show>
-      <Show when={state().pending}>
-        <ComposerNoticeRow icon={<RevertIcon />} role="status">
-          Saving earlier branch...
+      <Show
+        when={props.recoveryVisible !== false && state().recovery &&
+          !state().permanence}
+      >
+        <ComposerNoticeRow>
+          <BranchCopyRecovery owner={props.owner} />
         </ComposerNoticeRow>
       </Show>
-      <Show when={state().branches.length}>
-        <ComposerNoticeRow icon={<RevertIcon />}>
-          <button
-            type="button"
-            class="otk-pill"
-            onClick={() => props.owner.open(state().branches[0].id)}
-          >
-            Unrevert: {state().branches.length} saved earlier{" "}
-            {state().branches.length === 1 ? "branch" : "branches"}
-          </button>
+      <Show when={props.statusVisible !== false && state().pending}>
+        <ComposerNoticeRow icon={RevertIcon} role="status">
+          Saving the earlier conversation...
         </ComposerNoticeRow>
       </Show>
       <Show when={state().choice}>
@@ -81,6 +140,32 @@ export function SavedBranchNotice(
     </>
   );
 }
+export function BranchCopyRecovery(props: { owner: BranchHistory }) {
+  return <FittedActions items={branchCopyRecoveryActions(props.owner)} />;
+}
+
+export function branchCopyRecoveryActions(
+  owner: BranchHistory,
+): FittedAction[] {
+  return [
+    {
+      key: "retry",
+      label: owner.state.pending ? "Saving copy..." : "Retry",
+      disabled: owner.state.pending,
+      run: () => {
+        void owner.retryCopy().catch((cause) => owner.fail(cause));
+      },
+    },
+    {
+      key: "keep",
+      label: "Keep without a saved copy",
+      disabled: owner.state.pending,
+      title:
+        "Keep the live conversation and current draft without saving the earlier conversation",
+      run: () => owner.keepWithoutCopy(),
+    },
+  ];
+}
 export default function SavedBranches(
   props: {
     owner: BranchHistory;
@@ -90,6 +175,12 @@ export default function SavedBranches(
 ) {
   const branch = () =>
     props.owner.state.branches.find((b) => b.id === props.owner.state.opened);
+  const committed = createMemo(() => {
+    const saved = branch();
+    return saved && isReplaced(saved)
+      ? age(saved.committedAt!, Date.now())
+      : undefined;
+  });
   const projection = createMemo(() =>
     savedBranchProjection(branch(), props.prefs.showCost)
   );
@@ -131,24 +222,34 @@ export default function SavedBranches(
                 </button>
               </div>
             </header>
-            <div
-              class={[scrollRegion("y"), "otk-saved-messages"]}
+            <ScrollRegion
+              axis="y"
+              class="otk-saved-messages"
               ref={(element) => {
                 viewport = element;
               }}
             >
               <div class="otk-saved-header">
                 <p>
-                  {saved().replaced
-                    ? "This earlier branch was replaced; you can read it and reuse its prompts."
-                    : "This is a saved earlier branch; you can read it and reuse its prompts."}
-                  {" "}
-                  It is not live native history. Replaced messages cannot be
-                  restored to native history. Files are not restored.
+                  <Show
+                    when={committed()}
+                    fallback="Saved before a revert, not replaced"
+                  >
+                    {(time) => (
+                      <>
+                        Replaced when a revert was committed{" "}
+                        <TimeText time={time()} />
+                        {time().word ? "" : " ago"}
+                      </>
+                    )}
+                  </Show>
                 </p>
                 <p>
-                  Saved in this browser{" "}
-                  {new Date(saved().created).toLocaleString()}{" "}
+                  You can read this copy and reuse its prompts. Files are not
+                  restored.
+                </p>
+                <p>
+                  Saved in this browser {clockTitle(saved().created)}{" "}
                   ({saved().bytes.toLocaleString()}{" "}
                   bytes). Kept until you delete it.
                 </p>
@@ -171,7 +272,7 @@ export default function SavedBranches(
                           onClick={() => props.owner.open(b().id)}
                         >
                           <SelectionContent>
-                            {new Date(b().created).toLocaleString()}
+                            {clockTitle(b().created)}
                           </SelectionContent>
                         </button>
                       )}
@@ -267,7 +368,7 @@ export default function SavedBranches(
                   </Show>
                 )}
               />
-            </div>
+            </ScrollRegion>
           </section>
         </TranscriptSnapshot>
       )}

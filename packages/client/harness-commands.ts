@@ -16,6 +16,7 @@ export function createHarnessCommands(hub: CommandHub, ports: {
     command: CommandOption,
     args: Record<string, unknown>,
     origin?: import("@otk/protocol").RequestOrigin,
+    draftSend?: import("./drafts.ts").DraftSendCapture,
   ): Promise<void>;
 }): HarnessCommands {
   const registered = new Map<string, { signature: string; release(): void }>();
@@ -75,7 +76,7 @@ export function createHarnessCommands(hub: CommandHub, ports: {
                   "Session is not connected or the command owner is inactive",
               },
           run: (context, args: Record<string, unknown> = {}) =>
-            ports.execute(command, args, context.origin),
+            ports.execute(command, args, context.origin, context.draftSend),
         });
         registered.set(id, { signature, release });
       }

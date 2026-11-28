@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-message-action-group {
+  --control-color: var(--otk-fg-3);
   display: inline-flex;
   flex: none;
   flex-direction: column;
@@ -8,10 +9,17 @@
 .otk-message-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  opacity: 0;
+  gap: var(--message-action-gap, var(--space-1));
+  color: var(--otk-fg-3);
 }
-.otk-message-action-group.is-revealed .otk-message-actions,
-.otk-message-action-group:focus-within .otk-message-actions {
-  opacity: 1;
+.otk-message-actions .is-done {
+  color: var(--otk-action-text);
+}
+.otk-copy-confirmation {
+  position: absolute;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+  pointer-events: none;
 }

@@ -23,6 +23,14 @@ import { nativeKind } from "../support/native.ts";
 import { waitFor } from "../support/opencode.ts";
 import { resources, tempDir, withResources } from "../support/resources.ts";
 
+/** Match the client page consumer: the baseline and its sealed replay are one read. */
+function pageMessages(page: Pick<MessagePage, "items" | "catchup">): Message[] {
+  const projection = createTranscriptProjection();
+  projection.reset(page.items);
+  for (const { event } of page.catchup) projection.apply(event);
+  return projection.messages();
+}
+
 async function observed(
   native: OpencodeV2Test,
   id: string,
@@ -58,7 +66,7 @@ async function observed(
     content: (_id, op) => projection.apply(op),
   });
   adapter.core.subscriptions(id, 1);
-  projection.replace((await adapter.core.listMessages(id, {})).items);
+  projection.reset(pageMessages(await adapter.core.listMessages(id, {})));
   return { adapter, projection, errors, removed, connections };
 }
 function record(message: Message) {
@@ -272,7 +280,7 @@ Deno.test({
       });
       // Inspect the plugin's stored identity through a read-only test connection.
       // A WS crumb would itself acquire transcript demand and invalidate this case.
-      const stored = new DatabaseSync(`${native.root}/otk-${app.port}/otk.db`, {
+      const stored = new DatabaseSync(`${app.statePath}/otk.db`, {
         readOnly: true,
       });
       resources().defer(
@@ -451,7 +459,7 @@ Deno.test({
         target = await native.createSession();
       await turn(fake, native, target, "Before OTK");
       const app = await SidecarTest.start(native),
-        file = `${native.root}/otk-${app.port}/otk.db`;
+        file = `${app.statePath}/otk.db`;
       resources().defer("V2 request revert sidecar", () => app.stop());
       const settle = async (title: string) => {
         const form = await native.api.session.form.create({
@@ -841,16 +849,39 @@ Deno.test({
           native,
           target.id,
         );
-      await native.prompt(target.id, "Delegate, then report result");
-      const rows = await waitFor(() => projection.messages(), (rows) =>
-        rows.some((m) => {
-          const p = record(m);
-          return p?.kind === "external" &&
-            p.activity?.title === "Explore failed";
-        }), 30000);
-      const notice = rows.map(record).find((p) =>
-        p?.kind === "external" && p.activity?.title === "Explore failed"
+      // Acquire a native page before the independent outcomes arrive, then join
+      // its read with live delivery. MessagePage carries new rows in catchup.
+      const readPage = adapter.transcript.reader.page.bind(
+        adapter.transcript.reader,
       );
+      const captured = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let hold = true;
+      adapter.transcript.reader.page = async (...args) => {
+        const page = await readPage(...args);
+        if (hold) {
+          hold = false;
+          captured.resolve();
+          await release.promise;
+        }
+        return page;
+      };
+      resources().defer("release overlapping notice page", () => {
+        release.resolve();
+        adapter.transcript.reader.page = readPage;
+      });
+      const overlapping = adapter.core.listMessages(target.id, {});
+      await captured.promise;
+      await native.prompt(target.id, "Delegate, then report result");
+      // WP2: preserve both facts without joining the entity into the title.
+      const failed = (m: Message) => {
+        const p = record(m);
+        return p?.kind === "external" && p.activity?.title === "failed" &&
+          p.activity.entity?.label === "Explore";
+      };
+      const rows = await waitFor(() => projection.messages(), (rows) =>
+        rows.some(failed), 30000);
+      const notice = record(rows.find(failed)!);
       assert(notice?.kind === "external" && notice.activity?.tone === "error");
       assert(notice.activity.child?.sessionID);
       assert(
@@ -858,14 +889,26 @@ Deno.test({
           "The usage limit has been reached",
         ),
       );
-      const snapshot = await adapter.core.listMessages(target.id, {});
-      assert(snapshot.items.some((m) =>
+      release.resolve();
+      const concurrent = await overlapping;
+      assert(
+        !concurrent.items.some(failed),
+        "the notice must exercise sealed replay",
+      );
+      const replayed = pageMessages(concurrent);
+      assert(replayed.some(failed));
+      assert(replayed.some((m) =>
         m.role === "assistant" &&
         m.error?.message.includes("The usage limit has been reached")
       ));
-      assert(snapshot.items.some((m) =>
-        JSON.stringify(record(m) ?? {}).includes("Explore failed")
+      const snapshot = pageMessages(
+        await adapter.core.listMessages(target.id, {}),
+      );
+      assert(snapshot.some((m) =>
+        m.role === "assistant" &&
+        m.error?.message.includes("The usage limit has been reached")
       ));
+      assert(snapshot.some(failed));
       native.proxy.freeze();
       try {
         native.proxy.disconnect();
@@ -873,9 +916,7 @@ Deno.test({
           Promise.resolve(connections.at(-1)), (state) =>
           state === "reconnecting");
         assert(
-          projection.messages().some((m) =>
-            JSON.stringify(record(m) ?? {}).includes("Explore failed")
-          ),
+          projection.messages().some(failed),
           "the retained notice survives the disconnected generation",
         );
       } finally {
@@ -887,9 +928,9 @@ Deno.test({
         states.filter((state) =>
             state === "connected"
           ).length >= 2);
-      const after = await adapter.core.listMessages(target.id, {});
-      assert(after.items.some((m) =>
-        JSON.stringify(record(m) ?? {}).includes("Explore failed")
-      ));
+      const after = pageMessages(
+        await adapter.core.listMessages(target.id, {}),
+      );
+      assert(after.some(failed));
     }),
 });

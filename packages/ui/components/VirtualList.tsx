@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { focusControl } from "../keyboard/focus.ts";
 import "./VirtualList.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
+import ContentSlot from "./ContentSlot.tsx";
 import { isCancellation } from "@otk/protocol";
 import { createWindow, type WindowAnchor } from "@otk/client";
-import { acquireViewport, type ViewportPosition } from "./viewport.ts";
+import {
+  acquireViewport,
+  type ViewportNavigation,
+  type ViewportPosition,
+  type ViewportRevealRequest,
+} from "./viewport.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import {
   createContext,
@@ -24,7 +31,10 @@ export interface VirtualListControl {
   restore(anchor: WindowAnchor): Promise<void>;
   reveal(
     key: string,
-    options?: { align?: "center" | "nearest"; focus?: () => void },
+    options?: Omit<ViewportNavigation, "align"> & {
+      align?: "center" | "nearest";
+      focus?: () => void;
+    },
   ): Promise<void>;
   anchor(): WindowAnchor | undefined;
 }
@@ -32,6 +42,7 @@ export const LIST_OVERSCAN = 5;
 interface WindowContext {
   element(): HTMLElement | undefined;
   materialized(): boolean;
+  intrinsic(): boolean;
   path: string;
   measurements(path: string): Map<string, number>;
   materializers: Set<() => boolean>;
@@ -49,6 +60,8 @@ export function ContentWindow<T>(props: {
   key(value: T): string;
   label: string;
   scope?: string;
+  measurementKey?(value: T): string;
+  intrinsic?: boolean;
   role?: "content" | "segment" | "line" | "metadata";
   control?(control: VirtualListControl): void;
   render(value: () => T): Element;
@@ -63,7 +76,7 @@ export function ContentWindow<T>(props: {
       when={viewport}
       fallback={
         <For each={props.items} keyed={props.key}>
-          {(value) => props.render(value)}
+          {(value) => <ContentSlot content={() => props.render(value)} />}
         </For>
       }
     >
@@ -71,6 +84,7 @@ export function ContentWindow<T>(props: {
         keys={keys()}
         label={props.label}
         scope={props.scope}
+        intrinsic={props.intrinsic}
         samples={[{
           role: "content",
           class: `otk-window-${props.role ?? "content"}-estimate`,
@@ -80,9 +94,15 @@ export function ContentWindow<T>(props: {
         retainExcluded={false}
         control={props.control}
         revision={indexed()}
+        measurementKey={props.measurementKey
+          ? (key) => {
+            const value = indexed().get(key);
+            return value === undefined ? key : props.measurementKey!(value);
+          }
+          : undefined}
         render={(key) => (
           <Show when={indexed().get(key)}>
-            {(value) => props.render(value)}
+            {(value) => <ContentSlot content={() => props.render(value)} />}
           </Show>
         )}
       />
@@ -96,6 +116,8 @@ const frame = () =>
 export default function VirtualList(props: {
   id?: string;
   listRole?: "list" | "listbox";
+  activeDescendant?: string;
+  focusTarget?(element: HTMLElement): void;
   keys: readonly string[];
   label: string;
   scope?: string;
@@ -105,7 +127,10 @@ export default function VirtualList(props: {
   estimate?: number;
   retainExcluded?: boolean;
   measurements?(path: string): Map<string, number>;
+  measurementKey?(key: string): string;
+  anchorable?(key: string): boolean;
   revision?: unknown;
+  intrinsic?: boolean;
   overscan?: number;
   viewport?(): HTMLElement | undefined;
   render(key: string): Element;
@@ -118,6 +143,7 @@ export default function VirtualList(props: {
   control?(control: VirtualListControl): void;
 }): Element {
   const parent = useContext(Viewport);
+  const intrinsic = () => props.intrinsic ?? parent?.intrinsic() ?? false;
   const initialPosition = untrack(() =>
     props.position &&
     ({ scrollTop: props.position.scrollTop, anchor: props.position.anchor })
@@ -138,7 +164,16 @@ export default function VirtualList(props: {
   const path = `${parent?.path ?? ""}/${
     encodeURIComponent(props.scope ?? props.label)
   }`;
-  const model = createWindow(measurements(path));
+  // Retained numeric sizes are valid only under the metrics that produced them.
+  // This also fences caches borrowed after an unmounted window changes scale.
+  let metrics = `${getComputedStyle(document.documentElement).fontSize}:${
+    props.viewport?.()?.clientWidth ?? parent?.element()?.clientWidth ?? 0
+  }`;
+  const model = createWindow(
+    measurements(path),
+    (key) => `${metrics}:${props.measurementKey?.(key) ?? key}`,
+    measurements(`${path}/inline`),
+  );
   const [top, setTop] = createSignal(0), [height, setHeight] = createSignal(0);
   const [version, setVersion] = createSignal(0),
     [ready, setReady] = createSignal(false);
@@ -148,6 +183,13 @@ export default function VirtualList(props: {
   const [selected, setSelected] = createSignal<string[]>([]),
     [reveals, setReveals] = createSignal<string[]>([]);
   const [attachments, setAttachments] = createSignal<string[]>([]);
+  const [reflow, setReflow] = createSignal<string[]>([]);
+  const renewFootprint = (keys: readonly string[]) => {
+    const included = new Set(props.keys);
+    setReflow((pending) =>
+      [...new Set([...pending, ...keys])].filter((key) => included.has(key))
+    );
+  };
   const attachmentLeases = new Map<string, number>();
   const [all, setAll] = createSignal<readonly string[]>();
   const materialized = () => !!all() || !!parent?.materialized();
@@ -160,7 +202,8 @@ export default function VirtualList(props: {
   let currentKeys: readonly string[] | undefined, disposed = false;
   let positionOwner: ViewportPosition | undefined;
   const measuring = new Map<string, number>();
-  let measureFrame: number | undefined;
+  let cancelMeasurement: (() => void) | undefined;
+  let metricsDirty = false;
   let releaseParentMeasurement = parent?.hold?.();
   let releaseGeometryMeasurement: (() => void) | undefined;
   let selectingAll = false;
@@ -185,10 +228,14 @@ export default function VirtualList(props: {
     const offset = model.offset(key);
     return offset === undefined ? undefined : origin() + offset;
   };
-  const logicalAnchor = () => {
+  const anchorable = (key: string) => props.anchorable?.(key) !== false;
+  const logicalAnchor = (eligible = anchorable) => {
     const root = viewport(), bounds = root.getBoundingClientRect();
     const candidates = [...elements].flatMap(([key, element]) => {
-      if (!element.isConnected || measuring.has(key) || !model.measured(key)) {
+      if (
+        !eligible(key) || !element.isConnected || measuring.has(key) ||
+        !model.measured(key)
+      ) {
         return [];
       }
       const rect = element.getBoundingClientRect();
@@ -240,11 +287,42 @@ export default function VirtualList(props: {
   };
   const refresh = () => setVersion((v) => v + 1);
   function queueMeasurement() {
-    if (disposed || measureFrame !== undefined) return;
-    measureFrame = requestAnimationFrame(() => {
-      measureFrame = undefined;
+    // Mount can invalidate measurements before the window has joined its
+    // viewport. Keep those invalidations queued in the window; onSettled
+    // submits them to the owner instead of starting a private frame.
+    if (disposed || cancelMeasurement || !positionOwner) return;
+    const measure = () => {
+      cancelMeasurement = undefined;
       if (disposed) return;
       transaction(() => {
+        if (metricsDirty) {
+          metricsDirty = false;
+          const nextMetrics = `${
+            getComputedStyle(document.documentElement).fontSize
+          }:${viewport().clientWidth}`;
+          if (nextMetrics !== metrics) {
+            // Only a lane/font change revokes previously acquired extents.
+            if (intrinsic()) {
+              renewFootprint(
+                (currentKeys ?? []).filter((key) => model.measured(key)),
+              );
+            }
+            metrics = nextMetrics;
+            for (const [role, element] of samples) {
+              estimates.set(role, element.getBoundingClientRect().height);
+            }
+            if (currentKeys) {
+              model.update(
+                currentKeys,
+                (key) =>
+                  estimates.get(props.role?.(key) ?? "row") ?? props.estimate ??
+                    1,
+              );
+              refresh();
+            }
+            changing();
+          }
+        }
         let changed = false,
           released = false,
           pending = !ready() || !currentKeys;
@@ -252,8 +330,12 @@ export default function VirtualList(props: {
           if (count > 0) continue;
           const element = elements.get(key);
           if (element?.isConnected) {
-            changed =
-              model.measure(key, element.getBoundingClientRect().height) ||
+            const bounds = element.getBoundingClientRect();
+            changed = model.measure(
+              key,
+              bounds.height,
+              Math.max(bounds.width, element.scrollWidth),
+            ) ||
               changed;
             measuring.delete(key);
             released = true;
@@ -263,6 +345,10 @@ export default function VirtualList(props: {
           } else pending = true;
         }
         if (changed || released) refresh();
+        if (
+          reflow().length && !measuring.size &&
+          reflow().every((key) => model.measured(key))
+        ) setReflow([]);
         sync();
         if (
           ready() && currentKeys && !measuring.size &&
@@ -280,7 +366,8 @@ export default function VirtualList(props: {
         remember();
         if (pending) queueMeasurement();
       });
-    });
+    };
+    cancelMeasurement = positionOwner.measure(measure);
   }
   function holdMeasurement(key: string): () => void {
     beginMeasurement();
@@ -318,7 +405,22 @@ export default function VirtualList(props: {
     }
     queueMeasurement();
   };
-  createEffect(() => props.revision, () => transaction(() => changing(true)));
+  createEffect(() => props.revision, () =>
+    transaction(() => {
+      // Presentation changes can revoke a measured extent without changing keys.
+      // Rebuild the index before range demand, including formerly empty rows.
+      if (currentKeys) {
+        if (intrinsic()) {
+          renewFootprint(currentKeys.filter((key) => model.measured(key)));
+        }
+        model.clearInline();
+        model.update(currentKeys, (key) =>
+          estimates.get(props.role?.(key) ?? "row") ?? props.estimate ?? 1);
+        refresh();
+        sync();
+      }
+      changing(true);
+    }));
   const remember = () => {
     if (!currentKeys || restoring || disposed || !container.isConnected) return;
     props.onPosition?.({
@@ -379,6 +481,7 @@ export default function VirtualList(props: {
       ...selected(),
       ...reveals(),
       ...attachments(),
+      ...reflow(),
       ...measuring.keys(),
       ...focus() ? [focus()!] : [],
       ...all() ?? (parent?.materialized() ? props.keys : []),
@@ -416,10 +519,10 @@ export default function VirtualList(props: {
       transaction(() => {
         const previous = currentKeys;
         positionOwner?.remap(path, (anchor) => {
-          if (included.has(anchor.key)) return anchor;
+          if (included.has(anchor.key) && anchorable(anchor.key)) return anchor;
           const at = previous?.indexOf(anchor.key) ?? -1;
           const measuredNeighbor = (key: string) =>
-            included.has(key) &&
+            included.has(key) && anchorable(key) &&
             elements.get(key)?.isConnected && model.measured(key) &&
             !measuring.has(key);
           const neighbor = previous?.slice(at + 1).find((key) =>
@@ -433,6 +536,15 @@ export default function VirtualList(props: {
             : undefined;
         });
         changing();
+        if (intrinsic() && !initialized) {
+          // Establish complete-content intrinsic geometry once, before retiring
+          // any of it. Afterwards only source/lane/font revisions renew it.
+          // Constrained reading lanes already have stable inline geometry.
+          model.clearInline();
+          renewFootprint(next);
+        } else if (intrinsic()) {
+          renewFootprint(next.filter((key) => !model.measured(key)));
+        }
         model.update(
           next,
           (key) =>
@@ -451,7 +563,7 @@ export default function VirtualList(props: {
           const top = (model.restore(initialPosition.anchor) ??
             initialPosition.scrollTop) + origin();
           return { start: top, end: top, measured: true };
-        }, "start").catch((error) => {
+        }, { align: "start" }).catch((error) => {
           if (!isCancellation(error)) throw error;
         }).finally(() => {
           restoring = false;
@@ -517,11 +629,11 @@ export default function VirtualList(props: {
       records.some((record) =>
         Array.from(record.removedNodes).some((node) => node.contains(control))
       )
-    ) control.focus({ preventScroll: true });
+    ) focusControl(control, { preventScroll: true });
   };
   async function navigateKey(
     key: string,
-    align: "center" | "nearest" | "start",
+    options: ViewportNavigation,
     anchor?: WindowAnchor,
     focus?: () => void,
   ) {
@@ -548,17 +660,17 @@ export default function VirtualList(props: {
               .01,
           anchor: { id: path, key, start: base },
         };
-      }, align);
+      }, options);
       focus?.();
     } finally {
       setReveals((keys) => keys.filter((id) => id !== key));
     }
   }
   props.control?.({
-    restore: (anchor) => navigateKey(anchor.key, "start", anchor),
+    restore: (anchor) => navigateKey(anchor.key, { align: "start" }, anchor),
     anchor: logicalAnchor,
     reveal: (key, options) =>
-      navigateKey(key, options?.align ?? "nearest", undefined, options?.focus),
+      navigateKey(key, options ?? {}, undefined, options?.focus),
   });
   onSettled(() => {
     for (const [role, element] of samples) {
@@ -572,9 +684,8 @@ export default function VirtualList(props: {
       id: path,
       depth: path.split("/").length,
       distance: () => Math.max(0, -(logicalAnchor()?.offset ?? -Infinity)),
-      anchor() {
-        return logicalAnchor();
-      },
+      anchorable,
+      anchor: logicalAnchor,
       resolve: (anchor) => {
         const element = elements.get(anchor.key);
         const base = element?.isConnected ? rowStart(anchor.key) : undefined;
@@ -588,26 +699,50 @@ export default function VirtualList(props: {
       remember();
     });
     observer = new ResizeObserver((entries) => {
-      selection();
-      transaction(() => {
-        for (const entry of entries) {
-          const key = (entry.target as HTMLElement).dataset.virtualKey;
-          if (key && elements.get(key) === entry.target) {
-            beginMeasurement();
-            if (!measuring.has(key)) measuring.set(key, 0);
-          }
+      // Observers only invalidate. Publishing inside each observer would scan
+      // every sibling window once per child when a whole range mounts.
+      metricsDirty = true;
+      beginMeasurement();
+      for (const entry of entries) {
+        const key = (entry.target as HTMLElement).dataset.virtualKey;
+        if (key && elements.get(key) === entry.target) {
+          if (!measuring.has(key)) measuring.set(key, 0);
         }
-        sync();
-        queueMeasurement();
-      });
+      }
+      queueMeasurement();
     });
     observer.observe(root);
     observer.observe(container);
+    for (const element of samples.values()) observer.observe(element);
     for (const element of elements.values()) observer.observe(element);
     const moved = () => {
       selection();
       sync();
       remember();
+    };
+    const revealElement = (event: Event) => {
+      const element = event.target, key = keyFor(element);
+      if (!key || !(element instanceof HTMLElement)) return;
+      const request = (event as CustomEvent<ViewportRevealRequest>).detail;
+      if (request.settled) return;
+      const release = pin(key);
+      request.settled = positionOwner!.navigate(() => {
+        const row = elements.get(key), base = rowStart(key);
+        if (!row?.contains(element) || !element.isConnected) {
+          throw new DOMException("Viewport target retired", "AbortError");
+        }
+        if (base === undefined) return;
+        const bounds = element.getBoundingClientRect();
+        const rowBounds = row.getBoundingClientRect();
+        const start = base + bounds.top - rowBounds.top;
+        return {
+          start,
+          end: start + Math.min(bounds.height, root.clientHeight),
+          measured: !measuring.has(key) &&
+            Math.abs(rowBounds.height - model.size(key)) < .01,
+          anchor: { id: path, key, start: base },
+        };
+      }, { intent: "user", align: request.align }).finally(release);
     };
     const retain = (event: Event) => {
       const key = keyFor(event.target);
@@ -684,6 +819,7 @@ export default function VirtualList(props: {
     };
     root.addEventListener("scroll", moved, { passive: true });
     container.addEventListener("otk-context-retain", retain);
+    container.addEventListener("otk-viewport-reveal", revealElement);
     container.addEventListener("keydown", selectAll);
     document.addEventListener("selectionchange", selection);
     focusMoves = new MutationObserver(retainMovedFocus);
@@ -700,10 +836,13 @@ export default function VirtualList(props: {
       focusedControl = undefined;
       unregister();
       releasePosition();
+      cancelMeasurement?.();
+      cancelMeasurement = undefined;
       lease.release();
       positionOwner = undefined;
       root.removeEventListener("scroll", moved);
       container.removeEventListener("otk-context-retain", retain);
+      container.removeEventListener("otk-viewport-reveal", revealElement);
       container.removeEventListener("keydown", selectAll);
       document.removeEventListener("selectionchange", selection);
     };
@@ -747,6 +886,7 @@ export default function VirtualList(props: {
             element: viewport,
             materialized: () =>
               !!parent?.materialized() || !!all()?.includes(input.key),
+            intrinsic,
             measurements,
             materializers,
             hold: () => holdMeasurement(input.key),
@@ -761,7 +901,7 @@ export default function VirtualList(props: {
   }
   onCleanup(() => {
     disposed = true;
-    if (measureFrame !== undefined) cancelAnimationFrame(measureFrame);
+    cancelMeasurement?.();
     releaseParentMeasurement?.();
     releaseGeometryMeasurement?.();
     measuring.clear();
@@ -774,6 +914,7 @@ export default function VirtualList(props: {
       value={{
         element: viewport,
         materialized,
+        intrinsic,
         measurements,
         materializers,
         hold: parent?.hold,
@@ -781,13 +922,19 @@ export default function VirtualList(props: {
         path,
       }}
     >
-      <div
-        ref={container}
+      <ScrollRegion
+        ref={(element) => {
+          container = element;
+          props.focusTarget?.(element);
+        }}
         id={props.id}
-        class={`otk-virtual-list ${
-          borrowed ? "otk-virtual-borrowed" : scrollRegion()
-        } ${props.class ?? ""}`}
+        borrowed={borrowed}
+        class={`otk-virtual-list ${borrowed ? "otk-virtual-borrowed" : ""} ${
+          props.class ?? ""
+        }`}
         role={props.listRole ?? "list"}
+        tabindex={props.focusTarget ? -1 : undefined}
+        aria-activedescendant={props.activeDescendant}
         aria-label={props.label}
         data-acquired-count={props.keys.length}
         onFocusIn={(event) => acceptFocus(event.target)}
@@ -808,6 +955,11 @@ export default function VirtualList(props: {
             )}
           </For>
         </div>
+        <div
+          class="otk-virtual-inline"
+          aria-hidden="true"
+          style={{ "inline-size": `${(version(), model.inlineSize())}px` }}
+        />
         <For each={items()} keyed={(item) => item.key}>
           {(item) => (
             <>
@@ -825,7 +977,7 @@ export default function VirtualList(props: {
           aria-hidden="true"
           style={{ height: `${after()}px` }}
         />
-      </div>
+      </ScrollRegion>
     </Viewport>
   );
 }

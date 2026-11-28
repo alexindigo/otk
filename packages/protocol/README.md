@@ -1,5 +1,43 @@
 # @otk/protocol
 
+`projectPlacement` is shared by server archive membership and client layout;
+client re-exports it. The pending C3 behavior is unchanged: working/blocked
+removed checkouts stay live, while unknown-repository checkouts have no
+fabricated live parent. `archiveEntityID` uses the native repository ID, or the
+shared unknown-repository sentinel for that disclosure. Archive state comes from
+EntityStates' checkout memberships and changes with their states, forms and
+repository identity; clients do not roll up archive rows.
+
+## Compatibility and deployments
+
+`PROTOCOL_VERSION` changes only for incompatible wire changes. New optional
+fields and ignorable additive messages do not require a bump while existing
+consumers retain their contract. The optional entity map and ignored entity
+operations in 4b785f13 did not require its 20-to-21 bump; 21 remains unchanged.
+
+An incompatible hello receives
+`{t:"error",code:"protocol",reason:"client-outdated",protocol,build}` before a
+normal WebSocket close; the discriminator stays stable for already-open older
+clients. `build` is the served bundle identity (a hash of `index.html`), also
+provided in the page bootstrap and welcome as `sidecar.build`. The welcome's
+`sidecar.instance` changes per process start. The connection owner compares
+them: a different build of the page's server means its code is outdated; a new
+instance with the same build is a restart. Protocol 25 lets older tabs that
+check only the protocol receive the legacy error once and Reload through their
+existing path. Reload checkpoints feature-owned unsaved state, checks that the
+server is reachable, then navigates. Refusal leaves the page and work intact.
+Restored mutation identities resume their original receipt, never a new send.
+
+`ascendingID(prefix)` owns time-ordered record identities: twelve hexadecimal
+time/counter characters followed by fourteen base62 random characters. Browser
+pending sends and both native prompt fallbacks share this owner and encoding,
+compatible with opencode's ascending identifiers. Counter overflow and clock
+rollback retain local creation order. Native-created identities remain
+unchanged; parts and sessions without caller IDs continue to use native API
+generation. The architecture gate rejects private native-prefix encoders and
+submission random-ID fallbacks. Request, diagnostic and local UI UUIDs are
+separate.
+
 `randomID()` is the shared RFC 4122 v4 identity owner for browser code. It uses
 `crypto.getRandomValues`, available on plain HTTP as well as HTTPS. `sha256()`
 owns UTF-8 SHA-256 with a dependency-free fallback when Web Crypto is absent.
@@ -63,7 +101,10 @@ native-kind union. Its optional `Activity` supplies title, detail, generic tone,
 row/boundary layout, outgoing direction, disclosure category, parameters,
 rendered blocks, child reference and a safe icon hint. Native state keys and
 labels belong to the producer; active/terminal facts are nullable and unknown
-never means success. Activity has no visibility/hidden policy.
+never means success. `completion.placement: "footer"` declares normal completion
+owned by a reply footer, independently of native kind or title. Original facts
+remain available for inspection; Activity has no general visibility/hidden
+policy.
 
 Messages, parts and tool calls optionally retain `NativeSource`: bounded
 preview, original byte size, explicit truncation and optional exact text
@@ -72,6 +113,12 @@ typed fields accompany source rather than replacing it. `ToolResult` also
 supports `kind: "blocks"` for adapter-decoded prose; literal tool/file output
 keeps its existing representation. These plain JSON shapes use the existing
 content-operation wire serialization, without a parallel content codec.
+
+Terminal assistant and context records carry `outcomeTime`, separately from
+working-duration evidence. The native producer supplies a known instant and its
+source, or an explicit unknown reason. `outcomeTime()` selects normalized
+completion, error, last-part or terminal-event clocks without borrowing message
+start, observation or session-update time. Consumers do not reconstruct it.
 
 `errorMessage(unknown)` supplies nonempty feedback without assuming a thrown
 value is an Error; strings and string-valued messages are preserved, other
@@ -83,8 +130,8 @@ these helpers.
 
 ## Public API
 
-Supervision optionally carries `dependencies: { running: number }` independently
-of its unchanged own-session state and native completion token. Aggregate
+An inbox session entity optionally carries a running terminal owner count in
+`dependencies`, independently of its native supervision. Aggregate
 `ProjectStatus` adds `dependencies` between working and none; scalar project
 facts carry optional checkout-based `dependencies` counts. TerminalInfo may
 include `checkout` and `ownerSessionID`; existing session-targeted terminal RPCs
@@ -137,12 +184,35 @@ Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
 index owner alone reduces `IndexOp`. Gaps retain last-good metadata and acquire
 a complete baseline rather than inventing missing state.
 
+Protocol 21 adds the per-user `InboxSnapshot.entities` map, keyed by
+`entityKey(kind, id)`, and `entity.upsert` / `entity.remove` inbox operations.
+`EntityState` separates a session's own state from task, checkout, project,
+archive and global rollups. Counts retain unseen independently of the winning
+state. Session evidence carries work, effective inputs, scoped descendants and
+optional body-free request identities. Only the client request-lifetime owner
+supplies `arrivedAt`, in its local clock domain, for per-request presentation
+grace; server evidence does not invent that clock. Legacy projections remain
+during migration.
+
 The inbox's per-user `supervision` map and keyed `supervision` operations
 publish `needsYou | working | finishedUnseen | none`, with the proven terminal
 token. Adapters contribute neutral `SupervisionEvidence` identities and
 inventory freshness; only the core supervision owner interprets them. Legacy
 lifecycle status is not a lamp input. `sessions.seen` requires the captured
 displayed terminal, so delayed acknowledgement cannot consume a newer finish.
+Protocol 25 adds `sessions.acknowledge`: the server captures published unseen
+terminals for a task's Finished helpers or the full session subtree across
+checkouts, then returns the acknowledged session IDs and terminals. The same
+per-user watermarks back both methods. `SessionEvidence.helper` replaces
+`awaitingDelivery`; the three helper dispositions are `running`, `needsYou`, and
+`finished`. Seen helpers leave the roster unless they are working or need input.
+
+`SupervisionEvidence.delivered` carries a proven parent receipt and exact
+covered terminal. The supervision owner's explicit `unseen` fact includes this
+shared acknowledgement without manufacturing a user view. Work/input priority
+and finish/outcome history remain independent. Consumers treat missing `unseen`
+on older injected projections as false, never reconstruct it from finish/seen
+maps.
 
 An additive `summaries` map and `summaryRevision` baseline field publish scalar
 `ProjectSummary` facts. The additive `inbox.summaries` message carries keyed
@@ -164,6 +234,24 @@ values. Contiguous `catalog.chunk` transfers stage one complete kind before
 publication; chunks never expose a partial usable list. Catalogs declare server
 path style and canonical file paths.
 
+The additive `project` and `repository` directory kinds carry harness-provided
+project identity/avatar and working-folder branch/change facts. They share the
+existing catalog watch, demand, chunk and invalidation lifetimes. Native color
+names are resolved to concrete colors in the plugin; shared UI interprets no
+native repository or VCS kinds. Machine identity is present only when reported.
+
+The optional `projectEdit` capability supplies captured project settings and
+writable fields through `project.settings` and `project.update`. Name, icon,
+color and worktree startup script remain native facts. Plugins provide color
+choices and startup-variable hints; unsupported fields are absent. Native
+updates are fenced and re-read before confirmation. Durable receipts retain only
+project identity and field hashes, never uploaded images or script bodies. V1's
+current-project endpoint selects identity only; both settings and chip metadata
+read the authoritative project inventory rather than its cached fields. Project
+summaries carry scalar native name/color from the same native inventory, so
+sidebar labels refresh without per-row catalog demand. Permission policy is not
+part of project editing.
+
 `frecency.list` returns `{directory,revision,entries}`. Committed
 `frecency.patch` frames carry keyed upserts/removals, including removals grouped
 by the original directory when global retention prunes another directory.
@@ -173,6 +261,14 @@ priority, an unavailable reason, and a skill-name conflict reason. These are
 neutral catalog data; native vocabulary and precedence live only in each
 harness. `CommandInput.skill` explicitly selects a skill independently of a
 same-named server command.
+
+Shell and command inputs accept an optional native-compatible `messageID` from
+the shared identity owner. Their `SubmissionReceipt` is accepted/queued with the
+correlated native message ID, or unconfirmed with a reason when the native API
+cannot correlate its message. Completion receipts retain that metadata across
+replay, never input or attachment bodies. Older completion-only receipts remain
+readable as unconfirmed, not fabricated commitment. Native acceptance and the
+client's canonical transcript commitment are distinct observations.
 
 `ModelCatalog.defaultState` distinguishes a reported configured default from
 unknown, and `free` is `boolean|null`. Search pattern/count, diff path and todo
@@ -223,12 +319,16 @@ presentations validate and freeze the same control contract. Toggles may declare
 `onValue`/`offValue` to preserve a legacy stored representation while checked
 means on; absent mappings use true/false. UI and command consumers share
 `preferenceToggleValue`, so neither surface coerces or rewrites saved values.
-Theme IDs are bounded, nonempty identifier strings, independent of installed
-palettes; missing palettes resolve to the consumer's dark base at paint time,
-without changing the saved ID. System retains OS-mode base selection. The
-shipped contract uses interface inheritance rather than library-internal module
-augmentation, which JSR's publication graph does not support. The composition
-names owners only, never individual keys or validators.
+The visual feature contributes `textSize` as one of `90`, `100`, `110`, `125` or
+`150` (percentage strings), default `100`. Its settings-only segmented control
+uses the same validated registry, storage and broadcast contract; it does not
+contribute a second Display command or browser-local preference. Theme IDs are
+bounded, nonempty identifier strings, independent of installed palettes; missing
+palettes resolve to the consumer's dark base at paint time, without changing the
+saved ID. System retains OS-mode base selection. The shipped contract uses
+interface inheritance rather than library-internal module augmentation, which
+JSR's publication graph does not support. The composition names owners only,
+never individual keys or validators.
 
 The layout preference owner exports immutable `SHELL_WIDTHS` data for each
 column's minimum, maximum and default. Preference defaults/validation and UI
@@ -305,10 +405,11 @@ RPC.
 
 `restore` is a separately advertised capability: `restore(sessionID)` and
 `session.restore` return the authoritative session after unreverting. Legacy
-`revert` alone never implies Restore support. `RevertInfo` and live
-`session.revert` operations optionally carry oldest-first `prompts` (at most 50,
-200-character whitespace-collapsed previews) and a metadata-only boundary
-`prompt: HistoryEntry` for draft recall. Older peers can omit both fields.
+`revert` alone never implies Restore support. `RevertInfo` carries `boundaryID`,
+the fixed native-ordered `messageIDs` resolved for that stage, and `files`.
+Context records and replies belong to that identity set too. There is no prompt
+count or capped preview inventory; later appends cannot join an existing record.
+The metadata-only boundary `prompt: HistoryEntry` still supports draft recall.
 
 The optional `history` capability includes exact selected-prompt
 `entry(sessionID,

@@ -1,0 +1,125 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-chrome-meta {
+  font-variant-numeric: tabular-nums;
+  color: var(--otk-fg-3);
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  font-weight: 400;
+  line-height: var(--line-meta);
+}
+.otk-chrome-meta.is-truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.otk-section-tree {
+  --tree-height: var(--row-project);
+}
+.otk-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+  height: var(--row-project);
+  padding: 0;
+  text-align: start;
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+  line-height: var(--line-meta);
+}
+.otk-section-header-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--otk-border);
+}
+.otk-section-row-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+.otk-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--meta-row-gap, var(--space-4));
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
+  color: var(--otk-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.otk-meta-row.has-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.otk-meta-row.fits-whole-items > * {
+  flex: none;
+  inline-size: max-content;
+}
+.otk-meta-row.fits-whole-items > [hidden] {
+  display: none;
+}
+.otk-meta-row.has-intrinsic {
+  inline-size: var(--meta-intrinsic, auto);
+  max-inline-size: 100%;
+}
+.otk-meta-item {
+  display: inline-flex;
+  align-items: center;
+}
+.otk-meta-compact,
+.otk-meta-item.is-compact:not([data-meta-compact]) > .otk-meta-full {
+  display: none;
+}
+.otk-meta-item.is-compact > .otk-meta-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.otk-meta-compact > svg {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
+.otk-meta-fit {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  min-inline-size: 0;
+  flex-direction: var(--tree-heading-flow, row);
+}
+.otk-meta-primary {
+  --meta-primary-floor: calc-size(min-content, min(size, 6ch));
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  min-inline-size: var(--meta-primary-floor);
+  max-inline-size: 100%;
+  overflow: hidden;
+}
+.otk-meta-primary.is-measuring-minimum {
+  flex: none;
+  inline-size: 0;
+  inline-size: var(--meta-primary-floor);
+}
+.otk-meta-control {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.otk-meta-control[hidden] {
+  display: none;
+}
+.otk-meta-measure {
+  grid-area: 1 / 1;
+  inline-size: 0;
+  block-size: 0;
+  visibility: hidden;
+  display: flex;
+  pointer-events: none;
+}
+.otk-meta-item.is-compact[data-meta-compact] {
+  --meta-label-full: none;
+  --meta-label-compact: inline;
+}

@@ -2,6 +2,21 @@
 import map from "../../tests/browser/areas.json" with { type: "json" };
 
 export const areas = map.areas;
+export type Fallback = "all" | "contracts" | null;
+export interface Selection {
+  schema: number;
+  base: string;
+  paths: string[];
+  areas: string[];
+  smoke: boolean;
+  integration: string[];
+  broad: boolean;
+  fallback: Fallback;
+  themes: boolean;
+  scale: boolean;
+  milestone: boolean;
+  reasons: string[];
+}
 export function pathsFromNul(bytes: Uint8Array): string[] {
   const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   if (text && !text.endsWith("\0")) {
@@ -19,7 +34,7 @@ export function select(
   paths: string[],
   explicit: string[] = [],
   base = "missing",
-) {
+): Selection {
   if (explicit.some((a) => !areas.includes(a))) {
     throw new Error("Unknown explicit area");
   }
@@ -27,6 +42,7 @@ export function select(
   const integration = new Set<string>();
   const reasons: string[] = [];
   let broad = base === "missing",
+    fallback: Fallback = base === "missing" ? "all" : null,
     themes = false,
     scale = false,
     milestone = false;
@@ -40,30 +56,40 @@ export function select(
     const testArea = path.match(
       /^tests\/browser\/(?:behavior|contracts)\/([^/]+)\//,
     )?.[1];
+    const integrationFile = /^tests\/integration\/[^/]+_test\.ts$/.test(path);
+    if (integrationFile) {
+      integration.add(path);
+      for (const [area, files] of Object.entries(map.integration)) {
+        if (files.includes(path.slice("tests/integration/".length))) {
+          chosen.add(area);
+        }
+      }
+      reasons.push(`${path}: changed integration file`);
+    }
     if (!rules.length && testArea && areas.includes(testArea)) {
       chosen.add(testArea);
       reasons.push(`${path}: test area ${testArea}`);
-    } else if (!rules.length) {
+    } else if (!rules.length && !integrationFile) {
       broad = true;
-      reasons.push(`${path}: unclassified/deleted/renamed -> broad`);
+      fallback ??= "contracts";
+      reasons.push(`${path}: unclassified/deleted/renamed -> contracts`);
     }
     for (const rule of rules) {
       reasons.push(`${path}: map row ${rule.id}`);
       for (const a of rule.areas ?? []) chosen.add(a);
       broad ||= !!rule.broad;
-      themes ||= rule.themes === "always" ||
-        rule.themes === "style" && /\.css$|token/.test(path);
+      if (rule.broad) fallback ??= "contracts";
+      themes ||= !!rule.themes &&
+        /\.css$|token|(^|\/)themes?([/.]|$)|(^|\/)fonts?\//i.test(path);
       scale ||= !!rule.scale;
       milestone ||= !!rule.milestone;
     }
   }
-  if (broad) {
+  if (fallback === "all") {
     areas.forEach((a) => chosen.add(a));
     themes = true;
     reasons.push(
-      base === "missing"
-        ? "missing base -> broad"
-        : "shared/unclassified -> all versions",
+      "missing base -> all areas and themes",
     );
   }
   for (const area of chosen) {
@@ -79,11 +105,21 @@ export function select(
     smoke: true,
     integration: broad ? ["*"] : [...integration].sort(),
     broad,
+    fallback,
     themes,
     scale,
     milestone,
     reasons,
   };
+}
+
+export function browserGrep(selection: Pick<Selection, "areas" | "fallback">) {
+  const tags = [
+    ...selection.areas,
+    ...(selection.fallback === "contracts" ? ["contracts"] : []),
+    "smoke",
+  ];
+  return `@(${tags.join("|")})(?:\\s|$)`;
 }
 export function validateCollection(
   tags: string[][],

@@ -40,10 +40,23 @@ for (const kind of ["question", "permission"] as const) {
       );
     }
     const original = await primary.elementHandle();
+    // Hold the native permission reply before the owner can clear the request.
+    // Holding only the reply/content frames cannot delay an inbox verdict.
+    if (kind === "permission") {
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "hold",
+      });
+    }
     frames.hold((frame, request) =>
-      (frame.t === "request.result" && request?.method === `${kind}.reply`) ||
+      (frame.t === "request.result" &&
+        (request?.method === `${kind}.reply` ||
+          request?.method === `${kind}.list`)) ||
       (frame.t === "content" &&
-        (frame.event as { op?: string })?.op === `${kind}.remove`)
+        ((frame.event as { op?: string })?.op === `${kind}.remove` ||
+          kind === "question" &&
+            (frame.event as { op?: string })?.op === "form.remove")) ||
+      (kind === "question" && frame.t === "forms.pending")
     );
     await primary.click();
     await expect(primary).toBeVisible();
@@ -56,6 +69,11 @@ for (const kind of ["question", "permission"] as const) {
       frames.sent.filter(({ frame }) => frame.method === `${kind}.reply`);
     // Pending is visible during preparation; measure after the admitted frame.
     await expect.poll(() => replies().length).toBe(1);
+    if (kind === "permission") {
+      await expect.poll(async () =>
+        (await state.observe<{ replying: boolean }>()).replying
+      ).toBe(true);
+    }
     const before = await primary.evaluate(
       (node, original) => ({
         same: node === original,
@@ -94,11 +112,19 @@ for (const kind of ["question", "permission"] as const) {
     });
     // One native request admits one reply, whatever the control's lifetime.
     expect(replies()).toHaveLength(1);
-    expect(frames.sent.filter(({ frame }) => frame.method === "session.prompt"))
+    expect(
+      frames.sent.filter(({ frame }) => frame.method === "session.prompt"),
+    )
       .toHaveLength(0);
     expect(before.same).toBe(true);
     expect(afterClick.same).toBe(true);
     frames.release();
+    if (kind === "permission") {
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "release",
+      });
+    }
     await expect(dock).toHaveCount(0);
     expect(replies()).toHaveLength(1);
     await expect(input).toBeVisible();

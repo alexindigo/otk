@@ -5,8 +5,13 @@ import type {
   SessionHierarchyNode,
   TaskRecord,
 } from "@otk/protocol";
-import { sessionAncestors } from "@otk/protocol";
-import { aggregateStatus, type OperationAttention } from "./inbox.ts";
+import { entityKey, sessionAncestors, taskEntityID } from "@otk/protocol";
+import type { InboxStatus, OperationAttention } from "./inbox.ts";
+import {
+  createEntityStateStore,
+  type EntityStateStore,
+  lamp,
+} from "./entity-state.ts";
 import {
   projectTabGroups,
   resolveTabHierarchy,
@@ -14,49 +19,55 @@ import {
 } from "./tab-groups.ts";
 export interface TaskCrumb {
   id: string;
-  kind: "member" | "ancestor";
+  kind: "member" | "ancestor" | "helper";
   helper: boolean;
   depth: number;
   /** Compatibility flag for navigable orientation links, including local parents. */
   external?: boolean;
 }
-
-/** Visibility borrows the complete partition; it cannot admit another group's
- * members. Quiet inherited members retire unless they are the viewed session. */
-export function groupBreadcrumbs(
-  group: TabGroup,
+export interface TrailCrumb extends TaskCrumb {
+  status: InboxStatus;
+  run?: { startedAt: number; endedAt?: number };
+}
+export interface TrailModel {
+  crumbs: TrailCrumb[];
+  path: TrailCrumb[];
+  task?: string;
+}
+/** D67: crumbs describe ancestry, not task membership. */
+export function buildTrail(
+  group: TabGroup | undefined,
   entries: ReadonlyMap<string, IndexMetadata & OperationAttention>,
-  mandatory: ReadonlySet<string>,
+  entities: EntityStateStore,
   selected?: string,
-): TaskCrumb[] {
-  const roots = new Set(group.roots), members = new Set(group.members);
-  const result: TaskCrumb[] = [];
-  for (const id of group.members) {
-    if (!roots.has(id) && !mandatory.has(id) && id !== selected) continue;
-    const ancestors = sessionAncestors(id, (key) => entries.get(key));
-    const at = ancestors.findIndex((ancestor) => roots.has(ancestor));
-    result.push({
+): TrailModel {
+  const current = selected ?? group?.roots[0];
+  const ids = current
+    ? [
+      ...sessionAncestors(current, (id) => entries.get(id)).toReversed(),
+      current,
+    ].filter((id, at, all) => entries.has(id) && all.indexOf(id) === at)
+    : [];
+  const members = new Set(group?.members);
+  const status = (id: string) => lamp(entities, entityKey("session", id));
+  const directory = current ? entries.get(current)?.directory : undefined;
+  const path = ids.map((id, depth): TrailCrumb => {
+    const entry = entries.get(id)!;
+    const external = !members.has(id) || entry.directory !== directory;
+    return {
       id,
-      kind: "member",
-      helper: !roots.has(id),
-      depth: roots.has(id) ? 0 : at < 0 ? 1 : at + 1,
-    });
-  }
-  for (const id of group.ancestorLinks) {
-    if (members.has(id)) continue;
-    const at = result.findIndex((crumb) =>
-      sessionAncestors(crumb.id, (key) => entries.get(key)).includes(id)
-    );
-    if (at < 0) continue;
-    result.splice(at, 0, {
-      id,
-      kind: "ancestor",
-      helper: false,
-      depth: 0,
-      external: true,
-    });
-  }
-  return result;
+      kind: external ? "ancestor" : "member",
+      helper: !!entry.parentID,
+      depth,
+      status: status(id),
+      ...(external ? { external: true } : {}),
+    };
+  });
+  return {
+    path,
+    crumbs: path,
+    task: group && entityKey("task", taskEntityID(group.kind, group.id)),
+  };
 }
 
 /** Standalone explicit-member projection uses the same group owner as tabs.
@@ -70,13 +81,13 @@ export function taskBreadcrumbs(
     string,
     readonly (IndexMetadata & OperationAttention)[]
   >,
-  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "supervision"> = {
+  inbox: Pick<InboxSnapshot, "seen" | "finishes" | "entities"> = {
     seen: {},
     finishes: {},
   },
   followParent = false,
   projection?: ReadonlyMap<string, SessionHierarchyNode>,
-): TaskCrumb[] {
+): TrailCrumb[] {
   const saved = tasks.some((candidate) => candidate.id === task.id)
     ? tasks
     : [{ ...task, name: "", order: 0 }, ...tasks];
@@ -84,25 +95,21 @@ export function taskBreadcrumbs(
     followParent,
     hierarchy: projection,
   });
-  const mandatory = new Set(
-    entries.filter((entry) =>
-      aggregateStatus(entry, inbox) !== "none" ||
-      hierarchy?.get(entry.id)?.mandatory
-    ).map((
-      entry,
-    ) => entry.id),
-  );
   const groups = projectTabGroups(entries, saved, {
     followParent,
     hierarchy,
-    mandatory,
+    retained: new Set(task.sessions),
   });
   const group = groups.groups.find((group) =>
     group.kind === "task" && group.id === task.id
-  )!;
-  return groupBreadcrumbs(
+  );
+  if (!group) return [];
+  const entities = createEntityStateStore({ read: () => inbox.entities });
+  const trail = buildTrail(
     group,
     new Map(entries.map((entry) => [entry.id, entry])),
-    mandatory,
+    entities,
   );
+  entities.stop();
+  return trail.crumbs;
 }

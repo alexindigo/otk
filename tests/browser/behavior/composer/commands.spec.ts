@@ -7,7 +7,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
-import { openRecord } from "../../pages/transcript.ts";
+import { readRecordBody } from "../../pages/transcript.ts";
 import {
   composerError,
   rejectedComposerInput,
@@ -17,7 +17,8 @@ import {
 test.use({ profile: "composer-commands" });
 test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   tag: ["@composer", "@isolated"],
-}, async ({ isolatedState: state, page }) => {
+}, async ({ isolatedState: state, page }, info) => {
+  const frames = await wire(page);
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Commands",
   });
@@ -40,7 +41,29 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
       hasText: "COMMAND-FIXTURE inline args",
     }),
   ).toContainText("continued arguments");
-  await expect(prompt(page)).toHaveValue("");
+  if (state.controller.info!.version.startsWith("2.")) {
+    await expect(prompt(page)).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Check send", exact: true }))
+      .toBeVisible();
+    try {
+      await expect(page.locator(".otk-composer-notice")).toContainText(
+        "did not provide a way to confirm its message",
+      );
+    } finally {
+      const requests = frames.sent.map(({ frame }) => frame).filter((frame) =>
+        ["session.command", "session.prompt", "projects.visit", "tasks.create"]
+          .includes(frame.method ?? "")
+      );
+      const keys = new Set(requests.map((frame) => frame.ref?.key));
+      await info.attach("command-outcome-boundaries", {
+        contentType: "application/json",
+        body: JSON.stringify({
+          requests,
+          outcomes: frames.received.filter((frame) => keys.has(frame.ref?.key)),
+        }),
+      });
+    }
+  } else await expect(prompt(page)).toHaveValue("");
   await reply(state, page, session.id, "Project command received.");
   await state.queue(["Skill command received."]);
   await prompt(page).fill("/skills");
@@ -49,11 +72,15 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await page.locator(".otk-skills-picker .otk-picker-option").filter({
     hasText: "canary",
   }).click();
+  // Verify the reply while following the live tail. Reading the historical
+  // skill record below can move it out of the virtualized viewport.
+  await reply(state, page, session.id, "Skill command received.");
   // NT1 keeps injected skill context visible without a user bubble. NT2: a V2
-  // skill is a plugin record whose content sits in its closed body.
+  // skill is a plugin record. Its prose needs the measured viewport after
+  // disclosure, not just a mounted header and body shell.
   if (state.controller.info!.version.startsWith("2.")) {
     const skill = '[data-native-record="opencode-v2/skill"]';
-    await openRecord(page, skill);
+    await readRecordBody(page, skill);
     await expect(page.locator(`${skill} .otk-tool-body`)).toContainText(
       "SKILL-FIXTURE content",
     );
@@ -64,7 +91,6 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
       }),
     ).toBeVisible();
   }
-  await reply(state, page, session.id, "Skill command received.");
   const catalog = await state.product("commands.list", {
     sessionID: session.id,
   });
@@ -126,7 +152,12 @@ for (const origin of ["keyboard", "button"] as const) {
     const input = prompt(page), send = composerSend(page);
     const first = `First captured ${origin} prompt`;
     const newer = `Newer ${origin} shell draft`;
-    await state.queue(["First captured effect finished."]);
+    const running = await state.queue(
+      ["First captured effect finished."],
+      "held",
+    );
+    let release: Promise<unknown> | undefined;
+    const releaseReply = () => release ??= state.release(running.gate);
     frames.hold((frame, request) =>
       frame.t === "request.result" && request?.method === "session.prompt" &&
       request.params?.sessionID === target.id &&
@@ -139,26 +170,39 @@ for (const origin of ["keyboard", "button"] as const) {
       if (origin === "keyboard") await input.press("Enter");
       else await send.click();
       await expect.poll(() => frames.held.length).toBeGreaterThan(0);
-      await expectPrimaryBlocked(send, "Sending");
-      await expect(input).toHaveValue(first);
+      await expect(send).toHaveAccessibleName("Stop");
+      await expect(send).toBeEnabled();
+      await expect(input).toHaveValue("");
+      // Native execution can start before the browser receives the receipt.
+      await expect.poll(async () =>
+        (await messages(state, target.id)).some(({ info }) =>
+          info.role === "assistant"
+        )
+      ).toBe(true);
       await info.attach("held-send-before-input-command", {
         body: JSON.stringify({ origin, held: frames.held, sent: frames.sent }),
         contentType: "application/json",
       });
 
       // A trailing space keeps autocomplete out of Enter's path. This must
-      // reach prompt.submit and its beforeSubmit hook, not a picker shortcut.
+      // reach the composer activation owner, not a picker shortcut.
       await input.fill("/prompt.shell.enter ");
       await expect(page.locator(".otk-autocomplete")).toHaveCount(0);
       await input.press("Enter");
       await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
       await expect(input).toHaveValue("");
-      await expectPrimaryBlocked(send, "Sending");
+      await expect(send).toHaveAccessibleName("Stop");
+      await expect(send).toBeEnabled();
 
       await input.fill(newer);
+      await expect(send).toHaveAccessibleName("Send");
+      await expectPrimaryBlocked(send, "Previous message still sending");
       await input.press("Enter");
       await expect(input).toHaveValue(newer);
-      await expect(send).toHaveAttribute("aria-description", "Sending");
+      await expect(send).toHaveAttribute(
+        "aria-description",
+        "Previous message still sending",
+      );
       expect(
         await send.evaluate((node, original) => node === original, original),
       )
@@ -172,6 +216,7 @@ for (const origin of ["keyboard", "button"] as const) {
         );
       expect(effects()).toHaveLength(1);
       frames.release();
+      await releaseReply();
       await expect(send).toBeEnabled();
       await reply(state, page, target.id, "First captured effect finished.");
       await expect(input).toHaveValue(newer);
@@ -199,6 +244,7 @@ for (const origin of ["keyboard", "button"] as const) {
       );
     } finally {
       frames.release();
+      await releaseReply();
       await original?.dispose();
     }
   });
@@ -226,18 +272,24 @@ test.describe("long command", () => {
       await openSession(state, page, session.id);
       await prompt(page).fill("/probe multiline\narguments");
       await prompt(page).press("Enter");
-      await expect(prompt(page)).toHaveValue("/probe multiline\narguments");
+      await expect(prompt(page)).toHaveValue("");
       await expect(page.locator("[data-role=user] .otk-text")).toContainText(
         "LONG-COMMAND multiline",
       );
       await expect(page.locator(".otk-operation-feedback[role=status]"))
         .toContainText("Running command");
+      await expect(composerSend(page)).toHaveAccessibleName("Stop");
+      await expect(composerSend(page)).toBeEnabled();
       await prompt(page).fill("keep the next draft");
       await expect(prompt(page)).toBeEditable();
       await expect(page.locator(".otk-composer-dock [role=alert]"))
         .toHaveCount(0);
-      // The running command holds the one send intent; Send says so.
-      await expectPrimaryBlocked(composerSend(page), "Sending");
+      // A new draft returns the control to Send without settling the command RPC.
+      await expect(composerSend(page)).toHaveAccessibleName("Send");
+      await expectPrimaryBlocked(
+        composerSend(page),
+        "Previous message still sending",
+      );
       await state.release(held.gate);
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
         "Long slash finished.",

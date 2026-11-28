@@ -18,12 +18,13 @@ test(
     await page.reload();
     const activity = page.locator(".otk-permission-activity");
     const failed = activity.locator("[data-activity]").filter({
-      has: page.locator(".otk-error"),
+      has: page.getByRole("alert"),
     });
     await expect(failed).toHaveCount(1);
     await expect(failed).toContainText("Auto");
     await expect(failed).toContainText("Allow once");
     await expect(failed).toContainText("Refused automatic permission");
+    await failed.getByRole("button", { name: "Details", exact: true }).click();
     await expect(failed).toContainText(
       "Native policy refused the permission reply.",
     );

@@ -6,9 +6,10 @@ import type {
 } from "@otk/protocol";
 import PermissionSummary from "./PermissionSummary.tsx";
 import "./PermissionActivity.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import Clock from "./Clock.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
-import { errorFeedback, type FailureValue } from "@otk/client";
+import { errorFeedback, type FailureValue, presentFailure } from "@otk/client";
 
 const action = (entry: Activity) =>
   entry.reply === "reject"
@@ -23,8 +24,9 @@ export default function PermissionActivity(props: {
   onRetry(): Promise<void>;
 }) {
   return (
-    <section
-      class={[scrollRegion(), "otk-permission-activity"]}
+    <ScrollRegion
+      as="section"
+      class="otk-permission-activity"
       aria-label="Permission activity"
     >
       <FeedbackStatus
@@ -37,7 +39,7 @@ export default function PermissionActivity(props: {
             },
           }
           : props.value.loading
-          ? { kind: "pending", text: "Loading activity…" }
+          ? { kind: "pending", text: "Loading activity..." }
           : undefined}
       />
       <Show
@@ -58,26 +60,40 @@ export default function PermissionActivity(props: {
                   {entry().source === "auto" ? "Auto" : "Manual"} ·{" "}
                   {action(entry())}
                 </strong>
-                <time datetime={new Date(entry().time).toISOString()}>
-                  {new Date(entry().time).toLocaleTimeString()}
-                </time>
+                <Clock at={entry().time} />
               </header>
               <p class="otk-muted">{props.title(entry().request.sessionID)}</p>
-              <PermissionSummary request={entry().request} />
-              <p
-                class={entry().outcome === "failed" ? "otk-error" : "otk-muted"}
+              <PermissionSummary
+                request={entry().request}
+                placement={`activity/${entry().id}`}
+              />
+              <Show
+                when={entry().outcome === "failed"}
+                fallback={
+                  <p class="otk-muted">
+                    {entry().outcome === "confirmed"
+                      ? (entry().reply === "reject" ? "Rejected" : "Allowed")
+                      : "Reply started; outcome not confirmed"}
+                  </p>
+                }
               >
-                {entry().outcome === "confirmed"
-                  ? (entry().reply === "reject" ? "Rejected" : "Allowed")
-                  : entry().outcome === "failed"
-                  ? entry().failure?.facts?.reason
-                    ? `${entry().failure!.facts!.reason} ${
-                      entry().failure!.facts!.recovery ??
-                        "Review this request before trying again."
-                    }`
-                    : "The response could not be sent. Review this request before trying again"
-                  : "Reply started; outcome not confirmed"}
-              </p>
+                <FeedbackStatus
+                  compact
+                  feedback={entry().failure
+                    ? presentFailure(entry().failure!, {
+                      surface: "record",
+                      view: entry().failure!.facts?.target,
+                    })
+                    : errorFeedback("The response could not be sent", {
+                      actionLabel: "Sending permission response",
+                      target: {
+                        sessionID: entry().request.sessionID,
+                        label: props.title(entry().request.sessionID),
+                      },
+                      recovery: "Review this request before trying again",
+                    })}
+                />
+              </Show>
               <Show when={entry().message}>
                 <p>{entry().message}</p>
               </Show>
@@ -90,6 +106,6 @@ export default function PermissionActivity(props: {
           Load earlier activity
         </button>
       </Show>
-    </section>
+    </ScrollRegion>
   );
 }

@@ -47,7 +47,7 @@ const answer: Message = {
 
 Deno.test("context is visible but never a Timeline, queue or next-prompt anchor", () => {
   const owner = createTranscriptProjection();
-  owner.replace([prompt, answer, context]);
+  owner.reset([prompt, answer, context]);
   owner.busy(true);
   assertEquals(owner.state.messageIDs, ["prompt", "answer", "context"]);
   assertEquals(owner.state.replyIDs, ["prompt", "reply:prompt", "context"]);
@@ -68,7 +68,7 @@ Deno.test("context is visible but never a Timeline, queue or next-prompt anchor"
 
 Deno.test("reclassifying a header into context retires prompt and queue eligibility", () => {
   const owner = createTranscriptProjection();
-  owner.replace([prompt, answer, {
+  owner.reset([prompt, answer, {
     ...prompt,
     id: context.id,
     time: context.time,
@@ -117,7 +117,7 @@ Deno.test("snapshot and live context never replace composer or Undo selection", 
     });
   try {
     owner.temperature("screen");
-    for (let i = 0; i < 40; i++) await Promise.resolve();
+    await owner.refetch();
     assertEquals(owner.state.latestPrompt, {
       id: prompt.id,
       agent: prompt.agent,

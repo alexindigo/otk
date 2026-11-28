@@ -132,7 +132,6 @@ export class Transcript {
       retire?(id?: string): void;
       recovering?(id: string): MessagePage["recovering"];
       scopedRecovery?(id: string): boolean;
-      retryRecovery?(id: string): void;
       reconciled?(id: string, messageID: string, partID?: string): void;
       buffers: StreamBuffers;
       reader: Messages;
@@ -408,8 +407,95 @@ export class Transcript {
     id: string,
     before?: string,
     signal = new AbortController().signal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
   ): Promise<MessagePage> {
+    if (scope) return this.#snapshotIDs(id, scope, signal);
     return this.#page(id, before, signal, undefined, true);
+  }
+  async #snapshotIDs(
+    id: string,
+    scope: import("@otk/protocol").MessageSnapshotScope,
+    signal: AbortSignal,
+  ): Promise<MessagePage> {
+    ids.decode(id);
+    signal.throwIfAborted();
+    const owner = await this.#read(id, signal),
+      { replay, reader } = this.options;
+    signal = AbortSignal.any([signal, owner.controller.signal]);
+    const ownedClock = () => {
+      signal.throwIfAborted();
+      const clock = replay.clock(id);
+      if (owner !== this.#baselines.get(id) || clock.epoch !== owner.epoch) {
+        throw new HarnessError("capture-stale", "Archive epoch changed");
+      }
+      return clock;
+    };
+    const from = ownedClock(),
+      revisions = replay.revisions(id, scope.messageIDs);
+    const items: Message[] = [];
+    if (!scope.validate) {
+      for (const messageID of scope.messageIDs) {
+        signal.throwIfAborted();
+        const raw = await reader.get(
+          id,
+          messageID,
+          signal,
+          owner.raw.directory,
+        );
+        items.push(
+          await this.options.decorate(
+            mapMessage(raw.info, raw.parts),
+            raw,
+            owner.raw.directory,
+            true,
+          ),
+        );
+      }
+    }
+    signal.throwIfAborted();
+    const raw = owner.raw;
+    const session = scope.validate
+      ? {
+        ...mapSession(raw),
+        ...(raw.revert && {
+          revert: {
+            boundaryID: raw.revert.messageID,
+            messageIDs: [],
+            files: [],
+          },
+        }),
+      }
+      : await this.options.info(raw, signal);
+    const clock = ownedClock();
+    const turns = [
+      ...new Set(
+        items.map((m) => m.role === "assistant" ? m.replyTo ?? m.id : m.id),
+      ),
+    ];
+    const summaries = this.options.summaries(id, turns);
+    return {
+      sessionID: id,
+      session,
+      items,
+      from,
+      clock,
+      revisions: scope.validate
+        ? replay.revisions(id, scope.messageIDs)
+        : revisions,
+      version: replay.version(id),
+      older: null,
+      catchup: [],
+      helpers: {},
+      recovering: [],
+      turns: Object.fromEntries(
+        turns.map((
+          turnID,
+        ) => [turnID, {
+          boundary: { turnID, complete: true },
+          summary: summaries[turnID],
+        }]),
+      ),
+    };
   }
   async #page(
     id: string,
@@ -437,7 +523,6 @@ export class Transcript {
     }
     const capture = replay.capture(id);
     try {
-      if (!snapshot && !token) this.options.retryRecovery?.(id);
       baseline ??= await this.#read(id, signal);
       const owner = baseline;
       signal = AbortSignal.any([signal, owner.controller.signal]);

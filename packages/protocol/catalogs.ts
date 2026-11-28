@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure } from "./requests.ts";
+import type {
+  ProjectCatalogKinds,
+  ProjectChunkKinds,
+} from "./catalogs/project.ts";
+export type { CatalogProject, CatalogRepository } from "./catalogs/project.ts";
 import type { PathSemantics } from "./paths.ts";
 import type {
   ConfigCatalogKinds,
@@ -66,7 +71,8 @@ export interface DirectoryCatalogKinds
     ResourceCatalogKinds,
     FileCatalogKinds,
     QuestionCatalogKinds,
-    ConfigCatalogKinds {}
+    ConfigCatalogKinds,
+    ProjectCatalogKinds {}
 export interface CatalogValue<T> {
   state: "digesting" | "ready" | "unavailable";
   revision: number;
@@ -90,7 +96,10 @@ export interface CatalogDemand {
   intent: CatalogDemandIntent;
 }
 export interface CatalogRpcMethods {
-  "catalogs.watch": { params: { directory: string }; result: DirectoryCatalog };
+  "catalogs.watch": {
+    params: { directory: string; files?: true };
+    result: DirectoryCatalog;
+  };
   "catalogs.demand": {
     params: { directory: string } & CatalogDemand;
     result: null;
@@ -105,6 +114,7 @@ export interface CatalogsCapability {
     directory: string,
     listener: (value: DirectoryCatalog) => void,
     signal: AbortSignal,
+    files?: true,
   ): Promise<DirectoryCatalog>;
   demand(
     directory: string,
@@ -136,7 +146,8 @@ export interface CatalogChunkKinds
     ResourceChunkKinds,
     FileChunkKinds,
     QuestionChunkKinds,
-    ConfigChunkKinds {}
+    ConfigChunkKinds,
+    ProjectChunkKinds {}
 export type CatalogChunk = {
   [K in keyof CatalogChunkKinds]: {
     t: "catalog.chunk";

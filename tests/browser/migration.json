@@ -1812,8 +1812,8 @@
             ]
           },
           "lowerTierWitness": {
-            "file": "packages/client/tests/submission-intent_test.ts",
-            "testID": "a pending native submission does not swallow a later input command or admit another send"
+            "file": "packages/client/tests/composer-action_test.ts",
+            "testID": "enter sends once, rejects a second draft, and preserves explicit local commands"
           },
           "activeOwner": {
             "runner": "playwright",
@@ -12460,17 +12460,17 @@
       "file": "tests/e2e/tasks_test.ts",
       "area": "sessions",
       "batch": "A4",
-      "proofBoundary": "B+L: actual child progress/navigation and sibling/parent history",
+      "proofBoundary": "B+L: actual child progress/navigation and parent history",
       "groups": [
         {
           "id": "legacy.tasks.31c598fc33c59616",
           "originalTitle": "R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership",
-          "proofBoundary": "B+L: actual child progress/navigation and sibling/parent history",
+          "proofBoundary": "B+L: actual child progress/navigation and parent history",
           "destinations": [
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/sessions/tasks.spec.ts",
-              "testID": "sessions.real-task-progress-helper-sibling-parent-history-and-draft"
+              "testID": "sessions.real-task-progress-helper-parent-history-and-draft"
             }
           ],
           "retainedCoverage": {
@@ -12478,7 +12478,7 @@
               "otk-dark"
             ],
             "states": [
-              "R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership",
+              "Real task progress, child navigation, parent/history and draft preservation",
               "Dark browser outcome; complete source scenario retained"
             ]
           },
@@ -12486,7 +12486,7 @@
           "activeOwner": {
             "runner": "playwright",
             "file": "tests/browser/behavior/sessions/tasks.spec.ts",
-            "testID": "sessions.real-task-progress-helper-sibling-parent-history-and-draft"
+            "testID": "sessions.real-task-progress-helper-parent-history-and-draft"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12816,7 +12816,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/timestamps.spec.ts",
-              "testID": "messages.native-final-clock-hover-ax-preference-restart"
+              "testID": "messages.native-final-clock-persistent-footer-ax-preference-restart"
             }
           ],
           "retainedCoverage": {
@@ -12858,7 +12858,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/timestamps.spec.ts",
-              "testID": "messages.native-final-clock-hover-ax-preference-restart"
+              "testID": "messages.native-final-clock-persistent-footer-ax-preference-restart"
             }
           ],
           "retainedCoverage": {

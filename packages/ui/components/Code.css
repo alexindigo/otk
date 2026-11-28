@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-code {
-  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
@@ -9,12 +8,9 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 .otk-code pre {
-  margin: 8px 0;
+  margin: 0;
   white-space: pre;
-  padding: 12px;
-  border-radius: var(--radius-card);
-  background: var(--otk-bg-code);
-  border: 1px solid var(--otk-border-code);
+  padding: var(--space-3);
   font: inherit;
   line-height: var(--line-ui);
 }
@@ -23,7 +19,6 @@
 }
 .otk-code .otk-code-numbers {
   color: var(--secondary);
-  border-right: 0;
   text-align: right;
   user-select: none;
 }
@@ -59,9 +54,14 @@
   display: block;
   white-space: pre;
 }
-.otk-code[data-reveal-fence=true] > pre:not(.otk-code-numbers)::before,
-.otk-code[data-reveal-fence=true] > pre:not(.otk-code-numbers)::after {
+.otk-code[data-reveal-fence=true] .otk-code-content::before,
+.otk-code[data-reveal-fence=true] .otk-code-content::after {
   content: "```";
   display: block;
   color: var(--secondary);
+}
+.otk-code-number.is-marked {
+  color: var(--otk-action-text);
+  padding-inline-start: var(--space-1);
+  box-shadow: inset calc(2 * var(--otk-unit)) 0 0 var(--otk-action-text);
 }

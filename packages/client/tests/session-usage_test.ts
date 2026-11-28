@@ -20,6 +20,7 @@ const snapshot = (ledger: UsageLedger): TurnUsageDetail => ({
   clock: { epoch: "test", seq: 0 },
 });
 const policy = {
+  bridgepages: 4,
   coolms: 300000,
   recoveryconcurrency: 2,
   recoverypending: 128,

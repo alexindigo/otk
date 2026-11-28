@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { CheckoutRepositories } from "@otk/harness";
 import { runningDirectories } from "./db-hints.ts";
 import {
   emptyProjectSeed,
@@ -9,6 +10,7 @@ import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 import { HistoryReader } from "./history.ts";
 import { sessionDirectory } from "./directory.ts";
+import { inheritedVariant } from "./selection.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Derived,
@@ -45,6 +47,8 @@ import { isPrompt } from "./records.ts";
 import { reportedNumber } from "./usage-values.ts";
 import { NativeReadiness } from "./readiness.ts";
 import { SessionLists } from "./session-lists.ts";
+import { DeliveryIndex } from "@otk/harness";
+import { scanDeliveries } from "./delivery.ts";
 
 export interface DigestSnapshot {
   helper?: HelperSummary;
@@ -79,7 +83,7 @@ export interface OpencodeV1DigestReadiness {
   wait?<T>(readiness: Promise<T>, join?: boolean): Promise<T>;
   ioWait?<T>(readiness: Promise<T>, join?: boolean): Promise<T>;
   retryable?(error: unknown): boolean;
-  admission?(signal: AbortSignal): Promise<() => void>;
+  admission?: import("@otk/harness").DigestPort["admission"];
   work?(elapsedMs: number): void;
   listed?(
     entries: readonly SessionMetadata[],
@@ -286,6 +290,42 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.wait,
     );
     this.readers = {
+      "supervision.delivered": ({ ids, targets }, signal) => {
+        signal.throwIfAborted();
+        return Promise.resolve(this.delivered(ids, targets));
+      },
+      "supervision.deliveries": (input, signal) => {
+        signal.throwIfAborted();
+        const native = this.#native;
+        if (
+          !native || !(this.#nativeVerified || this.#projectVerified) ||
+          native.fileIdentity() !== native.identity
+        ) return Promise.resolve({ updates: [], reset: true });
+        const parent = native.db.prepare(
+          "SELECT time_updated FROM session WHERE id=?",
+        ).get(ids.decode(input.parentID));
+        if (!parent) return Promise.resolve({ updates: [], reset: true });
+        const index = new DeliveryIndex(
+          storage.sql,
+          "opcv1_delivery",
+          (run) => storage.transaction(run),
+          policy.publishrows,
+        );
+        return Promise.resolve(
+          index.step(
+            input,
+            native.identity,
+            Number(parent.time_updated),
+            (cursor) =>
+              scanDeliveries(
+                native.db,
+                input.parentID,
+                cursor,
+                policy.publishrows,
+              ),
+          ),
+        );
+      },
       "supervision.terminals": ({ after }, signal) => {
         signal.throwIfAborted();
         const native = this.#native;
@@ -431,6 +471,17 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.storage.diagnostic(undefined, error);
     }
   }
+  delivered(
+    keys: readonly string[],
+    targets?: Record<string, { parentID: string; runID: string }>,
+  ): import("@otk/harness").DeliveryScalar[] {
+    return new DeliveryIndex(
+      this.storage.sql,
+      "opcv1_delivery",
+      (run) => this.storage.transaction(run),
+      this.policy.publishrows,
+    ).facts(keys, targets);
+  }
   connection(value: number): void {
     if (value < this.#connection) return;
     if (!this.#connected || value !== this.#connection) {
@@ -504,7 +555,8 @@ export class OpencodeV1DigestSink implements DigestSink {
       created = -Infinity,
       cutoffCreated: number | undefined,
       // Native selection authority: the newest user-role message of any kind.
-      selection: Info | undefined;
+      selection: Info | undefined,
+      promptInfo: Info | undefined;
     let before: string | undefined;
     let satisfied = false;
     do {
@@ -533,6 +585,7 @@ export class OpencodeV1DigestSink implements DigestSink {
             (info.time.created === created && info.id > (prompt?.id ?? "")))
         ) {
           created = info.time.created;
+          promptInfo = info;
           prompt = {
             id: info.id,
             ...(typeof info.agent === "string" ? { agent: info.agent } : {}),
@@ -575,6 +628,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     } while (before && !satisfied);
     if (prompt && selection) {
       const { id } = prompt;
+      const variant = inheritedVariant(selection, promptInfo);
       prompt = {
         id,
         ...(typeof selection.agent === "string"
@@ -586,9 +640,7 @@ export class OpencodeV1DigestSink implements DigestSink {
               provider: selection.model.providerID,
               model: selection.model.modelID,
             },
-            ...(typeof selection.model.variant === "string"
-              ? { variant: selection.model.variant }
-              : {}),
+            ...(variant === undefined ? {} : { variant }),
           }
           : {}),
       };
@@ -843,6 +895,11 @@ export class OpencodeV1DigestSink implements DigestSink {
       >("/project", { signal });
       if (!projectFileMatches(native.db, reported)) return { projects };
       this.#projectVerified = true;
+      const repositories = await CheckoutRepositories.discover(
+        reported.flatMap((
+          project,
+        ) => [project.worktree, ...project.sandboxes ?? []]),
+      );
       let after = "";
       for (;;) {
         signal.throwIfAborted();
@@ -850,13 +907,16 @@ export class OpencodeV1DigestSink implements DigestSink {
           connection !== this.#connection ||
           native.fileIdentity() !== native.identity
         ) throw new Error("Project authority changed");
-        const page = projectSeeds(
-          native.db,
-          after,
-          this.policy.batch,
-          directory,
-          reported,
-          "opencode-v1:" + native.file,
+        const page = await repositories.seeds(
+          projectSeeds(
+            native.db,
+            after,
+            this.policy.batch,
+            directory,
+            reported,
+            "opencode-v1:" + native.file,
+          ),
+          signal,
         );
         if (!page.length) break;
         projects.push(...page);
@@ -876,22 +936,22 @@ export class OpencodeV1DigestSink implements DigestSink {
           for (const root of [project.worktree, ...project.sandboxes ?? []]) {
             if (known.has(root)) continue;
             known.add(root);
-            const empty = emptyProjectSeed(
+            const [empty] = await repositories.seeds([emptyProjectSeed(
               root,
               reported,
               "opencode-v1:" + native.file,
-            );
+            )], signal);
             projects.push(empty);
             await publish?.([empty]);
           }
         }
       }
       if (directory !== undefined && !projects.length) {
-        const empty = emptyProjectSeed(
+        const [empty] = await repositories.seeds([emptyProjectSeed(
           directory,
           reported,
           "opencode-v1:" + native.file,
-        );
+        )], signal);
         projects.push(empty);
         await publish?.([empty]);
       }
@@ -1412,6 +1472,12 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (metadata && metadata.id !== id) {
       throw new Error("Deletion metadata identity mismatch");
     }
+    new DeliveryIndex(
+      this.storage.sql,
+      "opcv1_delivery",
+      (run) => this.storage.transaction(run),
+      this.policy.publishrows,
+    ).retire(id);
     const saved = this.storage.read(id);
     const previous = saved ??
       (metadata

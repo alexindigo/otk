@@ -1,0 +1,67 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-subagent-list {
+  display: grid;
+  grid-template-columns: minmax(auto, 1fr) minmax(0, max-content)
+    var(--control-size);
+  column-gap: var(--space-3);
+  row-gap: var(--menu-row-gap);
+}
+.otk-subagent-list .otk-subagent-group,
+.otk-subagent-heading,
+.otk-subagent-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+.otk-subagent-heading {
+  padding: var(--menu-block-inset) var(--menu-item-inset);
+  border-block-end: 1px solid var(--overlay-border);
+}
+.otk-subagent-heading > * {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+.otk-subagent-terminate {
+  grid-column: 3;
+  min-inline-size: 0;
+}
+.otk-subagent-time {
+  white-space: nowrap;
+}
+.otk-subagent-navigation {
+  grid-column: 1;
+}
+.otk-subagent-meta {
+  grid-column: 2;
+  min-inline-size: 0;
+  display: flex;
+}
+.otk-subagent-facts {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+.otk-subagent-name {
+  inline-size: 100%;
+}
+.otk-subagent-name .otk-control-label {
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min)));
+}
+.otk-subagent-heading > * {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+button.otk-subagents-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  font-size: var(--text-meta);
+  line-height: var(--icon-compact);
+}
+.otk-subagents-clear > svg {
+  flex: none;
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}

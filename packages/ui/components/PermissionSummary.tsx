@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./PermissionSummary.css" with { type: "text" };
+import CodeBlock from "./CodeBlock.tsx";
 import { For, Match, Show, Switch } from "solid-js";
+import Disclosure from "./Disclosure.tsx";
 import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
 
 const detailOf = <K extends PermissionDetail["kind"]>(
@@ -11,7 +13,12 @@ const detailOf = <K extends PermissionDetail["kind"]>(
 
 /** The exact action and requested scope, shared by every approval surface. */
 export default function PermissionSummary(
-  props: { request: PermissionRequest; compact?: boolean },
+  props: {
+    request: PermissionRequest;
+    compact?: boolean;
+    placement?: string;
+    focusHome?(): void;
+  },
 ) {
   if (props.compact) {
     const target = () => {
@@ -38,7 +45,10 @@ export default function PermissionSummary(
         <Match when={detailOf(props.request.detail, "bash")}>
           {(detail) => (
             <>
-              <pre class="otk-permission-command">{detail().command}</pre>
+              <CodeBlock
+                source={{ kind: "request", text: detail().command }}
+                textClass="otk-permission-command"
+              />
               <Show when={detail().cwd}>
                 <p class="otk-muted otk-path">{detail().cwd}</p>
               </Show>
@@ -65,14 +75,30 @@ export default function PermissionSummary(
           {(detail) => <p>{detail().summary}</p>}
         </Match>
       </Switch>
-      <details class="otk-permission-patterns">
-        <summary>Requested scope</summary>
-        <ul>
-          <For each={props.request.patterns} keyed={false}>
-            {(pattern) => <li class="otk-path">{pattern()}</li>}
-          </For>
-        </ul>
-      </details>
+      <div class="otk-permission-patterns">
+        <Disclosure
+          kind="permissionScope"
+          variant="label"
+          identity={{ scope: props.request.id, id: props.placement ?? "dock" }}
+          label="Requested scope"
+          meta={() => (
+            <span class="otk-control-label">
+              {props.request.patterns.length}{" "}
+              {props.request.patterns.length === 1 ? "pattern" : "patterns"}
+            </span>
+          )}
+          hasContent={() => props.request.patterns.length > 0}
+          focusHome={props.focusHome}
+        >
+          {() => (
+            <ul>
+              <For each={props.request.patterns} keyed={false}>
+                {(pattern) => <li class="otk-path">{pattern()}</li>}
+              </For>
+            </ul>
+          )}
+        </Disclosure>
+      </div>
     </div>
   );
 }

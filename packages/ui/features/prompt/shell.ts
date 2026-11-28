@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
+import { requireCommittedSend } from "@otk/client";
 export function registerShellPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "shell",
@@ -29,17 +30,27 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         ),
       );
       return {
-        async submit(draft, parts, selection) {
+        async submit(draft, parts, selection, capture) {
           if (draft.mode !== "shell") return false;
-          await ctx.submit((options) =>
-            ctx.rpc("session.shell", {
-              sessionID: ctx.sessionID(),
-              command: parts.filter((p) => p.kind === "text").map((p) => p.text)
-                .join("\n"),
-              agent: selection.agent,
-              model: selection.model,
-            }, options)
+          const outcome = await ctx.submit(
+            (options, dispatch, messageID) => {
+              dispatch();
+              return ctx.rpc("session.shell", {
+                sessionID: ctx.sessionID(),
+                messageID,
+                command: parts.filter((p) => p.kind === "text").map((p) =>
+                  p.text
+                )
+                  .join("\n"),
+                agent: selection.agent,
+                model: selection.model,
+              }, options);
+            },
+            "composer",
+            undefined,
+            capture,
           );
+          requireCommittedSend(outcome);
           return true;
         },
         enabled: () =>
@@ -47,7 +58,7 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         label: () => ctx.props.value.mode === "shell" ? "Shell" : "Prompt",
         placeholder: () =>
           ctx.props.value.mode === "shell"
-            ? "Run a shell command…"
+            ? "Run a shell command..."
             : "Ask for a change, @ to add files, / for commands",
         key(event) {
           const { start, end } = ctx.selection();

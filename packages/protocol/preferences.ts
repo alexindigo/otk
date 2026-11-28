@@ -35,10 +35,15 @@ export const isPreference: PreferenceRegistry["validate"] = preferences.validate
 export { registerDiffPreferences } from "./preferences/diff.ts";
 export {
   isProjectLocation,
+  isSessionTreeKind,
+  projectLayoutKey,
   type ProjectLocation,
   registerLayoutPreferences,
+  type SessionTreeKind,
+  type SessionTreeTarget,
   SHELL_WIDTHS,
   type ShellLayout,
+  treeLayoutKey,
 } from "./preferences/layout.ts";
 export { registerKeymapPreferences } from "./preferences/keymap.ts";
 export { registerNotificationPreferences } from "./preferences/notifications.ts";
@@ -50,7 +55,11 @@ export {
 } from "./preferences/models.ts";
 export { isThemeId, registerThemePreferences } from "./preferences/theme.ts";
 export { registerTranscriptPreferences } from "./preferences/transcript.ts";
-export { registerVisualPreferences } from "./preferences/visual.ts";
+export {
+  registerVisualPreferences,
+  TEXT_SIZES,
+  type TextSize,
+} from "./preferences/visual.ts";
 export {
   DEFAULT_PROJECT_AGEING,
   registerInboxPreferences,

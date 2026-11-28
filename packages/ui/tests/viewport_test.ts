@@ -2,6 +2,141 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { acquireViewport, followViewport } from "../components/viewport.ts";
 
+Deno.test("viewport rejects an ineligible row at capture, remap and navigation", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    const retained: string[] = [];
+    const anchorable = (key: string) => key !== "gap";
+    const unregister = owner.register({
+      id: "rows",
+      depth: 1,
+      anchorable,
+      anchor: (eligible?: typeof anchorable) => ({
+        key: ["gap", "reply"].find(eligible ?? (() => true))!,
+        offset: 0,
+      }),
+      resolve: () => 400,
+      retain: ({ key }) => {
+        retained.push(key);
+        return () => {};
+      },
+    });
+    try {
+      owner.input(400);
+      for (let i = 0; i < 4; i++) flush();
+      assertEquals(retained, ["reply"]);
+      owner.remap("rows", () => ({ key: "gap", offset: 0 }));
+      const positioned = owner.navigate(() => ({
+        start: 400,
+        end: 420,
+        measured: true,
+        anchor: { id: "rows", key: "gap", start: 400 },
+      }), { intent: "user" });
+      for (let i = 0; i < 4; i++) flush();
+      await positioned;
+      assertEquals(retained, ["reply", "reply"]);
+    } finally {
+      unregister();
+      lease.release();
+    }
+  });
+});
+
+Deno.test("scrollbar input retires follow and commits proportional navigation through the position owner", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    try {
+      owner.input(400);
+      flush();
+      await Promise.resolve();
+      assertEquals(pane.scrollTop, 400);
+      assertEquals(owner.snapshot().scrollTop, 400);
+      assertEquals(owner.following(), false);
+      owner.input(900);
+      flush();
+      await Promise.resolve();
+      assertEquals(owner.following(), true);
+      assertEquals(owner.snapshot().scrollTop, 900);
+    } finally {
+      lease.release();
+    }
+  });
+});
+
+Deno.test("automatic measured positioning does not take follow intent", async () => {
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    try {
+      const positioned = owner.navigate(() => ({
+        start: 200,
+        end: 220,
+        measured: true,
+      }), { align: "start" });
+      flush();
+      await positioned;
+      assertEquals(pane.scrollTop, 200);
+      assertEquals(owner.following(), true);
+      owner.transaction(() => height(1072));
+      assertEquals(pane.scrollTop, 972);
+    } finally {
+      lease.release();
+    }
+  });
+});
+
+Deno.test("a measured reveal at the tail keeps its own anchor through growth and non-scroll input", async () => {
+  await viewportFixture(async ({ pane, height, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    let start = 915;
+    const unregister = owner.register({
+      id: "rows",
+      depth: 1,
+      anchor: () => ({ key: "reader", offset: pane.scrollTop }),
+      resolve: (anchor) =>
+        (anchor.key === "reveal" ? start : 0) + anchor.offset,
+    });
+    try {
+      const revealed = owner.navigate(() => ({
+        start,
+        end: start + 20,
+        measured: true,
+        anchor: { id: "rows", key: "reveal", start },
+      }), { intent: "user" });
+      flush();
+      await revealed;
+      assertEquals(owner.following(), false);
+      assertEquals(pane.scrollTop, 900);
+      // An automatic reveal cannot replace that reading position.
+      const automatic = owner.navigate(() => ({
+        start: 200,
+        end: 220,
+        measured: true,
+      }));
+      flush();
+      await automatic;
+      assertEquals(pane.scrollTop, 900);
+      // An unrelated press is not a request to scroll or to re-anchor.
+      pane.dispatchEvent(new Event("pointerdown"));
+      owner.transaction(() => height(1072));
+      assertEquals(pane.scrollTop, 900);
+      owner.transaction(() => {
+        start += 72;
+        height(1144);
+      });
+      assertEquals(start - pane.scrollTop, 15);
+      const latest = owner.latest(async () => {});
+      await Promise.resolve();
+      flush();
+      await latest;
+      assertEquals(pane.scrollTop, 1044);
+      assertEquals(owner.following(), true);
+    } finally {
+      unregister();
+      lease.release();
+    }
+  });
+});
+
 Deno.test("current return-source acquisition retains ordinary measured restoration", async () => {
   await viewportFixture(async ({ pane, flush }) => {
     const lease = acquireViewport(pane), owner = lease.owner;
@@ -12,7 +147,7 @@ Deno.test("current return-source acquisition retains ordinary measured restorati
         owner.keepAnchor();
         await owner.navigate(
           () => ({ start: 200, end: 250, measured: true }),
-          "start",
+          { align: "start" },
         );
       });
       await Promise.resolve();
@@ -112,7 +247,7 @@ for (const supersede of ["input", "retire", "navigation"]) {
             start: 300,
             end: 400,
             measured: true,
-          }));
+          }), { intent: "user" });
         } else {
           const event = new Event("wheel");
           Object.defineProperty(event, "deltaY", { value: -48 });
@@ -412,7 +547,7 @@ Deno.test("reveal completes when its relative geometry is measured while precedi
       result = lease.owner.navigate(() => {
         start += 20;
         return { start, end: start + 20, measured: true };
-      }, "center");
+      }, { align: "center", intent: "user" });
       void result.catch(() => {});
       for (let i = 0; i < 5; i++) flush();
     } finally {
@@ -577,6 +712,9 @@ function viewportFixture(
     scrollHeight = 1000;
     clientHeight = 100;
     #top = 0;
+    getBoundingClientRect() {
+      return { left: 0 };
+    }
     get scrollTop() {
       // Native clamping changes the stored offset; it cannot resurrect when a
       // later layout grows the scroll range again.
@@ -684,6 +822,33 @@ Deno.test("viewport position publications coalesce and retirement suppresses pen
   }, { tail: false });
 });
 
+Deno.test("sibling window measurements publish one viewport revision", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane);
+    try {
+      flush();
+      await Promise.resolve();
+      const measured: string[] = [];
+      const published: string[][] = [];
+      lease.owner.subscribe(() => published.push([...measured]));
+      lease.owner.measure(() => measured.push("first"));
+      const cancel = lease.owner.measure(() => measured.push("cancelled"));
+      lease.owner.measure(() => measured.push("second"));
+      cancel();
+      assertEquals(measured, []);
+      flush();
+      await Promise.resolve();
+      assertEquals(published, [["first", "second"]]);
+      lease.owner.measure(() => measured.push("retired"));
+      lease.release();
+      flush();
+      assertEquals(measured, ["first", "second"]);
+    } finally {
+      lease.release();
+    }
+  }, { tail: false });
+});
+
 Deno.test("explicit transcript position supersedes queued follow before or after its scroll notification", () => {
   for (const notify of [false, true]) {
     viewportFixture(({ pane, height, resize, flush }) => {
@@ -724,7 +889,7 @@ Deno.test("a pending reveal survives native clamping of the previous position", 
     try {
       result = lease.owner.navigate(
         () => ({ start: 200, end: 220, measured: true }),
-        "start",
+        { align: "start", intent: "user" },
       );
       void result.catch(() => {});
       // Layout can shrink and grow the native range before its scroll event is
@@ -902,6 +1067,8 @@ Deno.test("one geometry snapshot publishes committed bottom, intent and acquired
     const snapshot = owner.snapshot();
     assertEquals(snapshot.distanceFromBottom, 0);
     assertEquals(snapshot.viewportHeight, 100);
+    assertEquals(snapshot.contentHeight, 1400);
+    assertEquals(snapshot.scrollTop, 1300);
     assertEquals(snapshot.following, true);
     assertEquals(snapshot.history, {
       first: "first",

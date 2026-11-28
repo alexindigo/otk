@@ -4,6 +4,7 @@ import {
   createSignal,
   createUniqueId,
   type Element,
+  onCleanup,
   onSettled,
   useContext,
 } from "solid-js";
@@ -14,6 +15,7 @@ import {
   CommandHub,
 } from "@otk/client";
 import type { Keyboard } from "./dispatcher.ts";
+import type { SelectionFocusGroup } from "./focus.ts";
 export interface CommandPorts {
   commands: CommandHub;
   keyboard?: Keyboard;
@@ -40,6 +42,21 @@ export function CommandProvider(
 export function useCommandPorts(): CommandPorts {
   return useContext(Context) ?? { commands: new CommandHub() };
 }
+
+/** Register this item's own selection and control; the shell decides when to move focus. */
+export function selectionFocus(
+  group: SelectionFocusGroup,
+  selected: () => boolean,
+  home: () => HTMLElement | undefined,
+): (root: HTMLElement) => void {
+  const owner = useCommandPorts().keyboard?.focusOwner;
+  let release: (() => void) | undefined;
+  onCleanup(() => release?.());
+  return (root) => {
+    release?.();
+    release = owner?.item(root, { group, selected, home });
+  };
+}
 /** Current shortcut presentation from the same command descriptors as menus. */
 export function commandHints(ports: CommandPorts): {
   keys(id: string): string;
@@ -65,7 +82,7 @@ export function commandHints(ports: CommandPorts): {
       : ports.commands.keys(id);
     return [...new Set(values.filter(Boolean))].map((key) =>
       key.split("+").map((part) => part === "Escape" ? "Esc" : part).join("+")
-    ).join(" / ");
+    ).join(" or ");
   };
   return {
     keys,
@@ -79,7 +96,7 @@ export function commandHints(ports: CommandPorts): {
 export function ownedCommand<A = void, R = void>(
   ports: CommandPorts,
   command: CommandDefinition<A, R>,
-): (args: A) => Promise<R> {
+): (args: A, context?: import("@otk/client").CommandContext) => Promise<R> {
   let mounted = false;
   onSettled(() => {
     const release = ports.commands.register<A, R>(command);
@@ -89,9 +106,9 @@ export function ownedCommand<A = void, R = void>(
       release();
     };
   });
-  return (args) =>
+  return (args, context) =>
     mounted
-      ? ports.commands.run<R>(command.id, args)
+      ? ports.commands.run<R>(command.id, args, context)
       : Promise.reject(new Error(`Command owner inactive: ${command.id}`));
 }
 /** Independently mountable controls get isolated, owner-scoped action IDs. */

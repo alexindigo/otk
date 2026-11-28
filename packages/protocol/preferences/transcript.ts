@@ -17,6 +17,8 @@ export interface TranscriptPreferences {
   expandRecords: boolean;
   expandSource: boolean;
   expandCompaction: boolean;
+  expandStepMarkers: boolean;
+  expandSnapshots: boolean;
 }
 export function registerTranscriptPreferences(
   registry: PreferenceRegistry,
@@ -45,10 +47,10 @@ export function registerTranscriptPreferences(
   });
   registry.register({
     key: "timestamps",
+    // Retain stored/API compatibility; D21 makes message clocks unconditional.
     default: false,
     validate: booleanPreference,
     label: "Always show timestamps",
-    display: { order: 1, control: { kind: "toggle" } },
   });
   registry.register({
     key: "toolDetails",
@@ -104,9 +106,15 @@ export function registerTranscriptPreferences(
       control: { kind: "toggle", onValue: "show", offValue: "hide" },
     },
   });
+  // Retained for stored/API compatibility; D74 removed the transcript Work log.
+  registry.register({
+    key: "expandWork",
+    default: false,
+    validate: booleanPreference,
+    label: "Expand work logs by default",
+  });
   for (
     const [key, label, order] of [
-      ["expandWork", "Expand work logs by default", 1],
       ["expandToolOutput", "Expand tool output by default", 2],
       ["expandSystem", "Expand System rows by default", 5],
       ["expandDelegation", "Expand subagent results by default", 6],
@@ -114,6 +122,8 @@ export function registerTranscriptPreferences(
       ["expandRecords", "Expand other native records by default", 8],
       ["expandSource", "Expand native source by default", 9],
       ["expandCompaction", "Always keep session compaction expanded", 10],
+      ["expandStepMarkers", "Expand step markers by default", 11],
+      ["expandSnapshots", "Expand snapshots by default", 12],
     ] as const
   ) {
     registry.register({

@@ -4,6 +4,8 @@ import {
   CommandHub,
   createDrafts,
   errorFeedback,
+  type Feedback,
+  type FeedbackOwner,
   type SessionRevert,
   type SessionRevertState,
 } from "@otk/client";
@@ -21,11 +23,40 @@ export default function Notices(props: { prefs: Preferences }) {
   const [mode, setMode] = createSignal("strip");
   const drafts = createDrafts(solidState),
     write = drafts.writer("theme-notice");
-  const operation = solidState<SessionRevertState>({});
+  const record = {
+    boundaryID: "prompt",
+    messageIDs: ["prompt"],
+    files: [],
+    prompt: {
+      input: "Captured prompt",
+      mode: "normal" as const,
+      parts: [],
+      time: 1,
+    },
+  };
+  const operation = solidState<SessionRevertState>({ phase: "saved", record });
+  let current: Feedback | undefined;
+  const listeners = new Set<() => void>();
+  const feedback: FeedbackOwner = {
+    current: () => current,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    fail() {},
+    clear() {},
+  };
   const commands = new CommandHub();
   const rollback: SessionRevert = {
     state: operation.state,
     matches: () => true,
+    ready: () => undefined,
+    confirm: () => Promise.resolve(),
+    cancel() {},
+    retry: () => Promise.resolve(),
+    dismiss() {},
     revertTo: () => Promise.resolve(),
     restore: () => Promise.resolve(),
     undo: () => Promise.resolve(),
@@ -46,14 +77,26 @@ export default function Notices(props: { prefs: Preferences }) {
     prefs: () => props.prefs,
     dirty() {},
     act: (action) => action(),
-    submit: (action) => action(),
+    submit: async (action) => {
+      await action(undefined, () => {}, "msg_fixture");
+      return { kind: "committed", messageID: "msg_fixture" };
+    },
     history: () => Promise.resolve([]),
     attachments: (parts) => Promise.resolve(parts),
+    feedback,
   };
   const select = (value: string) => {
     setMode(value);
     operation.update((state) => {
       state.pending = value === "pending" ? "revert" : undefined;
+      state.record = ["strip", "pending", "error"].includes(value)
+        ? record
+        : undefined;
+      state.phase = value === "pending"
+        ? "staging"
+        : value === "error"
+        ? "failed"
+        : "saved";
       state.error = value === "error"
         ? errorFeedback("The requested rollback is no longer available", {
           actionLabel: "Rolling back conversation",
@@ -64,11 +107,35 @@ export default function Notices(props: { prefs: Preferences }) {
         })
         : undefined;
     });
+    current = value === "notice-error"
+      ? errorFeedback("The requested rollback is no longer available", {
+        actionLabel: "Rolling back conversation",
+        target: {
+          sessionID: "tstv1-theme-notice",
+          label: "Public composer notice",
+        },
+      })
+      : value === "notice-pending"
+      ? { kind: "pending", text: "Saving response" }
+      : value === "notice"
+      ? { kind: "info", text: "Captured browser-local feedback" }
+      : undefined;
+    for (const listener of listeners) listener();
   };
   return (
     <CommandProvider commands={commands}>
       <nav aria-label="Public notice state">
-        <For each={["strip", "pending", "error", "fork"]}>
+        <For
+          each={[
+            "strip",
+            "pending",
+            "error",
+            "notice",
+            "notice-pending",
+            "notice-error",
+            "fork",
+          ]}
+        >
           {(value) => (
             <button
               type="button"
@@ -100,7 +167,6 @@ export default function Notices(props: { prefs: Preferences }) {
             connected
             prefs={props.prefs}
             permissions={[]}
-            siblings={[]}
             onOpenChild={() => {}}
             child={false}
             revert={null}
@@ -108,23 +174,11 @@ export default function Notices(props: { prefs: Preferences }) {
             draft={drafts.get("theme-notice")}
             onDraft={write}
             onPrompt={() => Promise.resolve()}
-            onAbort={() => Promise.resolve()}
+            activity={() => ({ running: false, unstarted: 0 })}
+            onStop={() => Promise.resolve()}
             onOlder={() => Promise.resolve()}
             onRetry={() => Promise.resolve()}
             rollback={rollback}
-            strip={mode() === "strip"
-              ? {
-                count: 1,
-                preview: "Captured prompt",
-                prompts: [{
-                  messageID: "prompt",
-                  preview: "Captured prompt",
-                  time: 1,
-                }],
-                more: 0,
-                files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
-              }
-              : undefined}
             forkNote={mode() === "fork"
               ? { from: "Original conversation" }
               : undefined}

@@ -8,7 +8,11 @@ import {
 } from "../../registries/session.tsx";
 import Form, { FormInput } from "../../components/Form.tsx";
 import Dialog from "../../components/surface/Dialog.tsx";
-import ListRow from "../../components/ListRow.tsx";
+import SidebarRow, {
+  SidebarFeedback,
+  SidebarFrame,
+} from "../../components/SidebarRow.tsx";
+import { TreeNode } from "../../components/Tree.tsx";
 import TitleEditor, { TitleFeedback } from "../../components/TitleEditor.tsx";
 import Prompt from "../../components/Prompt.tsx";
 import AuthColumn from "../../components/AuthColumn.tsx";
@@ -99,15 +103,40 @@ function InlineScene() {
   return (
     <section aria-label="Session name" class="feedback-stability-inline">
       <h2>Rename session</h2>
-      <ListRow
-        as="div"
+      <TreeNode
+        path={[]}
+        class="otk-sidebar-tree"
         selected
-        editing
-        feedback={<TitleFeedback owner={owner} id="rename-feedback" />}
-        trailing={<button type="button">Session actions</button>}
-      >
-        <TitleEditor owner={owner} feedbackID="rename-feedback" />
-      </ListRow>
+        node={() => null}
+        frame={({ class: surface, children }) => (
+          <SidebarFrame
+            frame={{ selected: true, class: `${surface} otk-session-row` }}
+          >
+            {children}
+          </SidebarFrame>
+        )}
+        feedback={() => (
+          <SidebarFeedback>
+            <TitleFeedback owner={owner} id="rename-feedback" />
+          </SidebarFeedback>
+        )}
+        header={() => (
+          <SidebarRow
+            editing={owner.editing}
+            control={<button type="button">Session actions</button>}
+            title={{ text: "Original task", pending: owner.state.pendingTitle }}
+            editor={owner.editing
+              ? (
+                <TitleEditor
+                  owner={owner}
+                  feedbackID="rename-feedback"
+                  label="Rename session"
+                />
+              )
+              : undefined}
+          />
+        )}
+      />
     </section>
   );
 }
@@ -127,7 +156,10 @@ function StandaloneScene() {
     prefs: () => DEFAULT_PREFS,
     dirty() {},
     act: (action) => action(),
-    submit: (action) => action(),
+    submit: async (action) => {
+      await action(undefined, () => {}, "msg_fixture");
+      return { kind: "committed", messageID: "msg_fixture" };
+    },
     history: () => Promise.resolve([]),
     attachments: (parts) => Promise.resolve(parts),
   };
@@ -145,7 +177,8 @@ function StandaloneScene() {
             settled = Promise.withResolvers<void>();
             return settled.promise;
           }}
-          onAbort={() =>
+          activity={() => ({ running: true, unstarted: 0 })}
+          onStop={() =>
             Promise.resolve()}
         />
       </SessionProvider>

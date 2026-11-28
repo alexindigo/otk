@@ -3,10 +3,58 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
-import { activity, collapsed, visibleOnScreen } from "../../pages/sessions.ts";
+import {
+  activity,
+  collapsed,
+  sessionContext,
+  visibleOnScreen,
+} from "../../pages/sessions.ts";
 
 test.describe("task tabs", () => {
   test.use({ profile: "contract-sessions-tabs" });
+  test(
+    "sessions.human-task-identity-helper-crumb-attention-sticky-and-reload",
+    {
+      tag: ["@sessions", "@contracts", "@isolated"],
+    },
+    async ({ isolatedState: state, page }) => {
+      const root = "tstv1-otk", helper = "tstv1-helper";
+      await activity(state, helper, "hold");
+      await openSession(state, page, root);
+      const assertTask = async () => {
+        await expect(page.locator(`[data-tab="${helper}"]`)).toHaveCount(0);
+        await expect(page.locator(`[data-tab="${root}"]`)).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        await expect(
+          page.getByRole("button", { name: /^Subagents:/ }),
+        ).toHaveAccessibleName("Subagents: 1 running");
+      };
+      await assertTask();
+      await expect(page.locator(`[data-crumb="${helper}"]`)).toHaveCount(0);
+      await page.getByRole("button", { name: /^Subagents:/ })
+        .click();
+      await page.locator(`[data-subagent="${helper}"] .otk-subagent-name`)
+        .click();
+      await expect(page).toHaveURL(new RegExp(`${helper}$`));
+      await assertTask();
+      await page.reload();
+      await assertTask();
+      const project = page.locator(
+        `.otk-project-row[data-project=${JSON.stringify(state.directory)}]`,
+      );
+      await project.locator(".otk-sidebar-lamp-action").click();
+      await expect(page).toHaveURL(new RegExp(`${helper}$`));
+      await assertTask();
+      await openSession(state, page, "tstv1-atmosphera");
+      await project.locator(".otk-project-open").click();
+      await expect(page).toHaveURL(new RegExp(`${helper}$`));
+      await assertTask();
+      expect(await state.product("tasks.list", { directory: state.directory }))
+        .toEqual([]);
+    },
+  );
   test(
     "sessions.task-tabs-native-create-rename-order-close-crumbs-meter-draft-and-reload",
     { tag: ["@sessions", "@contracts", "@isolated"] },
@@ -34,8 +82,9 @@ test.describe("task tabs", () => {
         "aria-current",
         "page",
       );
-      await expect(page.locator("[data-crumb=tstv1-helper][data-helper=true]"))
-        .toBeVisible();
+      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^Subagents:/ }))
+        .toHaveAccessibleName("Subagents: 2 running");
       await expect(page.locator(".otk-context-meter")).toHaveAttribute(
         "data-tokens",
         "2670",
@@ -46,13 +95,14 @@ test.describe("task tabs", () => {
       );
       await expect(page.locator(".otk-context-meter")).not.toContainText("%");
       await expect(page.locator(".otk-context-bar")).toHaveCount(0);
-      await page.locator("[data-crumb=tstv1-helper]").click();
+      await page.locator('[data-session="tstv1-helper"]').click();
       await expect(page).toHaveURL(/tstv1-otk\/tstv1-helper$/);
+      await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveCount(0);
+      await page.locator('[data-session="tstv1-nested"]').click();
       await expect(page.locator("[data-crumb=tstv1-nested]")).toHaveAttribute(
         "data-depth",
         "2",
       );
-      await page.locator("[data-crumb=tstv1-nested]").click();
       await expect(page).toHaveURL(/tstv1-otk\/tstv1-nested$/);
       await page.locator("[data-crumb=tstv1-helper]").click();
       await page.reload();
@@ -64,7 +114,8 @@ test.describe("task tabs", () => {
         "aria-selected",
         "true",
       );
-      await page.locator("[data-crumb=tstv1-second]").click();
+      await expect(page.locator("[data-crumb=tstv1-second]")).toHaveCount(0);
+      await openSession(state, page, "tstv1-second");
       await expect(page).toHaveURL(/tstv1-second$/);
       await page.locator(`[data-tab="${plan.id}"]`).click();
       await page.locator(`[data-tab="${exec.id}"]`).click();
@@ -102,39 +153,65 @@ test.describe("task tabs", () => {
         });
         await expect(page.locator(".otk-tab-open").first()).toHaveAttribute(
           "data-tab",
-          exec.id,
+          ids[0],
         );
       }
       expect(
         (await state.product("tasks.list", { directory: state.directory }))
           .sort((a, b) => a.order - b.order).map((t) => t.id),
       ).toEqual([exec.id, plan.id]);
+      await openSession(state, page, "tstv1-otk");
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
-      // Unseen helper finishes stay visible until acknowledged (AXIOM 1).
+      // D76: acknowledging a finish retires attention, not an explicit open.
+      const helper = "tstv1-helper", nested = "tstv1-nested";
       const helpers = page.locator(
-        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
+        `[data-session=${helper}], [data-session=${nested}]`,
       );
       await expect(helpers.locator(".otk-status-light[data-state=finished]"))
         .toHaveCount(2);
+      await expect(page.locator(
+        "[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]",
+      )).toHaveCount(0);
+      const pill = page.getByRole("button", { name: /^Subagents:/ });
+      await expect(pill).toHaveAccessibleName("Subagents: 2 finished");
+      await pill.click();
+      const menu = page.getByRole("menu", { name: "Subagents" });
+      const agent = (id: string) => menu.locator(`[data-subagent=${id}]`);
+      await expect(agent(helper)).toBeVisible();
+      await expect(agent(nested)).toBeVisible();
       const finishes = await state.product("sessions.finishes", {});
-      for (const sessionID of ["tstv1-helper", "tstv1-nested"]) {
-        await state.product("sessions.seen", {
-          sessionID,
-          terminal: finishes[sessionID],
-        });
-      }
-      await expect(helpers).toHaveCount(0);
+      await state.product("sessions.seen", {
+        sessionID: helper,
+        terminal: finishes[helper],
+      });
+      await expect(pill).toHaveAccessibleName(
+        "Subagents: 1 finished, 1 opened",
+      );
+      await expect(agent(helper)).toBeVisible();
+      await expect(agent(nested)).toBeVisible();
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "release",
+        target: "trail-delivery",
+        sessionID: nested,
+      });
+      await expect(helpers.locator(".otk-status-light[data-state=finished]"))
+        .toHaveCount(0);
+      await expect(pill).toHaveAccessibleName("Subagents: 2 opened");
+      await expect(agent(nested)).toBeVisible();
+      await page.getByRole("button", { name: "Clear finished" }).click();
+      await expect(pill).toHaveCount(0);
+      await expect(menu.locator("[data-subagent]")).toHaveCount(0);
       await expect(
         page.locator("[data-tab=tstv1-helper], [data-tab=tstv1-nested]"),
       )
         .toHaveCount(0);
       await page.locator(".otk-new-session").click();
-      await expect(page.locator("[data-crumb]")).toHaveCount(3);
-      expect(
+      await expect(page.locator("[data-crumb]")).toHaveCount(1);
+      await expect.poll(async () =>
         (await state.product("tasks.list", { directory: state.directory }))
-          .find((t) => t.id === exec.id)!
-          .sessions,
+          .find((t) => t.id === exec.id)!.sessions
       ).toHaveLength(3);
       await page.reload();
       await expect(page.locator(".otk-tab-open").first()).toHaveAttribute(
@@ -165,20 +242,34 @@ test.describe("task tabs", () => {
       name: "Long chain",
       sessions: ids,
     });
-    await page.goto(`${state.url}/#/local/tstv1-otk`);
-    await expect(page.locator(".otk-folded-crumbs")).toBeVisible();
-    expect(await page.locator("[data-crumb]:visible").count()).toBeLessThan(10);
-    await page.locator(".otk-folded-crumbs > button").click();
-    const choice = page.locator(".otk-folded-crumbs .otk-menu-items button")
-      .nth(1);
-    const id = await choice.getAttribute("data-overflow-target");
-    expect(ids).toContain(id);
-    await choice.click();
-    await expect(page.locator(`[data-crumb="${id}"]`)).toHaveAttribute(
-      "aria-current",
-      "page",
+    for (const id of ids.slice(1)) await activity(state, id, "hold");
+    await page.setViewportSize({ width: 900, height: 1000 });
+    await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-chain-8`);
+    const chip = page.getByRole("button", {
+      name: /^Subagents:/,
+    });
+    const trail = page.locator(".otk-trail");
+    const current = trail.locator('[data-crumb][aria-current="page"]');
+    await expect(chip).toBeVisible();
+    // WP9 keeps every D67 ancestor navigable when compact titles cannot fit.
+    await expect(trail.locator("a[data-crumb]")).toHaveCount(ids.length);
+    await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
+      "data-fit-mode",
+      "scroll",
     );
+    await expect(current).toHaveAttribute("data-crumb", "tstv1-chain-8");
+    await expect(current).toBeInViewport({ ratio: 0.99 });
+    await current.focus();
+    await page.keyboard.press("Shift+Tab");
+    await expect(trail.locator("[data-crumb=tstv1-chain-7]")).toBeFocused();
+    await chip.click();
+    const id = "tstv1-chain-6";
+    const choice = page.getByRole("menu", { name: "Subagents" }).locator(
+      `[data-subagent="${id}"]`,
+    );
+    await choice.locator(".otk-subagent-name").click();
     await expect(page).toHaveURL(new RegExp(`${id}$`));
+    await expect(current).toHaveAttribute("data-crumb", id);
     await expect(page.locator(`[data-tab="${task.id}"]`)).toHaveAttribute(
       "aria-selected",
       "true",
@@ -188,7 +279,8 @@ test.describe("task tabs", () => {
       "data-otk-reduced-colors",
       "",
     );
-    await expect(page.locator(`[data-crumb="${id}"] .otk-lamp-shape`))
+    await chip.click();
+    await expect(choice.locator(".otk-lamp-shape"))
       .toHaveCSS("display", "block");
   });
 });
@@ -323,6 +415,9 @@ test.describe("phantom ownership", () => {
           0,
       });
       await page.locator(`[data-tab="${task.id}"]`).click();
+      // D76: an explicitly opened phantom stays reachable after leaving it.
+      await visibleOnScreen(page.locator("[data-tab=tstv1-otk]"));
+      await sessionContext(page, "[data-tab=tstv1-otk]", "session.close");
       await expect(page.locator("[data-tab=tstv1-otk]")).toHaveCount(0);
       expect(await state.product("session.get", { sessionID: "tstv1-otk" }))
         .toBeTruthy();

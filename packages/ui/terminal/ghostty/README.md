@@ -1,5 +1,10 @@
 # Ghostty browser renderer
 
+OTK's Run in terminal writes through one owner (`TerminalRuns` in @otk/client):
+a paste gesture through `paste`, then `submit` (Enter) right away, or after the
+user confirms. `erase` removes a pending paste. Programmatic writes are marked
+so user input can end a pending paste.
+
 Vendored from T3 Code (`pingdotgg/t3code`), commit
 `7462f234e89027943cf0d1a73d3ae1f36571d4e3`, `apps/web/src/terminal/ghostty/` and
 `apps/web/src/terminal-links.ts`. The prebuilt libghostty-vt assets use Ghostty
@@ -36,3 +41,9 @@ revokes pending clipboard paste intent without stopping its retained output
 parser. The scrollbar names the unique accessible output canvas it controls;
 terminal cells use physical left alignment independently of surrounding UI
 direction.
+
+The mount's computed font size and line height are the layout inputs for the
+canvas. An invisible `em`/`lh` probe wakes the same fit path as a viewport
+resize, even when text size changes without changing the mount's box. Fit
+measures cells in CSS pixels and requests the corresponding PTY grid; device
+pixel ratio configures the canvas backing store, not the application text size.

@@ -39,25 +39,39 @@ export async function helperParent(oc: BrowserNative) {
       },
     );
     const original = carrier.parts.find((part) => part.type === "tool")!;
-    await oc.request(
-      `/session/${parent.id}/message/${carrier.info.id}/part/${original.id}`,
-      {
-        method: "PATCH",
-        body: {
-          ...original,
-          tool: "task",
-          state: {
-            ...original.state,
-            input: {
-              description: `Inspection ${n + 1}`,
-              subagent_type: "general",
-              prompt: "Inspect",
+    const task = (
+      id: string,
+      callID: string | undefined,
+      description: string,
+    ) =>
+      oc.request(
+        `/session/${parent.id}/message/${carrier.info.id}/part/${id}`,
+        {
+          method: "PATCH",
+          body: {
+            ...original,
+            id,
+            callID,
+            tool: "task",
+            state: {
+              ...original.state,
+              input: {
+                description,
+                subagent_type: "general",
+                prompt: "Inspect",
+              },
+              metadata: { sessionId: child.nativeID },
             },
-            metadata: { sessionId: child.nativeID },
           },
         },
-      },
-    );
+      );
+    await task(original.id, original.callID, `Inspection ${n + 1}`);
+    // D74 / wl-5: Work inspects one reply. Keep two references to the same
+    // native helper in the last reply so both held progress cards can paint.
+    if (n === 9) {
+      const duplicate = crypto.randomUUID().replaceAll("-", "");
+      await task(`prt_${duplicate}`, `call_${duplicate}`, "Confirm inspection");
+    }
   }
   return { parent, child, work, tool };
 }

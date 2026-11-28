@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
 import {
+  ascendingID,
   type AttachmentPolicy,
   type CommandInput,
   type CommandOption,
@@ -197,6 +198,9 @@ export function commands(
         await selectAction(c, raw, input, operation);
         const submitSkillInput = !command &&
           (input.arguments.length > 0 || files.length > 0);
+        const messageID = submitSkillInput
+          ? input.messageID ?? ascendingID("msg")
+          : undefined;
         await c.effect(
           (api) =>
             command
@@ -225,6 +229,7 @@ export function commands(
             (api) =>
               api.session.prompt({
                 sessionID: raw.id,
+                id: messageID,
                 text: input.arguments,
                 files,
                 ...(raw.revert ? { skills: [{ id: skill!.id }] } : {}),
@@ -233,6 +238,12 @@ export function commands(
           );
         }
         if (operation) await c.settled(raw.id, operation);
+        return messageID ? { messageID, state: "queued" as const } : {
+          state: "unconfirmed" as const,
+          reason: `opencode completed the ${
+            command ? "command" : "skill"
+          }, but did not provide a way to confirm its message.`,
+        };
       }, operation);
     },
   };

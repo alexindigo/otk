@@ -9,6 +9,7 @@ import { Transcript } from "../transcript.ts";
 
 const sid = "opcv2-ses_fixture";
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,

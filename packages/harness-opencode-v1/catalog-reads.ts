@@ -13,6 +13,7 @@ import { opencodeV1SessionID as ids } from "./ids.ts";
 import type { SessionMetadata } from "@otk/protocol";
 import { readCatalogFiles } from "./catalog-files.ts";
 import { NativeReadiness } from "./readiness.ts";
+import { readProject, readRepository } from "./project-presentation.ts";
 
 /** Native endpoint knowledge stays with the contributing feature. No retained worker catalog. */
 export function catalogReaders(
@@ -21,6 +22,10 @@ export function catalogReaders(
 ): ProviderReaders {
   const metadata = new NativeReadiness(client.wait, metadataAdmission);
   return {
+    "catalog.project": ({ directory }, signal) =>
+      readProject(client, directory, signal),
+    "catalog.repository": ({ directory }, signal) =>
+      readRepository(client, directory, signal),
     "activity.status": async ({ directory }, signal) => {
       const statuses = await client.json<
         Record<

@@ -3,41 +3,127 @@ import type {
   AssistantMessage,
   ContentOp,
   Message,
+  MessagePage,
   Part,
   ReplyBoundary,
 } from "@otk/protocol";
 import {
+  canonicalRequest,
   compareMessages,
   isAssistantTerminal,
   isRealPrompt,
 } from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
 import { retainStreamMessage } from "./stream-last-good.ts";
+import type { CoverageGap } from "./acquired-range.ts";
+import type { SessionRevertState } from "./session-revert.ts";
+import type { PendingSend } from "./pending-send.ts";
+import {
+  createRecordProjection,
+  type RecordProjection,
+} from "./activity-spans.ts";
 
 export interface TranscriptReply {
   key: string;
   firstID: string;
   lastID: string;
   messageIDs: string[];
-  segments: { messageID: string; parts: Part[] }[];
+  segments: {
+    messageID: string;
+    turnID?: string;
+    parts: Part[];
+    agent?: string;
+    model?: AssistantMessage["model"];
+    time?: AssistantMessage["time"];
+  }[];
   message: Message;
   pending?: boolean;
+  send?: PendingSend;
   revision: number;
 }
 export interface TranscriptProjectionState {
+  /** New canonical tail rows, independent of paging, geometry and part edits. */
+  appendRevision: number;
   messageIDs: string[];
   messagesByID: Record<string, Message>;
   replyIDs: string[];
   repliesByID: Record<string, TranscriptReply>;
   queuedIDs: Set<string>;
+  records: RecordProjection;
 }
 export const replyKey = (message: Message): string =>
   (message.role === "assistant" ||
       message.role === "context" && message.replyTo !== undefined)
     ? `reply:${message.replyTo ?? message.id}`
     : message.id;
+export const revertRecordKey = (boundaryID: string) => `revert:${boundaryID}`;
+export const revertFlowBoundary = (
+  state: SessionRevertState,
+): string | undefined =>
+  state.record?.boundaryID ??
+    (state.phase === "staging" ? state.confirmation?.messageID : undefined);
+/** Display-only adjunct. Retained records never enter live body/sync ownership. */
+export function createRevertRecordProjection(): (
+  source: Pick<TranscriptProjectionState, "records" | "repliesByID">,
+  state: SessionRevertState,
+) => RecordProjection {
+  let revision = 0, previous: unknown[] = [];
+  return (source, state) => {
+    const boundaryID = revertFlowBoundary(state);
+    if (!boundaryID) return source.records;
+    const signature = [
+      source.records,
+      state.messages,
+      state.phase,
+      state.dismissed,
+      state.error,
+      boundaryID,
+    ];
+    if (signature.some((value, at) => value !== previous[at])) {
+      revision++;
+      previous = signature;
+    }
+    const key = revertRecordKey(boundaryID), messages = state.messages ?? [];
+    const anchor = messages.find((m) => m.id === boundaryID);
+    const members = [...new Set(messages.map(replyKey))];
+    const group = { key, members, title: "Reverted", revision };
+    const keys = [...source.records.keys];
+    const at = keys.findIndex((id) => {
+      const first = source.records.groups[id]?.members[0] ?? id;
+      const message = source.repliesByID[first]?.message;
+      return message &&
+        (anchor ? compareMessages(message, anchor) > 0 : state.record?.prompt &&
+          message.time.created > state.record.prompt.time);
+    });
+    keys.splice(at < 0 ? keys.length : at, 0, key);
+    return {
+      ...source.records,
+      keys,
+      revision: source.records.revision + revision,
+      groups: { ...source.records.groups, [key]: group },
+      revisions: { ...source.records.revisions, [key]: revision },
+    };
+  };
+}
 const compare = compareMessages;
 const dictionary = <T>(): Record<string, T> => Object.create(null);
+const sameJSON = (a: Message | Part, b: Message | Part): boolean =>
+  a === b || canonicalRequest(JSON.parse(JSON.stringify(a))) ===
+    canonicalRequest(JSON.parse(JSON.stringify(b)));
+const sameMessage = (a: Message, b: Message): boolean =>
+  a.id === b.id && sameJSON(a, b);
+
+function retainParts(previous: Message, next: Message): Message {
+  const byID = new Map(previous.parts.map((part) => [part.id, part]));
+  let reused = false;
+  const parts = next.parts.map((part) => {
+    const old = byID.get(part.id);
+    if (!old || !sameJSON(old, part)) return part;
+    reused ||= old !== part;
+    return old;
+  });
+  return reused ? { ...next, parts } : next;
+}
 /** Explicit neutral activity facts, shared by queue admission and presentation. */
 export function hasActiveRecord(message: Message): boolean {
   return message.role === "context" &&
@@ -62,12 +148,29 @@ function insert(
 }
 /** Sole canonical body and grouping owner. Compatibility arrays are explicit lazy reads. */
 export interface TranscriptProjection {
+  pendingSends(): readonly PendingSend[];
   readonly state: TranscriptProjectionState;
+  send(value: PendingSend): void;
+  /** Retire a local entry refused before native dispatch; committed source wins. */
+  cancelSend(messageID: string, withdrawn?: boolean): void;
+  started(messageID: string): boolean;
+  entry(messageID: string): TranscriptReply | undefined;
+  committed(messageID: string): boolean;
+  materialized(messageID: string): boolean;
+  releaseCommittedSends(): void;
   messages(): Message[];
-  clear(): void;
-  replace(messages: readonly Message[]): void;
+  reset(
+    messages: readonly Message[],
+    source?: { sameSource: boolean; keepParked: boolean },
+  ): void;
+  reconcile(
+    messages: readonly Message[],
+    source?: Pick<MessagePage, "clock" | "revisions">,
+  ): void;
   merge(messages: readonly Message[]): void;
   retain(ids: Set<string>): void;
+  park(ids: readonly string[]): void;
+  gaps(values: readonly CoverageGap[]): void;
   boundaries(values: readonly ReplyBoundary[]): void;
   boundary(turnID: string): ReplyBoundary | undefined;
   busy(value: boolean): boolean;
@@ -78,14 +181,27 @@ export interface TranscriptProjection {
   usesMetadata(ids: ReadonlySet<string>): boolean;
 }
 export function createTranscriptProjection(): TranscriptProjection {
+  const records = createRecordProjection();
+  let recordValue = records.reconcile([], {});
   const state: TranscriptProjectionState = {
+    appendRevision: 0,
     messageIDs: [],
     messagesByID: dictionary<Message>(),
     replyIDs: [],
     repliesByID: dictionary<TranscriptReply>(),
     queuedIDs: new Set(),
+    records: recordValue,
   };
   const parts = new Map<string, Map<string, number>>();
+  const witnesses = new Map<string, { epoch: string; revision: number }>();
+  const sends = new Map<string, PendingSend>();
+  const localParts = new Set<string>();
+  // A parked warm body stays in the canonical map but owns no ordered row or
+  // reply segment until a native cursor acquires its interval again.
+  const parked = new Set<string>();
+  const entryKey = (message: Message) =>
+    sends.get(message.id)?.intent.key ?? replyKey(message);
+  let replacing = false;
   const helperLinks = new Map<string, Map<string, string>>();
   const helperChildren = new Map<string, number>();
   const helperPart = (message: string, part: string, value?: Part) => {
@@ -129,6 +245,8 @@ export function createTranscriptProjection(): TranscriptProjection {
     touched = new Set<string>();
   let userOrder: string[] = [], unfinishedOrder: string[] = [];
   let busy = false, detached: Message[] | undefined;
+  let recordOrder: readonly string[] | undefined, recordsDirty = true;
+  let gaps: readonly CoverageGap[] = [];
   const read = (id: string) => state.messagesByID[id];
   const boundary = () => {
     const id = unfinishedOrder.at(-1);
@@ -222,9 +340,10 @@ export function createTranscriptProjection(): TranscriptProjection {
       const prompt = message.role !== "user" && message.replyTo
         ? read(message.replyTo)
         : undefined;
-      const anchor = prompt && compare(message, prompt) < 0
-        ? prompt
-        : undefined;
+      const anchor =
+        prompt && (sends.has(prompt.id) || compare(message, prompt) < 0)
+          ? prompt
+          : undefined;
       return { message: anchor ?? message, reply: anchor ? 1 : 0 };
     };
     const target = position(key);
@@ -362,8 +481,21 @@ export function createTranscriptProjection(): TranscriptProjection {
       segments,
       message,
       pending: previous?.pending,
+      send: sends.get(first.id),
       revision: (previous?.revision ?? 0) + 1,
     };
+    const updated = records.update(key, state.repliesByID[key].revision);
+    if (updated !== recordValue) {
+      state.records = state.records === recordValue ? updated : {
+        ...updated,
+        keys: state.records.keys,
+        revisions: {
+          ...state.records.revisions,
+          [key]: updated.revisions[key],
+        },
+      };
+      recordValue = updated;
+    }
     if (
       !previous || previous.messageIDs[0] !== ids[0] ||
       changed?.id === ids[0] && reordered
@@ -381,38 +513,126 @@ export function createTranscriptProjection(): TranscriptProjection {
         if (inQueue) queued.add(id);
         else queued.delete(id);
       }
-      const previous = state.repliesByID[id];
+      const key = sends.get(id)?.intent.key ?? id;
+      const previous = state.repliesByID[key];
       const value = busy && created !== undefined &&
         (id === current || inQueue || pendingTurns.has(id));
       if (value) pendingUsers.add(id);
       else pendingUsers.delete(id);
       if (previous && previous.pending !== value) {
-        state.repliesByID[id] = { ...previous, pending: value };
+        state.repliesByID[key] = { ...previous, pending: value };
       }
     }
     state.queuedIDs = queued;
     touched.clear();
+    if (recordsDirty || recordOrder !== state.replyIDs) {
+      const breaks = new Set<string>();
+      for (const gap of gaps) {
+        const location = locations.get(gap.older);
+        if (location) breaks.add(location.key);
+      }
+      recordValue = records.reconcile(
+        state.replyIDs,
+        state.repliesByID,
+        breaks,
+      );
+      state.records = recordValue;
+      if (breaks.size) {
+        const after = new Map<string, string[]>();
+        const revisions = { ...recordValue.revisions };
+        for (const gap of gaps) {
+          const reply = locations.get(gap.older)?.key;
+          const key = reply && recordValue.owners[reply];
+          if (!key) continue;
+          const keys = after.get(key) ?? [];
+          keys.push(gap.key);
+          after.set(key, keys);
+          revisions[gap.key] = 0;
+        }
+        state.records = {
+          ...recordValue,
+          keys: recordValue.keys.flatMap((
+            key,
+          ) => [key, ...after.get(key) ?? []]),
+          revisions,
+        };
+      }
+      recordOrder = state.replyIDs;
+      recordsDirty = false;
+    }
   };
-  const put = (message: Message, preservePartIndex = false) => {
+  const indexParts = (message: Message) => {
+    clearHelper(message.id);
+    for (const part of message.parts) helperPart(message.id, part.id, part);
+    parts.set(
+      message.id,
+      new Map(message.parts.map((part, i) => [part.id, i])),
+    );
+  };
+  // Only source admission can commit input. Decorations and derived clocks
+  // rebuild the same message too, but are not evidence that native accepted it.
+  const put = (message: Message, preservePartIndex = false, native = false) => {
+    const send = sends.get(message.id);
+    if (send && message.role === "user") {
+      if (native) {
+        sends.set(message.id, {
+          ...send,
+          phase: "committed",
+          feedback: undefined,
+          retry: undefined,
+        });
+      }
+      message = {
+        ...message,
+        sourceOrder: send.message.sourceOrder,
+        parts: native && !message.parts.length && localParts.has(message.id)
+          ? send.message.parts
+          : message.parts,
+      };
+    }
     const previous = read(message.id),
-      oldKey = previous && replyKey(previous),
-      key = replyKey(message);
+      oldKey = previous && entryKey(previous),
+      key = entryKey(message);
     if (previous === message) return;
+    witnesses.delete(message.id);
+    if (parked.has(message.id)) {
+      state.messagesByID[message.id] = message;
+      if (!preservePartIndex && previous?.parts !== message.parts) {
+        indexParts(message);
+      }
+      return;
+    }
+    const last = read(state.messageIDs.at(-1) ?? "");
+    if (!replacing && !previous && last && compare(last, message) < 0) {
+      state.appendRevision++;
+    }
+    if (previous?.role === "context" || message.role === "context") {
+      recordsDirty = true;
+    }
     header(previous, message);
     state.messagesByID[message.id] = message;
     if (!preservePartIndex && previous?.parts !== message.parts) {
-      clearHelper(message.id);
-      for (const part of message.parts) helperPart(message.id, part.id, part);
-      parts.set(
-        message.id,
-        new Map(message.parts.map((part, i) => [part.id, i])),
-      );
+      indexParts(message);
     }
     const segment = segmentByID.get(message.id);
-    if (segment?.parts !== message.parts) {
+    const agent = message.role === "assistant" ? message.agent : undefined;
+    const model = message.role === "assistant" ? message.model : undefined;
+    const time = message.role === "assistant" ? message.time : undefined;
+    const turnID = message.role === "assistant"
+      ? message.replyTo ?? message.id
+      : undefined;
+    if (
+      segment?.parts !== message.parts || segment?.agent !== agent ||
+      segment?.time !== time || segment?.model !== model ||
+      segment?.turnID !== turnID
+    ) {
       segmentByID.set(message.id, {
         messageID: message.id,
+        turnID,
         parts: message.parts,
+        agent,
+        model,
+        time,
       });
     }
     const reordered = !previous || compare(previous, message) !== 0;
@@ -456,8 +676,16 @@ export function createTranscriptProjection(): TranscriptProjection {
   const remove = (id: string) => {
     const previous = read(id);
     if (!previous) return;
+    witnesses.delete(id);
+    if (parked.delete(id)) {
+      delete state.messagesByID[id];
+      parts.delete(id);
+      clearHelper(id);
+      return;
+    }
+    if (previous.role === "context") recordsDirty = true;
     header(previous, undefined);
-    const key = replyKey(previous);
+    const key = entryKey(previous);
     const causalKey =
       previous.role === "user" && state.repliesByID[`reply:${id}`]
         ? `reply:${id}`
@@ -475,21 +703,89 @@ export function createTranscriptProjection(): TranscriptProjection {
     if (causalKey) orderGroup(causalKey);
     detached = undefined;
   };
+  const merge = (message: Message) => {
+    if (parked.has(message.id)) remove(message.id);
+    if (!read(message.id) || sends.has(message.id)) put(message, false, true);
+  };
   const owner = {
     state,
+    pendingSends: () =>
+      [...sends.values()].filter((send) => send.phase !== "committed"),
+    entry(messageID: string) {
+      return state.repliesByID[locations.get(messageID)?.key ?? messageID];
+    },
+    committed(messageID: string) {
+      return !!read(messageID) &&
+        (!sends.has(messageID) || sends.get(messageID)?.phase === "committed");
+    },
+    materialized: (id: string) => !!read(id) && !parked.has(id),
+    started(messageID: string) {
+      if (answers.has(messageID)) return true;
+      const position = userOrder.indexOf(messageID);
+      return position >= 0 &&
+        userOrder.slice(position + 1).some((id) => answers.has(id));
+    },
+    releaseCommittedSends() {
+      for (const [id, send] of sends) {
+        if (send.phase !== "committed") continue;
+        sends.delete(id);
+        localParts.delete(id);
+      }
+    },
+    cancelSend(messageID: string, withdrawn = false) {
+      const send = sends.get(messageID);
+      if (!withdrawn && (!send || send.phase === "committed")) return;
+      remove(messageID);
+      sends.delete(messageID);
+      localParts.delete(messageID);
+      queues();
+    },
+    send(value: PendingSend) {
+      const known = sends.get(value.message.id);
+      // Native evidence wins over late acknowledgement, timeout and rejection.
+      if (known?.phase === "committed") return;
+      const tail = read(state.messageIDs.at(-1) ?? "");
+      value = {
+        ...value,
+        message: {
+          ...value.message,
+          sourceOrder: known?.message.sourceOrder ??
+            (tail?.sourceOrder !== undefined
+              ? tail.sourceOrder + 1 / 1024
+              : tail
+              ? Math.max(tail.time.created, value.message.time.created)
+              : 0),
+        },
+      };
+      sends.set(value.message.id, value);
+      localParts.add(value.message.id);
+      put(value.message);
+      queues();
+    },
     boundary: (turnID: string) => boundaries.get(turnID),
     messages: (): Message[] => detached ??= state.messageIDs.map(read),
     usesMetadata: (ids: ReadonlySet<string>) => {
       for (const id of ids) if (helperChildren.has(id)) return true;
       return false;
     },
-    clear() {
+    reset(
+      messages: readonly Message[],
+      source?: { sameSource: boolean; keepParked: boolean },
+    ) {
+      const previous = state.messagesByID;
+      const inactive = source?.keepParked ? [...parked] : [];
+      const last = read(state.messageIDs.at(-1) ?? "");
       state.messageIDs = [];
       state.messagesByID = dictionary<Message>();
       state.replyIDs = [];
       state.repliesByID = dictionary<TranscriptReply>();
       state.queuedIDs = new Set();
+      gaps = [];
+      recordOrder = undefined;
+      recordsDirty = true;
       parts.clear();
+      witnesses.clear();
+      parked.clear();
       helperLinks.clear();
       helperChildren.clear();
       boundaries.clear();
@@ -507,21 +803,92 @@ export function createTranscriptProjection(): TranscriptProjection {
       userOrder = [];
       unfinishedOrder = [];
       detached = undefined;
+      replacing = true;
+      try {
+        for (const message of messages) {
+          put(
+            source?.sameSource === false
+              ? message
+              : retainStreamMessage(previous[message.id], message),
+            false,
+            true,
+          );
+        }
+        for (const id of inactive) {
+          if (!read(id)) {
+            parked.add(id);
+            state.messagesByID[id] = previous[id];
+            indexParts(previous[id]);
+          }
+        }
+        for (const send of sends.values()) {
+          if (send.phase !== "committed" && !read(send.message.id)) {
+            put(send.message);
+          } else if (send.phase === "committed" && !read(send.message.id)) {
+            sends.delete(send.message.id);
+            localParts.delete(send.message.id);
+          }
+        }
+      } finally {
+        replacing = false;
+      }
+      const next = read(state.messageIDs.at(-1) ?? "");
+      if (last && next && !previous[next.id] && compare(last, next) < 0) {
+        state.appendRevision++;
+      }
+      queues();
     },
-    replace(messages: readonly Message[]) {
-      const previous = state.messagesByID;
-      owner.clear();
+    reconcile(
+      messages: readonly Message[],
+      source?: Pick<MessagePage, "clock" | "revisions">,
+    ) {
       for (const message of messages) {
-        put(retainStreamMessage(previous[message.id], message));
+        const { id } = message;
+        const previous = read(id), known = witnesses.get(id);
+        const epoch = source?.clock.epoch, revision = source?.revisions?.[id];
+        const equal = previous && (known && known.epoch === epoch &&
+            known.revision === revision || sameMessage(previous, message));
+        const next = equal ? previous : retainStreamMessage(previous, message);
+        const body = !equal && previous ? retainParts(previous, next) : next;
+        if (parked.has(id)) merge(body);
+        else if (!equal || !owner.committed(id)) put(body, false, true);
+        if (epoch !== undefined && revision !== undefined) {
+          witnesses.set(id, { epoch, revision });
+        }
       }
       queues();
     },
     merge(messages: readonly Message[]) {
-      for (const message of messages) if (!read(message.id)) put(message);
+      for (const message of messages) merge(message);
       queues();
     },
     retain(ids: Set<string>) {
-      for (const id of state.messageIDs) if (!ids.has(id)) remove(id);
+      for (const id of [...state.messageIDs, ...parked]) {
+        if (
+          !ids.has(id) &&
+          (!sends.has(id) || sends.get(id)?.phase === "committed")
+        ) {
+          remove(id);
+          sends.delete(id);
+          localParts.delete(id);
+        }
+      }
+      queues();
+    },
+    park(ids: readonly string[]) {
+      for (const id of ids) {
+        const message = read(id);
+        if (!message || parked.has(id)) continue;
+        remove(id);
+        parked.add(id);
+        state.messagesByID[id] = message;
+        indexParts(message);
+      }
+      queues();
+    },
+    gaps(values: readonly CoverageGap[]) {
+      gaps = values;
+      recordsDirty = true;
       queues();
     },
     boundaries(values: readonly ReplyBoundary[]) {
@@ -531,13 +898,13 @@ export function createTranscriptProjection(): TranscriptProjection {
         if (reply) {
           const knownLast = value.lastID && read(value.lastID),
             last = lastHeaders.get(key);
-          state.repliesByID[key] = {
-            ...reply,
-            firstID: value.firstID ?? reply.firstID,
-            lastID: knownLast && last && compare(last, knownLast) > 0
-              ? last.id
-              : value.lastID ?? reply.lastID,
-          };
+          const firstID = value.firstID ?? reply.firstID;
+          const lastID = knownLast && last && compare(last, knownLast) > 0
+            ? last.id
+            : value.lastID ?? reply.lastID;
+          if (firstID !== reply.firstID || lastID !== reply.lastID) {
+            state.repliesByID[key] = { ...reply, firstID, lastID };
+          }
         }
       }
     },
@@ -573,6 +940,7 @@ export function createTranscriptProjection(): TranscriptProjection {
         return true;
       }
       if (op.op === "message.remove") {
+        records.retire(op.messageID);
         remove(op.messageID);
         queues();
         return true;
@@ -583,7 +951,12 @@ export function createTranscriptProjection(): TranscriptProjection {
         op.op !== "task.progress" && op.op !== "message.clock"
       ) return false;
       const id = op.op === "message.upsert" ? op.message.id : op.messageID;
-      const previous = read(id);
+      let previous = read(id);
+      if (op.op === "part.upsert" && localParts.has(id)) {
+        localParts.delete(id);
+        if (previous) previous = { ...previous, parts: [] };
+        parts.delete(id);
+      }
       const slot = op.op === "message.upsert" || op.op === "message.clock"
         ? undefined
         : parts.get(id)?.get(
@@ -596,6 +969,8 @@ export function createTranscriptProjection(): TranscriptProjection {
           next,
           op.op === "part.blocks" || op.op === "task.progress" ||
             (op.op === "part.upsert" && slot !== undefined && slot >= 0),
+          op.op === "message.upsert" || op.op === "part.upsert" ||
+            op.op === "part.blocks",
         );
         queues();
       }
@@ -628,6 +1003,18 @@ export function createTranscriptProjection(): TranscriptProjection {
   };
   return owner;
 }
+
+/** Static presentation for an explicitly detached window, never live writes. */
+export function projectTranscript(
+  messages: readonly Message[],
+  options: { busy?: boolean; boundaries?: readonly ReplyBoundary[] } = {},
+): TranscriptProjectionState {
+  const owner = createTranscriptProjection();
+  owner.reset(messages);
+  if (options.busy) owner.busy(true);
+  if (options.boundaries) owner.boundaries(options.boundaries);
+  return owner.state;
+}
 /** Detached multi-session compatibility input stays partitioned by session identity. */
 export function projectReplies(
   messages: readonly Message[],
@@ -647,7 +1034,7 @@ export function projectReplies(
   }
   return [...sessions.values()].flatMap((items) => {
     const owner = createTranscriptProjection();
-    owner.replace(items);
+    owner.reset(items);
     owner.busy(busy);
     return owner.state.replyIDs.map((id) => owner.state.repliesByID[id]);
   }).sort((a, b) =>

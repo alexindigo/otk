@@ -3,7 +3,6 @@ import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
 import {
-  labelTextBounds,
   type TaskMarkerGeometry,
   taskMarkerGeometry,
 } from "../../../support/control-geometry.ts";
@@ -13,6 +12,7 @@ interface NativeBox {
   padding: number;
   right: number;
   parentRight: number;
+  line: number;
 }
 interface LabelBox {
   gap: number;
@@ -29,6 +29,30 @@ interface NativeGeometry {
   labels: LabelBox[];
   selects: SelectBox[];
   tasks: TaskMarkerGeometry[];
+}
+function checkboxGeometry(root: string) {
+  return Array.from(
+    document.querySelectorAll<HTMLInputElement>(`${root} input[type=checkbox]`),
+  ).map((el) => {
+    const label = el.closest("label")!,
+      text = label.querySelector(".otk-control-label")!,
+      r = el.getBoundingClientRect(),
+      t = text.getBoundingClientRect(),
+      p = label.getBoundingClientRect(),
+      style = getComputedStyle(el);
+    return {
+      name: el.name,
+      width: r.width,
+      height: r.height,
+      line: parseFloat(getComputedStyle(label).lineHeight),
+      padding: parseFloat(style.paddingLeft),
+      right: t.right,
+      controlRight: r.right,
+      parentRight: p.right,
+      gap: t.left - r.right,
+      centers: Math.abs(r.y + r.height / 2 - t.y - t.height / 2),
+    };
+  });
 }
 test(
   "visual.real-display-markdown-native-checkbox-select-and-settings-fields",
@@ -87,7 +111,7 @@ test(
     await page.locator(".otk-display-menu > button").click();
     await expect(page.locator(".otk-display-menu fieldset")).toBeEnabled();
     const g = await page.evaluate<NativeGeometry>(
-      `(()=>{const textBounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=textBounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=textBounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value};}),tasks:(${taskMarkerGeometry})()};})()`,
+      `(()=>{const controls=(${checkboxGeometry})('.otk-display-menu');return {controls:controls.map(c=>({...c,right:c.controlRight})),labels:controls,selects:[...document.querySelectorAll('.otk-display-menu .otk-select')].map(el=>{const trigger=el.querySelector('button'),r=trigger.getBoundingClientRect(),row=el.closest('.otk-preference-control'),t=row.querySelector(':scope > .otk-control-label').getBoundingClientRect(),p=row.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(trigger).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.querySelector('input[type=hidden]').value};}),tasks:(${taskMarkerGeometry})()};})()`,
     );
     const display = await state.product("prefs.get", {});
     expect(display.diffStyle).toBe("auto");
@@ -95,15 +119,14 @@ test(
     expect(g.labels.length).toBeGreaterThan(0);
     for (const c of g.controls) {
       expect(c.width).toBeGreaterThan(0);
-      expect(c.width).toBeLessThanOrEqual(18);
+      expect(c.width).toBe(c.line);
       expect(c.height).toBeGreaterThan(0);
-      expect(c.height).toBeLessThanOrEqual(18);
+      expect(c.height).toBe(c.line);
       expect(c.padding).toBe(0);
       expect(c.right).toBeLessThanOrEqual(c.parentRight);
     }
     for (const l of g.labels) {
-      expect(l.gap).toBeGreaterThanOrEqual(9.05);
-      expect(l.gap).toBeLessThanOrEqual(15);
+      expect(Math.abs(l.gap - 8)).toBeLessThanOrEqual(.05);
       expect(l.centers).toBeLessThanOrEqual(.5);
       expect(l.right).toBeLessThanOrEqual(l.parentRight + .5);
     }
@@ -132,12 +155,20 @@ test(
       "Unchecked task",
       "Checked task",
     ]);
-    await page.locator("input[name=timestamps]").click();
-    await expect(page.locator("input[name=timestamps]")).toBeChecked();
+    // D21: clocks/actions are persistent, not a Display preference.
+    await expect(page.locator("input[name=timestamps]")).toHaveCount(0);
+    await page.locator("input[name=thinking]").click();
+    await expect(page.locator("input[name=thinking]")).toBeChecked();
     await expect(page.locator("textarea[name=prompt]")).toHaveValue(
       "Retain this draft",
     );
     await page.keyboard.press("Escape");
+    await expect(
+      page.locator(
+        "[data-role=assistant] .otk-message-details > .otk-chrome-meta > time[title]",
+      ),
+    )
+      .toBeVisible();
     await page.keyboard.press("Control+k");
     await page.locator("input[name=command-search]").fill("Settings");
     await page.locator('[data-command="settings.open"]').click();
@@ -162,7 +193,7 @@ test(
     const notification = await page.evaluate<
       (NativeBox & LabelBox & { name: string })[]
     >(
-      `(()=>{const textBounds=${labelTextBounds};return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=textBounds(el),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),right:s.right,parentRight:p.right};});})()`,
+      `(${checkboxGeometry})('.otk-notification-settings')`,
     );
     expect(notification.map((c: { name: string }) => c.name)).toEqual([
       "notify.toast",
@@ -172,12 +203,11 @@ test(
     ]);
     for (const c of notification) {
       expect(c.width).toBeGreaterThan(0);
-      expect(c.width).toBeLessThanOrEqual(18);
+      expect(c.width).toBe(c.line);
       expect(c.height).toBeGreaterThan(0);
-      expect(c.height).toBeLessThanOrEqual(18);
+      expect(c.height).toBe(c.line);
       expect(c.padding).toBe(0);
-      expect(c.gap).toBeGreaterThanOrEqual(9.7);
-      expect(c.gap).toBeLessThanOrEqual(15);
+      expect(Math.abs(c.gap - 8)).toBeLessThanOrEqual(.05);
       expect(c.centers).toBeLessThanOrEqual(.5);
       expect(c.right).toBeLessThanOrEqual(c.parentRight + .5);
     }
@@ -186,12 +216,28 @@ test(
 test(
   "visual.native-editor-blur-retains-more-anchor-and-independent-navigation",
   { tag: ["@visual"] },
-  async ({ state, page }) => {
+  async ({ state, page }, info) => {
+    const capture = async (stage: string) => {
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await page.screenshot({
+          path: info.outputPath(`more-${stage}-${theme}.png`),
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
+    };
     const ids: string[] = [];
     for (let i = 0; i < 10; i++) {
       ids.push(
         (await state.native<{ id: string }>("/session", "POST", {
-          title: `Native ${i}`,
+          title: `Native ancestry session ${i} with a deliberately long title`,
+          // D66: real undelivered helper runs drive the overflow inventory.
+          ...(i ? { parentID: ids[i - 1] } : {}),
           // The meter assertion needs reported zero usage, not native defaults.
           ...(i === 4 && state.controller.info!.version.startsWith("2.")
             ? {
@@ -214,12 +260,20 @@ test(
         })).id,
       );
     }
+    // D67: a genuine held native run drives the composer inventory, while
+    // ancestry remains available independently of execution/delivery state.
+    const held = await state.queue(["Native helper result"], "held");
+    await state.native(`/session/${ids[9]}/prompt_async`, "POST", {
+      model: { providerID: "fake", modelID: "scripted" },
+      parts: [{ type: "text", text: "Prepare helper result" }],
+    });
     await state.product("tasks.create", {
       directory: state.directory,
       name: "Native folding",
       sessions: ids,
     });
-    await openSession(state, page, ids[4]);
+    await page.goto(`${state.url}/#/local/${ids[4]}`);
+    await expect(page.locator(".otk-breadcrumb-row")).toBeVisible();
     // The neighboring meter owns a separate grid track. Its digest paint can
     // move More without changing the outer breadcrumb row's rectangle.
     await expect(page.locator(".otk-context-meter")).toHaveAttribute(
@@ -231,12 +285,16 @@ test(
       rightCollapsed: true,
     });
     await page.setViewportSize({ width: 800, height: 800 });
-    await page.locator(`[data-crumb="${ids[0]}"]`).click({ button: "right" });
+    await page.locator(`[data-crumb="${ids[1]}"]`).click({
+      button: "right",
+    });
     await page.locator(
       '.otk-context-menu [data-context-command="session.rename"]',
     ).click();
     await expect(page.locator(".otk-title-editor input")).toBeFocused();
-    const more = page.locator(".otk-folded-crumbs > button");
+    const more = page.getByRole("button", { name: /^Subagents:/ });
+    await expect(more).toHaveAccessibleName("Subagents: 1 running");
+    await expect(more).toHaveAttribute("aria-expanded", "false");
     // Join font/layout settlement on the actual gesture target, after the
     // neighboring digest consumer has painted its authoritative value.
     await expect.poll(() =>
@@ -255,10 +313,20 @@ test(
         return true;
       })
     ).toBe(true);
+    await capture("editing");
     const before = (await more.boundingBox())!;
     await more.click();
+    await expect(more).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".otk-title-editor input")).toHaveCount(0);
+    const afterBlur = (await more.boundingBox())!;
+    for (const k of ["x", "y", "width", "height"] as const) {
+      expect(
+        Math.abs(before[k] - afterBlur[k]),
+        JSON.stringify({ before, afterBlur, axis: k }),
+      ).toBeLessThanOrEqual(1);
+    }
     await expect(
-      page.locator(".otk-folded-crumbs [data-overflow-target]").first(),
+      page.locator(".otk-subagents [data-subagent]").first(),
     ).toBeVisible();
     const after = (await more.boundingBox())!;
     for (const k of ["x", "y", "width", "height"] as const) {
@@ -267,23 +335,24 @@ test(
         JSON.stringify({ before, after, axis: k }),
       ).toBeLessThanOrEqual(1);
     }
+    await capture("opened");
     await page.keyboard.press("ArrowDown");
     await expect(
-      page.locator(".otk-folded-crumbs [data-overflow-target]:focus"),
+      page.locator(".otk-subagents .otk-subagent-name:focus"),
     ).toHaveCount(1);
     await expect(page.locator(`[data-crumb="${ids[4]}"]`)).toBeVisible();
     const omitted = await page.locator(
-      ".otk-folded-crumbs [data-overflow-target]",
-    ).evaluateAll((els) =>
-      els.map((el) => el.getAttribute("data-overflow-target")!)
-    );
+      ".otk-subagents [data-subagent]",
+    ).evaluateAll((els) => els.map((el) => el.getAttribute("data-subagent")!));
     expect(omitted.length).toBeGreaterThan(0);
     await page.locator(
-      `.otk-folded-crumbs [data-overflow-target="${omitted[0]}"]`,
+      `.otk-subagents [data-subagent="${omitted[0]}"] .otk-subagent-name`,
     ).click();
     await expect(page).toHaveURL(new RegExp("/" + omitted[0] + "$"));
     await page.goto(state.url + "/#/local/" + ids[4]);
     await expect(page.locator(`[data-crumb="${ids[4]}"][aria-current=page]`))
       .toBeVisible();
+    await state.product("session.abort", { sessionID: ids[9] });
+    await state.release(held.gate);
   },
 );

@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ClientSession,
+  type ClientTabs,
+  createLiveWork,
+  entityFacts,
+  lamp,
+  liveWork as entityLiveWork,
   loadHistory,
+  permissionVisible,
   type Selection,
   type ServerResources,
   type SessionActions,
+  sessionShells,
 } from "@otk/client";
 import {
   belongsToSession,
-  type PermissionRequest,
+  derivedValue,
+  entityKey,
   type Preferences,
 } from "@otk/protocol";
 import type { SessionPorts } from "../registries/session.tsx";
@@ -21,16 +29,56 @@ export function sessionPorts(o: {
   session: ClientSession;
   guard: { mark(owner: string, dirty: boolean, input?: string): void };
   prefs(): Preferences;
-  permissionVisible?(sidecar: string, request: PermissionRequest): boolean;
+  tabs?(): ClientTabs | undefined;
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
   const connection = resources.sidecars.connection(target.sidecarId);
+  const entities = () => resources.inbox(target.sidecarId).entities;
+  const sessionKey = entityKey("session", target.sessionID);
+  const shells = () => sessionShells(entities(), sessionKey);
+  const rpc = actions.rpc(target);
+  const liveWork = createLiveWork({
+    items: () => [
+      ...(entityLiveWork(entities(), sessionKey) ?? []).flatMap((item) =>
+        item.kind === "helper"
+          ? [{
+            ...item,
+            kind: item.kind,
+            sessionID: item.id,
+            label: derivedValue(
+              resources.entry(target.sidecarId, item.id)?.digest.last,
+            )?.agent ?? item.label,
+          }]
+          : []
+      ),
+      ...(shells()?.items ?? []).map((item) => ({
+        ...item,
+        kind: "shell" as const,
+        sessionID: target.sessionID,
+      })),
+    ],
+    stopHelper: () =>
+      resources.linked(target.sidecarId) &&
+        resources.declares(target.sidecarId, "prompt")
+        ? (id) => actions.abort({ ...target, sessionID: id })
+        : undefined,
+    stopShell: () =>
+      resources.linked(target.sidecarId) &&
+        resources.declares(target.sidecarId, "shell.terminate")
+        ? async (shellID) => {
+          await rpc("shell.terminate", {
+            sessionID: target.sessionID,
+            shellID,
+          });
+        }
+        : undefined,
+  });
   return {
     supports: (c) =>
       c === "history"
         ? resources.anyAdvertised(c)
         : resources.declares(target.sidecarId, c),
-    rpc: actions.rpc(target),
+    rpc,
     connectionKey: () => resources.connectionKey(target.sidecarId),
     connected: () => resources.linked(target.sidecarId),
     onToolCompleted: (listener) => session.onToolCompleted(target, listener),
@@ -38,22 +86,95 @@ export function sessionPorts(o: {
     directoryCatalog: session.directoryCatalog,
     frecencyCatalog: session.frecencyCatalog,
     approvals: resources.approvals(target.sidecarId),
+    approvalTarget: () => {
+      const family = actions.family(target);
+      const sessionID = family.rootID ?? family.sessionID;
+      return {
+        sidecarId: target.sidecarId,
+        sessionID,
+        title: resources.entry(target.sidecarId, sessionID)?.title,
+      };
+    },
     feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,
+    composerTarget: () => {
+      const title =
+        resources.entry(target.sidecarId, target.sessionID)?.title ??
+          (session.state.info?.id === target.sessionID
+            ? session.state.info.title
+            : target.sessionID);
+      const task = o.tabs?.()?.taskFor(target.sessionID);
+      return {
+        task: task && task.name !== title ? task.name : undefined,
+        session: title,
+      };
+    },
     failureTarget: () => ({
       ...target,
       label: resources.entry(target.sidecarId, target.sessionID)?.title,
     }),
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),
+    entities,
+    entityFacts: (identity) =>
+      entityFacts(identity, {
+        entities: entities(),
+        session: (id) => ({
+          title: resources.entry(target.sidecarId, id)?.title,
+        }),
+      }),
+    status: (id) => lamp(entities(), entityKey("session", id)),
     location: (id) => actions.location(target, id),
-    permissions: () => session.state.content.permissions,
-    permissionVisible: o.permissionVisible
-      ? (request) => o.permissionVisible!(target.sidecarId, request)
-      : undefined,
-    questions: () => session.state.content.questions,
+    liveWork,
+    delivery: actions.delivery(target),
+    shells,
+    trail: () => o.tabs?.()?.trail(),
+    stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
+    clearFinished: (task) =>
+      resources.inbox(target.sidecarId).clearAttention({
+        scope: "helpers",
+        task,
+      }),
+    requests: connection.attention,
+    questionResponse: (id) =>
+      connection.rpc.questionResponse(id, connection.attention),
+    observeQuestionResponse(listener) {
+      const operation = connection.requests.subscribe(listener);
+      const native = connection.attention.subscribe(listener);
+      return () => {
+        operation();
+        native();
+      };
+    },
+    permissions: () => {
+      void session.state.content;
+      return connection.attention.permissions(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+        true,
+      );
+    },
+    permissionVisible: (request) =>
+      permissionVisible(
+        entities(),
+        request.sessionID,
+        request.id,
+        !resources.linked(target.sidecarId) &&
+          connection.attention.draft("permission", request.id)
+          ? "cached-draft"
+          : "fresh",
+      ),
+    questions: () => {
+      void session.state.content;
+      return connection.attention.questions(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+        true,
+      );
+    },
     forms: () =>
       resources.forms(target.sidecarId).filter((f) =>
+        !connection.attention.get("form", f.id)?.dismissed &&
         f.owner.kind === "session" &&
         f.presentation !== "question" &&
         !session.state.content.questions.some((question) =>

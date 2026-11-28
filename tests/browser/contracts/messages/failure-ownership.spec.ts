@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { scrollTranscript } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-messages-failure-ownership" });
 test("messages.mixed-failure-reply-retains-assistant-usage-and-actions", {
@@ -48,25 +49,39 @@ for (const available of [true, false]) {
       const editor = page.locator("textarea[name=prompt]");
       await editor.fill("Keep this draft when revealing the error");
       await editor.press("Enter");
-      const link = page.locator(".otk-operation-feedback").getByRole("link", {
-        name: "See the retained failure",
+      const notice = page.locator(".otk-composer-notice");
+      const link = notice.getByRole("button", {
+        name: "Show error",
       });
-      await expect(link).toBeVisible();
+      // Decision 65 / F7: a reference cannot acquire a record that is not yet
+      // in this transcript projection. Page older history independently.
+      await expect(notice).toContainText("Retained native failure");
+      await expect(link).toHaveCount(0);
+      // Issue 2.114: Details belongs to the notice, not the headline. The
+      // retained record gets sole custody once the reference can be shown.
+      const details = notice.getByRole("button", {
+        name: "Details",
+        exact: true,
+      });
+      await expect(details).toBeEnabled();
       const before =
         (await state.observe<{ pages: (string | null)[] }>()).pages.length;
-      await link.click();
-      if (available) {
-        await expect(record).toContainText("Retained native failure");
-        await expect(record).toBeFocused();
-      } else {
-        await expect(page.locator(".otk-messages")).toContainText(
-          "This message is no longer available",
-        );
-        await expect(record).toHaveCount(0);
-      }
+      await scrollTranscript(page, false);
       await expect.poll(async () =>
         (await state.observe<{ pages: (string | null)[] }>()).pages.length
       ).toBeGreaterThan(before);
+      if (available) {
+        await expect(record).toContainText("Retained native failure");
+        await expect(link).toBeVisible();
+        await expect(details).toHaveCount(0);
+        await link.click();
+        await expect(record).toBeFocused();
+      } else {
+        await expect(record).toHaveCount(0);
+        await expect(link).toHaveCount(0);
+        await expect(notice).toContainText("Retained native failure");
+        await expect(details).toBeEnabled();
+      }
       await expect(editor).toHaveValue(
         "Keep this draft when revealing the error",
       );

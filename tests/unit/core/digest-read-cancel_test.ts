@@ -106,7 +106,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     new Prefs(db, prefsOptions),
     registry,
     fixtureMessagePolicy,
-    requests,
+    { ...requests, server: { build: "test", instance: "test" } },
   );
   const frames: ServerFrame[] = [];
   const socket = {
@@ -231,7 +231,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
     new Prefs(db, prefsOptions),
     rpc,
     fixtureMessagePolicy,
-    requests,
+    { ...requests, server: { build: "test", instance: "test" } },
   );
   const makeSocket = () => {
     const frames: ServerFrame[] = [];

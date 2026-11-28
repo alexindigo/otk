@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-record-group {
+  --tree-height: var(--control-size);
+}
+.otk-activity-group {
+  --tree-row-gap: var(--message-gap, var(--space-6));
+}
+.otk-record-group-count,
+.otk-record-group-time {
+  flex: none;
+}
+.otk-record-group-time {
+  margin-inline-start: auto;
+}
+.otk-record-group.is-interval .otk-record-group-toggle {
+  font: inherit;
+}

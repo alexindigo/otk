@@ -16,6 +16,7 @@ import {
   registerEditTool,
   registerFetchTool,
   registerFilePart,
+  registerFilePreviewDialog,
   registerFormTakeover,
   registerGenericTool,
   registerGlobalForms,
@@ -49,6 +50,7 @@ import {
   registerToolPart,
   registerUnknownPart,
   registerWebSearchTool,
+  registerWorkPanel,
   registerWriteTool,
   ThemeEngine,
   ThemeRegistry,
@@ -73,9 +75,10 @@ export function applicationUi(): UiRegistries {
   registerQuestionTool(ui.tools);
   registerTextPart(ui.parts);
   registerReasoningPart(ui.parts);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   registerFilePart(ui.parts);
   registerImageDialog(ui.dialogs);
+  registerFilePreviewDialog(ui.dialogs);
   registerAgentPart(ui.parts);
   registerCompactionPart(ui.parts);
   registerUnknownPart(ui.parts);
@@ -103,6 +106,7 @@ export function applicationUi(): UiRegistries {
   registerSessionsPanel(ui.panels);
   registerTimelinePanel(ui.panels);
   registerActivityPanel(ui.panels);
+  registerWorkPanel(ui.panels);
   registerTerminalDock(ui.composerDocks);
   registerTerminalDialog(ui.dialogs);
   return ui;

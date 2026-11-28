@@ -54,7 +54,7 @@ test(
       tab = page.locator(`[data-tab="${task.id}"]`);
     await expect(tab.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
-      "finished",
+      "finished", // D78: an unseen finish wins over a running sibling.
     );
     await expect(project.locator(".otk-status-light")).toHaveAttribute(
       "data-state",
@@ -130,3 +130,44 @@ test(
     }
   },
 );
+
+test("attention.unseen-finished-task-outweighs-working-task-until-viewed", {
+  tag: ["@attention", "@isolated"],
+}, async ({ isolatedState: state, page }) => {
+  const running = "tstv1-running", finished = "tstv1-done";
+  const workingTask = await state.product("tasks.create", {
+    directory: state.directory,
+    name: "Working task",
+    sessions: [running],
+  });
+  const finishedTask = await state.product("tasks.create", {
+    directory: state.directory,
+    name: "Finished task",
+    sessions: [finished],
+  });
+  await openSession(state, page, "tstv1-otk");
+  await scenario(state, "hold", running);
+  const project = page.locator(
+    `[data-project="${state.directory}"] .otk-status-light`,
+  );
+  const workingLamp = page.locator(
+    `[data-tab="${workingTask.id}"] .otk-status-light`,
+  );
+  const finishedTab = page.locator(`[data-tab="${finishedTask.id}"]`);
+  const finishedLamp = finishedTab.locator(".otk-status-light");
+  await expect(project).toHaveAttribute("data-state", "working");
+  await scenario(state, "hold", finished);
+  await scenario(state, "release", finished);
+  // D78: the unseen finish must be visible at both levels, even during work.
+  await expect(workingLamp).toHaveAttribute("data-state", "working");
+  await expect(finishedLamp).toHaveAttribute("data-state", "finished");
+  await expect(project).toHaveAttribute("data-state", "finished");
+  await expect(finishedLamp).toBeVisible();
+  await expect(project).toBeVisible();
+
+  await finishedTab.click();
+  await expect(page).toHaveURL(new RegExp(`${finished}$`));
+  await expect(finishedLamp).toHaveAttribute("data-state", "none");
+  await expect(workingLamp).toHaveAttribute("data-state", "working");
+  await expect(project).toHaveAttribute("data-state", "working");
+});

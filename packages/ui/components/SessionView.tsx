@@ -2,7 +2,7 @@
 import { randomID } from "@otk/protocol";
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
@@ -23,26 +23,38 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
+import ActivityGroup from "./ActivityGroup.tsx";
+import RecordList from "./RecordList.tsx";
+import RecordKinds from "./RecordKinds.tsx";
+import { recordKindDisclosure, remaining } from "@otk/client";
+import TimeText from "./TimeText.tsx";
 import { activeProgressRecord } from "./work-log.ts";
 import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
-import SubagentBar from "./SubagentBar.tsx";
-import { RolledBackContent } from "./RolledBackStrip.tsx";
-import SavedBranches, { SavedBranchNotice } from "./SavedBranches.tsx";
+import RevertGroup, { RevertConfirmation } from "./RevertGroup.tsx";
+import SavedBranches, {
+  RevertSendChoice,
+  SavedBranchNotice,
+} from "./SavedBranches.tsx";
 import { ForkFact } from "./ForkNote.tsx";
-import ComposerNotice from "./ComposerNotice.tsx";
+import ComposerNotice, { ComposerActionNotice } from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
+import DraftRecoveryNotice from "./DraftRecoveryNotice.tsx";
 import PaneState from "./PaneState.tsx";
-import ProgressStatus from "./ProgressStatus.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { useSessionPorts } from "../registries/session.tsx";
+import { useUiRegistries } from "../registries/context.tsx";
+import type { ShellWork } from "../state/shell.ts";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
+  boundaryRepresentative,
   contextualFailure,
+  createRevertRecordProjection,
+  createTranscriptInteraction,
   createTranscriptProjection,
   errorFeedback,
   type FailureValue,
@@ -50,7 +62,10 @@ import {
   placeFailure,
   replyKey,
   RequestFailure,
+  revertFlowBoundary,
   revertPresentation,
+  revertRecordKey,
+  savedBranchMatches,
   sessionComposerFeedback,
   sessionResult,
   type SessionUsageOwner,
@@ -62,6 +77,7 @@ import {
   type ViewportSnapshot,
 } from "./viewport.ts";
 import JumpToLatest from "./JumpToLatest.tsx";
+import MessageDelivery from "./MessageDelivery.tsx";
 import { highlightingScope } from "../highlight/client.ts";
 import {
   HighlightProvider,
@@ -75,9 +91,30 @@ import {
   ownedCommand,
   useCommandPorts,
 } from "../keyboard/context.tsx";
-import { TranscriptContext } from "../features/transcript-context.tsx";
+import {
+  replySourceIncomplete,
+  TranscriptContext,
+} from "../features/transcript-context.tsx";
 import { contextTarget } from "./context-target.ts";
 import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
+import TranscriptGap from "./TranscriptGap.tsx";
+import { activityRecord } from "./activity-record.ts";
+/** Acquisition status for the host's fixed status slot, never the message flow. */
+export function transcriptStatus(input: {
+  loading?: boolean;
+  paging?: boolean;
+  continuity?: string;
+  transcript?: TranscriptOwner;
+}): string {
+  if (
+    input.loading || input.paging || input.continuity === "missing" ||
+    input.transcript?.state.load?.state === "loading"
+  ) {
+    return input.transcript?.progress?.().text ||
+      (input.paging ? "Loading earlier messages..." : "Loading messages...");
+  }
+  return "";
+}
 export default function SessionView(props: {
   sidecarId?: string;
   info?: ContentSession;
@@ -87,6 +124,7 @@ export default function SessionView(props: {
   latestPrompt?: import("@otk/protocol").LatestPrompt;
   catalog?: ModelCatalog;
   usageOwner?: SessionUsageOwner;
+  work?: ShellWork;
   entry?: IndexEntry;
   openUsage?(turnID: string): () => void;
   usageError?(turnID: string): FailureValue | undefined;
@@ -96,7 +134,7 @@ export default function SessionView(props: {
   exhausted: boolean;
   error?: string | FailureValue;
   sessionError?: string;
-  errorState?: SessionErrorState;
+  diagnostics?: SessionErrorState;
   draft: Draft;
   forkNote?: import("@otk/client").ForkNote;
   onDismissForkNote?(): void;
@@ -104,7 +142,6 @@ export default function SessionView(props: {
   displayMenu?: Element;
   prefs: Preferences;
   permissions: PermissionRequest[];
-  siblings: import("@otk/protocol").SessionStructure[];
   onOpenChild(id: string): void;
   child: boolean;
   revert: RevertInfo | null;
@@ -112,22 +149,29 @@ export default function SessionView(props: {
   branchHistory?: import("@otk/client").BranchHistory;
   strip?: import("@otk/client").RevertStrip;
   busy: boolean;
-  retryState?: { attempt: number; message: string; next: number };
+  retryState?: { attempt: number; message?: string; next?: number };
+  mountTranscriptLayer?(stage: HTMLDivElement): () => void;
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
+  captureSend?: PromptProps["captureSend"];
+  draftRecoveries?: readonly import("@otk/client").DraftRecovery[];
   onPrompt: PromptProps["onSubmit"];
-  onAbort(): Promise<void>;
+  activity: PromptProps["activity"];
+  onStop: PromptProps["onStop"];
 }): Element {
+  let releaseTranscriptLayer: (() => void) | undefined;
+  onCleanup(() => releaseTranscriptLayer?.());
   const writeDraft = props.onDraft;
   const sessionPorts = useSessionPorts();
+  const { composerDocks } = useUiRegistries();
   const feedbackOwner = sessionPorts?.feedback;
   const requestFeedback = bindFeedback(() => feedbackOwner);
   const rollbackPresentation = createMemo(() =>
     revertPresentation(
       props.rollback?.state ?? {},
       requestFeedback(),
-      props.branchHistory?.state.error,
+      props.branchHistory?.state,
     )
   );
   const failureTarget = () => ({
@@ -135,14 +179,8 @@ export default function SessionView(props: {
     sessionID: props.info?.id,
     label: props.info?.title,
   });
-  const feedback = createMemo(() =>
-    sessionComposerFeedback(
-      props.errorState,
-      failureTarget(),
-      rollbackPresentation().feedback,
-    )
-  );
   let noticeControl: { focus(): void } | undefined;
+  const [activationNotice, setActivationNotice] = createSignal<string>();
   const revealLifetime = new AbortController();
   onCleanup(() => revealLifetime.abort());
   const highlightLease = createMemo(() =>
@@ -150,13 +188,197 @@ export default function SessionView(props: {
   );
   // The selected facade can release its resource before this view and its
   // commands unmount. Keep the compatibility projection valid independently.
+  const fallbackProjection = createTranscriptProjection();
   const fallback = createMemo(() => {
-    const projection = createTranscriptProjection();
-    projection.replace(props.messages ?? []);
-    projection.busy(props.busy);
-    return projection.state;
+    fallbackProjection.reset(props.messages ?? []);
+    fallbackProjection.busy(props.busy);
+    return fallbackProjection.state;
   });
+  const interaction = props.transcript?.interaction ??
+    createTranscriptInteraction();
   const projection = () => props.transcript?.state ?? fallback();
+  const messageIDs = createMemo(() => new Set(projection().messageIDs));
+  const hasRecord = (id: string) => messageIDs().has(id);
+  const feedback = createMemo(() =>
+    sessionComposerFeedback(
+      props.diagnostics,
+      failureTarget(),
+      rollbackPresentation().feedback,
+      hasRecord,
+    )
+  );
+  const rollbackState = () => rollbackPresentation().state;
+  const revertRecords = createRevertRecordProjection();
+  const displayedRecords = createMemo(() =>
+    revertRecords(projection(), rollbackState())
+  );
+  const recordGroups = () => displayedRecords();
+  const footerCompletion = (key: string) => {
+    const group = recordGroups().groups[recordGroups().completions[key]];
+    return group?.silent ? group : undefined;
+  };
+  const transcriptKeys = createMemo(() =>
+    recordGroups().keys.filter((key) => {
+      const group = recordGroups().groups[key];
+      return !group?.completionOf ||
+        footerCompletion(group.completionOf)?.key !== key;
+    })
+  );
+  const isRevert = (key: string) => {
+    const boundary = revertFlowBoundary(rollbackState());
+    return boundary && key === revertRecordKey(boundary);
+  };
+  const recordWindows = new Map<string, VirtualListControl>();
+  const recordWindow = (key: string, control: VirtualListControl) => {
+    recordWindows.set(key, control);
+    return () => {
+      if (recordWindows.get(key) === control) recordWindows.delete(key);
+    };
+  };
+  const renderRecords = (
+    group: () => import("@otk/client").ActivityGroup,
+    one: (key: string) => Element,
+    children = () => group().children ?? [],
+  ): Element => (
+    <RecordList
+      items={children()}
+      key={(child) => child.key}
+      scope={group().key}
+      control={(control) => recordWindow(group().key, control)}
+      revision={(child) => child.revision}
+      outgoing={group().direction === "outgoing"}
+      outgoingItem={(child) => child.direction === "outgoing"}
+      render={(child) =>
+        activityRecord(child, one, () => (
+          <ActivityGroup
+            group={child()}
+            onOpenChild={props.onOpenChild}
+            prefs={props.prefs}
+            body={() => (
+              <RecordList
+                items={child().members}
+                key={(key) => key}
+                scope={child().key}
+                control={(control) => recordWindow(child().key, control)}
+                revision={(key) => projection().repliesByID[key]?.revision ?? 0}
+                outgoing={child().direction === "outgoing"}
+                render={(key) => one(key())}
+              />
+            )}
+          />
+        ))}
+    />
+  );
+  const completionPort = (key: string, one: (key: string) => Element) => {
+    const completion = footerCompletion(key);
+    if (!completion) return;
+    return {
+      key: completion.key,
+      body: () => renderRecords(() => footerCompletion(key)!, one),
+    };
+  };
+  const gapKey = (key: string) => key.startsWith("gap:");
+  const gaps = () => props.transcript?.state.gaps;
+  const renderGroup = (key: string, one: (key: string) => Element) =>
+    gapKey(key)
+      ? (
+        <Show when={gaps()?.find((gap) => gap.key === key)}>
+          {(gap) => (
+            <TranscriptGap
+              gap={gap}
+              onLoad={() => void props.transcript?.bridge(key)}
+            />
+          )}
+        </Show>
+      )
+      : renderRecord(key, one);
+  const renderRecord = (key: string, one: (key: string) => Element) => (
+    <Show
+      when={isRevert(key)}
+      fallback={
+        <Show
+          when={recordGroups().groups[key]}
+          fallback={
+            <Show
+              keyed
+              when={boundaryRepresentative(recordGroups().boundaries[key])}
+              fallback={one(key)}
+            >
+              {one}
+            </Show>
+          }
+        >
+          {(group) => (
+            <RecordKinds
+              items={group().children ?? []}
+              identity={group().key}
+              count={(child) => child.members.length}
+              prefs={props.prefs}
+              activity={(child) => {
+                const reply = projection().repliesByID[child.members[0]];
+                const part = reply?.message.parts[0];
+                return reply?.message.parts.length === 1 && !reply.pending &&
+                    part?.kind === "external" &&
+                    !part.failure
+                  ? part.activity
+                  : undefined;
+              }}
+              render={(visible, meta) => (
+                <ActivityGroup
+                  group={group()}
+                  onOpenChild={props.onOpenChild}
+                  prefs={props.prefs}
+                  meta={meta}
+                  breakouts={() => (
+                    <RecordList
+                      items={group().breakouts ?? []}
+                      key={(id) => id}
+                      scope={group().key}
+                      control={(control) => recordWindow(group().key, control)}
+                      revision={(id) =>
+                        projection().repliesByID[id]?.revision ?? 0}
+                      outgoing={group().direction === "outgoing"}
+                      render={(id) => one(id())}
+                    />
+                  )}
+                  body={() => renderRecords(group, one, visible)}
+                />
+              )}
+            />
+          )}
+        </Show>
+      }
+    >
+      <RevertGroup
+        group={recordGroups().groups[key]}
+        state={rollbackState()}
+        owner={props.rollback}
+        history={props.branchHistory}
+        prefs={props.prefs}
+        target={props.info && props.sidecarId
+          ? {
+            sidecarId: props.sidecarId,
+            sessionID: props.info.id,
+            directory: props.info.directory,
+            title: props.info.title,
+          }
+          : undefined}
+        warning={props.branchHistory?.preservationWarning()}
+        failure={rollbackPresentation().recordFailure?.failure}
+        failureStatus={rollbackPresentation().recordStatus}
+        recoverCopy={rollbackPresentation().recordRecovery}
+        onOpenCopy={props.branchHistory && rollbackState().record
+          ? () => {
+            const branch = props.branchHistory!.state.branches.find((branch) =>
+              savedBranchMatches(branch, rollbackState().record!)
+            );
+            if (branch) props.branchHistory!.open(branch.id);
+          }
+          : undefined}
+        onOpenChild={props.onOpenChild}
+      />
+    </Show>
+  );
   const count = () => projection().messageIDs.length;
   // One in-flow progress per active turn: an unfinished reply owns it;
   // otherwise the turn's newest active native record does.
@@ -164,24 +386,40 @@ export default function SessionView(props: {
   const transcriptBusy = () =>
     props.loading || props.paging ||
     props.continuity === "loading" || props.continuity === "missing";
-  const rollbackNotice = () =>
-    !!props.strip || !!props.rollback?.state.pending ||
-    !!props.rollback?.state.error;
-  const rollbackState = () => rollbackPresentation().state;
-  const savedNotice = () =>
-    !!props.branchHistory &&
-    (!!props.branchHistory.state.branches.length ||
-      !!props.branchHistory.state.error || props.branchHistory.state.pending);
   const noticed = () =>
-    rollbackNotice() || savedNotice() || !!props.forkNote || !!feedback();
-  const branchFailureVisible = () => {
-    const value = props.branchHistory?.state.error;
-    return !value || value.diagnosticID !== feedback()?.diagnosticID;
-  };
+    !!props.forkNote || !!feedback() || !!activationNotice() ||
+    !!props.draftRecoveries?.length ||
+    !!props.branchHistory?.state.permanence ||
+    rollbackPresentation().noticeRecovery ||
+    !!props.branchHistory?.state.choice ||
+    !!rollbackPresentation().branchFeedback;
   // The slot's identity is its mounted lifetime, not each feedback publication.
   const notice = () => (
     <ComposerNotice>
-      <Show when={feedback()}>
+      <Show when={props.branchHistory}>
+        {(owner) => (
+          <>
+            <RevertSendChoice
+              owner={owner()}
+              feedback={rollbackPresentation().permanenceFeedback}
+            />
+            <SavedBranchNotice
+              owner={owner()}
+              feedback={rollbackPresentation().branchFeedback}
+              recoveryVisible={rollbackPresentation().noticeRecovery}
+              statusVisible={false}
+            />
+          </>
+        )}
+      </Show>
+      <Show when={activationNotice()}>
+        {(text) => <ComposerActionNotice text={text()} />}
+      </Show>
+      <Show
+        when={feedback()?.kind !== "pending" || !activationNotice()
+          ? feedback()
+          : undefined}
+      >
         {(value) => (
           <OperationFeedback
             feedback={value()}
@@ -193,21 +431,9 @@ export default function SessionView(props: {
           />
         )}
       </Show>
-      <Show when={rollbackNotice()}>
-        <RolledBackContent
-          strip={props.strip}
-          state={rollbackState()}
-          preservationWarning={props.branchHistory?.preservationWarning()}
-        />
-      </Show>
-      <Show when={props.branchHistory}>
-        {(owner) => (
-          <SavedBranchNotice
-            owner={owner()}
-            failureVisible={branchFailureVisible()}
-          />
-        )}
-      </Show>
+      <For each={props.draftRecoveries}>
+        {(recovery) => <DraftRecoveryNotice recovery={recovery} />}
+      </For>
       <Show when={props.forkNote}>
         {(note) => (
           <ForkFact
@@ -243,18 +469,46 @@ export default function SessionView(props: {
   });
   const publishHistory = () =>
     following?.history({
+      appendRevision: props.transcript?.state.appendRevision ??
+        fallback().appendRevision,
       first: projection().messageIDs[0],
       last: projection().messageIDs.at(-1),
       exhausted: props.exhausted,
     });
   createEffect(() => ({
+    appendRevision: props.transcript?.state.appendRevision ??
+      fallback().appendRevision,
     first: projection().messageIDs[0],
     last: projection().messageIDs.at(-1),
     exhausted: props.exhausted,
   }), () => publishHistory());
   let followIntent = true;
   let window: VirtualListControl | undefined;
+  let focusHome: HTMLElement | undefined;
   let source: ReturnType<typeof sourceViewport> | undefined;
+  createEffect(() => ({
+    boundary: revertFlowBoundary(rollbackState()),
+    phase: rollbackState().phase,
+  }), (next, previous) => {
+    if (
+      !next.boundary || next.phase === "confirming" ||
+      next.boundary === previous?.boundary && previous.phase !== "confirming"
+    ) return;
+    onSettled(() => {
+      void window?.reveal(revertRecordKey(next.boundary!), { align: "nearest" })
+        .catch((cause) => {
+          if (!isCancellation(cause)) {
+            setRevealError(failureValue(cause, {
+              actionLabel: "Revealing the staged revert",
+              target: failureTarget(),
+              reason: "The reverted messages could not be brought into view.",
+              recovery:
+                "Use Jump to latest to see the revert and its Restore action.",
+            }));
+          }
+        });
+    });
+  });
   const regions = new Map<HTMLElement, { id: string; release?: () => void }>();
   const attachSource = (element: HTMLElement, id: string) => {
     const region = { id, release: source?.attach(element, id) };
@@ -264,6 +518,39 @@ export default function SessionView(props: {
       region.release?.();
     };
   };
+  const { commands } = commandPorts;
+  const workTarget = (turn: string) =>
+    props.sidecarId && props.info?.id
+      ? { sidecarId: props.sidecarId, sessionID: props.info.id, turn }
+      : undefined;
+  const workRuns = (turn: string) => {
+    const target = workTarget(turn);
+    return target && props.work?.model(target)?.runs(turn) || undefined;
+  };
+  const showWork = (turn: string, run?: string) => {
+    const target = workTarget(turn);
+    if (target) return commands.run("work.show", { ...target, run });
+  };
+  const workAction = (
+    target: NonNullable<ReturnType<typeof workTarget>>,
+    run?: string,
+  ) => {
+    const control = commands.control("work.show", { ...target, run }, {
+      target,
+      shown: () => props.work?.shows(target, target.turn) ?? false,
+      unshown: "The Work log did not open.",
+      recovery: "Try opening the Work log again.",
+    });
+    return {
+      ...control,
+      run: () => {
+        // Inspecting reply work is a reading intent. Keep this anchor instead
+        // of following new tail content behind the pane.
+        if (control.availability().available) following?.pause();
+        return control.run();
+      },
+    };
+  };
   const controls = new Map<string, MessageControl>();
   const reveal = ownedCommand(useCommandPorts(), {
     id: "transcript.reveal",
@@ -271,14 +558,20 @@ export default function SessionView(props: {
     category: "Transcript",
     arguments: {
       type: "object",
-      properties: { messageID: { type: "string" } },
+      properties: {
+        messageID: { type: "string" },
+        partID: { type: "string", optional: true },
+        replyOnly: { type: "boolean", optional: true },
+      },
     },
     enabled: (_ctx, target?: { messageID: string }) =>
       !props.branchHistory?.state.opened && !!target?.messageID &&
       (!!projection().messagesByID[target.messageID] || !!props.transcript),
-    run: async (_ctx, target: { messageID: string }) => {
+    run: async (
+      _ctx,
+      target: { messageID: string; partID?: string; replyOnly?: boolean },
+    ) => {
       setRevealError(undefined);
-      following?.pause();
       await props.transcript?.ensure(target.messageID, revealLifetime.signal);
       const message = projection().messagesByID[target.messageID];
       if (!message) {
@@ -288,21 +581,77 @@ export default function SessionView(props: {
           diagnosticID: randomID(),
         });
       }
-      const key = replyKey(message), reply = projection().repliesByID[key];
-      await window?.reveal(key, {
+      const reply = props.transcript?.projection.entry(message.id) ??
+        projection().repliesByID[replyKey(message)];
+      const key = reply?.key ?? replyKey(message);
+      const runs = workRuns(key);
+      const run = target.partID
+        ? runs?.runOf(target.partID)
+        : message.parts.map((part) => runs?.runOf(part.id)).find(Boolean);
+      if (run && reply && !target.replyOnly) {
+        await window?.reveal(key, {
+          align: "nearest",
+          intent: "user",
+        });
+        await controls.get(reply.message.id)?.revealFooter();
+        await showWork(key, run);
+        return;
+      }
+      const ancestors = recordGroups().parents[key] ?? [];
+      const part = message.parts[0];
+      const recordOwner = recordGroups().owners[key];
+      const interval = recordGroups().groups[recordOwner];
+      const completionOf = interval?.completionOf &&
+          footerCompletion(interval.completionOf)?.key === recordOwner
+        ? interval.completionOf
+        : undefined;
+      if (recordOwner && part?.kind === "external" && part.activity?.fold) {
+        recordKindDisclosure(interaction, recordOwner, part.activity.category)
+          .set(true);
+      }
+      interaction.reveal(ancestors);
+      const focus = () => {
+        const member = recordOwner &&
+          boundaryRepresentative(recordGroups().boundaries[recordOwner]);
+        const control = controls.get(
+          member || (reply?.message.id ?? target.messageID),
+        );
+        if (!control) {
+          throw new RequestFailure({
+            code: "message.missing",
+            retry: "none",
+            diagnosticID: randomID(),
+          });
+        }
+        control.reveal();
+      };
+      await window?.reveal(completionOf ?? recordOwner ?? key, {
         align: "center",
-        focus: () => {
-          const control = controls.get(reply?.message.id ?? target.messageID);
-          if (!control) {
-            throw new RequestFailure({
-              code: "message.missing",
-              retry: "none",
-              diagnosticID: randomID(),
-            });
-          }
-          control.reveal();
-        },
+        intent: "user",
+        focus: ancestors.length ? undefined : focus,
       });
+      if (completionOf) {
+        const replyID = projection().repliesByID[completionOf]?.message.id;
+        if (replyID) await controls.get(replyID)?.revealFooter();
+      }
+      for (let n = 0; n < ancestors.length; n++) {
+        const control = recordWindows.get(ancestors[n]);
+        if (!control) {
+          throw new RequestFailure({
+            code: "message.missing",
+            retry: "none",
+            diagnosticID: randomID(),
+          });
+        }
+        await control.reveal(
+          ancestors[n + 1] ?? recordGroups().leaves[key] ?? key,
+          {
+            align: "center",
+            intent: "user",
+            focus: n === ancestors.length - 1 ? focus : undefined,
+          },
+        );
+      }
     },
   });
   let releaseHighlighting: (() => void) | undefined;
@@ -332,13 +681,29 @@ export default function SessionView(props: {
         if (props.retryState) setNow(Date.now());
       }, 1000);
       following = followViewport(list, flow);
+      let sendRevision = sessionPorts?.delivery?.state.follow;
+      const releaseSends = sessionPorts?.delivery?.subscribe(() => {
+        const next = sessionPorts.delivery?.state.follow;
+        if (next === sendRevision) return;
+        sendRevision = next;
+        props.transcript?.interaction.anchor(null);
+        following?.reset();
+      });
       publishHistory();
       setGeometry(following.snapshot());
       const releaseGeometry = following.subscribeSnapshot(setGeometry);
       source = sourceViewport(
         list,
         () => projection().messageIDs,
-        (range) => props.transcript?.viewport(range),
+        (range) => {
+          props.transcript?.viewport(range);
+          if (range) {
+            const ids = projection().messageIDs;
+            sessionPorts?.delivery?.presented(
+              ids.slice(ids.indexOf(range.first), ids.indexOf(range.last) + 1),
+            );
+          }
+        },
       );
       for (const [element, region] of regions) {
         region.release = source.attach(element, region.id);
@@ -371,6 +736,7 @@ export default function SessionView(props: {
       return () => {
         clearInterval(clock);
         releaseGeometry();
+        releaseSends?.();
         following?.dispose();
         source?.dispose();
         source = undefined;
@@ -384,412 +750,564 @@ export default function SessionView(props: {
   return (
     <HighlightProvider lease={highlightLease()}>
       <TranscriptContext
-        interaction={props.transcript?.interaction}
+        interaction={interaction}
         nativeSource={props.transcript?.nativeSource}
         visibility={attachSource}
+        focusHome={() => focusHome?.focus({ preventScroll: true })}
       >
         <PathProvider
           paths={sessionPorts?.directoryCatalog?.state.catalog?.paths}
         >
           <section
             class="otk-session-view"
+            tabindex={-1}
+            ref={(element) => focusHome = element}
             aria-label="Session"
             aria-busy={transcriptBusy() ? "true" : "false"}
           >
             {props.displayMenu}
-            <Show when={props.info?.parentID}>
-              <SubagentBar
-                info={props.info!}
-                siblings={props.siblings}
-                onMove={props.transcript
-                  ? async (delta) => {
-                    const id = await props.transcript!.sibling(delta);
-                    if (id) props.onOpenChild(id);
-                  }
-                  : undefined}
-                onOpen={props.onOpenChild}
-              />
-            </Show>
-            <Show when={props.branchHistory?.state.opened}>
-              <SavedBranches
-                owner={props.branchHistory!}
-                prefs={props.prefs}
-                onOpenChild={props.onOpenChild}
-              />
-            </Show>
-            <Show when={!props.branchHistory?.state.opened}>
-              {(_live) => {
-                mountViewport();
-                return (
+            <div class="otk-session-content">
+              <div
+                class={["otk-transcript-stage", {
+                  "has-bounded-viewport": !!props.transcript ||
+                    !!props.mountTranscriptLayer,
+                }]}
+                ref={(element) => {
+                  releaseTranscriptLayer = props.mountTranscriptLayer?.(
+                    element,
+                  );
+                }}
+              >
+                <Show when={props.branchHistory?.state.opened}>
                   <div class="otk-transcript-viewport">
-                    <div
-                      role="region"
-                      aria-label="Transcript"
-                      aria-busy={transcriptBusy() ? "true" : "false"}
-                      class={[
-                        scrollRegion(
-                          "both",
-                          props.prefs.scrollbar ? "thin" : "hidden",
-                        ),
-                        "otk-messages",
-                        { "is-empty": !count() },
-                      ]}
-                      ref={[
-                        (element) => {
-                          list = element;
-                        },
-                        contextTarget(() => ({
-                          kind: "session",
-                          area: true,
-                          data: props.info && {
-                            sidecarId: props.sidecarId,
-                            sessionID: props.info.id,
-                            directory: props.info.directory,
-                            title: props.info.title,
-                          },
-                        })),
-                      ]}
-                    >
-                      <Show
-                        when={!count() &&
-                          (props.loading || props.error ||
-                            props.continuity === "missing")}
-                      >
-                        <PaneState
-                          feedback={props.error
-                            ? {
-                              ...errorFeedback(props.error)!,
-                              action: {
-                                label: "Retry messages",
-                                run: () => void retry(),
-                              },
-                            }
-                            : undefined}
-                        >
-                          <Show when={!props.error}>
-                            <ProgressStatus
-                              text={props.transcript?.progress
-                                ? props.transcript.progress().text
-                                : "Loading messages..."}
-                            />
-                          </Show>
-                        </PaneState>
-                      </Show>
-                      <Show
-                        when={!props.loading && !count() && !props.error &&
-                          !props.sessionError && !props.info?.notices?.length &&
-                          props.continuity !== "missing"}
-                      >
-                        <PaneState>
-                          <EmptyState>Start a conversation below.</EmptyState>
-                        </PaneState>
-                      </Show>
-                      <Show
-                        when={!!count() &&
-                          (props.loading || props.continuity === "missing")}
-                      >
-                        <ProgressStatus
-                          text={props.transcript?.progress
-                            ? props.transcript.progress().text
-                            : "Loading messages..."}
-                        />
-                      </Show>
-                      <div
-                        class="otk-message-flow"
-                        data-message-count={count()}
-                        ref={(element) => {
-                          flow = element;
-                        }}
-                      >
-                        <Show when={props.paging}>
-                          <PaneState>
-                            <ProgressStatus
-                              text={props.transcript?.progress
-                                ? props.transcript.progress().text
-                                : "Loading earlier messages..."}
-                            />
-                          </PaneState>
-                        </Show>
-                        <Show
-                          when={!props.exhausted && count() &&
-                            !props.paging && !props.loading &&
-                            props.continuity !== "missing"}
-                        >
-                          <button
-                            type="button"
-                            class="otk-load-older"
-                            onClick={() => void older()}
-                          >
-                            Load older messages
-                          </button>
-                        </Show>
-                        <Show when={props.error && !!count()}>
-                          <PaneState
-                            feedback={{
-                              ...errorFeedback(props.error)!,
-                              action: {
-                                label: "Retry messages",
-                                run: () => void retry(),
-                              },
-                            }}
-                          />
-                        </Show>
-                        <Show when={revealError()}>
-                          <PaneState feedback={errorFeedback(revealError())} />
-                        </Show>
-                        <SessionError
-                          state={props.errorState}
-                          error={props.sessionError}
-                          target={failureTarget()}
-                          operationKey={feedback()?.identity}
-                          diagnosticID={feedback()?.diagnosticID}
-                          composer={feedback()}
-                          onReveal={(messageID) =>
-                            void reveal({ messageID }).catch((cause) =>
-                              setRevealError(failureValue(cause))
-                            )}
-                        />
-                        <For each={props.info?.notices}>
-                          {(failure) => (
-                            <FeedbackStatus
-                              class="otk-session-notice"
-                              feedback={placeFailure(
-                                contextualFailure(failure, {
-                                  target: failureTarget(),
-                                }),
-                                { surface: "session", view: failureTarget() },
-                              )}
-                            />
-                          )}
-                        </For>
-                        <Show when={props.retryState}>
-                          {(retry) => (
-                            <div class="otk-retry-banner" role="status">
-                              <strong>
-                                Retrying · attempt {retry().attempt}
-                              </strong>
-                              <p>{retry().message}</p>
-                              <span>
-                                Next attempt in {Math.max(
-                                  0,
-                                  Math.ceil((retry().next - now()) / 1000),
-                                )}s
-                              </span>
-                            </div>
-                          )}
-                        </Show>
-                        <Show
-                          when={!props.transcript ||
-                            props.transcript.state.temperature === "screen"}
-                        >
-                          {(_screen) => {
-                            const positionAnchor = props.transcript?.interaction
-                              .anchor();
-                            return (
-                              <VirtualList
-                                keys={projection().replyIDs}
-                                label="Transcript messages"
-                                viewport={() => list}
-                                samples={[{
-                                  role: "reply",
-                                  class: "otk-window-reply-estimate",
-                                }]}
-                                role={() => "reply"}
-                                overscan={0}
-                                retainExcluded={false}
-                                measurements={props.transcript?.interaction
-                                  .measurements}
-                                control={(control) => {
-                                  window = control;
-                                }}
-                                position={positionAnchor
-                                  ? {
-                                    scrollTop: 0,
-                                    anchor: positionAnchor,
-                                  }
-                                  : undefined}
-                                onPosition={(position) => {
-                                  followIntent = following?.following() ??
-                                    followIntent;
-                                  if (followIntent) {
-                                    props.transcript?.interaction.anchor(null);
-                                    return;
-                                  }
-                                  if (position.anchor) {
-                                    props.transcript?.interaction.anchor(
-                                      {
-                                        ...position.anchor,
-                                        messageID: projection()
-                                          .repliesByID[position.anchor.key]
-                                          ?.messageIDs[0],
-                                      },
-                                    );
-                                  }
-                                }}
-                                onPins={(keys) =>
-                                  props.transcript?.pin(
-                                    keys.flatMap((key) =>
-                                      projection().repliesByID[key]
-                                        ?.messageIDs ?? []
-                                    ),
-                                  )}
-                                render={(key) => (
-                                  <Show when={projection().repliesByID[key]}>
-                                    {(reply) => {
-                                      const message = () =>
-                                        reply().message;
-                                      const turnID = () =>
-                                        message().role === "assistant"
-                                          ? (message() as import("@otk/protocol").AssistantMessage)
-                                            .replyTo ?? message().id
-                                          : message().id;
-                                      const target = () => ({
-                                        sidecarId: props.sidecarId!,
-                                        sessionID: message().sessionID,
-                                        turnID: turnID(),
-                                      });
-                                      return (
-                                        <Message
-                                          sidecarId={props.sidecarId}
-                                          sessionTitle={props.entry?.title ??
-                                            props.info?.title}
-                                          ownerID={reply().key}
-                                          segments={reply().segments}
-                                          message={message()}
-                                          lastID={reply().lastID}
-                                          pending={reply().pending}
-                                          recovery={props.transcript?.state
-                                            .content
-                                            .recovering
-                                            ?.find((
-                                              p,
-                                            ) =>
-                                              reply().messageIDs.includes(
-                                                p.messageID,
-                                              )
-                                            )
-                                            ?.state ??
-                                            (props.transcript?.state.recovering
-                                                .some((
-                                                  p,
-                                                ) =>
-                                                  reply().messageIDs.includes(
-                                                    p.messageID,
-                                                  )
-                                                )
-                                              ? "recovering"
-                                              : undefined)}
-                                          onRetryRecovery={() => void retry()}
-                                          usage={props.usageOwner?.priced(
-                                            target(),
-                                            props.catalog,
-                                          )}
-                                          summary={sessionResult(
-                                            props.entry,
-                                            message(),
-                                          )}
-                                          openUsage={props.openUsage
-                                            ? () => props.openUsage!(turnID())
-                                            : undefined}
-                                          usageError={() =>
-                                            props.usageError?.(turnID())}
-                                          copySource={props.transcript
-                                            ? (id, text) =>
-                                              props.transcript!.source(id, text)
-                                            : undefined}
-                                          activeRecord={progressRecord() ===
-                                            message().id}
-                                          copyIncomplete={message().role ===
-                                              "assistant" &&
-                                            !!props.transcript &&
-                                            (!props.exhausted &&
-                                              (!props.transcript.projection
-                                                .boundary(
-                                                  turnID(),
-                                                )
-                                                ?.firstID ||
-                                                !projection()
-                                                  .messagesByID[
-                                                    reply().firstID
-                                                  ]))}
-                                          prefs={props.prefs}
-                                          directory={props.info?.directory}
-                                          permissions={props.permissions}
-                                          onOpenChild={props.onOpenChild}
-                                          queued={projection().queuedIDs.has(
-                                            message().id,
-                                          )}
-                                          control={(control) => {
-                                            const id = message().id;
-                                            controls.set(id, control);
-                                            return () => {
-                                              if (
-                                                controls.get(id) === control
-                                              ) {
-                                                controls
-                                                  .delete(id);
-                                              }
-                                            };
-                                          }}
-                                        />
-                                      );
-                                    }}
-                                  </Show>
-                                )}
-                              />
-                            );
-                          }}
-                        </Show>
-                      </div>
-                    </div>
-                    <JumpToLatest
-                      visible={!!geometry() &&
-                        geometry()!.distanceFromBottom >
-                          geometry()!.viewportHeight}
-                      title={hints.title("transcript.latest", "Jump to latest")}
-                      onJump={() => {
-                        void latest().catch((error) => {
-                          if (!isCancellation(error)) {
-                            setRevealError(failureValue(error, {
-                              actionLabel: "Revealing latest messages",
-                              target: {
-                                sidecarId: props.sidecarId,
-                                sessionID: props.info?.id,
-                                label: props.info?.title,
-                              },
-                            }));
-                          }
-                        });
-                      }}
+                    <SavedBranches
+                      owner={props.branchHistory!}
+                      prefs={props.prefs}
+                      onOpenChild={props.onOpenChild}
                     />
                   </div>
-                );
-              }}
-            </Show>
+                </Show>
+                <Show when={!props.branchHistory?.state.opened}>
+                  {(_live) => {
+                    mountViewport();
+                    return (
+                      <div class="otk-transcript-viewport">
+                        <ScrollRegion
+                          role="region"
+                          aria-label="Transcript"
+                          aria-busy={transcriptBusy() ? "true" : "false"}
+                          class={[
+                            "otk-messages",
+                            {
+                              "is-empty": !count() &&
+                                !revertFlowBoundary(rollbackState()) &&
+                                !sessionPorts?.delivery?.state.receipts.length,
+                            },
+                          ]}
+                          scrollbar={props.prefs.scrollbar ? "otk" : "hidden"}
+                          ref={[
+                            (element) => {
+                              list = element;
+                            },
+                            contextTarget(() => ({
+                              kind: "session",
+                              area: true,
+                              data: props.info && {
+                                sidecarId: props.sidecarId,
+                                sessionID: props.info.id,
+                                directory: props.info.directory,
+                                title: props.info.title,
+                              },
+                            })),
+                          ]}
+                        >
+                          <Show
+                            when={!count() &&
+                              !sessionPorts?.delivery?.state.receipts.length &&
+                              props.error}
+                          >
+                            <PaneState
+                              feedback={{
+                                ...errorFeedback(props.error)!,
+                                action: {
+                                  label: "Retry messages",
+                                  run: () => void retry(),
+                                },
+                              }}
+                            />
+                          </Show>
+                          <Show
+                            when={!props.loading && !count() &&
+                              !revertFlowBoundary(rollbackState()) &&
+                              !props.error &&
+                              !sessionPorts?.delivery?.state.receipts.length &&
+                              !props.sessionError &&
+                              !props.info?.notices?.length &&
+                              props.continuity !== "missing"}
+                          >
+                            <PaneState>
+                              <EmptyState>
+                                Start a conversation below.
+                              </EmptyState>
+                            </PaneState>
+                          </Show>
+                          <div
+                            class="otk-message-flow"
+                            data-message-count={count()}
+                            ref={(element) => {
+                              flow = element;
+                            }}
+                          >
+                            <Show
+                              when={!props.exhausted && count() &&
+                                !props.paging && !props.loading &&
+                                props.continuity !== "missing"}
+                            >
+                              <button
+                                type="button"
+                                class="otk-load-older"
+                                onClick={() => void older()}
+                              >
+                                Load older messages
+                              </button>
+                            </Show>
+                            <Show
+                              when={props.error && !!count() &&
+                                !gaps()?.some((gap) =>
+                                  gap.failure === props.error
+                                )}
+                            >
+                              <PaneState
+                                feedback={{
+                                  ...errorFeedback(props.error)!,
+                                  action: {
+                                    label: "Retry messages",
+                                    run: () => void retry(),
+                                  },
+                                }}
+                              />
+                            </Show>
+                            <Show when={revealError()}>
+                              <PaneState
+                                feedback={errorFeedback(revealError())}
+                              />
+                            </Show>
+                            <SessionError
+                              state={props.diagnostics}
+                              error={props.sessionError}
+                              target={failureTarget()}
+                              operationKey={feedback()?.identity}
+                              diagnosticID={feedback()?.diagnosticID}
+                              composer={feedback()}
+                              hasRecord={hasRecord}
+                              onReveal={(messageID) =>
+                                void reveal({ messageID }).catch((cause) =>
+                                  setRevealError(failureValue(cause))
+                                )}
+                            />
+                            <For each={props.info?.notices}>
+                              {(failure) => (
+                                <FeedbackStatus
+                                  class="otk-session-notice"
+                                  singleLine
+                                  feedback={placeFailure(
+                                    contextualFailure(failure, {
+                                      target: failureTarget(),
+                                    }),
+                                    {
+                                      surface: "session",
+                                      view: failureTarget(),
+                                      hasRecord,
+                                    },
+                                  )}
+                                />
+                              )}
+                            </For>
+                            <Show when={props.retryState}>
+                              {(retry) => (
+                                <div class="otk-retry-banner" role="status">
+                                  <strong>
+                                    Retrying · attempt {retry().attempt}
+                                  </strong>
+                                  <Show when={retry().message}>
+                                    {(message) => (
+                                      <p title={message()}>{message()}</p>
+                                    )}
+                                  </Show>
+                                  <Show when={retry().next !== undefined}>
+                                    <span>
+                                      Next attempt in{" "}
+                                      <TimeText
+                                        time={remaining(
+                                          retry().next! - now(),
+                                          "second",
+                                        )}
+                                      />
+                                    </span>
+                                  </Show>
+                                </div>
+                              )}
+                            </Show>
+                            <Show
+                              when={!props.transcript ||
+                                props.transcript.state.temperature === "screen"}
+                            >
+                              {(_screen) => {
+                                const positionAnchor = props.transcript
+                                  ?.interaction
+                                  .anchor();
+                                return (
+                                  <VirtualList
+                                    keys={transcriptKeys()}
+                                    revision={recordGroups().revision}
+                                    anchorable={(key) => !gapKey(key)}
+                                    measurementKey={(key) =>
+                                      gapKey(key)
+                                        ? key
+                                        : `${key}:${
+                                          recordGroups().revisions[key] ?? 0
+                                        }:${
+                                          footerCompletion(key)?.revision ?? 0
+                                        }`}
+                                    label="Transcript messages"
+                                    viewport={() => list}
+                                    samples={[{
+                                      role: "reply",
+                                      class: "otk-window-reply-estimate",
+                                    }]}
+                                    role={() => "reply"}
+                                    overscan={0}
+                                    retainExcluded={false}
+                                    measurements={props.transcript?.interaction
+                                      .measurements}
+                                    control={(control) => {
+                                      window = control;
+                                    }}
+                                    position={positionAnchor
+                                      ? {
+                                        scrollTop: 0,
+                                        anchor: positionAnchor,
+                                      }
+                                      : undefined}
+                                    onPosition={(position) => {
+                                      followIntent = following?.following() ??
+                                        followIntent;
+                                      if (followIntent) {
+                                        props.transcript?.interaction.anchor(
+                                          null,
+                                        );
+                                        return;
+                                      }
+                                      if (position.anchor) {
+                                        props.transcript?.interaction.anchor(
+                                          {
+                                            ...position.anchor,
+                                            messageID: projection()
+                                              .repliesByID[
+                                                recordGroups()
+                                                  .groups[position.anchor.key]
+                                                  ?.members[0] ??
+                                                  position.anchor.key
+                                              ]
+                                              ?.messageIDs[0],
+                                          },
+                                        );
+                                      }
+                                    }}
+                                    onPins={(keys) =>
+                                      props.transcript?.pin(
+                                        keys.flatMap((key) =>
+                                          (recordGroups().boundaries[key] ??
+                                            recordGroups().groups[key]
+                                              ?.members ??
+                                            [
+                                              key,
+                                              ...(footerCompletion(key)
+                                                ?.members ??
+                                                []),
+                                            ])
+                                            .flatMap((member) =>
+                                              projection().repliesByID[member]
+                                                ?.messageIDs ?? []
+                                            )
+                                        ),
+                                      )}
+                                    render={(key) =>
+                                      renderGroup(
+                                        key,
+                                        function renderReply(key): Element {
+                                          return (
+                                            <Show
+                                              when={projection()
+                                                .repliesByID[key]}
+                                            >
+                                              {(reply) => {
+                                                const message = () =>
+                                                  reply().message;
+                                                const turnID = () =>
+                                                  message().role === "assistant"
+                                                    ? (message() as import("@otk/protocol").AssistantMessage)
+                                                      .replyTo ?? message().id
+                                                    : message().id;
+                                                const target = () => ({
+                                                  sidecarId: props.sidecarId!,
+                                                  sessionID:
+                                                    message().sessionID,
+                                                  turnID: turnID(),
+                                                });
+                                                const work = () => {
+                                                  const runs = workRuns(key);
+                                                  const target = workTarget(
+                                                    key,
+                                                  );
+                                                  return runs && target
+                                                    ? {
+                                                      runs,
+                                                      shown: props.work?.shows(
+                                                        target,
+                                                        key,
+                                                      ) ?? false,
+                                                      action: (run?: string) =>
+                                                        workAction(target, run),
+                                                      onFeedback: (
+                                                        outcome: {
+                                                          feedback:
+                                                            import("@otk/client").Feedback;
+                                                        },
+                                                      ) =>
+                                                        setRevealError(
+                                                          outcome.feedback,
+                                                        ),
+                                                    }
+                                                    : undefined;
+                                                };
+                                                return (
+                                                  <>
+                                                    <Message
+                                                      sidecarId={props
+                                                        .sidecarId}
+                                                      sessionTitle={props.entry
+                                                        ?.title ??
+                                                        props.info?.title}
+                                                      ownerID={reply().key}
+                                                      segments={reply()
+                                                        .segments}
+                                                      message={message()}
+                                                      work={work()}
+                                                      send={reply().send}
+                                                      sourceTime={(id) =>
+                                                        projection()
+                                                          .messagesByID[id]
+                                                          ?.time.created}
+                                                      sourceOutcomeTime={(
+                                                        id,
+                                                      ) => {
+                                                        const source =
+                                                          projection()
+                                                            .messagesByID[id];
+                                                        return source?.role !==
+                                                            "user"
+                                                          ? source?.outcomeTime
+                                                          : undefined;
+                                                      }}
+                                                      lastID={reply().lastID}
+                                                      pending={reply().pending}
+                                                      completion={completionPort(
+                                                        key,
+                                                        renderReply,
+                                                      )}
+                                                      recovery={props.transcript
+                                                        ?.state
+                                                        .content
+                                                        .recovering
+                                                        ?.find((
+                                                          p,
+                                                        ) =>
+                                                          reply().messageIDs
+                                                            .includes(
+                                                              p.messageID,
+                                                            )
+                                                        )
+                                                        ?.state ??
+                                                        (props.transcript?.state
+                                                            .recovering
+                                                            .some((
+                                                              p,
+                                                            ) =>
+                                                              reply().messageIDs
+                                                                .includes(
+                                                                  p.messageID,
+                                                                )
+                                                            )
+                                                          ? "recovering"
+                                                          : undefined)}
+                                                      onRetryRecovery={() =>
+                                                        void retry()}
+                                                      usage={props.usageOwner
+                                                        ?.priced(
+                                                          target(),
+                                                          props.catalog,
+                                                        )}
+                                                      summary={sessionResult(
+                                                        props.entry,
+                                                        message(),
+                                                      )}
+                                                      openUsage={props.openUsage
+                                                        ? () =>
+                                                          props.openUsage!(
+                                                            turnID(),
+                                                          )
+                                                        : undefined}
+                                                      usageError={() =>
+                                                        props.usageError?.(
+                                                          turnID(),
+                                                        )}
+                                                      copySource={props
+                                                          .transcript
+                                                        ? (id, text) =>
+                                                          props.transcript!
+                                                            .source(
+                                                              id,
+                                                              text,
+                                                            )
+                                                        : undefined}
+                                                      activeRecord={progressRecord() ===
+                                                        message().id}
+                                                      copyIncomplete={!!props
+                                                        .transcript &&
+                                                        replySourceIncomplete(
+                                                          props.transcript,
+                                                          reply(),
+                                                          props.exhausted,
+                                                        )}
+                                                      prefs={props.prefs}
+                                                      directory={props.info
+                                                        ?.directory}
+                                                      permissions={props
+                                                        .permissions}
+                                                      onOpenChild={props
+                                                        .onOpenChild}
+                                                      queued={projection()
+                                                        .queuedIDs
+                                                        .has(
+                                                          message().id,
+                                                        )}
+                                                      control={(control) => {
+                                                        const id = message().id;
+                                                        controls.set(
+                                                          id,
+                                                          control,
+                                                        );
+                                                        return () => {
+                                                          if (
+                                                            controls.get(id) ===
+                                                              control
+                                                          ) {
+                                                            controls
+                                                              .delete(id);
+                                                          }
+                                                        };
+                                                      }}
+                                                    />
+                                                    <Show
+                                                      when={props.rollback &&
+                                                        rollbackState()
+                                                            .confirmation
+                                                            ?.messageID ===
+                                                          message().id &&
+                                                        (rollbackState()
+                                                              .phase ===
+                                                            "confirming" ||
+                                                          rollbackState()
+                                                                  .phase ===
+                                                                "failed" &&
+                                                            !rollbackState()
+                                                              .record)}
+                                                    >
+                                                      <RevertConfirmation
+                                                        owner={props.rollback!}
+                                                      />
+                                                    </Show>
+                                                  </>
+                                                );
+                                              }}
+                                            </Show>
+                                          );
+                                        },
+                                      )}
+                                  />
+                                );
+                              }}
+                            </Show>
+                            <MessageDelivery
+                              owner={sessionPorts?.delivery}
+                              class="otk-transcript-delivery"
+                            />
+                          </div>
+                        </ScrollRegion>
+                        <JumpToLatest
+                          visible={!!geometry() &&
+                            (geometry()!.newMessages ||
+                              geometry()!.distanceFromBottom >
+                                geometry()!.viewportHeight)}
+                          newMessages={geometry()?.newMessages}
+                          title={hints.title(
+                            "transcript.latest",
+                            "Jump to latest",
+                          )}
+                          onJump={() => {
+                            void latest().catch((error) => {
+                              if (!isCancellation(error)) {
+                                setRevealError(failureValue(error, {
+                                  actionLabel: "Revealing latest messages",
+                                  target: {
+                                    sidecarId: props.sidecarId,
+                                    sessionID: props.info?.id,
+                                    label: props.info?.title,
+                                  },
+                                }));
+                              }
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  }}
+                </Show>
+              </div>
+              <div class="otk-session-docks">
+                <For
+                  each={composerDocks.available(sessionPorts.supports)}
+                  keyed={(dock) => dock.id}
+                >
+                  {(dock) => dock().component()}
+                </For>
+              </div>
+            </div>
             <ComposerTakeovers
               focusNotice={() => noticeControl?.focus()}
               notice={noticed() ? notice : undefined}
-              readOnly={props.child}
             >
               {(active) => (
                 <div
                   class={["otk-composer-stack", {}]}
-                  hidden={active()}
                   inert={active()}
                 >
                   <div
                     class={["otk-composer-input", {}]}
                   >
                     <Prompt
+                      joinRequired={props.child}
                       suspended={active()}
                       context={props.latestPrompt}
-                      busy={props.busy}
+                      activity={props.activity}
                       value={props.draft}
                       connected={props.connected}
                       onChange={writeDraft}
-                      onSubmit={(parts, mode, selection) =>
-                        props.onPrompt(parts, mode, selection)}
-                      onAbort={() => props.onAbort()}
+                      captureSend={props.captureSend}
+                      onSubmit={props.onPrompt}
+                      onStop={props.onStop}
+                      onActivationNotice={setActivationNotice}
                     />
                   </div>
                 </div>

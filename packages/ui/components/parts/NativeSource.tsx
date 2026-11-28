@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "../tools/ToolFrame.css" with { type: "text" };
-import "./NativeSource.css" with { type: "text" };
+import CodeBlock from "../CodeBlock.tsx";
 import {
   createEffect,
   createMemo,
@@ -12,11 +12,13 @@ import type { Preferences } from "@otk/protocol";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "../FeedbackStatus.tsx";
 import {
-  retainedDisclosure,
+  transcriptDisclosureIdentity,
   useNativeSource,
 } from "../../features/transcript-context.tsx";
-import { ChevronIcon } from "../ChromeIcons.tsx";
+import { TreeItem, TreeNode } from "../Tree.tsx";
+import { WorkLogIcon } from "../ChromeIcons.tsx";
 import { sourcePreview } from "./native-source-preview.ts";
+import Disclosure, { useDisclosure } from "../Disclosure.tsx";
 
 type Loaded =
   | { state: "loading" }
@@ -30,17 +32,16 @@ export default function NativeSource(props: {
   preview?: { text: string; bytes: number; truncated: boolean };
   prefs: Preferences;
 }): import("solid-js").Element {
-  const [open, setOpen] = retainedDisclosure(
-    "source",
-    "source",
-    () => props.prefs,
-  );
+  const identify = transcriptDisclosureIdentity();
+  const hasContent = () => !!(props.reference || props.preview);
+  const input = { category: "source" as const, prefs: () => props.prefs };
+  const state = useDisclosure("source", identify, input);
+  const open = () => hasContent() && state.open();
   const read = useNativeSource();
   const resource = createMemo(() =>
     open() && props.reference ? read?.(props.reference) : undefined
   );
   const [revision, setRevision] = createSignal(0);
-  const toggle = () => setOpen(!open());
   // An explicit choice or the category default can open the fold; either reads.
   createEffect(() => [open(), resource()] as const, ([expanded, owner]) => {
     if (!expanded || !owner) return;
@@ -81,66 +82,84 @@ export default function NativeSource(props: {
   };
   return (
     <section class={["otk-tool-line otk-native-source", { "is-open": open() }]}>
-      <button
-        type="button"
+      <Disclosure
+        kind="source"
+        identity={identify()}
+        input={input}
+        variant="label"
         class="otk-tool-toggle"
-        aria-expanded={open() ? "true" : "false"}
-        onClick={toggle}
+        lead={() => <WorkLogIcon />}
+        label="Source"
+        hasContent={hasContent}
+        layout={({ trigger, region, open, frame }) => (
+          <TreeNode
+            class="otk-tool-row"
+            ref={frame}
+            trigger={{ variant: "span", element: trigger, hasBox: hasContent }}
+            bodyVisible={open()}
+            region={region}
+          />
+        )}
       >
-        <span class="otk-tool-icon" aria-hidden="true">
-          <ChevronIcon />
-        </span>
-        <span class="otk-control-label">Source</span>
-      </button>
-      <Show when={open()}>
-        <div
-          class="otk-tool-body"
-          aria-busy={shown()?.state === "loading" ? "true" : "false"}
-        >
-          <Show when={shown()?.state === "loading"}>
-            <small class="otk-muted">Loading source</small>
-          </Show>
-          <Show
-            when={(() => {
-              const value = shown();
-              return value?.state === "failed" ? value : undefined;
-            })()}
-          >
-            {(value) => (
-              <FeedbackStatus
-                feedback={(() => {
-                  const feedback = errorFeedback(value().failure);
-                  return feedback && {
-                    ...feedback,
-                    action: resource()
-                      ? {
-                        label: "Retry",
-                        run: () => resource()?.retry(),
-                      }
-                      : undefined,
-                  };
-                })()}
-              />
-            )}
-          </Show>
-          <Show
-            when={(() => {
-              const value = shown();
-              return value?.state === "ready" ? value : undefined;
-            })()}
-          >
-            {(value) => (
-              <>
-                <small class="otk-muted">
-                  {value().bytes}{" "}
-                  bytes{value().truncated ? " - Preview truncated" : ""}
-                </small>
-                <pre class="otk-native-preview">{value().text}</pre>
-              </>
-            )}
-          </Show>
-        </div>
-      </Show>
+        {() => (
+          <TreeItem last>
+            <TreeNode
+              header={() => (
+                <div
+                  class="otk-tool-body"
+                  aria-busy={shown()?.state === "loading" ? "true" : "false"}
+                >
+                  <Show when={shown()?.state === "loading"}>
+                    <small class="otk-muted">Loading source</small>
+                  </Show>
+                  <Show
+                    when={(() => {
+                      const value = shown();
+                      return value?.state === "failed" ? value : undefined;
+                    })()}
+                  >
+                    {(value) => (
+                      <FeedbackStatus
+                        feedback={(() => {
+                          const feedback = errorFeedback(value().failure);
+                          return feedback && {
+                            ...feedback,
+                            action: resource()
+                              ? {
+                                label: "Retry",
+                                run: () => resource()?.retry(),
+                              }
+                              : undefined,
+                          };
+                        })()}
+                      />
+                    )}
+                  </Show>
+                  <Show
+                    when={(() => {
+                      const value = shown();
+                      return value?.state === "ready" ? value : undefined;
+                    })()}
+                  >
+                    {(value) => (
+                      <>
+                        <small class="otk-muted">
+                          {value().bytes}{" "}
+                          bytes{value().truncated ? " - Preview truncated" : ""}
+                        </small>
+                        <CodeBlock
+                          source={{ kind: "output", text: value().text }}
+                          textClass="otk-native-preview"
+                        />
+                      </>
+                    )}
+                  </Show>
+                </div>
+              )}
+            />
+          </TreeItem>
+        )}
+      </Disclosure>
     </section>
   );
 }

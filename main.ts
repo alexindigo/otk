@@ -84,7 +84,13 @@ export async function start(
           const current = index.getMetadata(entry.id);
           index.upsertMetadata(
             current && current.timeUpdated > entry.timeUpdated
-              ? current
+              ? {
+                ...current,
+                activity: {
+                  ...current.activity,
+                  delivered: entry.activity?.delivered,
+                },
+              }
               : current
               ? {
                 ...entry,
@@ -96,6 +102,7 @@ export async function start(
                   ...entry.activity,
                   ...current.activity,
                   ...latestTerminal(entry.activity, current.activity),
+                  delivered: entry.activity?.delivered,
                 },
               }
               : entry,
@@ -123,6 +130,7 @@ export async function start(
       diagnostic: (error) => diagnostic("warn", "session digest", error),
     });
     leaseTurnDetail(index, digest, diagnostic, signal);
+    let dispatchReportAt = 0;
     const backend = new OpencodeV2ServerAdapter(
       {
         serviceFile: selected.file,
@@ -136,6 +144,17 @@ export async function start(
       (error) => diagnostic("warn", "opencode V2", error),
       fetch,
       digest,
+      (pressure) => {
+        diagnostics?.dispatch?.(pressure);
+        diagnostics?.section(
+          `native:dispatch:${pressure.activeType ?? "idle"}`,
+          pressure.handlerMs,
+        );
+        if (Date.now() - dispatchReportAt >= 10_000) {
+          dispatchReportAt = Date.now();
+          diagnostic("info", "native dispatch", pressure);
+        }
+      },
     );
     return await startApplication(
       cfg,
@@ -208,6 +227,7 @@ export async function start(
                 ...entry.activity,
                 ...current.activity,
                 ...latestTerminal(entry.activity, current.activity),
+                delivered: entry.activity?.delivered,
               },
             }
             : entry,
@@ -287,6 +307,13 @@ if (import.meta.main) {
     const cfg = config();
     diagnostic = diagnosticsLog(cfg.log.level);
     app = await start(cfg, undefined, lifetime.signal, diagnostic);
+    const roots = cfg.images.roots;
+    diagnostic(
+      "info",
+      roots.length
+        ? `inline images: allowed roots ${JSON.stringify(roots)}`
+        : "inline images: no allowed roots",
+    );
     if (lifetime.signal.aborted) stop();
     await app.server.finished;
     await stopping;

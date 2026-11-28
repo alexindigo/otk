@@ -3,30 +3,22 @@
   display: flex;
   flex-direction: column;
   color: var(--otk-fg-2);
-  margin: 0 0 4px;
   font-size: var(--text-ui);
 }
-.otk-tool-toggle,
-.otk-tool-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 26px;
-  padding: 0 4px;
-  color: inherit;
-  text-align: left;
+.otk-tool-row {
+  --tree-row-gap: var(--tool-line-gap, var(--space-1));
 }
 .otk-tool-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 13px;
-  flex: 0 0 13px;
+  width: var(--icon-compact);
+  flex: 0 0 var(--icon-compact);
   color: var(--otk-fg-3);
 }
 .otk-tool-icon svg {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
 }
 .otk-tool-verb {
   font-weight: 500;
@@ -44,36 +36,22 @@
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
   opacity: 0;
-  font-variant-numeric: tabular-nums;
 }
-.otk-tool-toggle:is(:hover,:focus-visible) .otk-tool-duration {
+.otk-tool-line:is(:hover,:focus-within) .otk-tool-duration {
   opacity: 1;
 }
 .otk-tool-body {
-  padding: 0 0 4px 24px;
+  padding-block-end: var(--space-1);
 }
 .otk-tool-body p {
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 .otk-tool-summary {
   color: var(--fg);
   white-space: pre-wrap;
 }
-.otk-tool-line[data-tool-status=error] .otk-tool-state,
-.otk-tool-error {
-  color: var(--otk-status-error);
-}
 .otk-tool-line[data-tool-status=denied] :is(.otk-tool-toggle, .otk-tool-summary) {
   text-decoration: line-through;
-}
-.otk-tool-error {
-  white-space: pre-wrap;
-  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
-}
-.otk-tool-error-toggle {
-  align-self: flex-start;
-  font-size: var(--text-meta);
-  padding: 4px 8px;
 }
 .otk-tool-add,
 .otk-tool-del {
@@ -85,6 +63,6 @@
 .otk-tool-del {
   color: var(--otk-diff-del);
 }
-.otk-tool-line.is-error > .otk-tool-state {
-  color: var(--otk-status-error);
+.otk-tool-state.is-error {
+  color: var(--otk-fg-2);
 }

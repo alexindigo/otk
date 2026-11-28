@@ -6,6 +6,7 @@ import type { TestState } from "../fixtures/test-state.ts";
 import type { Page } from "@playwright/test";
 import type { Preferences } from "@otk/protocol";
 import { receivedPrompt } from "../fixtures/provider.ts";
+import { revealAcquired } from "../pages/transcript.ts";
 
 async function observer(state: TestState, page: Page) {
   expect(await state.product("prefs.get", {})).toEqual(state.lease.baseline);
@@ -144,6 +145,30 @@ for (const order of ["forward", "reverse"]) {
             "Held contamination prompt",
           );
           await second.locator("textarea[name=prompt]").press("Enter");
+          // Expanded native selection records may virtualize the reply. Acquire
+          // its canonical identity before asserting the same rendered stream.
+          let identities: string[] = [];
+          await expect.poll(async () => {
+            identities = await second.evaluate(() => {
+              const messages = (globalThis as typeof globalThis & {
+                transcriptPublication?: Map<
+                  string,
+                  import("@otk/protocol").Message
+                >;
+              }).transcriptPublication;
+              return [...messages?.values() ?? []].filter((message) =>
+                message.role === "assistant"
+              ).map((message) => message.id);
+            });
+            return identities.length;
+          }).toBe(1);
+          const identity = identities[0];
+          expect(identity).toBeTruthy();
+          await revealAcquired(
+            second,
+            `[data-message="${identity}"] .otk-text`,
+          );
+          await expect(second.locator("[data-role=assistant]")).toHaveCount(1);
           await expect(second.locator("[data-role=assistant] .otk-text"))
             .toHaveText("Held contaminator");
           await expect.poll(() =>

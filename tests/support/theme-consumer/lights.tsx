@@ -19,7 +19,11 @@ export default function Lights() {
         <For each={Object.keys(LIGHT_STATES) as LightState[]}>
           {(state) => (
             <div>
-              <StatusLight state={state} event={event()} />
+              <StatusLight
+                state={state}
+                event={event()}
+                dependencies={state === "dependencies" ? 1 : undefined}
+              />
               <span>{state}</span>
             </div>
           )}

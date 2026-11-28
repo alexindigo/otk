@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.request-lifetime-scene {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 24px;
+}
+.request-lifetime-controls {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.request-lifetime-preview {
+  grid-column: 1;
+  grid-row: 1;
+  container-type: size;
+  block-size: 600px;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}

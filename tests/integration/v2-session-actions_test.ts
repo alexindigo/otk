@@ -5,6 +5,7 @@ import {
   opencodeV2SessionID as ids,
 } from "@otk/harness-opencode-v2-server";
 import {
+  ascendingID,
   type OperationContext,
   OperationFailure,
   type ReceiptData,
@@ -221,8 +222,11 @@ test("OC2A2 messages-only leaves files unchanged; code mode changes them; Restor
     await Deno.readTextFile(native.directory + "/note.txt"),
     "changed\n",
   );
-  assertEquals(staged.revert?.messageCount, 1);
-  assertEquals(staged.revert?.prompts?.[0].preview, "change note.txt");
+  assertEquals(staged.revert?.boundaryID, user.id);
+  assertEquals(
+    staged.revert?.messageIDs,
+    all.data.slice(all.data.indexOf(user)).map((m) => m.id),
+  );
   assertEquals(staged.revert?.files, []);
   const code = await value.capabilities.revertCode!.revert(
     target.id,
@@ -283,7 +287,7 @@ test("OC2A3 attachment failure preserves stage; the next successful prompt makes
     })
   );
   assertEquals(
-    (await value.core.getSession(target.id)).revert?.messageID,
+    (await value.core.getSession(target.id)).revert?.boundaryID,
     user.id,
   );
   fake.queue({ chunks: ["new ", "reply"], delay: 1000 });
@@ -325,15 +329,23 @@ test("OC2A4 shell stays non-LLM; commands prepare inputs before checkpointed sel
   const target = await native.createSession(),
     { value } = await adapter(native),
     op = operation();
-  await value.capabilities.shell!.shell({
+  const shellMessageID = ascendingID("msg");
+  const shellInput = {
     sessionID: target.id,
+    messageID: shellMessageID,
     command: "printf 'V4 shell output'",
-  }, op.context);
+  };
+  const shellReceipt: unknown = await value.capabilities.shell!.shell(
+    shellInput,
+    op.context,
+  );
+  assertEquals(shellReceipt, { messageID: shellMessageID, state: "started" });
   const rows = await native.api.message.list({
     sessionID: target.nativeID,
     limit: 200,
   });
   assert(rows.data.some((m) => m.type === "shell" && m.status === "exited"));
+  assert(rows.data.some((m) => m.id === shellMessageID));
   assertEquals(rows.data.filter((m) => m.type === "assistant").length, 0);
   assert(
     (await value.capabilities.commands!.listCommands(target.id)).some((c) =>
@@ -356,12 +368,14 @@ test("OC2A4 shell stays non-LLM; commands prepare inputs before checkpointed sel
   assertEquals(preparation.code, "attachment");
   assertEquals(op.effects.length, before);
   fake.queue({ chunks: ["command completed"] });
-  await value.capabilities.commands!.command({
+  const commandReceipt: unknown = await value.capabilities.commands!.command({
     sessionID: target.id,
     command: "fixture",
     arguments: "args",
     model: { provider: "fake", model: "scripted" },
   }, op.context);
+  assertEquals((commandReceipt as { state?: string })?.state, "unconfirmed");
+  assert((commandReceipt as { reason?: string })?.reason);
   assert(op.receipts.some((r) => r.kind === "session-selection"));
   fake.queue({ chunks: ["compact summary"] });
   await value.capabilities.sessionActions!.compact(target.id, {
@@ -400,7 +414,7 @@ test("OC2A5 skill invocation uses the native skill ID and preserves arguments an
       .data.find((m) => m.type === "user")!;
   await value.capabilities.revert!.revert(target.id, old.id, op.context);
   fake.queue({ chunks: ["skill reply"] });
-  await value.capabilities.commands!.command({
+  const skillReceipt: unknown = await value.capabilities.commands!.command({
     sessionID: target.id,
     command: "review-contract",
     arguments: "Review these exact bytes",
@@ -420,6 +434,7 @@ test("OC2A5 skill invocation uses the native skill ID and preserves arguments an
   assert(!rows.some((m) => m.id === old.id));
   const user = rows.find((m) => m.type === "user");
   assert(user?.type === "user");
+  assertEquals(skillReceipt, { messageID: user.id, state: "queued" });
   assertEquals(user.text, "Review these exact bytes");
   assertEquals(user.files?.[0].name, "contract.txt");
   assertEquals(user.files?.[0].data, btoa("contract bytes"));
@@ -430,3 +445,36 @@ test("OC2A5 skill invocation uses the native skill ID and preserves arguments an
   assertEquals(rows.filter((m) => m.type === "skill").length, 0);
   assert(op.receipts.some((r) => r.kind === "command-skill-activated"));
 });
+
+for (const kind of ["command", "skill"] as const) {
+  test(`M1 native ${kind} without an identity API returns an explicit unconfirmed receipt`, async () => {
+    const fake = new FakeLlm(),
+      config: Record<string, unknown> = {
+        commands: { receipt: { template: "Receipt command" } },
+      };
+    const native = await OpencodeV2Test.start(fake, {
+      config,
+      prepare: async (fixture) => {
+        const path = fixture.directory + "/skills/receipt";
+        await Deno.mkdir(path, { recursive: true });
+        await Deno.writeTextFile(
+          path + "/SKILL.md",
+          "---\nname: receipt\ndescription: Receipt skill\n---\nReceipt skill context.\n",
+        );
+        config.skills = [fixture.directory + "/skills"];
+      },
+    });
+    const target = await native.createSession(),
+      { value } = await adapter(native),
+      op = operation();
+    fake.queue({ chunks: ["Receipt operation completed."] });
+    const receipt: unknown = await value.capabilities.commands!.command({
+      sessionID: target.id,
+      command: "receipt",
+      arguments: "",
+      ...(kind === "skill" ? { skill: { name: "receipt" } } : {}),
+    }, op.context);
+    assertEquals((receipt as { state?: string })?.state, "unconfirmed");
+    assert((receipt as { reason?: string })?.reason);
+  });
+}

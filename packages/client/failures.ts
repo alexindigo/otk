@@ -1,21 +1,23 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { randomID } from "@otk/protocol";
+import { isCancellation, randomID } from "@otk/protocol";
 import type {
   FailureFacts,
   FailureTarget,
   PublicFailure,
   RequestProgress,
 } from "@otk/protocol";
-export interface FailurePresentation {
+import type { Disclosures } from "./disclosure.ts";
+interface FailureContent {
   value: PublicFailure;
-  /** An unavailable optional feature is information, not a failed action. */
-  tone?: "info";
+  /** Client-local presentation lifetime; not a diagnostic or burst group. */
+  occurrence: string;
   action: string;
   heading: string;
   target: { label: string; href?: string };
   reason: string;
   /** Specific next step supplied by the action/cause owner, absent otherwise. */
   recovery?: string;
+  details?: string;
   count: number;
   occurrences: readonly string[];
   /** No feature-authored reason: Details carry the diagnostic ID instead. */
@@ -23,6 +25,41 @@ export interface FailurePresentation {
   /** A retained record owns the facts; another surface only points to it. */
   reference?: { messageID: string; label: string };
 }
+
+let failureSequence = 0;
+const occurrences = new WeakMap<object, string>();
+export function failureOccurrence(source: object): string {
+  let id = occurrences.get(source);
+  if (!id) {
+    occurrences.set(source, id = `failure-occurrence/${++failureSequence}`);
+  }
+  return id;
+}
+
+/** Snapshot/enrich the facts without starting another occurrence. */
+export function inheritFailureOccurrence<T extends object>(
+  source: object,
+  value: T,
+): T {
+  occurrences.set(value, failureOccurrence(source));
+  return value;
+}
+
+export function retireFailureOccurrence(
+  owner: Disclosures | undefined,
+  source: object,
+) {
+  const scope = occurrences.get(source);
+  if (scope) owner?.retire({ scope });
+}
+/** Outcome and visual signal cannot disagree, even for independent consumers. */
+export type FailurePresentation =
+  & FailureContent
+  & (
+    | { kind: "pending"; tone: "neutral" }
+    | { kind: "info"; tone: "info" }
+    | { kind: "error"; tone: "error" }
+  );
 /** Plain words when no owner published a reason; never jargon. */
 export const GENERIC_FAILURE_REASON = "OTK has no further details";
 export interface Feedback {
@@ -33,6 +70,8 @@ export interface Feedback {
   text: string;
   field?: string;
   action?: { label: string; run(): void };
+  /** Owner-provided intent to hide settled feedback, not undo the action. */
+  dismiss?(): void;
   failure?: FailurePresentation;
 }
 export interface FeedbackOwner {
@@ -43,10 +82,12 @@ export interface FeedbackOwner {
 }
 /** Placement is local to a surface/view, never a reason to discard a failure. */
 export type FailurePlacement = "record" | {
-  surface: "feedback" | "session" | "notification";
+  surface: "feedback" | "session" | "notification" | "record";
   view?: FailureTarget;
+  /** The live transcript projection, not a mounted DOM or a retained observation. */
+  hasRecord?(messageID: string): boolean;
 };
-function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
+export function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
   return !!a?.sessionID && a.sessionID === b?.sessionID &&
     (a.sidecarId ?? "local") === (b.sidecarId ?? "local");
 }
@@ -92,7 +133,8 @@ export class FailurePresenter {
     // Public facts are a wire DTO. Snapshot its owned object levels so a
     // framework-bound feedback value cannot leak proxies into delivery ports.
     const sourceFacts = failure.facts;
-    failure = {
+    const occurrence = failureOccurrence(failure);
+    failure = inheritFailureOccurrence(failure, {
       ...failure,
       ...(sourceFacts
         ? {
@@ -107,18 +149,21 @@ export class FailurePresenter {
           },
         }
         : {}),
-    };
+    });
     const enrichment = this.#contributions.get(failure.code)?.(failure);
     const facts = failure.facts ?? {};
-    const reference = placement !== "record" &&
-      placement.surface !== "notification" && placement.view?.sessionID &&
-      placement.view.sessionID === facts.target?.sessionID &&
-      (placement.view.sidecarId ?? "local") ===
-        (facts.target?.sidecarId ?? "local");
+    const retained = placement === "record" || placement.surface === "record";
+    const reference = !retained && placement.surface !== "notification" &&
+      sameView(facts.target, placement.view) && facts.record &&
+      placement.hasRecord?.(facts.record.messageID);
     const action = (facts.action && this.context.action?.(facts.action)) ||
       facts.actionLabel || "The requested action";
-    const target = this.context.target?.(facts.target ?? {}) ??
-      { label: facts.target?.label ?? "OTK" };
+    const target =
+      placement !== "record" && placement.surface !== "notification" &&
+        sameView(facts.target, placement.view)
+        ? { label: "" }
+        : this.context.target?.(facts.target ?? {}) ??
+          { label: facts.target?.label ?? "OTK" };
     const known = [facts.reason, enrichment?.text].find((text) => text?.trim());
     const reason = known ?? GENERIC_FAILURE_REASON;
     const status = facts.status === undefined ? "" : ` (HTTP ${facts.status})`;
@@ -126,23 +171,31 @@ export class FailurePresenter {
       facts.outcome === "unavailable" || enrichment?.kind === "pending";
     const informational = !pending && enrichment?.kind === "info";
     const heading = pending
-      ? `Checking whether ${action} finished`
-      : informational
+      ? `Checking whether ${action.charAt(0).toLowerCase()}${
+        action.slice(1)
+      } finished`
+      : informational || /(?:^|\s)failed[.!]?$/i.test(action)
       ? action
       : `${action} failed`;
     // Retry policy classifies execution, not advice. Only an owner that knows
     // this action and cause can supply a useful next step.
     const recovery = facts.recovery?.trim() || undefined;
     const presentation: FailurePresentation = {
+      ...(pending
+        ? { kind: "pending", tone: "neutral" } as const
+        : informational
+        ? { kind: "info", tone: "info" } as const
+        : { kind: "error", tone: "error" } as const),
       value: failure,
+      occurrence,
       action,
       heading,
       target,
       reason: reason + status,
       recovery,
+      details: facts.details,
       count: 1,
       occurrences: [failure.diagnosticID],
-      ...(informational ? { tone: "info" as const } : {}),
       ...(known ? {} : { generic: true }),
       ...(facts.record && reference
         ? {
@@ -161,7 +214,9 @@ export class FailurePresenter {
       text: presentation.reference?.label ?? [
         informational
           ? presentation.reason
-          : `${heading} for ${target.label}: ${presentation.reason}`,
+          : `${heading}${
+            target.label ? ` for ${target.label}` : ""
+          }: ${presentation.reason}`,
         ...recovery ? [recovery] : [],
       ].map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`)
         .join(" "),
@@ -206,12 +261,14 @@ export class FailurePresenter {
     occupant?: Feedback,
   ): Feedback | undefined {
     const value = this.#present(failure, placement);
+    if (
+      placement !== "record" && placement.surface === "feedback" &&
+      failure.facts?.record && sameView(failure.facts.target, placement.view) &&
+      failure.facts.origin !== "composer"
+    ) return;
     if (value.failure?.reference && placement !== "record") {
       const origin = failure.facts?.origin ?? "session";
-      if (
-        placement.surface === "session" && origin === "composer" ||
-        placement.surface === "feedback" && origin !== "composer"
-      ) return;
+      if (placement.surface === "session" && origin === "composer") return;
       const held = occupant?.failure;
       if (
         placement.surface === "session" && held?.reference &&
@@ -261,10 +318,12 @@ export class FailurePresenter {
     };
     return { kind: "pending", text: text[progress.code] };
   }
-  connection(): Feedback {
+  connection(updated = false): Feedback {
     return {
       kind: "connection",
-      text: "Reconnecting. Your pending action is kept.",
+      text: updated
+        ? "OTK was updated. Your pending action is kept."
+        : "Reconnecting. Your pending action is kept.",
     };
   }
 }
@@ -289,14 +348,14 @@ export function contextualFailure(
   if (!context) return failure;
   const target = { ...context.target, ...failure.facts?.target };
   const label = failure.facts?.target?.label || context.target?.label;
-  return {
+  return inheritFailureOccurrence(failure, {
     ...failure,
     facts: {
       ...context,
       ...failure.facts,
       target: { ...target, ...(label ? { label } : {}) },
     },
-  };
+  });
 }
 
 /** One entry for definite failures and local exceptions; release is silent. */
@@ -306,13 +365,15 @@ export function failureFeedback(
   diagnostic: (id: string, cause: unknown) => void = () => {},
   context?: FailureFacts,
 ): Feedback | undefined {
-  if (cause instanceof RequestReleased) return undefined;
+  if (cause instanceof RequestReleased || isCancellation(cause)) {
+    return undefined;
+  }
   if (cause instanceof FeedbackFailure) return cause.feedback;
   const failure = cause instanceof RequestFailure
     ? contextualFailure(cause.failure, context)
     : localFailure(cause, diagnostic, context);
   return presenter.place(failure, {
     surface: "feedback",
-    view: failure.facts?.target,
+    view: context?.target ?? failure.facts?.target,
   });
 }

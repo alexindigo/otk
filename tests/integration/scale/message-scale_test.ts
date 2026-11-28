@@ -7,7 +7,7 @@ import type { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 import { start } from "../../../main.ts";
 import { cfg } from "../../support/config.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
-import { freePort, waitFor } from "../../support/opencode.ts";
+import { waitFor } from "../../support/opencode.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
 import { SCALE } from "../../support/session-scale.ts";
 import { createScale, scaleDiscovery } from "../../support/scale-native.ts";
@@ -175,7 +175,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   );
   resources().defer("reserve proxy", () => proxy.shutdown());
   const config = cfg();
-  config.server.port = freePort();
+  config.server.port = 0;
   config.auth.type = "none";
   config.harness.url = `http://127.0.0.1:${(proxy.addr as Deno.NetAddr).port}`;
   config.harness.db = native.db;
@@ -184,7 +184,13 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   }
   await scaleDiscovery(native, config.harness.url);
   config.state.path = join(root, "state");
-  const app = await start(config);
+  const pressure: unknown[] = [];
+  const app = await start(config, {
+    section() {},
+    pressure: (value) => {
+      pressure.push(value);
+    },
+  });
   resources().defer("reserve app", () => app.stop());
   const pages = app.backend.core.listMessages.bind(app.backend.core);
   app.backend.core.listMessages = (...args) => {
@@ -223,10 +229,33 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   });
   resources().defer("reserve owner", () => owner.stop());
   const connection = new SidecarConnection(
-    `http://127.0.0.1:${config.server.port}`,
+    `http://127.0.0.1:${app.server.addr.port}`,
     {
       status() {},
       frame(frame) {
+        if (
+          frame.t === "load.chunk" &&
+          frame.load.scope.kind === "session-messages" &&
+          frame.load.scope.sessionID === selected.id
+        ) {
+          lifecycle.push({
+            at: performance.now(),
+            kind: frame.t,
+            load: frame.load,
+          });
+        }
+        if (
+          frame.t === "request.result" && frame.outcome.ok &&
+          frame.outcome.result && typeof frame.outcome.result === "object" &&
+          Reflect.get(frame.outcome.result, "sessionID") === selected.id
+        ) {
+          lifecycle.push({
+            at: performance.now(),
+            kind: frame.t,
+            version: Reflect.get(frame.outcome.result, "version"),
+            load: Reflect.get(frame.outcome.result, "load"),
+          });
+        }
         if (
           frame.t === "request.result" && !frame.outcome.ok ||
           frame.t === "request.rejected"
@@ -265,10 +294,10 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
       },
     },
     {
-      fetcher: originFetch(`http://127.0.0.1:${config.server.port}`),
+      fetcher: originFetch(`http://127.0.0.1:${app.server.addr.port}`),
       socket: (url) =>
         Reflect.construct(WebSocket, [url, {
-          headers: { Origin: `http://127.0.0.1:${config.server.port}` },
+          headers: { Origin: `http://127.0.0.1:${app.server.addr.port}` },
         }]) as WebSocket,
     },
   );
@@ -312,6 +341,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   resource.viewport({ first: messageID(1520), last: messageID(1524) });
   await waitFor(() => resource.state.messageIDs.length, (n) => n >= 30);
   const begun = performance.now();
+  let oldestSeen = Infinity, advancedAt = begun;
   for (let step = 0, rank = 1520; rank >= 0; step++) {
     const due = begun + step * 200;
     await new Promise((r) =>
@@ -319,6 +349,34 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
     );
     const loaded = resource.state.messageIDs;
     const oldest = Number(loaded[0].slice("msg_scale".length));
+    if (oldest < oldestSeen) {
+      oldestSeen = oldest;
+      advancedAt = performance.now();
+    }
+    if (performance.now() - advancedAt > 30_000) {
+      throw new Error(
+        `Native reserve stalled without older-page advancement for 30s: ${
+          JSON.stringify({
+            oldest,
+            acquired: loaded.length,
+            continuity: resource.state.continuity,
+            loading: resource.state.pageLoading,
+            load: resource.state.load,
+            cursor: resource.state.olderCursor,
+            error: resource.state.pageError,
+            version: resource.state.version,
+            lifecycle: lifecycle.slice(-6),
+            operations: connection.rpc.requests.operations(selected.id).map((
+              op,
+            ) => op.state),
+            failures: failures.slice(-3),
+            requests: requests.slice(-3),
+            phases: phases.slice(-6),
+            pressure: pressure.slice(-3),
+          })
+        }`,
+      );
+    }
     const requestedFirst = Math.max(0, rank);
     // Real scrolling can reach the acquired edge, never an unrendered ID.
     // Keep reporting reserve misses without turning cadence into lost demand.

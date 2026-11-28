@@ -14,11 +14,12 @@ import {
   discoveryFailure,
   type DiscoveryState,
 } from "./discovery.ts";
-import { FeedbackFailure } from "./failures.ts";
+import { type Feedback, FeedbackFailure } from "./failures.ts";
 import { HttpRequests } from "./http-requests.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { browserStorage } from "./browser-storage.ts";
 import type { PublicDefaults } from "./public-defaults.ts";
+import type { ServerContinuity } from "./server-continuity.ts";
 import {
   type ConnectionOptions,
   type ConnectionState,
@@ -32,8 +33,13 @@ export interface SidecarSpec {
 }
 export interface SidecarState extends SidecarSpec {
   status: ConnectionState;
+  /** Transport has welcomed; the current view's baselines are still attaching. */
+  attaching?: true;
   harness: HarnessState;
+  continuity?: ServerContinuity;
   error?: string;
+  /** Retain the owner's facts instead of reparsing the compatibility text. */
+  feedback?: Feedback;
   authType?: string;
   capabilities: CapabilityName[];
   /** Changes on each welcomed transport connection, including reconnects. */
@@ -141,7 +147,11 @@ export function createSidecars(
           key: "connecting",
           label: "Connecting",
           elapsedMs: 0,
-          result: { ...failure.feedback, kind: "error" },
+          result: {
+            ...failure.feedback,
+            kind: "error",
+            feedback: failure.feedback,
+          },
         }],
       };
     });
@@ -158,23 +168,31 @@ export function createSidecars(
     const connection = new SidecarConnection(
       spec.baseUrl,
       {
+        continuity(value) {
+          setState((draft) => {
+            const item = draft.list.find((item) => item.id === spec.id);
+            if (item) item.continuity = value;
+          });
+        },
         defaults(value) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);
             if (item) item.defaults = value;
           });
         },
-        status(status, error, authType) {
+        status(status, error, authType, feedback) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);
             if (item) {
               item.status = status;
+              delete item.attaching;
               if (status === "connected") {
                 item.connectionVersion = (item.connectionVersion ?? 0) + 1;
               }
               // Capabilities describe the backend, not transport liveness. Keep
               // feature owners (and their unsent input) mounted while reconnecting.
               item.error = error;
+              item.feedback = feedback;
               if (authType !== undefined) item.authType = authType;
             }
           });
@@ -185,6 +203,7 @@ export function createSidecars(
               const item = draft.list.find((item) => item.id === spec.id);
               if (item) {
                 item.capabilities = [...welcomeCapabilities(frame)];
+                if (frame.viewAcknowledgements) item.attaching = true;
               }
             });
           }
@@ -208,8 +227,11 @@ export function createSidecars(
           },
         }
         : {
+          reload: options.connection?.reload,
           afterRender: options.connection?.afterRender,
           policy: options.connection?.policy,
+          retireRequestDisclosures: options.connection
+            ?.retireRequestDisclosures,
           requests: {
             sidecarId: spec.id,
             serverLabel: spec.label,

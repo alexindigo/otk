@@ -46,11 +46,14 @@ test(
     await expect(page.getByText(/^Loading messages\.\.\./))
       .toBeHidden();
     await page.evaluate(() => document.fonts.ready);
-    const label = tabs.locator(".otk-tabs-project");
+    const label = tabs.locator(".otk-project-chip-trigger .otk-control-label");
     const name = state.directory.split("/").at(-1)!;
     expect(name.length).toBeGreaterThan(100);
     await expect(label).toHaveText(name);
-    await expect(label).toHaveAttribute("title", state.directory);
+    await expect(tabs.locator(".otk-project-chip-trigger")).toHaveAttribute(
+      "aria-label",
+      `Project: ${name}`,
+    );
 
     {
       const theme = "otk-dark";
@@ -75,7 +78,7 @@ test(
           const geometry = await tabs.evaluate((root) => {
             const strip = root.querySelector(".otk-task-strip")!;
             const project = root.querySelector<HTMLElement>(
-              ".otk-tabs-project",
+              ".otk-project-chip-trigger .otk-control-label",
             )!;
             const list = root.querySelector(".otk-task-list")!;
             const s = strip.getBoundingClientRect();
@@ -84,7 +87,7 @@ test(
             const style = getComputedStyle(strip);
             const actions = Array.from(
               strip.querySelectorAll<HTMLButtonElement>(
-                ".otk-task-new, .otk-topbar-end button",
+                ".otk-task-new, .otk-topbar-end .otk-display-trigger",
               ),
             ).map((control) => {
               const r = control.getBoundingClientRect();

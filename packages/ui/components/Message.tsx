@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isAssistantTerminal } from "@otk/protocol";
+import { useOptionalSessionPorts } from "../registries/session.tsx";
+import { scopedEntityFacts } from "../entity-facts.ts";
 import "./Message.css" with { type: "text" };
-import { agentColor } from "../theme/agent-color.ts";
-import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
+import {
+  errorFeedback,
+  failedSendPresentation,
+  messageTimeValue,
+  replyErrorFeedback,
+  runnableText,
+  workFailureFeedback,
+} from "@otk/client";
+import FeedbackStatus from "./FeedbackStatus.tsx";
+import { createMemo, For, onSettled, Show } from "solid-js";
 import { type MessagePresentation, messagePresentation } from "@otk/client";
-import WorkLog from "./WorkLog.tsx";
+import WorkStrip from "./WorkStrip.tsx";
+import EntityPill from "./EntityPill.tsx";
+import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
+import TimeValue from "./TimeValue.tsx";
+import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
@@ -13,10 +27,10 @@ import type { UsageSummary } from "@otk/protocol";
 import {
   createMessageLayout,
   messageLayoutRole,
-  timingExplanation,
-  workingTime,
+  type ReplyStart as ReplyStartData,
+  type WorkRuns,
 } from "./work-log.ts";
-import MessageActions from "./MessageActions.tsx";
+import MessageFooter, { type FooterCompletion } from "./MessageFooter.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
   Message as OtkMessage,
@@ -25,80 +39,38 @@ import type {
 } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { Preferences } from "@otk/protocol";
-import type { PartProps } from "../registries/renderers.ts";
+import PartsView from "./PartsView.tsx";
 import {
-  contentGeneration,
   ContentIdentityProvider,
   contentOwner,
   sourceRegion,
-  useContentIdentity,
 } from "../features/transcript-context.tsx";
-function PartView(
-  props: {
-    part: Part;
-    prefs: Preferences;
-    streaming: boolean;
-    directory?: string;
-    permissions: PermissionRequest[];
-    paneWidth?: number;
-    onOpenChild(id: string): void;
-    user: boolean;
-    pending?: boolean;
-    sourceID?: string;
-  },
-) {
-  const { parts } = useUiRegistries();
-  const identity = useContentIdentity();
-  return (
-    <Show when={parts.resolve(props.part)} keyed>
-      {(renderer) => {
-        const Component = renderer;
-        return (
-          <ContentIdentityProvider
-            value={{ ...identity, partID: props.part.id }}
-          >
-            <div
-              ref={sourceRegion(() => props.sourceID ?? identity.messageID!)}
-            >
-              <Component {...props} />
-            </div>
-          </ContentIdentityProvider>
-        );
-      }}
-    </Show>
-  );
-}
-/** A stable keyed component boundary preserves source nodes during part updates. */
-function PartsView(
-  props: Omit<PartProps, "part"> & {
-    parts: Part[];
-    sourceID?(part: Part): string;
-  },
-) {
-  const generation = contentGeneration();
-  return (
-    <ContentWindow
-      items={props.parts}
-      key={(part) => generation(part.id)}
-      label="Reply parts"
-      render={(part) => (
-        <PartView
-          part={part()}
-          prefs={props.prefs}
-          directory={props.directory}
-          permissions={props.permissions}
-          onOpenChild={props.onOpenChild}
-          user={props.user}
-          streaming={props.streaming}
-          pending={props.pending}
-          sourceID={props.sourceID?.(part())}
-        />
-      )}
-    />
-  );
-}
 export interface MessageControl {
   reveal(): void;
+  revealFooter(): Promise<void>;
+}
+function ReplyStart(props: {
+  source: ReplyStartData;
+  sessionID: string;
+}) {
+  const session = useOptionalSessionPorts();
+  return (
+    <span
+      class="otk-reply-start"
+      data-reply-source={props.source.messageID}
+    >
+      <EntityPill
+        label={props.source.agent}
+        facts={scopedEntityFacts(session, {
+          sessionID: props.sessionID,
+          turnID: props.source.turnID ?? props.source.messageID,
+          timing: props.source.timing,
+          outcomeTime: props.source.outcomeTime,
+          model: props.source.model,
+        })}
+      />
+    </span>
+  );
 }
 export default function Message(
   props: {
@@ -106,15 +78,21 @@ export default function Message(
     sessionTitle?: string;
     ownerID?: string;
     message: OtkMessage;
+    sourceTime?(messageID: string): number | undefined;
+    sourceOutcomeTime?(
+      messageID: string,
+    ): import("@otk/protocol").OutcomeTime | undefined;
     segments?: import("@otk/client").TranscriptReply["segments"];
     lastID?: string;
     pending?: boolean;
+    send?: import("@otk/client").TranscriptReply["send"];
     recovery?: "recovering" | "unavailable";
     onRetryRecovery?(): void;
     metadata?: import("@otk/protocol").AssistantMessage | null;
     usage?: Usage;
     summary?: import("@otk/protocol").Derived<UsageSummary>;
     openUsage?(): () => void;
+    completion?: FooterCompletion;
     usageError?(): import("@otk/client").FailureValue | undefined;
     prefs: Preferences;
     directory?: string;
@@ -133,22 +111,68 @@ export default function Message(
     copyIncomplete?: boolean;
     /** The transcript's one in-flow progress for an active native record. */
     activeRecord?: boolean;
+    work?: {
+      runs: WorkRuns;
+      shown: boolean;
+      action(run?: string): import("@otk/client").ActionControl;
+      onFeedback: NonNullable<Parameters<typeof WorkStrip>[0]["onFeedback"]>;
+    };
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
   const layout = createMessageLayout();
   const sourceID = (part: Part) => layout.source(part.id) ?? props.message.id;
+  const recordTime = (part: Part) => {
+    const record = parts.presentation(part, props.prefs).failure?.facts?.record;
+    if (record) {
+      return props.sourceTime?.(record.messageID) ??
+        (props.message.role === "context" &&
+            props.message.id === record.messageID
+          ? props.message.time.created
+          : undefined);
+    }
+    return props.message.role === "context"
+      ? props.sourceTime?.(sourceID(part)) ??
+        (sourceID(part) === props.message.id
+          ? props.message.time.created
+          : undefined)
+      : undefined;
+  };
   const framing = createMemo(() =>
     layout.update(
       props.ownerID ?? props.message.id,
       messageLayoutRole(props.message),
       props.segments ??
-        [{ messageID: props.message.id, parts: props.message.parts }],
+        [{
+          messageID: props.message.id,
+          parts: props.message.parts,
+          ...(props.message.role === "assistant"
+            ? {
+              agent: props.message.agent,
+              turnID: props.message.replyTo ?? props.message.id,
+              model: props.message.model,
+              time: props.message.time,
+            }
+            : {}),
+        }],
       JSON.stringify(props.prefs),
       (part) => parts.presentation(part, props.prefs),
     )
   );
   const frames = () => framing().frames;
+  const failedSend = () => failedSendPresentation(props.send?.feedback);
+  const failureTime = (part: Part) => {
+    const id =
+      parts.presentation(part, props.prefs).failure?.facts?.record?.messageID ??
+        sourceID(part);
+    const time = props.sourceOutcomeTime?.(id) ??
+      (id === props.message.id && props.message.role !== "user"
+        ? props.message.outcomeTime
+        : undefined);
+    return time?.state === "known" && time.at !== outcomeClock()?.at
+      ? time.at
+      : undefined;
+  };
   const userBubble = () => framing().userBubble;
   const prompt = () => framing().prompt;
   const identity = () => ({
@@ -160,12 +184,26 @@ export default function Message(
     directory: props.directory,
   });
   let footerControl: VirtualListControl | undefined;
+  const revealFooter = async () => {
+    await footerControl?.reveal("footer", { align: "nearest", intent: "user" });
+  };
   let usageControl: { open(): void } | undefined;
+  const replySources = () => framing().replyAgents;
+  const replySource = (source: () => ReplyStartData) => (
+    <ReplyStart
+      source={{
+        ...source(),
+        timing: presentation().time?.timing,
+        outcomeTime: presentation().time?.outcome,
+      }}
+      sessionID={props.message.sessionID}
+    />
+  );
   contentOwner(identity, {
     get usage() {
       return props.openUsage
         ? async () => {
-          await footerControl?.reveal("footer", { align: "nearest" });
+          await revealFooter();
           usageControl?.open();
         }
         : undefined;
@@ -182,9 +220,9 @@ export default function Message(
       reveal() {
         (prompt() && bubble ? bubble : article).focus({ preventScroll: true });
       },
+      revealFooter,
     })
   );
-  const [revealed, setRevealed] = createSignal(false);
   const target = () => ({
     ...identity(),
     source: framing().copyable || props.copyIncomplete
@@ -198,7 +236,7 @@ export default function Message(
       : undefined,
     lastID: props.lastID ?? props.message.id,
     completed: isAssistantTerminal(props.message),
-    queued: props.queued,
+    queued: props.queued || !!props.send && props.send.phase !== "committed",
   });
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
@@ -213,10 +251,23 @@ export default function Message(
       );
   const streaming = () => presentation().streaming;
   const progress = () => presentation().progress;
+  const outcomeClock = createMemo(() => {
+    const time = presentation().time?.outcome;
+    return time?.state === "known" ? time : undefined;
+  });
   const error = () =>
-    props.message.role === "assistant" && !props.message.interrupted
-      ? props.message.error?.message
-      : undefined;
+    replyErrorFeedback(
+      props.message,
+      (props.segments ?? [{ parts: props.message.parts }]).flatMap((
+        { parts: source },
+      ) =>
+        source.flatMap((part) => {
+          const failure = parts.presentation(part, props.prefs).failure;
+          return failure ? [failure] : [];
+        })
+      ),
+      identity(),
+    );
   return (
     <ContentIdentityProvider value={identity()}>
       <article
@@ -224,21 +275,37 @@ export default function Message(
           (element) => {
             article = element;
           },
-          contextTarget(() => ({
-            kind: props.readOnly
+          contextTarget((invocation) => {
+            const kind = props.readOnly
               ? "saved-message"
               : prompt()
               ? "prompt"
-              : "reply",
-            data: target(),
-          })),
+              : "reply";
+            const data = target();
+            if (kind !== "reply") return { kind, data };
+            const span = invocation.inner.find(({ kind }) =>
+              kind === "code-span"
+            )?.data as { text: string } | undefined;
+            return {
+              kind,
+              data: {
+                ...data,
+                runText: runnableText({
+                  selection: invocation.selection,
+                  span: span?.text,
+                }),
+              },
+            };
+          }),
         ]}
         class={["otk-message", {
           "otk-user-message": userBubble(),
-          "is-revealed": revealed(),
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
+        data-send-state={props.send?.phase}
+        data-send-key={props.send?.intent.key}
+        data-failure-diagnostic={failedSend().diagnosticID}
         tabindex="-1"
       >
         <For each={frames()} keyed={(frame) => frame.id}>
@@ -263,47 +330,25 @@ export default function Message(
             >
               <ContentWindow
                 items={frame().groups}
+                intrinsic={userBubble() && !frame().transcript}
                 scope={frame().id}
                 key={(group) => group.id}
                 label="Reply segments"
                 role="segment"
                 render={(group) => (
-                  <Show
-                    when={group().work}
-                    fallback={
-                      <PartsView
-                        parts={group().parts}
-                        prefs={props.prefs}
-                        directory={props.directory}
-                        permissions={props.permissions}
-                        onOpenChild={props.onOpenChild}
-                        user={props.message.role === "user"}
-                        streaming={streaming()}
-                        pending={props.pending}
-                        sourceID={sourceID}
-                      />
-                    }
-                  >
-                    <WorkLog
-                      workingMs={group().workingMs}
-                      identity={group().id}
-                      prefs={props.prefs}
-                      required={group().required}
-                      body={() => (
-                        <PartsView
-                          parts={group().parts}
-                          prefs={props.prefs}
-                          directory={props.directory}
-                          permissions={props.permissions}
-                          onOpenChild={props.onOpenChild}
-                          user={props.message.role === "user"}
-                          streaming={streaming()}
-                          pending={props.pending}
-                          sourceID={sourceID}
-                        />
-                      )}
-                    />
-                  </Show>
+                  <PartsView
+                    parts={group().parts}
+                    prefs={props.prefs}
+                    directory={props.directory}
+                    permissions={props.permissions}
+                    onOpenChild={props.onOpenChild}
+                    user={props.message.role === "user"}
+                    streaming={streaming()}
+                    pending={props.pending}
+                    sourceID={sourceID}
+                    recordTime={recordTime}
+                    failureTime={failureTime}
+                  />
                 )}
               />
               <Show when={progress() && frame().id === frames().at(-1)?.id}>
@@ -313,53 +358,59 @@ export default function Message(
           )}
         </For>
         <Show when={props.recovery}>
-          <p role="status" class="otk-response-recovery">
-            {props.recovery === "unavailable"
-              ? "Response refresh unavailable."
-              : "Refreshing response…"}
-            <Show
-              when={props.recovery === "unavailable" && props.onRetryRecovery}
-            >
-              <button
-                type="button"
-                onClick={() => props.onRetryRecovery?.()}
-              >
-                Retry response
-              </button>
-            </Show>
-          </p>
+          <FeedbackStatus
+            feedback={props.recovery === "unavailable"
+              ? {
+                ...errorFeedback("Response refresh unavailable.", {
+                  actionLabel: "Refreshing response",
+                  target: identity(),
+                })!,
+                action: props.onRetryRecovery
+                  ? { label: "Retry response", run: props.onRetryRecovery }
+                  : undefined,
+              }
+              : { kind: "pending", text: "Refreshing response..." }}
+          />
         </Show>
         <Show when={prompt()}>
-          <footer
-            class={["otk-user-meta", {
-              "otk-time-always": props.prefs.timestamps,
-            }]}
+          <MessageFooter
+            class="otk-user-meta"
+            at={props.message.time.created}
+            actions={!props.readOnly &&
+                (!props.send || props.send.phase === "committed")
+              ? { kind: "prompt", target: target() }
+              : undefined}
           >
-            <span class="otk-user-details">
-              <time
-                class="otk-created-time"
-                datetime={new Date(props.message.time.created).toISOString()}
-              >
-                {new Date(props.message.time.created).toLocaleString()}
-              </time>
-              <Show when={props.queued}>
-                <span class="otk-queued">Queued</span>
-              </Show>
-            </span>
-            <Show when={!props.readOnly}>
-              <MessageActions
-                kind="prompt"
-                revealed={revealed()}
-                target={target()}
-                region={() => article}
-                onReveal={setRevealed}
-              />
+            <Show when={props.send?.phase === "pending"}>
+              <ChromeMeta class="otk-send-meta">
+                <ActivityIndicator small decorative />Sending
+              </ChromeMeta>
             </Show>
-          </footer>
+            <Show
+              when={props.queued &&
+                (!props.send || props.send.phase === "committed")}
+            >
+              <ChromeMeta class="otk-queued">Queued</ChromeMeta>
+            </Show>
+          </MessageFooter>
+          <Show when={props.send?.phase === "failed"}>
+            <Show
+              when={failedSend().feedback}
+              fallback={<ChromeMeta>Not sent</ChromeMeta>}
+            >
+              {(feedback) => (
+                <FeedbackStatus
+                  class="otk-send-failure"
+                  intrinsic
+                  feedback={feedback()}
+                />
+              )}
+            </Show>
+          </Show>
         </Show>
         <Show when={assistant()}>
-          {(message) => (
-            <>
+          {(message) => {
+            return (
               <ContentWindow
                 items={["footer"]}
                 key={(key) => key}
@@ -369,62 +420,88 @@ export default function Message(
                   footerControl = control;
                 }}
                 render={() => (
-                  <footer
-                    ref={sourceRegion(() => props.lastID ?? props.message.id)}
-                    class={["otk-message-footer", {
-                      "otk-time-always": props.prefs.timestamps,
-                    }]}
-                  >
-                    <span class="otk-message-details">
-                      <span
-                        class="otk-message-agent otk-created-trigger"
-                        tabindex="0"
-                        data-otk-focus="content"
-                        style={{
-                          "--message-agent-color":
-                            agentColor(message().agentColor) ||
-                            "var(--otk-fg-3)",
-                        }}
-                      >
-                        {message().agent}
-                      </span>
-                      <time
-                        class="otk-created-time"
-                        datetime={new Date(message().time.created)
-                          .toISOString()}
-                      >
-                        {new Date(message().time.created).toLocaleString()}
-                      </time>
-                      <span class="otk-last-output-date" aria-hidden="true">
-                        {new Date(
-                          message().time.lastOutput ?? message().time.created,
-                        ).toLocaleDateString()}
-                      </span>
+                  <div class="otk-reply-end">
+                    <Show
+                      when={props.work && props.work.runs.segments.length > 0 &&
+                        props.work}
+                    >
+                      {(work) => (
+                        <>
+                          <WorkStrip
+                            runs={work().runs}
+                            shown={work().shown}
+                            action={(run) => work().action(run)}
+                            onFeedback={(outcome) => work().onFeedback(outcome)}
+                          />
+                          <For
+                            each={work().runs.failed}
+                            keyed={(run) => run.key}
+                          >
+                            {(run) => (
+                              <FeedbackStatus
+                                feedback={workFailureFeedback(run(), () => {
+                                  const port = work();
+                                  void port.action(run().key).run().then(
+                                    (outcome) => {
+                                      if (outcome.kind !== "shown") {
+                                        port.onFeedback(outcome);
+                                      }
+                                    },
+                                  );
+                                })}
+                                summaryOnly
+                              />
+                            )}
+                          </For>
+                        </>
+                      )}
+                    </Show>
+                    <MessageFooter
+                      whole
+                      completion={props.completion}
+                      leading={
+                        <Show when={replySources()[0]}>
+                          {replySource}
+                        </Show>
+                      }
+                      ref={sourceRegion(() => props.lastID ?? props.message.id)}
+                      at={outcomeClock()?.at}
+                      actions={!props.readOnly
+                        ? { kind: "reply", target: target() }
+                        : undefined}
+                      duration={
+                        <Show
+                          when={presentation().time?.timing ||
+                            presentation().time?.fallback}
+                        >
+                          <TimeValue
+                            class="otk-turn-time"
+                            value={messageTimeValue(presentation().time)}
+                          />
+                        </Show>
+                      }
+                    >
                       <span>
                         {message().model.provider}/{message().model.model}
                       </span>
-                      <Show when={presentation().time}>
-                        {(time) => (
-                          <span
-                            class="otk-turn-time"
-                            title={timingExplanation(time().timing)}
-                          >
-                            {workingTime(time().timing) ?? time().fallback}
-                          </span>
-                        )}
-                      </Show>
                       <Show when={presentation().usage}>
                         {(usage) => (
-                          <TurnUsage
-                            summary={usage().summary}
-                            detail={() => props.usage}
-                            error={props.usageError}
-                            open={props.openUsage}
-                            control={(control) => {
-                              usageControl = control;
-                            }}
-                            showCost={props.prefs.showCost}
-                          />
+                          <MetaItem
+                            rank={2}
+                            compactInPlace
+                            required={!!props.openUsage}
+                          >
+                            <TurnUsage
+                              summary={usage().summary}
+                              detail={() => props.usage}
+                              error={props.usageError}
+                              open={props.openUsage}
+                              control={(control) => {
+                                usageControl = control;
+                              }}
+                              showCost={props.prefs.showCost}
+                            />
+                          </MetaItem>
                         )}
                       </Show>
                       <For each={presentation().facts}>
@@ -433,45 +510,24 @@ export default function Message(
                       <Show when={message().interrupted}>
                         <span>interrupted</span>
                       </Show>
-                    </span>
-                    <Show when={!props.readOnly}>
-                      <MessageActions
-                        kind="reply"
-                        revealed={revealed()}
-                        target={target()}
-                        region={() => article}
-                        onReveal={setRevealed}
-                      />
-                    </Show>
-                    <span class="otk-output-time-group">
-                      <time
-                        class="otk-last-output-time"
-                        tabindex="0"
-                        data-otk-focus="content"
-                        aria-label="Last output time"
-                        datetime={new Date(
-                          message().time.lastOutput ?? message().time.created,
-                        ).toISOString()}
-                        title={`Last output: ${
-                          new Date(
-                            message().time.lastOutput ?? message().time.created,
-                          ).toLocaleString()
-                        }`}
+                      {/* Fit turn-level metadata before the other agent facts. */}
+                      <For
+                        each={replySources().slice(1)}
+                        keyed={(source) => source.agent}
                       >
-                        {new Date(
-                          message().time.lastOutput ?? message().time.created,
-                        )
-                          .toLocaleTimeString()}
-                      </time>
-                    </span>
-                  </footer>
+                        {replySource}
+                      </For>
+                    </MessageFooter>
+                  </div>
                 )}
               />
-            </>
-          )}
+            );
+          }}
         </Show>
         <Show when={error()}>
-          <p class="otk-error" role="alert">{error()}</p>
+          <FeedbackStatus
+            feedback={error()}
+          />
         </Show>
       </article>
     </ContentIdentityProvider>

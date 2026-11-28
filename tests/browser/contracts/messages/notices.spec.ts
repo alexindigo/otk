@@ -2,6 +2,11 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import {
+  openLatestWork,
+  openWork,
+  revealAcquired,
+} from "../../pages/transcript.ts";
 test.describe("V1 records", () => {
   test.use({ profile: "contract-messages-v1-notices" });
   test("messages.running-record-progress-survives-queued-prompt", {
@@ -31,6 +36,8 @@ test.describe("V1 records", () => {
     });
     await expect(page.locator(".otk-response-progress")).toHaveCount(0);
     await page.reload();
+    // Settled records rejoin the interval; inspect through its reveal owner.
+    await revealAcquired(page, '[data-message="running-record"]');
     await expect(page.locator('[data-message="running-record"]')).toContainText(
       "Native work finished",
     );
@@ -44,6 +51,15 @@ test.describe("V1 records", () => {
   }, async ({ isolatedState: state, page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
     await openSession(state, page, "tstv1-otk");
+    // Eligible singleton records retain the same public span/fold hierarchy.
+    const openRecords = async () => {
+      const closed = page.locator(
+        '.otk-record-group-toggle[aria-expanded="false"]',
+      );
+      while (await closed.count()) await closed.first().click();
+    };
+    await openRecords();
+    await revealAcquired(page, '[data-message="context"]');
     const standalone = page.locator('[data-message="context"]');
     await expect(standalone).toHaveAttribute("data-role", "context");
     await expect(standalone.locator(".otk-user-bubble")).toHaveCount(0);
@@ -62,28 +78,49 @@ test.describe("V1 records", () => {
     const failed = page.locator('[data-message="task-notice"]');
     await expect(failed.locator(".otk-native-record")).toHaveClass(/is-error/);
     await failed.getByRole("button", { name: /Task failed/ }).click();
-    await expect(failed.locator(".otk-tool-body")).toContainText(
+    await expect(failed.locator(".otk-failure-reason")).toHaveText(
       "The usage limit has been reached",
     );
-    await expect(page.locator('[data-message="reply"] [role="alert"]'))
-      .toHaveText("The usage limit has been reached");
+    const reply = page.locator('[data-message="reply"]');
+    await expect(reply.getByRole("alert")).toHaveCount(2);
+    for (
+      const name of [
+        "Inspect retained records failed: Subagent failed: The usage limit has been reached",
+        "Running session failed: The usage limit has been reached.",
+      ]
+    ) {
+      await expect(
+        reply.getByRole("alert", { name, exact: true })
+          .locator(
+            ".otk-failure-summary-reason, .otk-failure-main-reason .otk-failure-reason",
+          ),
+      ).toContainText("The usage limit has been reached");
+    }
+    await revealAcquired(page, '[data-message="summary"]');
     await expect(page.locator('[data-message="summary"]')).toHaveAttribute(
       "data-role",
       "context",
     );
+    await revealAcquired(page, '[data-message="permission:retained"]');
     await expect(page.locator('[data-message="permission:retained"]'))
       .toContainText("Permission rejected");
+    await revealAcquired(page, '[data-message="question:retained"]');
     await expect(page.locator('[data-message="question:retained"]'))
       .toContainText("Question cancelled");
     const permission = page.locator('[data-message="permission:retained"]');
     const question = page.locator('[data-message="question:retained"]');
-    await expect(permission.locator(".otk-tool-brief")).toHaveText(
+    await expect(
+      permission.locator(".otk-failure-main-reason .otk-failure-reason"),
+    ).toHaveText(
       "bash: git status --short",
     );
-    await expect(question.locator(".otk-tool-brief")).toHaveText(
+    await expect(
+      question.locator(".otk-failure-main-reason .otk-failure-reason"),
+    ).toHaveText(
       "Verification: Run the focused checks?",
     );
     const retry = page.locator('[data-message="retry:retained"]');
+    await revealAcquired(page, '[data-message="retry:retained"]');
     await expect(retry).toContainText("Free usage exceeded");
     await retry.getByRole("button", { name: /Retry 1/ }).click();
     await expect(retry.getByRole("link", { name: "subscribe" }))
@@ -95,6 +132,8 @@ test.describe("V1 records", () => {
       retry.locator(".otk-tool-body > p").filter({ hasText: /^Retry 1$/ }),
     ).toHaveCount(0);
     await page.reload();
+    await openRecords();
+    await revealAcquired(page, '[data-message="context"]');
     await expect(standalone).toHaveAttribute("data-role", "context");
     await expect(prompt.locator(".otk-user-bubble")).toContainText(
       "Please investigate",
@@ -108,11 +147,14 @@ test.describe("V1 records", () => {
     const permission = page.locator('[data-message="permission:retained"]');
     const question = page.locator('[data-message="question:retained"]');
     for (
-      const [row, title] of [[permission, /Permission rejected/], [
-        question,
+      const [id, title] of [["permission:retained", /Permission rejected/], [
+        "question:retained",
         /Question cancelled/,
       ]] as const
     ) {
+      const selector = `[data-message="${id}"]`;
+      await revealAcquired(page, selector);
+      const row = page.locator(selector);
       await row.getByRole("button", { name: title }).click();
       await expect(row.getByRole("button", { name: "Source", exact: true }))
         .toHaveAttribute("aria-expanded", "false");
@@ -146,11 +188,14 @@ test.describe("V1 records", () => {
     await expect(questionSource).toHaveAttribute("aria-expanded", "true");
     await page.reload();
     for (
-      const [row, title] of [[permission, /Permission rejected/], [
-        question,
+      const [id, title] of [["permission:retained", /Permission rejected/], [
+        "question:retained",
         /Question cancelled/,
       ]] as const
     ) {
+      const selector = `[data-message="${id}"]`;
+      await revealAcquired(page, selector);
+      const row = page.locator(selector);
       await row.getByRole("button", { name: title }).click();
       await expect(row.getByRole("button", { name: "Source", exact: true }))
         .toHaveAttribute("aria-expanded", "true");
@@ -171,6 +216,10 @@ test.describe("V2 records", () => {
     const idle = page.locator('[data-native-record="opencode-v2/idle"]');
     await expect(idle).toHaveClass(/is-error/);
     await expect(idle).toContainText("The usage limit has been reached");
+    await revealAcquired(
+      page,
+      '[data-native-record="opencode-v2/model-switched"]',
+    );
     await expect(
       page.locator('[data-native-record="opencode-v2/model-switched"]'),
     ).toContainText("Switched variant to high");
@@ -187,12 +236,7 @@ test.describe("V2 records", () => {
     await expect(compaction.locator("strong")).toHaveText("Compaction summary");
     await expect(page.locator('[data-native-record="opencode-v2/retry"]'))
       .toContainText("Retry scheduled - attempt 2");
-    const work = page.locator(".otk-work-fold");
-    for (const fold of await work.all()) {
-      if (await fold.getAttribute("aria-expanded") === "false") {
-        await fold.click();
-      }
-    }
+    await openLatestWork(page);
     await expect(
       page.locator('[data-native-record="opencode-v2/active-retry"]'),
     ).toContainText("Provider temporarily unavailable");
@@ -218,16 +262,30 @@ test.describe("V2 records", () => {
       await page.setViewportSize({ width: 1280, height: 1600 });
       await openSession(state, page, "tstv1-otk");
       const system = page.locator('[data-native-record="opencode-v2/system"]');
+      await revealAcquired(page, '[data-native-record="opencode-v2/system"]');
       await expect(system).toContainText("System");
       await expect(system).toContainText("Instructions updated: codemode");
       const failed = page.locator(
         '[data-native-record="opencode-v2/synthetic"]',
       )
-        .filter({ hasText: "Junior failed" });
+        .filter({
+          has: page.locator(".otk-entity-pill", { hasText: "Junior" }),
+        })
+        .filter({ has: page.getByText("failed", { exact: true }) });
+      await expect(
+        failed.getByRole("button", {
+          name: "Junior details",
+          exact: true,
+        }),
+      ).toHaveText("Junior");
+      await expect(failed.getByText("failed", { exact: true })).toBeVisible();
       await expect(failed).toHaveClass(/is-error/);
       await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible();
       await expect(
-        failed.getByRole("button", { name: "Open task", exact: true }),
+        failed.getByRole("button", {
+          name: "Open task details",
+          exact: true,
+        }),
       )
         .toBeVisible();
       await failed.locator(".otk-tool-toggle").click();
@@ -253,9 +311,11 @@ test.describe("V2 records", () => {
       const rows = await failed.locator(".otk-native-parameters").evaluate((
         list,
       ) =>
-        Array.from(list.querySelectorAll("dt")).map((dt) => {
+        Array.from(list.querySelectorAll(":scope > dt")).map((dt) => {
           const label = dt.getBoundingClientRect(),
-            value = dt.nextElementSibling!.querySelector(".otk-native-value")!
+            value = dt.nextElementSibling!.querySelector(
+              ".otk-native-value, .otk-entity-pill",
+            )!
               .getBoundingClientRect();
           return {
             left: value.left,
@@ -277,22 +337,29 @@ test.describe("V2 records", () => {
       await source.locator(".otk-tool-toggle").click();
       await expect(source.locator(".otk-native-preview")).toBeVisible();
       await expect(source).toContainText("bytes");
-      await expect(page.locator(".otk-message .otk-error[role=alert]"))
-        .toContainText(
-          "The usage limit has been reached",
-        );
+      await expect(
+        page.locator(".otk-message").getByRole("alert", {
+          name: "Running session failed: The usage limit has been reached.",
+          exact: true,
+        }).locator(".otk-failure-main-reason .otk-failure-reason"),
+      ).toHaveText("The usage limit has been reached");
       await expect(page.locator('[data-native-record="opencode-v2/shell"]'))
         .toContainText("Exited with code 7");
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/request-outcome"]',
+      );
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toContainText("Question cancelled");
-      const work = page.locator(".otk-work-fold");
-      for (let i = 0; i < await work.count(); i++) {
-        if (await work.nth(i).getAttribute("aria-expanded") === "false") {
-          await work.nth(i).click();
-        }
-      }
-      const task = page.locator('[data-tool="task"]');
+      const result = page.locator('.otk-messages [data-role="assistant"]')
+        .filter({
+          has: page.getByRole("button", {
+            name: /Work log:.*Foreground result/,
+          }),
+        });
+      const work = await openWork(result);
+      const task = work.locator('[data-tool="task"]');
       await task.locator(".otk-tool-toggle").first().click();
       await expect(task.locator("strong.otk-prose-strong")).toHaveText(
         "Result",
@@ -301,12 +368,15 @@ test.describe("V2 records", () => {
       await expect(task.locator(".otk-tool-body")).not.toContainText(
         "<subagent",
       );
-      const execute = page.locator('[data-tool="external"]').filter({
+      const execute = work.locator('[data-tool="external"]').filter({
         hasText: "execute",
       });
       await expect(execute).toHaveClass(/is-error/);
       await expect(execute).toContainText("No such file: missing");
-      await execute.locator(".otk-tool-toggle").first().click();
+      const toggle = execute.locator(".otk-tool-toggle").first();
+      if (await toggle.getAttribute("aria-expanded") === "false") {
+        await toggle.click();
+      }
       await expect(execute.locator('[data-tool="external"]')).toContainText(
         "read",
       );
@@ -314,6 +384,10 @@ test.describe("V2 records", () => {
       await expect(execute).toBeVisible();
       await page.reload();
       await expect(failed).toBeVisible();
+      await revealAcquired(
+        page,
+        '[data-native-record="opencode-v2/request-outcome"]',
+      );
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toBeVisible();

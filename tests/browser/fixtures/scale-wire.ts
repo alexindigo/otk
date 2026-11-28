@@ -8,12 +8,17 @@ export interface ScaleFrame {
   frame: {
     t: string;
     method: string;
+    ref?: { key: string; window: string };
+    refs?: { key: string; window: string }[];
+    outcome?: { ok: boolean };
     params?: {
       directory?: string;
+      query?: string;
       sessionID?: string;
       before?: string;
       kinds?: string[];
       intent?: string;
+      files?: true;
     };
   };
 }
@@ -36,6 +41,14 @@ export function scaleWire(page: Page) {
     };
     socket.on("framesent", ({ payload }) => record("sent", payload));
     socket.on("framereceived", ({ payload }) => record("received", payload));
+    socket.on("close", () => {
+      frames.push({
+        socket: id,
+        direction: "received",
+        at: performance.now(),
+        frame: { t: "socket.closed", method: "" },
+      });
+    });
   });
   return frames;
 }
@@ -50,6 +63,7 @@ export function scaleGenerations(frames: ScaleFrame[]) {
         directory: unknown;
         kinds?: string[];
         intent?: string;
+        files?: true;
       }[];
     }
   >();
@@ -74,6 +88,7 @@ export function scaleGenerations(frames: ScaleFrame[]) {
         directory: frame.params?.directory,
         kinds: frame.params?.kinds,
         intent: frame.params?.intent,
+        files: frame.params?.files,
       });
     }
   }

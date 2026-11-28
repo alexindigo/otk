@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import type { InboxBaseline, InboxSnapshot } from "@otk/protocol";
+import { entityKey, type EntityState } from "@otk/protocol";
 import { createInbox, type InboxChanges, type InboxRpc } from "../inbox.ts";
 import { createState, type StateFactory } from "../state.ts";
+import { createSessionTree } from "../session-tree.ts";
 
 const snapshot = (): InboxSnapshot => ({
   projects: [{
     directory: "/p",
-    order: 0,
     added: true,
     inactive: false,
     lastVisit: 1,
@@ -16,6 +17,72 @@ const snapshot = (): InboxSnapshot => ({
   seen: {},
   finishes: {},
   pathTemplates: [],
+});
+
+Deno.test("entity patches use the existing inbox revision fence and preserve unrelated identities", () => {
+  const model = createInbox({
+    call: () => Promise.reject(new Error("unused")),
+  });
+  const entity: EntityState = {
+    kind: "session",
+    id: "s",
+    state: "working",
+    previous: "none",
+    counts: { blocked: 0, working: 1, finished: 0, unseen: 0 },
+  };
+  const key = entityKey(entity.kind, entity.id);
+  const baseline = { ...snapshot(), entities: { [key]: entity } };
+  const changes: InboxChanges[] = [];
+  model.observeChanges((change) => changes.push(change));
+  model.receive({
+    t: "inbox.snapshot",
+    generation: "a",
+    revision: 0,
+    inbox: baseline,
+  });
+  const project = model.state.inbox.projects[0];
+  const updated = {
+    ...entity,
+    state: "blocked" as const,
+    cause: "permission" as const,
+  };
+  model.receive({
+    t: "inbox.patch",
+    generation: "a",
+    from: 0,
+    revision: 1,
+    ops: [{ op: "entity.upsert", value: updated }],
+  });
+  assertEquals(model.state.inbox.entities?.[key], updated);
+  assertStrictEquals(model.state.inbox.projects[0], project);
+  assertEquals(
+    baseline.entities[key],
+    entity,
+    "replica writes cannot mutate the received baseline",
+  );
+  assertEquals(changes.at(-1)?.entities, [key]);
+  model.receive({
+    t: "inbox.patch",
+    generation: "a",
+    from: 0,
+    revision: 1,
+    ops: [{ op: "entity.remove", key }],
+  });
+  assertEquals(
+    model.state.inbox.entities?.[key],
+    updated,
+    "replayed revisions cannot remove newer state",
+  );
+  model.receive({
+    t: "inbox.patch",
+    generation: "a",
+    from: 1,
+    revision: 2,
+    ops: [{ op: "entity.remove", key }],
+  });
+  assertEquals(model.state.inbox.entities, {});
+  assertEquals(changes.at(-1)?.entities, [key]);
+  model.stop();
 });
 Deno.test("accepted inbox facts and keyed observers are current before a deferred binding publishes", () => {
   const pending: (() => void)[] = [];
@@ -197,4 +264,38 @@ Deno.test("retired inbox recovery releases its read and cannot publish after ser
   });
   await new Promise((yes) => setTimeout(yes, 0));
   assertEquals(model.state.inbox.pathTemplates, []);
+});
+Deno.test("Sessions grouping follows accepted task upserts applied in place", () => {
+  const model = createInbox({
+    call: () => Promise.reject(new Error("unused")),
+  });
+  model.receive({
+    t: "inbox.snapshot",
+    generation: "a",
+    revision: 0,
+    inbox: snapshot(),
+  });
+  const tree = createSessionTree();
+  const entries = [{
+    id: "s",
+    directory: "/p",
+    title: "Session",
+    timeCreated: 1,
+  }];
+  const group = () =>
+    tree.rows(entries, model.state.inbox.tasks, "/p").find((row) =>
+      row.kind === "session"
+    )?.group;
+  assertEquals(group(), "");
+  model.receive({
+    t: "inbox.patch",
+    generation: "a",
+    from: 0,
+    revision: 1,
+    ops: [
+      { op: "task.upsert", task: { ...snapshot().tasks[0], sessions: ["s"] } },
+    ],
+  });
+  // The accepted tasks array is the same object, edited by the reducer.
+  assertEquals(group(), "t");
 });

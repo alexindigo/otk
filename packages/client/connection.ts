@@ -19,10 +19,64 @@ import { apiBase, type AuthStatus, bootstrapRequestMetadata } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
 import { RequestTracker, type RequestTrackerOptions } from "./requests.ts";
 import { HttpReadFailure, HttpRequests } from "./http-requests.ts";
-import { FeedbackFailure, RequestReleased } from "./failures.ts";
+import {
+  type Feedback,
+  FeedbackFailure,
+  RequestFailure,
+  RequestReleased,
+} from "./failures.ts";
 import { type PublicDefaults, publicDefaultsFrom } from "./public-defaults.ts";
 import { authStatus, discoveryFailure } from "./discovery.ts";
 import { actionFeedback } from "./failure-features.ts";
+import { RequestLifetimes } from "./request-lifetime.ts";
+import type { SidecarState } from "./sidecars.ts";
+import { ReloadRefused } from "./reload.ts";
+import {
+  type ContinuityMemory,
+  graceElapsed,
+  lost,
+  outdated,
+  reached,
+  refused,
+  type ServerContinuity,
+  UNREACHABLE_GRACE_MS,
+  welcomed,
+} from "./server-continuity.ts";
+
+export type ConnectionInput = Pick<
+  SidecarState,
+  "label" | "status" | "harness" | "error" | "feedback" | "continuity"
+>;
+export type ConnectionLightState =
+  | "updated"
+  | "connected"
+  | "connecting"
+  | "reconnecting"
+  | "disconnected"
+  | "error";
+/** Both links must be healthy. Session work/attention never enters this owner. */
+export function connectionState(
+  connection?: ConnectionInput,
+): ConnectionLightState {
+  if (!connection) return "disconnected";
+  if (
+    connection.continuity?.kind === "updated" ||
+    connection.status === "client outdated" ||
+    connection.status === "protocol mismatch"
+  ) return "updated";
+  if (
+    connection.error || connection.status === "login required" ||
+    connection.status === "setup required"
+  ) return "error";
+  if (
+    connection.status === "reconnecting" ||
+    connection.harness === "reconnecting"
+  ) return "reconnecting";
+  if (connection.status === "connected" && connection.harness === "connected") {
+    return "connected";
+  }
+  return "connecting";
+}
 
 export type ConnectionState =
   | "connecting"
@@ -30,13 +84,25 @@ export type ConnectionState =
   | "reconnecting"
   | "login required"
   | "setup required"
+  | "client outdated"
   | "protocol mismatch";
 export interface ConnectionSink {
   defaults?(value: PublicDefaults): void;
-  status(state: ConnectionState, error?: string, authType?: string): void;
+  continuity?(state: ServerContinuity): void;
+  status(
+    state: ConnectionState,
+    error?: string,
+    authType?: string,
+    feedback?: Feedback,
+  ): void;
   frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
+  retireRequestDisclosures?(scope: string): void;
+  /** Application-owned lossless reload; the transport never reloads the page. */
+  reload?(): void | Promise<void>;
+  page?: { build?: string };
+  graceMs?: number;
   /** Application-supplied policy before this server returns its own authority. */
   policy?: ClientRequestPolicy;
   /** UI adapters acknowledge accepted state after its render opportunity. */
@@ -46,12 +112,19 @@ export interface ConnectionOptions {
   api?: URL;
   socket?: (url: URL) => WebSocket;
   fetcher?: typeof fetch;
-  requests?: Omit<RequestTrackerOptions, "send" | "server" | "available">;
+  requests?: Omit<
+    RequestTrackerOptions,
+    "send" | "server" | "available" | "renewWindow"
+  >;
 }
 export type ConnectionAttempt =
   | { kind: "checked"; auth: AuthStatus }
   | { kind: "failed"; cause: unknown }
   | { kind: "superseded" };
+export type RecoveredConnection = {
+  instance: string;
+  replaced: boolean;
+};
 function browserStorage(server: string): RequestTrackerOptions["storage"] {
   if (
     typeof globalThis.document === "undefined" ||
@@ -68,6 +141,23 @@ function browserStorage(server: string): RequestTrackerOptions["storage"] {
 }
 export class SidecarConnection {
   readonly base: URL;
+  readonly attention: RequestLifetimes;
+  readPermissions(
+    scope: string,
+    entry: import("@otk/protocol").SessionLookup,
+    signal?: AbortSignal,
+  ): Promise<import("@otk/protocol").PermissionRequest[]> {
+    return this.attention.readPermissions(
+      scope,
+      entry,
+      (owned) =>
+        this.supports("permissions")
+          ? this.rpc.call("permission.list", { sessionID: scope }, owned)
+          : Promise.resolve([]),
+      this.messages,
+      signal,
+    );
+  }
   readonly rpc: Rpc;
   readonly requests: RequestTracker;
   readonly http: HttpRequests;
@@ -75,7 +165,11 @@ export class SidecarConnection {
   #controller?: AbortController;
   #retry?: ReturnType<typeof setTimeout>;
   #silence?: ReturnType<typeof setTimeout>;
+  #grace?: ReturnType<typeof setTimeout>;
+  #continuity: ServerContinuity = { kind: "away", since: Date.now() };
+  #memory: ContinuityMemory;
   #attempt = 0;
+  #invalidFailure?: string;
   #policy?: ClientRequestPolicy;
   #stopped = false;
   #welcomed = false;
@@ -86,25 +180,53 @@ export class SidecarConnection {
   #auth?: AuthStatus;
   #view: ViewLease = { epoch: 0, crumbs: [], rows: [] };
   #selectionGeneration = 0;
-  #pageSettled = false;
+  #page: "waiting" | "accepted" | "settled" = "waiting";
+  #attachment?: {
+    sentEpoch: number;
+    baseline: boolean;
+    acknowledgedEpoch?: number;
+    confirmsViews?: true;
+    recovered: boolean;
+    welcome?: {
+      state: ServerContinuity;
+      memory: ContinuityMemory;
+      connection: RecoveredConnection;
+    };
+  };
+  #recoveredListeners = new Set<(connection: RecoveredConnection) => void>();
+  onRecovered(listener: (connection: RecoveredConnection) => void): () => void {
+    this.#recoveredListeners.add(listener);
+    return () => this.#recoveredListeners.delete(listener);
+  }
   /** Capture selection and transport generations before acquiring its first page. */
   firstPage(sessionID: string): () => void {
-    if (this.#pageSettled || this.#view.selected !== sessionID) return () => {};
+    if (this.#page !== "waiting" || this.#view.selected !== sessionID) {
+      return () => {};
+    }
     const generation = this.#selectionGeneration, controller = this.#controller;
     return () => {
       const accepted = () => {
         if (
           generation !== this.#selectionGeneration ||
           controller !== this.#controller ||
-          this.#view.selected !== sessionID || !this.#welcomed ||
-          this.#pageSettled
+          this.#view.selected !== sessionID || this.#page !== "waiting"
         ) return;
-        this.#pageSettled = true;
-        this.send({ t: "view.settled", epoch: this.#view.epoch, sessionID });
+        this.#page = "accepted";
+        this.#settlePage();
       };
       if (this.options.afterRender) this.options.afterRender(accepted);
       else queueMicrotask(accepted);
     };
+  }
+  #settlePage(): void {
+    const attachment = this.#attachment, { epoch, selected } = this.#view;
+    if (
+      this.#page !== "accepted" || !selected || !attachment ||
+      !this.connected ||
+      (attachment.confirmsViews && attachment.acknowledgedEpoch !== epoch)
+    ) return;
+    this.#page = "settled";
+    this.send({ t: "view.settled", epoch, sessionID: selected });
   }
   get viewEpoch(): number {
     return this.#view.epoch;
@@ -121,15 +243,50 @@ export class SidecarConnection {
     ) return;
     if (value.selected !== this.#view.selected) {
       this.#selectionGeneration++;
-      this.#pageSettled = false;
+      this.#page = "waiting";
     }
     this.#view = {
       ...value,
       crumbs: [...value.crumbs],
       rows: [...value.rows],
+      references: value.references?.slice(),
       epoch: this.#view.epoch + 1,
     };
-    if (this.#welcomed) this.send({ t: "view", ...this.#view });
+    this.#reconcileView();
+  }
+  #reconcileView(): void {
+    const attachment = this.#attachment;
+    if (
+      !this.connected || !attachment ||
+      attachment.sentEpoch === this.#view.epoch
+    ) return;
+    attachment.sentEpoch = this.#view.epoch;
+    this.send({ t: "view", ...this.#view });
+    // An overtaken hello can only have published a baseline for the old
+    // epoch. A patch cannot initialize a replacement socket's index replica.
+    if (attachment.confirmsViews && !attachment.baseline) {
+      this.send({ t: "resnapshot" });
+    }
+  }
+  #recover(): void {
+    const attachment = this.#attachment, welcome = attachment?.welcome;
+    if (
+      !attachment || !welcome || attachment.recovered ||
+      (attachment.confirmsViews &&
+        (!attachment.baseline ||
+          attachment.acknowledgedEpoch !== this.#view.epoch))
+    ) return;
+    attachment.recovered = true;
+    this.#clearGrace();
+    this.#attempt = 0;
+    this.#memory = welcome.memory;
+    this.#publish(welcome.state);
+    if (this.#attachment !== attachment) return;
+    this.sink.status("connected");
+    for (const listener of this.#recoveredListeners) {
+      if (this.#attachment !== attachment) break;
+      listener(welcome.connection);
+    }
   }
   get attachments(): import("@otk/protocol").AttachmentPolicy | undefined {
     return this.#attachments ?? this.options.attachments;
@@ -143,6 +300,11 @@ export class SidecarConnection {
     readonly options: ConnectionOptions = {},
   ) {
     this.base = options.api ?? apiBase(baseUrl);
+    this.attention = new RequestLifetimes(
+      undefined,
+      options.retireRequestDisclosures,
+    );
+    this.#memory = { page: options.page };
     this.#policy = options.policy && clientRequestPolicyFrom(options.policy);
     const metadata = createRequestMetadata();
     this.requests = new RequestTracker({
@@ -155,6 +317,10 @@ export class SidecarConnection {
             bootstrapRequestMetadata[method]?.kind ??
             "mutation"),
       available: (control) => this.#welcomed || this.#bootstrap(control),
+      renewWindow: () => {
+        this.#retire();
+        this.#schedule();
+      },
       send: (control) => this.#route(control),
     });
     this.rpc = new Rpc((frame) => this.send(frame), this.requests);
@@ -164,6 +330,8 @@ export class SidecarConnection {
       fetcher: options.fetcher,
       policy: this.#policy,
     });
+    this.sink.continuity?.(this.#continuity);
+    this.#startGrace();
   }
   #bootstrap(control: RequestControl): boolean {
     if (control.t === "request") return control.ref.window === "bootstrap";
@@ -230,12 +398,15 @@ export class SidecarConnection {
         this.base.href,
       );
       if (!current()) return { kind: "superseded" };
+      this.#invalidFailure = undefined;
       this.#auth = auth;
       const defaults = publicDefaultsFrom(auth.defaults);
       if (defaults) this.sink.defaults?.(defaults);
       this.#policy = clientRequestPolicyFrom(auth.requests.policy);
       this.http.policy(this.#policy);
       if (auth.setupRequired || !auth.authenticated) {
+        this.#clearGrace();
+        this.#publish(reached(this.#continuity));
         this.requests.authenticationRequired();
         this.sink.status(
           auth.setupRequired ? "setup required" : "login required",
@@ -253,6 +424,11 @@ export class SidecarConnection {
         new WebSocket(url);
       socket.onopen = () => {
         if (current() && socket === this.#socket) {
+          this.#attachment = {
+            sentEpoch: this.#view.epoch,
+            baseline: false,
+            recovered: false,
+          };
           socket.send(
             JSON.stringify({
               t: "hello",
@@ -263,10 +439,16 @@ export class SidecarConnection {
         }
       };
       socket.onmessage = ({ data }) => {
-        if (!current() || socket !== this.#socket) return;
+        const attachment = this.#attachment;
+        if (!current() || socket !== this.#socket || !attachment) return;
         const frame: ServerFrame = JSON.parse(data);
+        // Inbox patches and settlement edges have their own revision fences
+        // across view changes. In particular an in-flight settlement must not
+        // be lost when a new view replaces the one that observed the work.
         if (
-          frame.t !== "load.chunk" && frame.epoch !== undefined &&
+          frame.t !== "load.chunk" && frame.t !== "inbox.patch" &&
+          frame.t !== "inbox.settlement" &&
+          frame.epoch !== undefined &&
           frame.epoch < this.#view.epoch
         ) return;
         if (this.#policy) {
@@ -283,8 +465,13 @@ export class SidecarConnection {
           return;
         }
         if (frame.t === "welcome") {
+          if (this.#welcomed) return;
+          const facts = {
+            protocol: frame.protocol,
+            build: frame.sidecar?.build,
+          };
           if (frame.protocol !== PROTOCOL_VERSION) {
-            this.#protocolMismatch();
+            this.#protocolMismatch(facts);
             return;
           }
           try {
@@ -292,13 +479,28 @@ export class SidecarConnection {
             this.#attachments = frame.attachments;
             this.#policy = clientRequestPolicyFrom(frame.requests.policy);
           } catch {
-            this.#protocolMismatch();
+            this.#protocolMismatch(facts);
             return;
           }
+          const result = welcomed(this.#continuity, this.#memory, {
+            build: frame.sidecar.build,
+            instance: frame.sidecar.instance,
+          });
+          attachment.welcome = {
+            ...result,
+            connection: {
+              instance: frame.sidecar.instance,
+              replaced: this.#memory.current?.instance !== undefined &&
+                this.#memory.current.instance !== frame.sidecar.instance,
+            },
+          };
+          attachment.confirmsViews = frame.viewAcknowledgements;
+          if (result.state.kind === "updated") this.#publish(result.state);
+          if (!current()) return;
           this.#welcomed = true;
           this.#capabilities = new Set(welcomeCapabilities(frame));
-          this.#attempt = 0;
           this.http.policy(this.#policy);
+          this.#reconcileView();
           for (const id of this.#subscriptions) {
             this.send({ t: "subscribe", sessionID: id });
           }
@@ -307,19 +509,45 @@ export class SidecarConnection {
             this.#policy.resumebatch,
             frame.requests.principal,
           );
-          this.sink.status("connected");
+          if (!current()) return;
+          if (!attachment.confirmsViews) this.#recover();
+          this.#settlePage();
         }
         if (frame.t === "error" && frame.code === "protocol") {
-          this.#protocolMismatch();
+          this.#protocolMismatch({
+            protocol: frame.protocol,
+            build: frame.build,
+          });
           return;
         }
+        if (!this.#welcomed) return;
+        if (frame.t === "view.ready") {
+          if (frame.epoch === attachment.sentEpoch) {
+            attachment.acknowledgedEpoch = frame.epoch;
+            this.#settlePage();
+            this.#recover();
+          }
+          return;
+        }
+        if (
+          attachment.confirmsViews && !attachment.baseline &&
+          frame.t === "index.patch"
+        ) return;
         this.rpc.receive(frame);
+        if (frame.t === "harness" && frame.state !== "connected") {
+          this.attention.resetPermissionScopes();
+        }
         const accepted = this.sink.frame(frame);
+        if (!current() || socket !== this.#socket) return;
         if (
           accepted !== false && frame.epoch !== undefined &&
           (frame.t === "index.snapshot" || frame.t === "index.patch")
         ) {
           this.send({ t: "index.applied", epoch: frame.epoch, rev: frame.rev });
+          if (frame.t === "index.snapshot") {
+            attachment.baseline = true;
+            this.#recover();
+          }
         }
       };
       socket.onclose = () => {
@@ -331,48 +559,84 @@ export class SidecarConnection {
       return { kind: "checked", auth: this.#auth };
     } catch (cause) {
       if (current() && !(cause instanceof RequestReleased)) {
+        const invalid =
+          cause instanceof HttpReadFailure && cause.kind === "invalid" ||
+          cause instanceof FeedbackFailure;
+        const feedback = !invalid && !(cause instanceof RequestFailure)
+          ? undefined
+          : actionFeedback(
+            cause instanceof FeedbackFailure || cause instanceof RequestFailure
+              ? cause
+              : discoveryFailure(
+                this.base.href,
+                cause instanceof HttpReadFailure
+                  ? cause.reason
+                  : "the browser could not open the OTK connection",
+                "Check that the server and this page run matching OTK versions",
+              ),
+          );
+        const failure = feedback?.text;
+        // A fresh connection must confirm malformed data before it becomes an
+        // error. Readiness, transport gaps and reset volatile receipts never do.
+        const persistent = invalid && failure !== undefined &&
+          failure === this.#invalidFailure;
+        this.#invalidFailure = invalid ? failure : undefined;
         this.#retire();
-        this.#schedule();
-        this.sink.status(
-          "reconnecting",
-          actionFeedback(
-            cause instanceof FeedbackFailure ? cause : discoveryFailure(
-              this.base.href,
-              cause instanceof HttpReadFailure
-                ? cause.reason
-                : "the browser could not open the OTK connection",
-              "Check that OTK is running and reachable, then reload this page",
-            ),
-          )?.text,
+        this.#schedule(
+          cause instanceof HttpReadFailure ? cause.retryAfter : undefined,
+          persistent || cause instanceof RequestFailure ? feedback : undefined,
         );
         return { kind: "failed", cause };
       }
       return { kind: "superseded" };
     }
   }
-  #schedule(): void {
+  #schedule(retryAfter = 0, feedback?: Feedback): void {
     if (this.#stopped) return;
+    this.#publish(lost(this.#continuity, Date.now()));
+    this.#startGrace();
     const attempt = this.#attempt++;
     if (this.#policy) {
       this.#retry = setTimeout(
         () => void this.connect(),
-        Math.min(
-          this.#policy.retrybase * 2 ** Math.min(attempt, 30),
-          this.#policy.retrymax,
+        Math.max(
+          retryAfter,
+          Math.min(
+            this.#policy.retrybase * 2 ** Math.min(attempt, 30),
+            this.#policy.retrymax,
+          ),
         ),
       );
     }
-    this.sink.status("reconnecting");
+    this.sink.status("reconnecting", feedback?.text, undefined, feedback);
+  }
+  #publish(next: ServerContinuity): void {
+    if (next === this.#continuity) return;
+    this.#continuity = next;
+    this.sink.continuity?.(next);
+  }
+  #startGrace(): void {
+    if (this.#continuity.kind !== "away" || this.#grace !== undefined) return;
+    this.#grace = setTimeout(() => {
+      this.#grace = undefined;
+      this.#publish(graceElapsed(this.#continuity));
+    }, this.options.graceMs ?? UNREACHABLE_GRACE_MS);
+  }
+  #clearGrace(): void {
+    clearTimeout(this.#grace);
+    this.#grace = undefined;
   }
   #retire(): void {
     this.#selectionGeneration++;
-    this.#pageSettled = false;
+    this.#page = "waiting";
+    this.#attachment = undefined;
     this.#controller?.abort();
     this.#controller = undefined;
     clearTimeout(this.#retry);
     clearTimeout(this.#silence);
     this.#retry = undefined;
     this.#welcomed = false;
+    this.attention.resetPermissionScopes();
     this.requests.disconnect();
     const socket = this.#socket;
     this.#socket = undefined;
@@ -381,12 +645,29 @@ export class SidecarConnection {
       socket.close();
     }
   }
-  #protocolMismatch(): void {
-    this.stop();
-    this.sink.status(
-      "protocol mismatch",
-      "Reload after updating the client and sidecar together.",
-    );
+  #protocolMismatch(facts: { protocol?: number; build?: string }): void {
+    // Retire transport, not captured mutation/input custody. Reload owns that.
+    this.#stopped = true;
+    this.#retire();
+    this.requests.clientOutdated();
+    this.#clearGrace();
+    this.#publish(outdated(this.#continuity, facts));
+    this.sink.status("client outdated");
+  }
+  async reload(): Promise<void> {
+    if (!this.options.reload) return;
+    this.#publish(refused(this.#continuity));
+    try {
+      await this.options.reload();
+    } catch (cause) {
+      console.error("Reload checkpoint diagnostic", cause);
+      this.#publish(refused(
+        this.#continuity,
+        cause instanceof ReloadRefused
+          ? cause.message
+          : "Your work could not be saved for Reload. This page has not reloaded.",
+      ));
+    }
   }
   async login(input: { username: string; password: string }): Promise<void> {
     await this.http.start("login", input, { owner: "login" }).result;
@@ -404,6 +685,7 @@ export class SidecarConnection {
         "login required",
         actionFeedback(failure)?.text,
         attempt.auth.authType,
+        actionFeedback(failure),
       );
       throw failure;
     }
@@ -417,8 +699,10 @@ export class SidecarConnection {
   }
   stop(): void {
     this.#stopped = true;
+    this.#clearGrace();
     this.#retire();
     this.#subscriptions.clear();
+    this.#recoveredListeners.clear();
     this.requests.stop();
     void this.http.stop();
   }

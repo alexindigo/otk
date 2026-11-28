@@ -134,6 +134,58 @@ Deno.test("bootstrap completion and covered invalidations preserve acquired tran
   }
 });
 
+Deno.test("equal native source witnesses retain failed previews across live replay and remount", async () => {
+  const f = fixture();
+  const native = {
+    ...message,
+    source: { kind: "invented", ref: "opaque", revision: "raw-first" },
+  };
+  const turns = async () => {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  };
+  try {
+    f.reply("session.messages", fixturePage("s", [native], undefined, info));
+    await f.until(() => !f.owner.state.loading);
+    const source = f.owner.transcript!.nativeSource!("opaque");
+    let release = source.retain();
+    await turns();
+    f.reply("source.get", undefined, "fixture");
+    await turns();
+    assertEquals(source.state.state, "failed");
+    release();
+    f.event({ op: "message.upsert", message: structuredClone(native) });
+    release = source.retain();
+    await turns();
+    assertEquals(source.state.state, "failed");
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "source.get").length,
+      0,
+    );
+    // A raw-only change has the same neutral presentation but a new witness.
+    const changed = {
+      ...native,
+      source: { ...native.source, revision: "raw-second" },
+    };
+    f.event({ op: "message.upsert", message: changed });
+    await turns();
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "source.get").length,
+      1,
+    );
+    f.reply("source.get", {
+      kind: "invented",
+      preview: "raw second",
+      bytes: 10,
+      truncated: false,
+    });
+    await turns();
+    assertEquals(source.state.state, "ready");
+    release();
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("newer invalidation refreshes stale authority once and never refetches another session", async () => {
   const f = fixture();
   try {
@@ -291,7 +343,7 @@ Deno.test("a resync-covered initial failure retries the new epoch immediately wi
   }
 });
 
-Deno.test("essential transcript publishes independently of failed or held attention and sibling resources", async () => {
+Deno.test("essential transcript publishes independently of failed or held attention reads", async () => {
   const f = fixture();
   try {
     f.reply("session.messages", fixturePage("s", [message], undefined, info));
@@ -304,13 +356,12 @@ Deno.test("essential transcript publishes independently of failed or held attent
       op: "question.upsert",
       request: { id: "live", sessionID: "s", questions: [] },
     });
-    f.reply("question.list", []);
-    f.reply("session.children", undefined, "siblings offline");
     await f.until(() =>
       !!f.owner.state.error &&
       f.owner.state.error.failure?.reason ===
         "OTK has no further details"
     );
+    f.reply("question.list", []);
     assertEquals(
       f.owner.state.content.questions.map((question) => question.id),
       ["live"],

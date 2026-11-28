@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
 import {
   type OperationContext,
   OperationFailure,
@@ -7,9 +7,68 @@ import {
 } from "@otk/protocol";
 import { V2Client } from "../client.ts";
 import { preparePrompt, V2Prompt } from "../prompt.ts";
-import { selectAction } from "../session-actions.ts";
+import { selectAction, sessionActions } from "../session-actions.ts";
 import type { NativeSession } from "../messages.ts";
-function fixture() {
+
+for (const race of [false, true]) {
+  Deno.test(`V2 withdraw confirms inbox cancellation${race ? " versus promotion race" : ""}`, async () => {
+    const sessionID = "opcv2-ses_root", messageID = "msg_target";
+    const order: string[] = [];
+    let queued = false, delivered = false;
+    const gate = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    const client = new V2Client(
+      { endpoint: { url: "http://localhost:4000" }, pid: 1, version: "2.2.6" },
+      1000,
+      new AbortController().signal,
+      (input, init) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith(`/inbox/${messageID}`) && init?.method === "DELETE") {
+          order.push("cancel");
+          queued = false;
+          delivered = race;
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        if (path.endsWith("/inbox")) {
+          order.push("inbox");
+          return Promise.resolve(
+            Response.json({ data: queued ? [{ id: messageID }] : [] }),
+          );
+        }
+        if (path.endsWith(`/message/${messageID}`)) {
+          order.push("message");
+          return Promise.resolve(
+            delivered
+              ? Response.json({ data: { id: messageID, type: "user" } })
+              : Response.json({ _tag: "MessageNotFoundError" }, {
+                status: 404,
+              }),
+          );
+        }
+        throw new Error(`Unexpected fixture request ${path}`);
+      },
+    );
+    const owner = new V2Prompt(() => client);
+    const withdraw = Reflect.get(owner, "withdraw");
+    assertEquals(typeof withdraw, "function");
+    await Promise.all([
+      client.sequence("ses_root", async () => {
+        entered.resolve();
+        await gate.promise;
+        queued = true;
+        order.push("dispatch");
+      }),
+      (async () => {
+        await entered.promise;
+        const stopped = withdraw.call(owner, sessionID, messageID);
+        gate.resolve();
+        assertEquals(await stopped, { state: race ? "started" : "withdrawn" });
+      })(),
+    ]);
+    assertEquals(order, ["dispatch", "inbox", "cancel", "inbox", "message"]);
+  });
+}
+function fixture(variant = "default") {
   const calls: {
       path: string;
       body: Record<string, unknown> | undefined;
@@ -18,7 +77,7 @@ function fixture() {
     receipts: ReceiptData[] = [];
   let fence = 0,
     agent = "build",
-    model = { providerID: "fake", id: "scripted", variant: "default" },
+    model = { providerID: "fake", id: "scripted", variant },
     fail = "";
   const submissions: { sessionID: string; messageID: string }[] = [];
   const operation: OperationContext = {
@@ -51,6 +110,9 @@ function fixture() {
         return Promise.reject(new TypeError("transport lost"));
       }
       if (init?.method === "GET") {
+        if (/\/message$/.test(path)) {
+          return Promise.resolve(Response.json({ data: [], cursor: {} }));
+        }
         if (path === "/api/agent") {
           return Promise.resolve(Response.json({
             data: [{
@@ -72,6 +134,18 @@ function fixture() {
       }
       if (path.endsWith("/agent")) agent = body.agent;
       if (path.endsWith("/model")) model = body.model;
+      if (path.endsWith("/compact")) {
+        return Promise.resolve(Response.json({
+          data: {
+            id: "msg_0123456789abcdefghij",
+            sessionID: "ses_root",
+            time: { created: 1 },
+            type: "compaction",
+            payload: {},
+            delivery: "steer",
+          },
+        }));
+      }
       return Promise.resolve(
         path.endsWith("/prompt")
           ? Response.json({ data: {} })
@@ -174,6 +248,37 @@ Deno.test("V2 prompt and action selections resolve the agent's model default bef
     });
   }
 });
+Deno.test("V2 fallback submits and returns ascending native-format identities", async () => {
+  const f = fixture(), ids: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const receipt = await f.prompt.prompt({
+      sessionID: "opcv2-ses_root",
+      mode: "normal",
+      parts: [{ kind: "text", text: "Native-compatible fallback" }],
+    }, f.operation);
+    const id = f.calls.at(-1)!.body!.id as string;
+    assertMatch(id, /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
+    assertEquals(receipt, { messageID: id, state: "queued" });
+    assertEquals(f.submissions.at(-1)!.messageID, id);
+    ids.push(id);
+  }
+  assert(ids[1] > ids[0]);
+  assert(ids[2] > ids[1]);
+});
+Deno.test("V2 successful prompt returns the exact submitted native identity", async () => {
+  const f = fixture();
+  const receipt: unknown = await f.prompt.prompt({
+    sessionID: "opcv2-ses_root",
+    messageID: "msg_123456789abcdef01234567890",
+    mode: "normal",
+    parts: [{ kind: "text", text: "Correlate this send" }],
+  }, f.operation);
+  assertEquals(receipt, {
+    messageID: "msg_123456789abcdef01234567890",
+    state: "queued",
+  });
+  assertEquals(f.submissions[0].messageID, "msg_123456789abcdef01234567890");
+});
 Deno.test("V2 failed preparation leaves every selection untouched; uncertain later switch is never resent", async () => {
   const f = fixture();
   await assertRejects(
@@ -244,5 +349,65 @@ Deno.test("V2 prepared upload and agent mentions preserve offsets and exact byte
         mention: { start: 0, end: 6, text: "@agent" },
       }], "/repo"),
     OperationFailure,
+  );
+});
+
+Deno.test("V2 prompt and action keep the applied variant and switch only on an explicit change (2.62)", async () => {
+  const applied = { provider: "fake", model: "scripted" };
+  for (
+    const [variant, expected] of [
+      ["high", undefined],
+      ["low", { providerID: "fake", id: "scripted", variant: "low" }],
+    ] as const
+  ) {
+    for (const action of [false, true]) {
+      const f = fixture("high");
+      const input = { agent: "build", model: applied, variant };
+      if (action) {
+        await selectAction(
+          f.client,
+          {
+            id: "ses_root",
+            agent: "build",
+            location: { directory: "/repo" },
+            model: { providerID: "fake", id: "scripted", variant: "high" },
+          } as NativeSession,
+          input,
+          f.operation,
+        );
+      } else {
+        await f.prompt.prompt({
+          ...input,
+          sessionID: "opcv2-ses_root",
+          mode: "normal",
+          parts: [{ kind: "text", text: "keep the applied variant" }],
+        }, f.operation);
+      }
+      assertEquals(
+        f.calls.find((c) => c.path.endsWith("/model"))?.body,
+        expected && { model: expected },
+        `${variant} ${action ? "action" : "prompt"}`,
+      );
+    }
+  }
+});
+
+Deno.test("V2 compaction never switches the applied model or variant (2.62)", async () => {
+  const f = fixture("high");
+  const { sessionActions: actions } = sessionActions({
+    client: () => f.client,
+    observed() {},
+    removed: () => Promise.resolve(),
+  });
+  await actions!.compact("opcv2-ses_root", {
+    provider: "fake",
+    model: "scripted",
+  });
+  assert(f.calls.some((c) => c.path.endsWith("/compact")));
+  assertEquals(
+    f.calls.filter((c) =>
+      c.path.endsWith("/model") || c.path.endsWith("/agent")
+    ),
+    [],
   );
 });

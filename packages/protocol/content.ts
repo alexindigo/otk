@@ -56,6 +56,12 @@ export type Block =
     rows: Inline[][][];
   }
   | { b: "rule" };
+
+/** Prompt text is literal in every transcript; never reparse it as Markdown. */
+export function promptTextBlocks(text: string): Block[] {
+  return text ? [{ b: "paragraph", inline: [{ i: "text", text }] }] : [];
+}
+
 export interface Hunk {
   oldStart: number;
   oldLines: number;
@@ -302,6 +308,7 @@ export interface ActivityParameter {
   label: string;
   value: string;
   child?: ChildRef;
+  entity?: { label: string; sessionID?: string };
 }
 export type DisclosureCategory =
   | "work"
@@ -313,6 +320,8 @@ export type DisclosureCategory =
   | "outgoing"
   | "compaction"
   | "record"
+  | "stepMarkers"
+  | "snapshots"
   | "source";
 /** A loaded item's native source: an opaque plugin-owned reference that a
  * Source fold reads on demand, plus exact text only for declared content (Copy).
@@ -320,6 +329,8 @@ export type DisclosureCategory =
 export interface NativeSource {
   kind: string;
   ref?: string;
+  /** Producer-owned exact-source witness, independent of neutral presentation. */
+  revision?: string;
   preview?: string;
   bytes?: number;
   truncated?: boolean;
@@ -334,12 +345,27 @@ export interface NativeSourceView {
 }
 export interface Activity {
   kindLabel: string;
+  /** Low-signal bookkeeping folds into its enclosing frame's category count.
+   * Canonical records and their source references are always retained. */
+  fold?: boolean;
+  /** Producer-owned neutral count wording; kind is opaque to consumers. */
+  summary?: { kind: string; noun: string; plural: string };
+  /** Producer-owned normal completion; the reply footer owns its presentation.
+   * Original facts remain inspectable in the background interval. */
+  completion?: { placement: "footer" };
+  /** Neutral live-work identity supplied by the harness, never inferred from wording. */
+  work?: { kind: "shell" };
   layout: "row" | "boundary";
+  /** Records sharing a key form one session boundary (e.g. a marker and its
+   * summary). If unset, use the part ID; never infer the key from wording. */
+  boundary?: { key: string };
   direction?: "outgoing";
   category: DisclosureCategory;
   state?: ActivityState;
   tone: "normal" | "error";
   title: string;
+  /** Independent agent control; title contains only the remaining heading. */
+  entity?: { label: string; sessionID?: string };
   detail?: string;
   parameters?: ActivityParameter[];
   body?: Block[];
@@ -386,6 +412,7 @@ export interface UserMessage {
 export interface AssistantMessage {
   /** Native settlement is a fact even when its exact clock was lost. */
   terminal?: boolean;
+  outcomeTime?: import("./outcome-time.ts").OutcomeTime;
   id: string;
   sessionID: string;
   role: "assistant";
@@ -405,12 +432,12 @@ export interface AssistantMessage {
 /** A native action boundary, independent of prompt/recall/queue identity. */
 export interface RevertBoundary {
   messageID: string;
-  affected: { messages: number; prompts: number };
 }
 export interface ContextMessage {
   id: string;
   sessionID: string;
   role: "context";
+  outcomeTime?: import("./outcome-time.ts").OutcomeTime;
   /** Native turn association, without making a context record a prompt anchor. */
   replyTo?: string;
   sourceOrder?: number;
@@ -444,10 +471,16 @@ export interface ContentSession {
   archived: boolean;
   selection?: PromptSelection;
   revert?: RevertInfo;
+  revertCommitted?: RevertCommit;
   error?: string;
   errorState?: SessionErrorState;
   /** Optional read failures that do not invalidate the session or transcript. */
   notices?: import("./requests.ts").PublicFailure[];
+}
+/** Native confirmation, not a deduction from a missing stage or message. */
+export interface RevertCommit {
+  boundaryID: string;
+  at: number;
 }
 export interface RevertedPrompt {
   messageID: string;
@@ -455,11 +488,10 @@ export interface RevertedPrompt {
   preview: string;
 }
 export interface RevertInfo {
-  messageID: string;
-  messageCount: number;
+  boundaryID: string;
+  /** Fixed in native order when the boundary is staged. Never a live tail scan. */
+  messageIDs: string[];
   files: { path?: string; additions: number; deletions: number }[];
-  /** Oldest first, at most 50, whitespace collapsed and at most 200 characters. */
-  prompts?: RevertedPrompt[];
   /** Boundary prompt content; attachments retain metadata-only history refs. */
   prompt?: HistoryEntry;
 }
@@ -508,12 +540,12 @@ export type ContentOp =
   | { op: "form.remove"; requestID: string }
   | {
     op: "session.revert";
-    messageID?: string;
-    messageCount: number;
+    boundaryID?: string;
+    messageIDs: string[];
     files: RevertInfo["files"];
-    prompts?: RevertedPrompt[];
     prompt?: HistoryEntry;
   }
+  | ({ op: "session.revert.committed" } & RevertCommit)
   | {
     op: "message.upsert";
     message:
@@ -571,5 +603,6 @@ export interface QuestionRequest {
 }
 export function isAttentionOp(op: ContentOp): boolean {
   return isPermissionOp(op) || op.op === "question.upsert" ||
-    op.op === "question.remove";
+    op.op === "question.remove" || op.op === "form.upsert" ||
+    op.op === "form.remove";
 }

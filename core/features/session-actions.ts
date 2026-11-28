@@ -2,11 +2,15 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
-import { Requests, type StoreWrite } from "@otk/store";
+import type { StoreWrite } from "@otk/store";
 import type { ContentSession } from "@otk/protocol";
 import { MAX_SESSION_TITLE } from "@otk/protocol";
 import type { RpcContext } from "../ws/registry.ts";
-import { nativeEffect, nativeExecution } from "../requests/policies.ts";
+import {
+  assertUncontestedRecovery,
+  nativeEffect,
+  nativeExecution,
+} from "../requests/policies.ts";
 import {
   archivedReceipt,
   completionReceipt,
@@ -159,15 +163,14 @@ export function register(
         if (record.receipt_kind === renamedReceipt.kind) {
           return { state: "complete", result: renamedReceipt.restore(record) };
         }
-        if (
-          record.receipt_kind === renameIntent.kind &&
-          !new Requests(ctx.store).superseded(record)
-        ) {
+        if (record.receipt_kind === renameIntent.kind) {
+          assertUncontestedRecovery(ctx, record);
           const expected = renameIntent.restore(record);
           const current = await ctx.harness.core.getSession(
             expected.sessionID,
             execution.signal,
           );
+          assertUncontestedRecovery(ctx, record);
           if (current.title === expected.title) {
             return { state: "complete", result: current };
           }

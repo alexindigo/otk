@@ -3,18 +3,21 @@ import type {
   CapabilityName,
   IndexEntry,
   Preferences,
+  ProjectEditTarget,
   ProjectLocation,
+  ProjectMove,
+  ProjectPatch,
   ServerFrame,
   SessionStructure,
+  SessionTreeTarget,
   ShellLayout,
 } from "@otk/protocol";
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
 import {
-  type ApprovalAttention,
   type AttentionProjection,
   createAttentionProjection,
   type EntryChanges,
-} from "./approval-attention.ts";
+} from "./entry-observations.ts";
 import type { SidecarConnection } from "./connection.ts";
 import type {
   ClientIndex,
@@ -22,18 +25,13 @@ import type {
   MergedEntry,
   MergedMetadata,
 } from "./index.ts";
-import {
-  aggregateStatus,
-  createInbox,
-  type InboxModel,
-  projectHierarchy,
-} from "./inbox.ts";
+import { createInbox, type InboxModel, projectHierarchy } from "./inbox.ts";
 import {
   createProjectProjection,
   type ProjectProjectionRow,
 } from "./project-projection.ts";
 import type { Selection } from "./session.ts";
-import { projectName, type ProjectSelection } from "./project-navigation.ts";
+import type { ProjectSelection } from "./project-navigation.ts";
 import {
   type ClientSidecars,
   LOCAL_SIDECAR,
@@ -43,9 +41,12 @@ import { createState, type StateFactory } from "./state.ts";
 import { createProgress, type ProgressDisplay } from "./progress.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
-import { requestAttention } from "./request-attention.ts";
 import { createSessionTree, type SessionListRow } from "./session-tree.ts";
-import { createCatalogCodecs } from "@otk/protocol";
+import {
+  createCatalogCodecs,
+  entityKey,
+  entityRetainsVisibility,
+} from "@otk/protocol";
 import {
   type ClientDirectoryCatalogs,
   createDirectoryCatalogs,
@@ -56,11 +57,24 @@ import {
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
 import { createSessionLists } from "./session-lists.ts";
+import { type CollectionState, collectionState } from "./collection-state.ts";
+import { createProjectOrder, orderProjectRows } from "./project-order.ts";
+import { createPrograms, type ProjectProgram } from "./programs.ts";
+import { createFileFacts, type FileFacts } from "./file-facts.ts";
+import { reportDiagnostic } from "./diagnostics.ts";
+import type { NoteSession, NotificationLocation } from "./notifications.ts";
+import { sessionTitle } from "./session-title.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
   removed?(id: string): void;
 }
+type ServerProjectRow = ProjectProjectionRow & {
+  sidecarId: string;
+  label: string;
+  otkProjectID?: string;
+  program?: ProjectProgram;
+};
 export interface ServerResources {
   forms(id: string): readonly import("@otk/protocol").FormRequest[];
   progress(server: string, directory?: string): ProgressDisplay;
@@ -76,9 +90,12 @@ export interface ServerResources {
     rows: readonly string[],
     query?: string,
   ): void;
+  historyNeighbors(neighbors: readonly Selection[]): void;
+  retainSessionReference(sidecarId: string, sessionID: string): () => void;
   projectSession(
     project: ProjectSelection,
     preferred?: string,
+    attention?: boolean,
   ): Promise<string | undefined>;
   /** Presentation routing only; native/persisted directories remain unchanged. */
   projectDirectory?(
@@ -89,9 +106,20 @@ export interface ServerResources {
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
   directoryCatalog(id: string, directory: string): DirectoryCatalogLease;
+  fileFacts(id: string): FileFacts;
   frecencyCatalog(id: string, directory: string): FrecencyCatalogLease;
   approvals(id: string): ApprovalModel;
   tabs(project: ProjectSelection): ClientTabs;
+  holdTaskOrder(project: ProjectSelection): () => void;
+  moveProject(sidecarId: string, move: ProjectMove): Promise<void>;
+  programs(
+    id: string,
+  ): Readonly<
+    Pick<
+      ReturnType<typeof createPrograms>,
+      "ready" | "auto" | "programs" | "settled"
+    >
+  >;
   taskActions(project: ProjectSelection): TaskActions;
   entry(sidecarId: string, sessionID: string): IndexEntry | undefined;
   server(id: string): SidecarState | undefined;
@@ -101,11 +129,6 @@ export interface ServerResources {
   declares(id: string, capability: CapabilityName): boolean;
   anyAdvertised(capability: CapabilityName): boolean;
   connectionKey(id: string): number | undefined;
-  attention(id: string): ApprovalAttention;
-  /** Borrow the existing operation projection; presentation must not delay it. */
-  operationAttention?(
-    id: string,
-  ): Pick<ReturnType<typeof requestAttention>, "sessions" | "projectStates">;
   projected(id: string, sessionID: string): IndexEntry | undefined;
   projectedProject(id: string, directory: string): readonly IndexEntry[];
   observeEntries(
@@ -124,22 +147,33 @@ export interface ServerResources {
     sessionID: string,
   ): MergedMetadata | undefined;
   sessionRows(project: ProjectSelection, query?: string): SessionListRow[];
-  sessionRowsReady(project: ProjectSelection): boolean;
-  sessionRowsLoading(project: ProjectSelection): boolean;
-  sessionRowsStatus(project: ProjectSelection): ProgressDisplay;
+  projectContents(project: ProjectSelection): CollectionState;
+  sessionCollection(project: ProjectSelection, query?: string): {
+    state: CollectionState;
+    rows: SessionListRow[];
+    progress: ProgressDisplay;
+  };
+  projectsReady(): boolean;
   projectProgress(
     project: ProjectSelection,
   ): { busy: boolean; announcement: string };
   projectRow(
     project: ProjectSelection,
     now: number,
-    ageing?: readonly number[],
   ): ProjectProjectionRow | undefined;
   duplicateProjectName(name: string): boolean;
+  checkoutLabel(sidecarId: string, directory: string): string;
+  projectLabel(sidecarId: string, directory: string): string;
+  notificationLocation(target: NoteSession): NotificationLocation | undefined;
+  updateProject(
+    target: ProjectSelection & ProjectEditTarget,
+    patch: ProjectPatch,
+  ): Promise<void>;
   projects(
     now: number,
-    ageing?: readonly number[],
-  ): (ProjectProjectionRow & { sidecarId: string; label: string })[];
+  ): ServerProjectRow[];
+  /** The connection's entity states, for lamps and emphasis (decision 62). */
+  entities(server: string): import("./entity-state.ts").EntityStateStore;
   tabSnapshot(project: ProjectSelection): TabInput;
   syncTabs(
     project: ProjectSelection,
@@ -152,6 +186,8 @@ export interface ServerResources {
   add(url: string, label: string): Promise<string>;
   remove(id: string): void;
   layout(patch: Partial<ShellLayout>): Promise<void>;
+  projectCollapse(project: ProjectSelection, collapsed: boolean): Promise<void>;
+  treeCollapse(target: SessionTreeTarget, collapsed: boolean): Promise<void>;
   rememberLocation(location: ProjectLocation): Promise<void>;
   inactive(project: ProjectSelection, inactive: boolean): Promise<void>;
   setPreference(key: keyof Preferences, value: unknown): Promise<void>;
@@ -166,6 +202,7 @@ export function createServerResources(o: {
   index: ClientIndex;
   factory?: StateFactory;
   error?: (error: unknown) => void;
+  diagnostic?: (error: unknown) => void;
   /** One release input for catalog warm-up. Until decision 30, acquisition is page-ready. */
   pageReady?: (
     project: ProjectSelection,
@@ -173,9 +210,36 @@ export function createServerResources(o: {
   ) => void | (() => void);
 }): ServerResources {
   const factory = o.factory ?? createState;
-  const pendingForms = factory<
-    { servers: Record<string, import("@otk/protocol").FormRequest[]> }
-  >({ servers: {} });
+  const orders = new Map<string, ReturnType<typeof createProjectOrder>>();
+  const missingOrder = new Map<string, Set<string>>();
+  function projectOrder(id: string) {
+    let order = orders.get(id);
+    if (!order) orders.set(id, order = createProjectOrder(factory));
+    return order;
+  }
+  const programReplicas = new Map<string, ReturnType<typeof createPrograms>>();
+  function programs(id: string) {
+    let replica = programReplicas.get(id);
+    if (!replica) programReplicas.set(id, replica = createPrograms(factory));
+    return replica;
+  }
+  const lifetimeClock = factory({ revision: 0 });
+  const requestSubscriptions = new Map<string, () => void>();
+  const requests = (id: string) => {
+    void lifetimeClock.state.revision;
+    const owner = sidecars.connection(id).attention;
+    if (!requestSubscriptions.has(id)) {
+      requestSubscriptions.set(
+        id,
+        owner.subscribe(() => {
+          lifetimeClock.update((s) => {
+            s.revision++;
+          });
+        }),
+      );
+    }
+    return owner;
+  };
   const hierarchyClock = factory({ revision: 0 });
   const tabContextClock = factory({ keys: {} as Record<string, number> });
   const invalidateTabContext = (cache: { key: string; dirty: boolean }) => {
@@ -193,6 +257,19 @@ export function createServerResources(o: {
     return owner;
   };
   const inboxes = new Map<string, InboxModel>();
+  const fileFactOwners = new Map<string, FileFacts>();
+  const fileFacts = (id: string) => {
+    let owner = fileFactOwners.get(id);
+    if (!owner) {
+      owner = createFileFacts(sidecars.connection(id).rpc, undefined, {
+        images: sidecars.connection(id).rpc,
+        factory,
+        diagnostic: (cause) => reportDiagnostic(console.debug, cause),
+      });
+      fileFactOwners.set(id, owner);
+    }
+    return owner;
+  };
   const catalogs = new Map<string, ClientDirectoryCatalogs>();
   const frecencies = new Map<
     string,
@@ -213,6 +290,11 @@ export function createServerResources(o: {
         diagnostic: o.error,
         watch: (directory) =>
           sidecars.connection(id).rpc.start("catalogs.watch", { directory }),
+        retainFiles: (directory) =>
+          sidecars.connection(id).rpc.start("catalogs.watch", {
+            directory,
+            files: true,
+          }),
         demand: (directory, kinds, intent, signal) =>
           sidecars.connection(id).rpc.call("catalogs.demand", {
             directory,
@@ -279,13 +361,13 @@ export function createServerResources(o: {
     string,
     ReturnType<typeof createProjectProjection>
   >();
-  const operationCache = new Map<string, ReturnType<typeof requestAttention>>();
   const projectReleases = new Map<string, (() => void)[]>();
   const names = new Map<string, number>();
+  const projectLabels = new Map<string, Map<string, string>>();
   const nameClock = factory({ keys: {} as Record<string, number> });
-  const nameMembership = (directory: string, present: boolean) => {
-    const name = projectName(directory), before = names.get(name) ?? 0;
-    const after = before + (present ? 1 : -1);
+  const countName = (name: string, delta: number) => {
+    const before = names.get(name) ?? 0;
+    const after = before + delta;
     if (after) names.set(name, after);
     else names.delete(name);
     if ((before > 1) !== (after > 1)) {
@@ -296,15 +378,16 @@ export function createServerResources(o: {
   };
   const labelledRows = new WeakMap<
     ProjectProjectionRow,
-    { sidecarId: string; label: string } & ProjectProjectionRow
+    ServerProjectRow
   >();
   const tabModels = new Map<string, ClientTabs>();
-  const requestObservers = new Map<string, () => void>();
-  const requestClock = factory({ keys: {} as Record<string, number> });
   const observers = new Set<FrameObserver>();
   let stopped = false;
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
   let selected: Selection | undefined, crumbs: string[] = [];
+  let historyNeighbors: readonly Selection[] = [];
+  const sessionReferences = new Map<string, Map<string, number>>();
+  let referenceViewPending = false;
   let rowDemand:
     | { project: ProjectSelection; rows: string[]; query: string }
     | undefined;
@@ -333,6 +416,10 @@ export function createServerResources(o: {
       listOwner(project.sidecarId).get(input)
     );
   const trees = new Map<string, ReturnType<typeof createSessionTree>>();
+  const rowFacts = new WeakMap<SessionListRow[], {
+    count: number;
+    beforeAnswer: SessionListRow[];
+  }>();
   const listContexts = new WeakMap<TabInput, {
     scope: string;
     values: (SessionStructure & { retained: boolean })[];
@@ -373,7 +460,12 @@ export function createServerResources(o: {
       for (const id of rowDemand.rows) required.add(id);
     }
     for (const entry of input.entries) {
-      if (entry.deleted || aggregateStatus(entry, input.inbox) !== "none") {
+      if (
+        entry.deleted ||
+        entityRetainsVisibility(
+          input.entities?.get(entityKey("session", entry.id)),
+        )
+      ) {
         required.add(entry.id);
       }
     }
@@ -390,6 +482,7 @@ export function createServerResources(o: {
           id: entry.id,
           directory: entry.directory,
           title: entry.title,
+          timeCreated: entry.timeCreated,
           parentID: entry.parentID,
           retained: !!entry.deleted,
           hierarchy: entry.hierarchy,
@@ -399,7 +492,6 @@ export function createServerResources(o: {
     listContexts.set(input, { scope, values: context });
     return context;
   };
-  const inboxDirectories = new Map<string, string>();
   const sendView = () => {
     const id = visible?.project.sidecarId ?? selected?.sidecarId;
     for (const sidecar of sidecars.state.list) {
@@ -415,17 +507,32 @@ export function createServerResources(o: {
           : undefined,
         crumbs: active ? crumbs : [],
         rows: rows?.rows ?? [],
+        references: [...(sessionReferences.get(sidecar.id)?.keys() ?? [])]
+          .sort(),
+        historyNeighbors: historyNeighbors.length
+          ? historyNeighbors.filter((target) => target.sidecarId === sidecar.id)
+            .map((target) => target.sessionID)
+          : undefined,
         query: rows?.query,
         tasksFollowParent,
       });
     }
   };
+  const scheduleReferenceView = () => {
+    if (referenceViewPending || stopped) return;
+    referenceViewPending = true;
+    queueMicrotask(() => {
+      referenceViewPending = false;
+      if (!stopped) sendView();
+    });
+  };
   const sendScope = (
     id: string,
     value: { directory?: string; sessions: string[] },
   ) => {
-    if (advertised(id, "digests")) {
-      void sidecars.connection(id).rpc.call("digests.scope", value).catch(
+    const connection = sidecars.connection(id);
+    if (attached(id) && declares(id, "digests")) {
+      void connection.rpc.call("digests.scope", value).catch(
         o.error ?? console.warn,
       );
     }
@@ -438,6 +545,10 @@ export function createServerResources(o: {
   const server = (id: string): SidecarState | undefined =>
     sidecars.state.list.find((s) => s.id === id);
   const connected = (id: string): boolean => server(id)?.status === "connected";
+  const attached = (id: string): boolean => {
+    const value = server(id);
+    return value?.status === "connected" || value?.attaching === true;
+  };
   const linked = (id: string): boolean =>
     connected(id) && server(id)?.harness === "connected";
   const declares = (id: string, capability: CapabilityName): boolean =>
@@ -463,132 +574,61 @@ export function createServerResources(o: {
       owner = createAttentionProjection({
         entry: (sessionID) => entry(id, sessionID),
         ids: () => o.index.ids(id),
-        children: (sessionID) => o.index.children(id, sessionID),
-        completions: true,
+        entity: (sessionID) =>
+          inbox(id).entities.isStale
+            ? undefined
+            : inbox(id).entities.get(entityKey("session", sessionID)),
         factory,
       });
       projections.set(id, owner);
-      for (
-        const [session, time] of Object.entries(inbox(id).state.inbox.finishes)
-      ) {
-        const supervision = inbox(id).state.inbox.supervision?.[session];
-        owner.finished(
-          session,
-          time,
-          true,
-          supervision?.terminal === time ? supervision.outcome : undefined,
+      owner.subscribe((changes) => {
+        requests(id).observePermissionScopes(
+          changes,
+          (session) => entry(id, session),
         );
-      }
+      });
     }
-    const model = approvals(id);
-    owner.configure(
-      model.state.snapshot.enabled,
-      linked(id) && model.state.ready,
-    );
     return owner;
-  };
-  const attention = (id: string): ApprovalAttention => {
-    const current = approvals(id).attention(linked(id));
-    const owner = projection(id);
-    return {
-      ...current,
-      entries: (entries) =>
-        entries.map((entry) => {
-          const projected = owner.get(entry.id);
-          return projected && projected.attention !== entry.attention
-            ? { ...entry, attention: projected.attention }
-            : entry;
-        }),
-    };
-  };
-  const operationAttention = (id: string) => {
-    const rpc = sidecars.connection(id).rpc;
-    if (!requestObservers.has(id) && !stopped) {
-      requestObservers.set(
-        id,
-        rpc.requests.subscribe(() => {
-          const previous = operationCache.get(id);
-          operationCache.delete(id);
-          refreshOperations(id, previous);
-          requestClock.update((state) => {
-            state.keys[id] = (state.keys[id] ?? 0) + 1;
-          });
-        }),
-      );
-    }
-    void requestClock.state.keys[id];
-    let value = operationCache.get(id);
-    if (value) return value;
-    value = requestAttention(
-      rpc.requests.operations(),
-      rpc.metadata,
-      (sessionID) => o.index.getMetadata(id, sessionID),
-      inbox(id).state.inbox.tasks,
-    );
-    operationCache.set(id, value);
-    return value;
-  };
-  const refreshOperations = (
-    id: string,
-    previous?: ReturnType<typeof requestAttention>,
-  ) => {
-    const owner = projectOwners.get(id);
-    if (!owner) return;
-    const next = operationAttention(id);
-    owner.update(
-      new Set([...previous?.sessions.keys() ?? [], ...next.sessions.keys()]),
-    );
-    owner.operations(next.projectStates);
   };
   const projectOwner = (id: string) => {
     let owner = projectOwners.get(id);
     if (owner) return owner;
-    const decorated = new WeakMap<MergedMetadata, MergedMetadata>();
+    const counted = new Map<string, string>();
+    projectLabels.set(id, counted);
     owner = createProjectProjection({
       factory,
-      membership: nameMembership,
-      inbox: () => inbox(id).state.inbox,
-      taskActivity: () => operationAttention(id).tasks,
-      entry: (sessionID) => {
-        const raw = o.index.getMetadata(id, sessionID);
-        if (!raw) return undefined;
-        const attention = projection(id).get(sessionID)?.attention ??
-          raw.attention;
-        const operationStatus = operationAttention(id).sessions.get(sessionID);
-        if (attention === raw.attention && !operationStatus) return raw;
-        const previous = decorated.get(raw);
-        if (
-          previous?.attention === attention &&
-          previous.operationStatus === operationStatus
-        ) return previous;
-        const value = { ...raw, attention, operationStatus };
-        decorated.set(raw, value);
-        return value;
+      labelChanged(directory, label) {
+        const before = counted.get(directory);
+        if (label === before) return;
+        if (before !== undefined) countName(before, -1);
+        if (label === undefined) counted.delete(directory);
+        else {
+          counted.set(directory, label);
+          countName(label, 1);
+        }
       },
+      inbox: () => inbox(id).state.inbox,
+      entities: () => inbox(id).entities,
+      entry: (sessionID) => o.index.getMetadata(id, sessionID),
     });
     projectOwners.set(id, owner);
     owner.inbox(inbox(id).state.inbox);
     owner.update(o.index.ids(id));
-    owner.operations(operationAttention(id).projectStates);
     projectReleases.set(id, [
       projection(id).subscribe((changes) =>
         owner!.update(changes.changes.map((c) => c.id))
       ),
       inbox(id).observeChanges((changes) => {
-        const previous = operationCache.get(id);
-        if (changes.tasks) operationCache.delete(id);
         owner!.inbox(inbox(id).state.inbox, changes);
-        if (changes.tasks) refreshOperations(id, previous);
+        if (changes.baseline || changes.entities) {
+          owner!.entities(changes.baseline ? "all" : changes.entities!);
+        }
       }),
     ]);
     return owner;
   };
   const entries = (): MergedEntry[] =>
-    sidecars.state.list.flatMap((s) =>
-      operationAttention(s.id).entries(
-        attention(s.id).entries(o.index.partition(s.id)),
-      )
-    );
+    sidecars.state.list.flatMap((s) => [...o.index.partition(s.id)]);
   const inbox = (id: string): InboxModel => {
     live();
     let model = inboxes.get(id);
@@ -598,10 +638,19 @@ export function createServerResources(o: {
         factory,
         o.error,
         () => sidecars.connection(id).viewEpoch,
+        () => attached(id),
+        () =>
+          visible?.project.sidecarId === id
+            ? projectOwner(id).resolve(visible.project.directory)
+            : undefined,
       );
       inboxes.set(id, model);
       const current = model;
+      current.entities.stale(!attached(id));
       current.observeChanges((changes) => {
+        if (changes.baseline || changes.entities) {
+          current.entities.stale(!attached(id));
+        }
         for (const cache of tabInputs.values()) {
           if (cache.server !== id) continue;
           if (changes.sessions.some((key) => cache.dependencies.has(key))) {
@@ -620,21 +669,13 @@ export function createServerResources(o: {
         }
         const owner = projections.get(id);
         if (!owner) return;
-        const finishes = current.state.inbox.finishes;
-        for (
-          const session of changes.baseline
-            ? new Set([...Object.keys(finishes), ...o.index.ids(id)])
-            : changes.sessions
-        ) {
-          if (changes.baseline || finishes[session] !== undefined) {
-            const time = finishes[session] ?? 0;
-            const supervision = current.state.inbox.supervision?.[session];
-            const outcome = supervision?.terminal === time
-              ? supervision.outcome
-              : undefined;
-            if (changes.admitted) owner.admitFinished(session, time, outcome);
-            else owner.finished(session, time, changes.baseline, outcome);
-          }
+        const prefix = entityKey("session", "");
+        const entitySessions = changes.entities?.filter((key) =>
+          key.startsWith(prefix)
+        ).map((key) => key.slice(prefix.length)) ?? [];
+        owner.update(entitySessions, changes.baseline, changes.admitted);
+        if (changes.settlements) {
+          owner.settled(changes.settlements);
         }
       });
     }
@@ -654,6 +695,7 @@ export function createServerResources(o: {
     dependencies: ReadonlySet<string>;
     dirty: boolean;
     taskSignature: string;
+    tasks: TabInput["inbox"]["tasks"];
     followParent: boolean;
     value: TabInput;
   }>();
@@ -663,15 +705,28 @@ export function createServerResources(o: {
     const followParent = tasksFollowParent;
     const key = JSON.stringify([p.sidecarId, base.directory]);
     void tabContextClock.state.keys[key];
+    const tasks = () =>
+      inbox(p.sidecarId).projectTasks(base.directory) ??
+        base.inbox.tasks;
+    const currentTasks = tasks();
     const previous = tabInputs.get(key);
     if (
       previous?.base === base && previous.followParent === followParent &&
-      !previous.dirty
+      previous.tasks === currentTasks && !previous.dirty
     ) {
       return previous.value;
     }
     const context = new Map(base.entries.map((entry) => [entry.id, entry]));
     const dependencies = new Set(context.keys());
+    const descendants = new Set(dependencies);
+    for (const id of descendants) {
+      for (const child of o.index.children(p.sidecarId, id)) {
+        if (!descendants.has(child)) {
+          descendants.add(child);
+          dependencies.add(child);
+        }
+      }
+    }
     const acquire = () => {
       for (const id of dependencies) {
         const entry = owner.entry(id);
@@ -682,7 +737,7 @@ export function createServerResources(o: {
       }
     };
     acquire();
-    for (const task of base.inbox.tasks) {
+    for (const task of currentTasks) {
       if (
         (base.directories ?? [base.directory]).includes(task.directory) ||
         followParent && task.sessions.some((id) => dependencies.has(id))
@@ -693,6 +748,9 @@ export function createServerResources(o: {
     acquire();
     const value: TabInput = {
       version: base.version,
+      get connected() {
+        return linked(p.sidecarId);
+      },
       directory: base.directory,
       directories: base.directories,
       context: [...context.values()],
@@ -701,10 +759,16 @@ export function createServerResources(o: {
         return base.entries;
       },
       get inbox() {
-        return base.inbox;
+        const current = base.inbox, values = tasks();
+        return current.tasks === values
+          ? current
+          : { ...current, tasks: values };
       },
       get taskActivity() {
         return base.taskActivity;
+      },
+      get entities() {
+        return base.entities;
       },
     };
     tabInputs.set(key, {
@@ -713,7 +777,8 @@ export function createServerResources(o: {
       base,
       dependencies,
       dirty: false,
-      taskSignature: hierarchyTaskSignature(base.inbox.tasks, dependencies),
+      taskSignature: hierarchyTaskSignature(tasks(), dependencies),
+      tasks: currentTasks,
       followParent,
       value,
     });
@@ -737,8 +802,65 @@ export function createServerResources(o: {
     }
     return model;
   };
+  const sessionCollection = (
+    p: ProjectSelection,
+    query?: string,
+  ) => {
+    const lists = listsFor(p, query),
+      key = JSON.stringify([p.sidecarId, p.directory]);
+    let tree = trees.get(key);
+    if (!tree) trees.set(key, tree = createSessionTree());
+    const input = tabInput(p), model = tabs(p);
+    model.update(input);
+    const taskOrder = model.tabs().map((tab) => tab.id);
+    const owner = listOwner(p.sidecarId);
+    const tasksKnown =
+      inbox(p.sidecarId).projectTasks(input.directory) !== undefined;
+    const answered = tasksKnown && lists.every((page) => owner.confirmed(page));
+    const rows = model.orderRows(tree.rows(
+      [...new Map(
+        lists.flatMap((list) => owner.structures(list, listContext(p))).map((
+          entry,
+        ) => [entry.id, entry]),
+      ).values()],
+      input.inbox.tasks,
+      p.directory,
+      query,
+      projectOwner(p.sidecarId).scopes(
+        projectOwner(p.sidecarId).resolve(p.directory),
+      ),
+      taskOrder,
+    ));
+    let facts = rowFacts.get(rows);
+    if (!facts) {
+      const ungrouped = rows.some((row) =>
+        row.kind === "session" && !row.group
+      );
+      const count = rows.reduce(
+        (count, row) => count + Number(row.kind === "session" || !!row.group),
+        0,
+      );
+      facts = {
+        count,
+        beforeAnswer: ungrouped ? rows : rows.filter((row) => !!row.group),
+      };
+      rowFacts.set(rows, facts);
+    }
+    return {
+      state: collectionState(answered, tasksKnown ? facts.count : 0),
+      // The synthetic heading is not evidence of an empty ungrouped list.
+      rows: answered ? rows : facts.beforeAnswer,
+      progress: owner.progress(lists.find((page) => page.loading) ?? lists[0]),
+    };
+  };
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
+    if (frame.t === "programs" || frame.t === "welcome") {
+      programs(id).receive(frame);
+    }
+    if (frame.t === "projects.order" || frame.t === "welcome") {
+      projectOrder(id).receive(frame);
+    }
     if (
       id === LOCAL_SIDECAR && frame.t === "prefs" &&
       tasksFollowParent !== frame.prefs.tasksFollowParent
@@ -748,21 +870,22 @@ export function createServerResources(o: {
         state.revision++;
       });
       sendView();
+      for (const model of inboxes.values()) model.invalidateProjectTasks();
       for (const owner of listOwners.values()) owner.refresh();
     }
     approvals(id).receive(frame);
     if (frame.t === "forms.pending") {
-      pendingForms.update((s) => {
-        s.servers[id] = frame.requests;
-      });
+      requests(id).replace("form", frame.requests);
     }
+    if (frame.t === "content") requests(id).receive(frame.event);
     let accepted = true;
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
       accepted = o.index.receive(id, frame);
       if (!accepted) sidecars.connection(id).send({ t: "resnapshot" });
       else {
-        const previous = operationCache.get(id);
-        if (o.index.changes(id)!.metadata.length) operationCache.delete(id);
+        requests(id).retireSessions((session) =>
+          !!o.index.get(id, session)?.deleted
+        );
         projection(id).update(
           o.index.changes(id)!.ids,
           frame.t === "index.snapshot",
@@ -772,14 +895,16 @@ export function createServerResources(o: {
           if (
             cache.server === id &&
             o.index.changes(id)!.metadata.some((key) =>
-              cache.dependencies.has(key)
+              cache.dependencies.has(key) ||
+              cache.dependencies.has(
+                o.index.getMetadata(id, key)?.parentID ?? "",
+              )
             )
           ) {
             invalidateTabContext(cache);
           }
         }
         if (o.index.changes(id)!.metadata.length) {
-          refreshOperations(id, previous);
           if (
             selected?.sidecarId === id &&
             o.index.changes(id)!.metadata.includes(selected.sessionID)
@@ -787,16 +912,12 @@ export function createServerResources(o: {
         }
       }
     }
-    if (frame.t === "welcome") projections.get(id)?.reset();
+    if (frame.t === "welcome") {
+      projections.get(id)?.reset();
+      inbox(id).entities.stale(true);
+    }
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
-    if (
-      frame.t === "inbox.snapshot" &&
-      frame.epoch === sidecars.connection(id).viewEpoch &&
-      visible?.project.sidecarId === id
-    ) {
-      inboxDirectories.set(id, visible.project.directory);
-    }
     if (frame.t === "digest.progress") {
       for (const facts of frame.values) {
         progressOwner(id).receive(facts.directory ?? "", facts);
@@ -824,10 +945,14 @@ export function createServerResources(o: {
   };
   const sidecars = o.sidecars(receive);
   const stopLinks = sidecars.subscribe(() => {
+    // Reconnection alone cannot revive old evidence. Accepted entity changes
+    // or a baseline make the replica fresh again in observeChanges above.
+    for (const [id, model] of inboxes) {
+      if (!attached(id)) model.entities.stale(true);
+    }
     for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {
-    operationAttention,
     progress: (id, directory) => {
       const owner = progressOwner(id),
         label = "Indexing sessions";
@@ -873,6 +998,35 @@ export function createServerResources(o: {
         });
       }
     },
+    historyNeighbors(neighbors) {
+      if (JSON.stringify(neighbors) === JSON.stringify(historyNeighbors)) {
+        return;
+      }
+      historyNeighbors = neighbors;
+      sendView();
+    },
+    retainSessionReference(sidecarId, sessionID) {
+      let ids = sessionReferences.get(sidecarId);
+      if (!ids) sessionReferences.set(sidecarId, ids = new Map());
+      const refs = ids;
+      const count = refs.get(sessionID) ?? 0;
+      refs.set(sessionID, count + 1);
+      if (!count) scheduleReferenceView();
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        const next = (refs.get(sessionID) ?? 1) - 1;
+        if (next > 0) refs.set(sessionID, next);
+        else {
+          refs.delete(sessionID);
+          if (!refs.size && sessionReferences.get(sidecarId) === refs) {
+            sessionReferences.delete(sidecarId);
+          }
+          scheduleReferenceView();
+        }
+      };
+    },
     visibleRows(project, rows, query = "") {
       const next = {
         project,
@@ -884,19 +1038,29 @@ export function createServerResources(o: {
       sendView();
       listOwner(project.sidecarId).activate(listInputs(project, query));
       for (const list of listsFor(project, query)) {
-        listOwner(project.sidecarId).viewport(list, rows);
+        listOwner(project.sidecarId).viewport(
+          list,
+          rows,
+          () =>
+            sessionCollection(project, query).rows.filter((row) =>
+              row.kind === "session"
+            )
+              .map((row) => row.key),
+        );
       }
     },
-    async projectSession(project, preferred) {
+    async projectSession(project, preferred, attention) {
       const connection = sidecars.connection(project.sidecarId);
       return await connection.rpc.call("navigation.default", {
         directory: project.directory,
         preferred,
+        ...(attention ? { attention: true } : {}),
       }) ?? undefined;
     },
     projectDirectory: (sidecar, directory, repoID) =>
       projectOwner(sidecar).resolve(directory, repoID),
     inbox,
+    fileFacts,
     directoryCatalog: (id, directory) => {
       live();
       return directoryOwner(id).acquire(directory);
@@ -906,15 +1070,27 @@ export function createServerResources(o: {
       return frecencyOwner(id).acquire(directory);
     },
     approvals,
-    forms: (id) => pendingForms.state.servers[id] ?? [],
+    forms: (id) => requests(id).forms(),
     tabs,
+    holdTaskOrder(p) {
+      const model = tabs(p);
+      model.update(tabInput(p));
+      return model.holdOrder();
+    },
+    async moveProject(id, move) {
+      const result = await sidecars.connection(id).rpc.call(
+        "projects.move",
+        move,
+      );
+      await projectOrder(id).settled(result.revision);
+    },
+    programs,
     entry,
     server,
     connected,
     linked,
     declares,
     advertised,
-    attention,
     projected: (id, sessionID) => projection(id).get(sessionID),
     projectedProject: (id, directory) => {
       const owner = projection(id);
@@ -954,98 +1130,100 @@ export function createServerResources(o: {
       sidecars.state.list.some((s) => advertised(s.id, capability)),
     connectionKey: (id) => server(id)?.connectionVersion,
     projectEntries: (p) =>
-      operationAttention(p.sidecarId).entries(
-        attention(p.sidecarId).entries(
-          projectOwner(p.sidecarId).input(p.directory).entries.map((entry) =>
-            o.index.get(p.sidecarId, entry.id)!
-          ).filter(Boolean),
-        ),
-      ),
-    projectRow: (p, now, ageing) =>
+      projectOwner(p.sidecarId).input(p.directory).entries.flatMap((entry) => {
+        const row = o.index.get(p.sidecarId, entry.id);
+        return row ? [row] : [];
+      }),
+    projectRow: (p, now) =>
       projectOwner(p.sidecarId).row(
         projectOwner(p.sidecarId).resolve(p.directory),
         now,
-        ageing,
       ),
+    entities: (server) => inbox(server).entities,
     projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
     metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
-    sessionRowsReady: (p) => {
-      const pages = listsFor(
-        p,
-        rowDemand?.project.directory === p.directory &&
-          rowDemand.project.sidecarId === p.sidecarId
-          ? rowDemand.query
-          : "",
-      );
-      return (pages.every((page) => page.ready) || listContext(p).length > 0) &&
-        inbox(p.sidecarId).state.ready &&
-        inboxDirectories.get(p.sidecarId) === p.directory;
-    },
-    sessionRowsLoading: (p) =>
-      listsFor(
-        p,
-        rowDemand?.project.directory === p.directory &&
-          rowDemand.project.sidecarId === p.sidecarId
-          ? rowDemand.query
-          : "",
-      ).some((page) => page.loading),
-    sessionRowsStatus: (p) =>
-      listOwner(p.sidecarId).progress(
-        listsFor(
-          p,
-          rowDemand?.project.directory === p.directory &&
-            rowDemand.project.sidecarId === p.sidecarId
-            ? rowDemand.query
-            : "",
-        ).find((page) => page.loading) ?? listsFor(p)[0],
+    projectContents: (p) => sessionCollection(p).state,
+    sessionCollection,
+    sessionRows: (p, query) => sessionCollection(p, query).rows,
+    projectsReady: () =>
+      sidecars.state.list.every((s) =>
+        projectOrder(s.id).ready && programs(s.id).ready &&
+        inbox(s.id).state.ready
       ),
-    sessionRows: (p, query) => {
-      const lists = listsFor(p, query),
-        key = JSON.stringify([p.sidecarId, p.directory]);
-      let tree = trees.get(key);
-      if (!tree) trees.set(key, tree = createSessionTree());
-      return tree.rows(
-        [...new Map(
-          lists.flatMap((list) =>
-            listOwner(p.sidecarId).structures(list, listContext(p))
-          ).map((entry) => [entry.id, entry]),
-        ).values()],
-        inbox(p.sidecarId).state.inbox.tasks,
-        p.directory,
-        query,
-        projectOwner(p.sidecarId).scopes(
-          projectOwner(p.sidecarId).resolve(p.directory),
-        ),
-      );
-    },
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
+    checkoutLabel: (id, directory) => projectOwner(id).label(directory),
+    projectLabel: (id, directory) => projectOwner(id).projectLabel(directory),
+    notificationLocation({ sidecar, session }) {
+      const entry = o.index.getMetadata(sidecar, session);
+      if (!entry) return undefined;
+      const projects = projectOwner(sidecar);
+      const directory = projects.resolve(entry.directory, entry.projectID);
+      const project = { sidecarId: sidecar, directory };
+      const model = tabs(project);
+      model.update(tabInput(project));
+      const title = sessionTitle(session, entry.title);
+      return {
+        project: projects.projectIdentity(directory),
+        task: model.taskTitleFor(session) ?? title,
+        session: title,
+      };
+    },
+    async updateProject({ sidecarId, directory, projectID }, patch) {
+      await sidecars.connection(sidecarId).rpc.call("project.update", {
+        directory,
+        projectID,
+        patch,
+      });
+    },
     duplicateProjectName: (name) => {
       for (const s of sidecars.state.list) projectOwner(s.id);
       void nameClock.state.keys[name];
       return (names.get(name) ?? 0) > 1;
     },
-    projects: (now, ageing) => {
-      const rows = sidecars.state.list.flatMap((s) => {
+    projects: (now) => {
+      // The configured server list is durable before any server answers.
+      const rows = sidecars.state.list.flatMap((s, serverOrder) => {
+        const order = projectOrder(s.id);
+        const replica = programs(s.id);
+        if (!order.ready || !replica.ready) return [];
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
-          const row = owner.row(directory, now, ageing)!;
+          const row = owner.row(directory, now)!;
+          const slot = order.slot(directory);
+          const program = slot?.ordinal === 0
+            ? replica.member(slot.id)
+            : undefined;
+          if (!slot) {
+            let reported = missingOrder.get(s.id);
+            if (!reported) missingOrder.set(s.id, reported = new Set());
+            if (!reported.has(directory)) {
+              reported.add(directory);
+              reportDiagnostic(
+                o.diagnostic ?? console.warn,
+                new Error(
+                  `project order missing directory: ${s.id} ${directory}`,
+                ),
+              );
+            }
+          }
           let labelled = labelledRows.get(row);
-          if (!labelled || labelled.label !== s.label) {
-            labelled = { ...row, sidecarId: s.id, label: s.label };
+          if (
+            !labelled || labelled.label !== s.label ||
+            labelled.otkProjectID !== slot?.id || labelled.program !== program
+          ) {
+            labelled = {
+              ...row,
+              sidecarId: s.id,
+              label: s.label,
+              otkProjectID: slot?.id,
+              program,
+            };
             labelledRows.set(row, labelled);
           }
-          return labelled;
-        }).sort((a, b) => a.order - b.order);
-      }).sort((a, b) => {
-        const rank = { tracked: 0, index: 1, template: 2 };
-        if (a.source === "tracked" && b.source === "tracked") return 0;
-        return rank[a.source ?? "tracked"] - rank[b.source ?? "tracked"] ||
-          a.order - b.order ||
-          projectName(a.directory).localeCompare(projectName(b.directory)) ||
-          a.directory.localeCompare(b.directory) ||
-          a.label.localeCompare(b.label);
+          return { row: labelled, serverOrder, slot };
+        });
       });
-      return projectHierarchy(rows);
+      return projectHierarchy(orderProjectRows(rows));
     },
     tabSnapshot(p) {
       const input = tabInput(p);
@@ -1078,27 +1256,33 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      programReplicas.get(id)?.stop();
+      programReplicas.delete(id);
+      orders.get(id)?.stop();
+      orders.delete(id);
+      missingOrder.delete(id);
+      requestSubscriptions.get(id)?.();
+      requestSubscriptions.delete(id);
       listOwners.get(id)?.stop();
       listOwners.delete(id);
-      inboxDirectories.delete(id);
       progressOwners.get(id)?.stop();
       progressOwners.delete(id);
       for (const release of projectReleases.get(id) ?? []) release();
       projectReleases.delete(id);
-      for (const directory of projectOwners.get(id)?.directories() ?? []) {
-        nameMembership(directory, false);
+      for (const label of projectLabels.get(id)?.values() ?? []) {
+        countName(label, -1);
       }
+      projectLabels.delete(id);
       projectOwners.delete(id);
       for (const [key, cache] of tabInputs) {
         if (cache.server === id) tabInputs.delete(key);
       }
-      operationCache.delete(id);
+      fileFactOwners.get(id)?.stop();
+      fileFactOwners.delete(id);
       catalogs.get(id)?.stop();
       catalogs.delete(id);
       frecencies.get(id)?.stop();
       frecencies.delete(id);
-      requestObservers.get(id)?.();
-      requestObservers.delete(id);
       o.index.remove(id);
       for (const observer of observers) observer.removed?.(id);
       inboxes.get(id)?.stop();
@@ -1116,6 +1300,19 @@ export function createServerResources(o: {
     },
     async layout(patch) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
+    },
+    async projectCollapse(project, collapsed) {
+      await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.project", {
+        sidecarId: project.sidecarId,
+        directory: project.directory,
+        collapsed,
+      });
+    },
+    async treeCollapse(target, collapsed) {
+      await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.tree", {
+        ...target,
+        collapsed,
+      });
     },
     async rememberLocation(location) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call(
@@ -1136,8 +1333,15 @@ export function createServerResources(o: {
       });
     },
     stop() {
+      for (const replica of programReplicas.values()) replica.stop();
+      programReplicas.clear();
+      for (const order of orders.values()) order.stop();
+      orders.clear();
+      for (const release of requestSubscriptions.values()) release();
+      requestSubscriptions.clear();
       if (stopped) return;
       stopped = true;
+      sessionReferences.clear();
       for (const owner of listOwners.values()) owner.stop();
       listOwners.clear();
       for (const owner of progressOwners.values()) owner.stop();
@@ -1151,17 +1355,16 @@ export function createServerResources(o: {
       projectReleases.clear();
       projectOwners.clear();
       tabInputs.clear();
-      operationCache.clear();
       visibleCatalog?.stopReady?.();
       visibleCatalog?.directory.release();
       visibleCatalog?.frecency.release();
       visibleCatalog = undefined;
+      for (const owner of fileFactOwners.values()) owner.stop();
+      fileFactOwners.clear();
       for (const owner of catalogs.values()) owner.stop();
       for (const owner of frecencies.values()) owner.stop();
       catalogs.clear();
       frecencies.clear();
-      for (const release of requestObservers.values()) release();
-      requestObservers.clear();
       for (const model of approvalModels.values()) model.stop();
       for (const model of tabModels.values()) model.stop();
       approvalModels.clear();

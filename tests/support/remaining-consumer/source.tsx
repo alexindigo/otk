@@ -28,6 +28,7 @@ export function mountSourceProbe() {
     };
   };
   const base = "Provider-only complete source ".repeat(2000);
+  const workID = "work", time = { start: 1, end: 2 };
   const message = (rank: number): AssistantMessage => ({
     id: "reply",
     sessionID: "tstv1-source",
@@ -39,7 +40,7 @@ export function mountSourceProbe() {
     cost: 0,
     interrupted: false,
     parts: [{
-      id: "work",
+      id: workID,
       kind: "external",
       name: "source.work",
       data: `${base}${rank}`,
@@ -51,7 +52,7 @@ export function mountSourceProbe() {
     bodies++;
     return <pre data-source-body>{props.part.data}</pre>;
   }, (part) => ({
-    work: { start: 1, end: 2 },
+    work: time,
     copyable: true,
     get text() {
       reads++;
@@ -60,6 +61,43 @@ export function mountSourceProbe() {
       return value;
     },
   }));
+  // D74: this standalone consumer supplies one fixed Work run. Only the
+  // registered part's source changes; no Work model or panel is under test.
+  const run = {
+    key: workID,
+    lane: "action" as const,
+    label: "Provider work",
+    partIDs: [workID],
+    live: false,
+    failed: false,
+    ...time,
+  };
+  const work = {
+    runs: {
+      runs: [run],
+      segments: [{
+        run: run.key,
+        lane: run.lane,
+        failed: run.failed,
+        live: run.live,
+        weightMs: 1,
+        title: run.label,
+      }],
+      actions: 1,
+      failed: [],
+      bookkeeping: [],
+      trailingThoughts: [],
+      summary: "Work log: 1 action",
+      runOf: (partID: string) => partID === workID ? workID : undefined,
+    },
+    shown: false,
+    action: () => ({
+      availability: () => ({ available: true }) as const,
+      subscribe: () => () => {},
+      run: () => Promise.reject(new Error("The Work log must stay closed")),
+    }),
+    onFeedback() {},
+  };
   Object.assign(globalThis, {
     sourceProbe: {
       mount: setMounted,
@@ -92,6 +130,7 @@ export function mountSourceProbe() {
           <TranscriptContext>
             <Message
               message={current()}
+              work={work}
               prefs={DEFAULT_PREFS}
               permissions={[]}
               queued={false}

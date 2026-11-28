@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./fixture-diagnostics.ts";
+import { decodeBase64 } from "@std/encoding/base64";
 import { fromFileUrl, join, relative, resolve } from "@std/path";
+import { DatabaseSync } from "node:sqlite";
 import { nativeFixture } from "./native-fixture.ts";
 import { submitFailureScenario } from "./request-failure-fixture.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
@@ -55,6 +57,43 @@ async function bind<T>(start: () => Promise<T>): Promise<T> {
   }
 }
 
+async function writeFixtureFiles(
+  root: string,
+  files: Record<string, string>,
+  write: (target: string, data: string) => Promise<void>,
+): Promise<void> {
+  for (const [name, data] of Object.entries(files)) {
+    const target = resolve(root, name);
+    const path = relative(root, target);
+    if (
+      !path || path === ".." || path.startsWith("../") || path.startsWith("/")
+    ) {
+      throw new Error("File outside fixture root");
+    }
+    // Check every existing path segment before proceeding to the next one.
+    let parent = root;
+    for (const part of path.split("/").slice(0, -1)) {
+      parent = join(parent, part);
+      try {
+        if ((await Deno.lstat(parent)).isSymlink) {
+          throw new Error("Symlink parent");
+        }
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+        await Deno.mkdir(parent);
+      }
+    }
+    try {
+      if ((await Deno.lstat(target)).isSymlink) {
+        throw new Error("Symlink target");
+      }
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+    }
+    await write(target, data);
+  }
+}
+
 let stopID: string | undefined;
 let shutdownFailure: unknown;
 try {
@@ -64,6 +103,7 @@ try {
     let client: WsClient | undefined;
     let baseline: Record<string, Json> = {};
     let lease: TestLease | undefined;
+    let privateHome: string | undefined;
     let profile = "ordinary" as Profile;
     let composer: ReturnType<typeof composerProfile> | undefined;
     let poisoned = false;
@@ -97,7 +137,11 @@ try {
               owner.fake.port,
               owner.oc.port,
               owner.oc.nativePort,
-              ...owner.servers.map((server) => server.port),
+              ...owner.servers.flatMap((server) =>
+                server.port === server.nativePort
+                  ? [server.port]
+                  : [server.port, server.nativePort]
+              ),
             ]),
           ],
           sidecarPort: fixture.servers[0]?.port,
@@ -286,6 +330,13 @@ try {
             composer = composerProfile(profile);
           }
           let contextOptions: Parameters<typeof nativeFixture>[1];
+          if (
+            profile === "attention-failed-helper" && nativeVersion === "1.19.3"
+          ) {
+            contextOptions = {
+              env: { OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: "true" },
+            };
+          }
           if (profile === "menus-default") {
             contextOptions = { config: { default_agent: "plan" } };
           }
@@ -377,7 +428,8 @@ try {
                 ? { "*": "allow" }
                 : profile === "revert-native"
                 ? { edit: "allow", read: "allow", bash: "allow" }
-                : profile === "sessions-tasks"
+                : profile === "sessions-tasks" ||
+                    profile === "attention-failed-helper"
                 ? { bash: "ask", task: "allow" }
                 : profile === "composer-pickers"
                 ? { bash: "allow" }
@@ -406,7 +458,12 @@ try {
                 ? composer.options
                 : profile === "sessions-discovery"
                 ? { env: { OPENCODE_PRINT_LOGS: "1" } }
-                : ["messages-context", "messages-priced", "menus-default"]
+                : [
+                    "messages-context",
+                    "messages-priced",
+                    "menus-default",
+                    "attention-failed-helper",
+                  ]
                     .includes(profile)
                 ? contextOptions
                 : profile === "messages-tool-states"
@@ -594,6 +651,9 @@ try {
           ) {
             transport = await nativeMessageScenario(fixture.oc, profile);
           }
+          if (profile === "messages-private-home") {
+            privateHome = join(fixture.oc.root, `home-${crypto.randomUUID()}`);
+          }
           const server = await bind(() =>
             fixture!.sidecar(
               transport
@@ -615,7 +675,8 @@ try {
                         requestms: 90000,
                       }
                       : {}),
-                    ...(profile === "transport-freeze"
+                    ...(profile === "transport-freeze" ||
+                        profile === "transport-stall"
                       ? { heartbeattimeout: 2 }
                       : {}),
                   },
@@ -623,6 +684,7 @@ try {
                 : ["messages-cooling", "messages-temperature"].includes(profile)
                 ? { messages: { coolms: 2500, preloadms: 1500 } }
                 : {},
+              { stableOrigin: profile !== "ordinary", home: privateHome },
             )
           );
           if (record) {
@@ -632,10 +694,13 @@ try {
                 pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
                 sidecarPort: server.port,
                 ports: [
-                  fixture.fake.port,
-                  fixture.oc.port,
-                  server.port,
-                  fixture.oc.nativePort,
+                  ...new Set([
+                    fixture.fake.port,
+                    fixture.oc.port,
+                    server.port,
+                    server.nativePort,
+                    fixture.oc.nativePort,
+                  ]),
                 ],
               }),
             );
@@ -681,16 +746,20 @@ try {
           return {
             root: fixture.oc.root,
             url: server.url,
+            statePath: server.statePath,
             nativeUrl: fixture.oc.url,
             binary: nativeBinary,
             version: nativeVersion,
             pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
             ports: [
-              ...extraPorts,
-              fixture.fake.port,
-              fixture.oc.port,
-              server.port,
-              fixture.oc.nativePort,
+              ...new Set([
+                ...extraPorts,
+                fixture.fake.port,
+                fixture.oc.port,
+                server.port,
+                server.nativePort,
+                fixture.oc.nativePort,
+              ]),
             ],
           };
         }
@@ -768,6 +837,13 @@ try {
           return null;
         case "queueScript": {
           if (
+            frame.params.failHelper && profile !== "attention-failed-helper"
+          ) {
+            throw new Error(
+              "Provider rejection requires the failed-helper profile",
+            );
+          }
+          if (
             (frame.params.delay ?? 0) > 2000 &&
             !["composer-long-command", "revert-native"].includes(profile)
           ) {
@@ -784,6 +860,12 @@ try {
           const id = crypto.randomUUID();
           const script = {
             chunks: frame.params.chunks,
+            ...(frame.params.failHelper
+              ? {
+                forPrompt: "Run the provider error fixture",
+                failure: { status: 403, message: "Scripted helper refused" },
+              }
+              : {}),
             ...(frame.params.reasoning
               ? { reasoning: frame.params.reasoning }
               : {}),
@@ -853,6 +935,16 @@ try {
           };
         case "nativeRequest": {
           const params = frame.params;
+          if (
+            (params.path.startsWith("/experimental/job?") ||
+              params.path === "/shell") &&
+            (profile !== "attention-orphaned-jobs" || params.target ||
+              params.project)
+          ) {
+            throw new Error(
+              "Job and shell inventories belong to the isolated orphan-job scenario",
+            );
+          }
           if (params.target === "remote") {
             if (profile !== "composer-history" || !remote || params.project) {
               throw new Error(
@@ -977,31 +1069,22 @@ try {
           return { url: server.url, session };
         }
         case "writeProjectFiles":
-          for (const [name, text] of Object.entries(frame.params.files)) {
-            const target = resolve(lease!.directory, name);
-            const path = relative(lease!.directory, target);
-            if (!path || path.startsWith("..") || path.startsWith("/")) {
-              throw new Error("File outside project root");
-            }
-            // Refuse symlink parents; never follow fixture-created links out of root.
-            let parent = lease!.directory;
-            for (const part of path.split("/").slice(0, -1)) {
-              parent = join(parent, part);
-              await Deno.mkdir(parent, { recursive: true });
-              if ((await Deno.lstat(parent)).isSymlink) {
-                throw new Error("Symlink parent");
-              }
-            }
-            try {
-              if ((await Deno.lstat(target)).isSymlink) {
-                throw new Error("Symlink target");
-              }
-            } catch (error) {
-              if (!(error instanceof Deno.errors.NotFound)) throw error;
-            }
-            await Deno.writeTextFile(target, text);
-          }
+          await writeFixtureFiles(
+            lease!.directory,
+            frame.params.files,
+            Deno.writeTextFile,
+          );
           return null;
+        case "writeHomeFiles":
+          if (!privateHome || !lease) {
+            throw new Error("Fixture has no private HOME");
+          }
+          await writeFixtureFiles(
+            privateHome,
+            frame.params.files,
+            (target, data) => Deno.writeFile(target, decodeBase64(data)),
+          );
+          return { home: privateHome };
         case "restart":
           if (profile === "ordinary") {
             throw new Error("Restart requires isolated profile");
@@ -1010,10 +1093,9 @@ try {
           else {
             const server = fixture!.servers.at(-1)!;
             await client!.close();
-            await server.stop();
-            // The isolated restart journey proves missed terminal data, rather
-            // than relying on future chunks after a successful reconnection.
-            if (profile === "transport-restart") {
+            await server.restart(async () => {
+              // Prove missed terminal data, not future chunks after reconnect.
+              if (profile !== "transport-restart") return;
               fixture!.fake.releaseAll();
               gates.clear();
               await waitFor(() => fixture!.fake.active, (count) => count === 0);
@@ -1035,17 +1117,73 @@ try {
                     ),
                 );
               }
-            }
-            const replacement = await fixture!.sidecar({
-              server: { port: server.port },
-              state: { path: join(fixture!.oc.root, `otk-${server.port}`) },
             });
-            client = new WsClient(replacement.url);
+            client = new WsClient(server.url);
             await client.connect(fixture!.oc.directory);
             await recordOwnership();
           }
           return null;
         case "scenario":
+          if (frame.params.action === "seed-orphaned-job") {
+            if (
+              profile !== "attention-orphaned-jobs" || !lease ||
+              fixture!.oc.kind !== "opencode-v2-server" ||
+              !frame.params.sessionID
+            ) {
+              throw new Error(
+                "Expected the isolated native orphan-job scenario",
+              );
+            }
+            const sessionID = frame.params.sessionID.replace(/^opcv2-/, "");
+            const { nativeID: childID } = await fixture!.oc.session<
+              { id: string }
+            >(
+              "/session",
+              {
+                method: "POST",
+                body: { title: "Orphaned native job", parentID: sessionID },
+                directory: lease.directory,
+              },
+            );
+            createdIDs.push(browserSessionID(childID));
+            const native = new DatabaseSync(fixture!.oc.db);
+            try {
+              const parent = native.prepare(
+                "SELECT directory FROM session_v2 WHERE id=?",
+              ).get(sessionID);
+              if (parent?.directory !== lease.directory) {
+                throw new Error("Foreign orphan-job parent");
+              }
+              // Reproduce a leftover durable record in the disposable stock DB,
+              // not a live executor entry, an inbox item, or an OTK publication.
+              const notification = `msg_${
+                crypto.randomUUID().replaceAll("-", "")
+              }`;
+              const created = Date.now() - 60_000;
+              native.prepare(
+                `INSERT INTO job(notification_id,id,session_id,child_session_id,kind,title,status,recovery,time_created,time_updated)
+                VALUES(?,?,?,?,'subagent','Orphaned native job','running',?,?,?)`,
+              )
+                .run(
+                  notification,
+                  childID,
+                  sessionID,
+                  childID,
+                  JSON.stringify({
+                    kind: "subagent",
+                    parentSessionID: sessionID,
+                    childSessionID: childID,
+                    agent: "explore",
+                    description: "Orphaned native job",
+                  }),
+                  created,
+                  created,
+                );
+            } finally {
+              native.close();
+            }
+            return { childID };
+          }
           if (
             profile === "composer-request-failure" &&
             frame.params.action === "fail"

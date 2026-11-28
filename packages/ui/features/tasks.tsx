@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
+import { retainForReload } from "../state/reload.tsx";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
 import Form, { FormInput } from "../components/Form.tsx";
 export interface TaskNameInput {
+  key?: string;
   name?: string;
   save(name: string): Promise<void>;
 }
@@ -18,13 +20,21 @@ export function registerTaskDialogs(dialogs: DialogRegistry): void {
 function TaskName(props: DialogProps) {
   const input = props.input as TaskNameInput;
   const [name, setName] = createSignal(input.name ?? "");
+  if (input.key) {
+    retainForReload(`task-name:${input.key}`, {
+      snapshot: name,
+      restore(value) {
+        setName(String(value));
+      },
+    });
+  }
   return (
     <Form
       title="Task name"
       submitLabel="Save task"
       pendingLabel={input.name === undefined
-        ? "Creating task…"
-        : "Renaming task…"}
+        ? "Creating task..."
+        : "Renaming task..."}
       onSubmit={async (data) => {
         await input.save(String(data.get("taskName")).trim());
         props.close();

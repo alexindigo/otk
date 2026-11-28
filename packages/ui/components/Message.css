@@ -1,106 +1,54 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-message {
-  margin-bottom: 24px;
+  margin-bottom: var(--message-gap, var(--space-6));
   line-height: var(--line-prose);
   overflow-wrap: anywhere;
 }
 .otk-user-message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  container: otk-failure / inline-size;
+  --user-column: 80%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--user-column));
+  justify-items: end;
+  gap: var(--space-1);
+}
+.otk-user-message > * {
+  grid-column: 2;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 .otk-user-bubble {
-  max-width: 80%;
   background: var(--otk-bubble);
   border-radius: var(--radius-bubble);
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
 }
 .otk-transcript-frame {
-  align-self: stretch;
+  grid-column: 1 / -1;
+  justify-self: stretch;
 }
 .otk-user-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-inline: 8px;
-  font-size: var(--text-meta);
-  color: var(--otk-fg-3);
   max-width: 100%;
-}
-.otk-created-time {
-  color: var(--otk-fg-3);
-  visibility: hidden;
-}
-.otk-time-always .otk-created-time,
-.otk-user-message:has(.otk-created-trigger:is(:hover,:focus-visible)) .otk-created-time,
-.otk-message-details:has(.otk-created-trigger:is(:hover,:focus-visible)) .otk-created-time {
-  visibility: visible;
-}
-.otk-message-footer {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 8px 16px;
-  margin-top: 4px;
-  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
-  color: var(--otk-fg-3);
-  font-variant-numeric: tabular-nums;
-}
-.otk-message-details,
-.otk-user-details {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  flex-wrap: nowrap;
-  gap: 8px 16px;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.otk-message-details > *,
-.otk-user-details > * {
-  flex: none;
-}
-.otk-message-agent:is(:hover,:focus-visible) {
-  color: var(--message-agent-color);
-}
-.otk-message-details .otk-created-time {
-  display: none;
-}
-.otk-message-footer.otk-time-always .otk-created-time,
-.otk-message-details:has(.otk-created-trigger:is(:hover,:focus-visible)) .otk-created-time {
-  display: inline;
-}
-.otk-output-time-group {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.otk-last-output-time {
-  white-space: nowrap;
-}
-.otk-last-output-date {
-  display: none;
-  visibility: hidden;
-}
-.otk-message-footer:has(.otk-last-output-time:is(:hover,:focus-visible)) .otk-last-output-date {
-  display: inline;
-  visibility: visible;
-}
-.otk-queued {
-  background: var(--otk-surface-2);
-  color: var(--fg);
-  padding: 0 4px;
-  border-radius: var(--radius-control);
 }
 .otk-response-recovery {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-block: 8px;
+  gap: var(--space-2);
+  margin-block: var(--space-2);
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
+}
+.otk-send-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.otk-send-failure {
+  justify-self: end;
+  inline-size: fit-content;
+}
+
+.otk-reply-end {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }

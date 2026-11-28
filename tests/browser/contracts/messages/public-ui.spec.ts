@@ -1,7 +1,41 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 test.use({ profile: "contract-messages-public-ui" });
+
+test("messages.constrained-toasts-keep-detail-and-actions-reachable", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }, info) => {
+  await page.setViewportSize({ width: 400, height: 220 });
+  const stack = page.getByRole("region", { name: "Notifications" });
+  const toast = stack.locator('[data-note="other"]');
+  const heading = toast.getByText("Target other", { exact: true });
+  const lastDetail = toast.getByText("Detail 14 for other", { exact: true });
+  const dismiss = toast.getByRole("button", {
+    name: "Dismiss notification",
+    exact: true,
+  });
+  for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+    await page.goto(`${state.url}/?action-toasts&tall&theme=${theme}`);
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
+    await expect(heading).toBeInViewport();
+    await expect(lastDetail).not.toBeInViewport();
+    await heading.hover();
+    await page.mouse.wheel(0, 2000);
+    await expect(lastDetail).toBeInViewport();
+    await expect(heading).not.toBeInViewport();
+    await page.screenshot({
+      path: info.outputPath(`toast-constrained-${theme}.png`),
+    });
+    await toast.getByRole("button", { name: "Open session", exact: true })
+      .click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await dismiss.click();
+    await expect(toast).toHaveCount(0);
+    await expect(stack.locator('[data-note="refused"]')).toHaveCount(1);
+  }
+});
 
 for (const scenario of ["lifetime", "source"] as const) {
   test(`messages.lazy-preview-${scenario}`, {
@@ -25,7 +59,10 @@ for (const scenario of ["lifetime", "source"] as const) {
     const row = (name: string) =>
       page.locator(`[data-native-record="${name}"]`);
     const toggle = (name: string) =>
-      row(name).locator(":scope > header > button");
+      row(name).getByRole("button", {
+        name: `Unsupported part: ${name}`,
+        exact: true,
+      });
     const counts = () =>
       page.evaluate(() =>
         (window as unknown as { previewEncodes: Record<string, number> })
@@ -36,9 +73,14 @@ for (const scenario of ["lifetime", "source"] as const) {
       "false",
     );
     expect(await counts()).toEqual({});
-    await expect(row("absent").getByRole("button")).toHaveCount(0);
+    // WP16 still discloses the record's exact clock even without source bytes.
+    // Opening that outer record must not invent a Source fold or encode a preview.
+    await toggle("absent").click();
+    await expect(row("absent").locator("[data-record-time]")).toBeVisible();
+    await expect(row("absent").locator(".otk-native-source")).toHaveCount(0);
+    expect(await counts()).toEqual({});
     if (scenario === "source") {
-      await row("explicit").getByRole("button").click();
+      await toggle("explicit").click();
       await expect(row("explicit").locator("pre")).toHaveText(
         "OTK_LAZY_PREVIEW_explicit:",
       );
@@ -46,7 +88,7 @@ for (const scenario of ["lifetime", "source"] as const) {
         "90000 bytes - Preview truncated",
       );
       expect(await counts()).toEqual({ explicit: 1 });
-      await row("empty").getByRole("button").click();
+      await toggle("empty").click();
       await expect(row("empty").locator("pre")).toHaveJSProperty(
         "textContent",
         "",
@@ -109,6 +151,87 @@ for (const scenario of ["lifetime", "source"] as const) {
   });
 }
 
+test("messages.public-ui-action-controls-never-end-silently", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await page.goto(state.url);
+  const action = (id: string) => page.locator(`[data-action="${id}"]`);
+  const button = (id: string) =>
+    action(id).getByRole("button", { name: id, exact: true });
+  // An owner-observed non-result is a refusal with its reason, in flow.
+  await button("Open unobserved").click();
+  await expect(action("Open unobserved")).toContainText(
+    "The fixture view did not open.",
+  );
+  // A thrown effect is a failure on the control, not a dropped promise.
+  await button("Open failing").click();
+  await expect(action("Open failing").locator(".otk-feedback-status"))
+    .toBeVisible();
+  await expect(button("Open failing")).toBeEnabled();
+  // Unavailable is disabled with its reason; a self-target is not offered.
+  await expect(button("Open closed")).toBeDisabled();
+  await expect(action("Open closed")).toContainText("Server offline");
+  await expect(action("Open self").getByRole("button")).toHaveCount(0);
+  await expect(button("Open late")).toBeDisabled();
+  await page.getByRole("button", { name: "Install action owner", exact: true })
+    .click();
+  await expect(button("Open late")).toBeEnabled();
+});
+
+test(
+  "messages.notification-open-controls-observe-the-view-and-refuse-self-targets",
+  {
+    tag: ["@messages", "@contracts"],
+  },
+  async ({ isolatedState: state, page }) => {
+    const url = new URL(state.url);
+    url.searchParams.set("action-toasts", "");
+    await page.goto(url.href);
+    const toast = (id: string) => page.locator(`.otk-toast[data-note="${id}"]`);
+    await expect(
+      toast("current").getByRole("button", {
+        name: "Open session",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await toast("refused").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(toast("refused")).toContainText(
+      "The requested view did not open.",
+    );
+    await expect(page.locator("[data-toast-view]")).toHaveText("current");
+    await toast("other").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await expect(
+      toast("other").getByRole("button", { name: "Open session", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Hide session view", exact: true })
+      .click();
+    await expect(page.locator("[data-toast-settings]")).toBeVisible();
+    await toast("other").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(toast("other")).toContainText(
+      "The requested view did not open.",
+    );
+    await expect(page.locator("[data-toast-view]")).toHaveCount(0);
+    await page.getByRole("button", { name: "Allow session view", exact: true })
+      .click();
+    await toast("other").getByRole("button", {
+      name: "Open session",
+      exact: true,
+    }).click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await expect(page.locator("[data-toast-settings]")).toHaveCount(0);
+  },
+);
+
 test("messages.public-ui-external-tools-callbacks-isolation", {
   tag: ["@messages", "@contracts", "@composer"],
 }, async ({ isolatedState: state, page }) => {
@@ -136,10 +259,14 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
     "aria-label",
     "No known activity",
   );
-  await expect(page.locator("#registered .otk-tool-toggle")).toHaveCount(2);
+  // 2.114/dx-2 gives inert unknown-part leaves the same lane styling as tools.
+  const registeredTools = page.locator("#registered button.otk-tool-toggle");
+  await expect(registeredTools).toHaveCount(2);
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(0);
-  await page.locator("#registered > .otk-tool-line .otk-tool-toggle").click();
-  await page.locator("#registered .otk-message .otk-tool-toggle").click();
+  await registeredTools.and(page.locator("#registered > .otk-tool-line button"))
+    .click();
+  await registeredTools.and(page.locator("#registered .otk-message button"))
+    .click();
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(2);
   await expect(page.locator("[data-library-code] .otk-token").first())
     .toBeAttached();
@@ -173,7 +300,9 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#isolated .otk-tool-brief")).toHaveText(
     "Initial result",
   );
-  await page.locator("#isolated .otk-tool-toggle").click();
+  const isolatedTool = page.locator("#isolated button.otk-tool-toggle");
+  await expect(isolatedTool).toHaveAttribute("aria-expanded", "false");
+  await isolatedTool.click();
   await expect(page.locator("#isolated .otk-tool-body")).toBeVisible();
   await expect(page.locator("#isolated .otk-tool-output")).toHaveText(
     "Reusable output",
@@ -181,10 +310,8 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#isolated .otk-tool-body .otk-tool-summary"))
     .toHaveCount(0);
   await page.locator("[data-update]").click();
-  await expect(page.locator("#registered .otk-tool-toggle").first())
-    .toContainText("Inspect");
-  await expect(page.locator("#registered .otk-tool-toggle").first())
-    .toContainText("external target");
+  await expect(registeredTools.first()).toContainText("Inspect");
+  await expect(registeredTools.first()).toContainText("external target");
   await expect(page.locator("#registered .otk-tool-body").first())
     .toBeVisible();
   await expect.poll(() =>
@@ -203,11 +330,13 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#registered")).toContainText(
     "Unsupported part: future.card",
   );
-  await page.locator("[data-inject]").click();
+  await page.getByRole("button", { name: "Inject draft" }).click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Injected draft",
   );
-  await expect(page.locator(".otk-prompt-context > span").first()).toHaveText(
+  await expect(
+    page.locator(".otk-prompt-context:not([inert] *) > span").first(),
+  ).toHaveText(
     "External-Agent",
   );
   await page.locator("textarea[name=prompt]").click();
@@ -221,7 +350,7 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
     "outline-style",
     "solid",
   );
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue("");
   await expect.poll(() =>
     page.locator("#submitted").textContent().then((s) => JSON.parse(s!))

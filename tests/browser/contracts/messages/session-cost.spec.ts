@@ -76,24 +76,53 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
   }
   expect(observation.reads.filter((id) => id === "tstv1-core")).toHaveLength(0);
   expect(observation.reads).not.toContain("tstv1-other");
-  await expect(row("tstv1-core")).toHaveAttribute(
-    "aria-label",
+  // Issue 2.96: the shared row's action owns the accessible name.
+  await expect(row("tstv1-core").getByRole("button")).toHaveAccessibleName(
     `${observation.title}, session cost $1.02`,
   );
-  await expect(row("tstv1-helper")).toHaveAttribute(
-    "aria-label",
+  await expect(row("tstv1-helper").getByRole("button")).toHaveAccessibleName(
     `Explore callers, child of ${observation.title}, session cost $0.07`,
   );
-  const geometry = async () => {
+  const geometry = async (narrow = false) => {
+    const projectHeight = await page.locator(".otk-project-row[data-project]")
+      .first().evaluate((element) => element.getBoundingClientRect().height);
+    expect(projectHeight).toBeGreaterThan(0);
     const boxes = await page.locator(".otk-session-row").evaluateAll((rows) =>
       rows.filter((r) => r.querySelector(".otk-session-cost")).map((r) => {
-        const c = r.querySelector(".otk-session-cost")!.getBoundingClientRect(),
-          t = r.querySelector(".otk-row-title")!.getBoundingClientRect(),
+        const cost = r.querySelector(".otk-session-cost")!,
+          c = cost.getClientRects().length
+            ? cost.getBoundingClientRect()
+            : null,
+          meta = cost.closest(".otk-meta-row")!.getBoundingClientRect(),
+          label = r.querySelector<HTMLElement>("[data-row-title]")!,
+          labelRect = label.getBoundingClientRect(),
+          floor = document.createElement("span"),
+          t = r.querySelector(".otk-sidebar-title-text")!
+            .getBoundingClientRect(),
           l = r.querySelector(".otk-status-light")!.getBoundingClientRect(),
           b = r.getBoundingClientRect();
+        Object.assign(floor.style, {
+          position: "absolute",
+          inlineSize: "var(--row-title-min)",
+        });
+        label.append(floor);
+        const minimumTitleWidth = Math.min(
+          t.width,
+          floor.getBoundingClientRect().width,
+        );
+        floor.remove();
         return {
-          right: c.right,
-          centre: c.y + c.height / 2,
+          cost: c && {
+            left: c.left,
+            right: c.right,
+            centre: c.y + c.height / 2,
+            whole: c.left >= meta.left - .5 && c.right <= meta.right + .5,
+          },
+          rowRight: b.right,
+          titleRight: labelRect.right,
+          labelWidth: labelRect.width,
+          minimumTitleWidth,
+          centre: b.y + b.height / 2,
           titleCentre: t.y + t.height / 2,
           lightCentre: l.y + l.height / 2,
           height: b.height,
@@ -102,19 +131,44 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
       })
     );
     expect(boxes).toHaveLength(3);
+    const visibleCosts = boxes.flatMap((box) => box.cost ? [box.cost] : []);
+    // 2.109: a narrow row yields only whole facts, and only if they do not
+    // fit beside the title floor. Its exact accessible cost is independent.
+    expect(visibleCosts.length).toBeGreaterThan(0);
+    if (!narrow) expect(visibleCosts).toHaveLength(boxes.length);
     for (const b of boxes) {
-      expect(Math.abs(b.right - boxes[0].right)).toBeLessThanOrEqual(.5);
+      if (b.cost) {
+        expect(Math.abs(b.cost.right - visibleCosts[0].right))
+          .toBeLessThanOrEqual(.5);
+        expect(Math.abs(b.centre - b.cost.centre)).toBeLessThanOrEqual(.5);
+        expect(b.cost.whole).toBe(true);
+        expect(b.cost.left).toBeGreaterThanOrEqual(b.titleRight - .5);
+        expect(b.cost.right).toBeLessThanOrEqual(b.rowRight + .5);
+        expect(b.labelWidth).toBeGreaterThanOrEqual(b.minimumTitleWidth - .5);
+      }
       expect(Math.abs(b.centre - b.titleCentre)).toBeLessThanOrEqual(.5);
       expect(Math.abs(b.centre - b.lightCentre)).toBeLessThanOrEqual(.5);
-      expect(b.height).toBe(30);
+      // Issue 2.96: both sidebars use the same fixed row track.
+      expect(Math.abs(b.height - projectHeight)).toBeLessThanOrEqual(.5);
       expect(b.overflow).toBe(false);
     }
   };
   await geometry();
+  const costDescriptions = await Promise.all(
+    ["tstv1-core", "tstv1-helper"].map(async (id) => {
+      const action = row(id).getByRole("button");
+      const description = await action.getAttribute("aria-description");
+      expect(description).toMatch(/^Exact session cost: \$\d/);
+      return { action, description: description! };
+    }),
+  );
   const prefs = await state.product("prefs.get", {});
   await state.product("layout.patch", { rightWidth: 280 });
   await expect(page.locator(".otk-right-panel")).toHaveCSS("width", "280px");
-  await geometry();
+  await geometry(true);
+  for (const { action, description } of costDescriptions) {
+    await expect(action).toHaveAccessibleDescription(description);
+  }
   await state.product("layout.patch", {
     rightWidth: prefs.shellLayout.rightWidth,
   });

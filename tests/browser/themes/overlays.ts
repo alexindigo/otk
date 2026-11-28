@@ -5,8 +5,11 @@ import type { TestState } from "../fixtures/test-state.ts";
 import { accessoryGeometry } from "../../support/control-geometry.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { fixedContent } from "./content.ts";
-import { reveal } from "./collections.ts";
+import { revealAcquired as reveal } from "../pages/transcript.ts";
 import { restoreViewport } from "./capture.ts";
+import { diffHunk, expectDiffHunk } from "../pages/diff.ts";
+import { clipboard, copied, pick } from "../pages/menus.ts";
+import { cssLength } from "../pages/css-length.ts";
 
 interface Inputs {
   state: TestState;
@@ -37,8 +40,10 @@ async function command(page: Page, id: string, query: string) {
   await page.locator(`[data-command="${id}"]`).click();
 }
 export async function surface(page: Page) {
+  // An open overlay owns its direct surface. Closed pickers nested in that
+  // surface keep their own panels in the DOM and are not open surfaces.
   const owner = page.locator(
-    "dialog[open] .otk-surface,:popover-open .otk-surface",
+    "dialog[open] > .otk-surface,:popover-open > .otk-surface",
   );
   await expect(owner).toHaveCount(1);
   await frames(page);
@@ -94,7 +99,7 @@ export async function surface(page: Page) {
 }
 async function positioned(page: Page, anchor?: string) {
   await frames(page);
-  const g = await page.locator(":popover-open .otk-surface").evaluate(
+  const g = await page.locator(":popover-open > .otk-surface").evaluate(
     (el, anchor) => {
       const r = el.getBoundingClientRect(),
         p = el.closest(".otk-popover-panel")!.getBoundingClientRect(),
@@ -142,8 +147,10 @@ export async function menuGeometry(page: Page) {
   const g = await page.locator(":popover-open [role=menu]").evaluate((menu) => {
     const panel = menu.closest(".otk-surface")!,
       r = panel.getBoundingClientRect(),
-      first = menu.parentElement!.firstElementChild!.getBoundingClientRect(),
-      last = menu.parentElement!.lastElementChild!.getBoundingClientRect();
+      // A named menu includes the title in its chrome, outside the body.
+      // Measure both insets at the surface slots, not at the menu rows.
+      first = panel.firstElementChild!.getBoundingClientRect(),
+      last = panel.lastElementChild!.getBoundingClientRect();
     return {
       inside: r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0 &&
         r.right <= innerWidth + .5 && r.bottom <= innerHeight + .5,
@@ -171,7 +178,12 @@ async function allMarks(
     expect(item.shift).toBe(0);
     expect(item.position).toBe("static");
     if (item.orientation === "vertical") {
-      expect([item.w, item.h, item.start]).toEqual([3, 14, 3]);
+      expect([item.w, item.h, item.start]).toEqual([
+        3,
+        14,
+        // Style7 finding 5: Tree reserves the mark before the row tracks.
+        item.external ? 0 : 3,
+      ]);
       expect(item.centred).toBeLessThanOrEqual(.5);
     } else {expect([item.h, item.start, item.end, item.bottom]).toEqual([
         2,
@@ -225,36 +237,63 @@ export async function usage(
         for (const width of [320, 280]) {
           await state.product("layout.patch", { rightWidth: width });
           await state.product("prefs.set", { key: "showCost", value: true });
+          await expect(page.locator(".otk-right-panel")).toHaveCSS(
+            "width",
+            `${width}px`,
+          );
           await expect(page.locator(".otk-session-cost")).toHaveCount(
             name === "unknown" || name === "unreported" ? 2 : 3,
           );
+          await frames(page);
           const boxes = await page.locator(
             ".otk-session-row:has(.otk-session-cost)",
           ).evaluateAll((rows) =>
             rows.map((row) => {
-              const c = row.querySelector(".otk-session-cost")!
-                  .getBoundingClientRect(),
-                t = row.querySelector(".otk-row-title")!
+              const cost = row.querySelector(".otk-session-cost")!,
+                c = cost.getClientRects().length
+                  ? cost.getBoundingClientRect()
+                  : null,
+                t = row.querySelector(".otk-sidebar-title-text")!
                   .getBoundingClientRect(),
                 l = row.querySelector(".otk-status-light")!
-                  .getBoundingClientRect();
+                  .getBoundingClientRect(),
+                bounds = row.getBoundingClientRect();
               return {
-                right: c.right,
-                centre: c.y + c.height / 2,
+                cost: c && { right: c.right, centre: c.y + c.height / 2 },
+                edge: bounds.right,
                 title: t.y + t.height / 2,
                 light: l.y + l.height / 2,
-                height: row.getBoundingClientRect().height,
+                height: bounds.height,
                 overflow: row.scrollWidth > row.clientWidth,
               };
             })
           );
+          const rowHeight = await cssLength(
+            page.locator(".otk-session-row:has(.otk-session-cost)").first(),
+            "--row-project",
+          );
+          const inset = await cssLength(
+            page.locator(".otk-right-panel"),
+            "--space-2",
+          );
+          const painted = boxes.flatMap((box) => box.cost ? [box.cost] : []);
+          expect(painted.length).toBeGreaterThan(0);
+          if (width === 320) expect(painted).toHaveLength(boxes.length);
           for (const box of boxes) {
-            expect(Math.abs(box.right - boxes[0].right)).toBeLessThanOrEqual(
-              .5,
-            );
-            expect(Math.abs(box.centre - box.title)).toBeLessThanOrEqual(.5);
-            expect(Math.abs(box.centre - box.light)).toBeLessThanOrEqual(.5);
-            expect(box.height).toBe(30);
+            // 2.109 yields whole facts before squeezing the title. A yielded
+            // cost still exists in the DOM but has no painted geometry.
+            if (box.cost) {
+              expect(Math.abs(box.cost.right - painted[0].right))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(box.cost.right - (box.edge - inset)))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(box.cost.centre - box.title))
+                .toBeLessThanOrEqual(.5);
+              expect(Math.abs(box.cost.centre - box.light))
+                .toBeLessThanOrEqual(.5);
+            }
+            expect(Math.abs(box.title - box.light)).toBeLessThanOrEqual(.5);
+            expect(box.height).toBe(rowHeight);
             expect(box.overflow).toBe(false);
           }
           await shot(`usage-rows-${name}-${width}-${theme.id}`);
@@ -270,7 +309,12 @@ export async function usage(
               .toHaveCount(count);
             await expect.poll(() =>
               page.locator(".otk-usage-breakdown tbody tr").evaluateAll(
-                (rows) => rows.map((r) => r.children.length),
+                (rows) =>
+                  rows.map((row) =>
+                    row.querySelectorAll(
+                      ":scope > .otk-usage-identity > *, :scope > td:not(.otk-usage-identity)",
+                    ).length
+                  ),
               )
             ).toEqual(Array(count).fill(cost ? 10 : 9));
             if (!cost) {
@@ -284,7 +328,9 @@ export async function usage(
             if (name === "unreported") {
               await expect(trigger).toContainText("Tokens unavailable");
               if (cost) await expect(trigger).toContainText("Cost unavailable");
-              await expect(page.locator(".otk-message-footer")).not
+              await expect(
+                page.locator("[data-role=assistant] .otk-message-footer"),
+              ).not
                 .toContainText("$0.00");
             }
             const g = await page.locator(".otk-turn-usage :popover-open")
@@ -358,6 +404,9 @@ export async function usage(
       }
     }
     await prefs("showCost", true);
+    // The exact-cost witness includes the context meter. Give this collection
+    // its own viewport instead of inheriting the preceding narrow ledger case.
+    await page.setViewportSize({ width: 1280, height: 720 });
     for (
       const [i, label, exact] of [
         [0, "$0.00", "$0"],
@@ -382,7 +431,13 @@ export async function usage(
         ).toHaveText(label);
         await expect(page.locator(".otk-context-meter .otk-usage-cost"))
           .toHaveText(label);
-        await expect(page.locator(`[data-session="${content.sessionID}"]`))
+        await expect(page.locator(".otk-context-meter .otk-usage-cost"))
+          .toBeVisible();
+        await expect(
+          page.locator(
+            `[data-session="${content.sessionID}"] .otk-session-open`,
+          ),
+        )
           .toHaveAttribute("aria-description", `Exact session cost: ${exact}`);
         await expect(page.locator(".otk-turn-usage > button")).toHaveAttribute(
           "aria-label",
@@ -469,17 +524,27 @@ export async function surfaces(
         await allMarks(cdp, ".otk-project-sessions [data-otk-selection]", 10);
         await allMarks(cdp, ".otk-project-tabs [data-otk-selection]", 3);
         await allMarks(cdp, ".otk-panel-icons [data-otk-selection]", 1);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "hold",
+          sessionID: "tstv1-crumb-path",
+        });
         await page.setViewportSize({ width: 800, height: 900 });
-        await page.locator(".otk-folded-crumbs > button").click();
+        await page.locator(".otk-subagents > button").click();
         await surface(page);
         await menuGeometry(page);
         await allMarks(
           cdp,
-          ".otk-folded-crumbs .otk-menu-items [data-otk-selection]",
+          ".otk-subagents .otk-menu-items [data-otk-selection]",
           1,
         );
         await shot(`selection-more-${reduced}-${theme.id}`);
         await close(page);
+        await state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action: "release",
+          sessionID: "tstv1-crumb-path",
+        });
         await page.setViewportSize({ width: 1280, height: 900 });
         await page.keyboard.press("Control+k");
         await allMarks(cdp, ".otk-palette-list [data-otk-selection]", 5);
@@ -529,8 +594,10 @@ export async function surfaces(
           await expect(page.locator(".otk-editor p")).toHaveText(
             "Save to keep changes",
           );
-          await expect(page.locator("dialog[open] .otk-surface-title button"))
-            .toHaveText("Close");
+          const close = page.locator("dialog[open] .otk-surface-title")
+            .getByRole("button", { name: "Close Edit prompt", exact: true });
+          await expect(close.locator("svg")).toBeVisible();
+          await expect(close).toHaveText("");
         }
         if (name !== "Display") {
           if (name === "Editor" || name === "New task") {
@@ -600,17 +667,17 @@ export async function surfaces(
                 expect(g.width).toBeLessThanOrEqual(417);
               }
               if (name === "Editor") {
+                const gutter = await cssLength(
+                  page.locator("html"),
+                  "--overlay-gutter",
+                );
                 const bounds = await page.locator("dialog[open]").evaluate(
-                  (el) => {
+                  (el, g) => {
                     const d = el.getBoundingClientRect(),
                       t = el.querySelector("textarea[name=editor]")!
                         .getBoundingClientRect(),
                       f = el.querySelector(".otk-editor footer")!
-                        .getBoundingClientRect(),
-                      g = parseFloat(
-                        getComputedStyle(document.documentElement)
-                          .getPropertyValue("--overlay-gutter"),
-                      );
+                        .getBoundingClientRect();
                     return [
                       d.left - g,
                       innerWidth - d.right - g,
@@ -620,6 +687,7 @@ export async function surfaces(
                       d.bottom - f.bottom,
                     ];
                   },
+                  gutter,
                 );
                 bounds.slice(0, 5).forEach((v) =>
                   expect(v).toBeGreaterThanOrEqual(-1)
@@ -732,20 +800,23 @@ export async function surfaces(
           "right:0;bottom:0",
         ].entries()
       ) {
-        await page.locator(".otk-tabs-project").evaluate((el, edges) => {
-          const e = el as HTMLElement;
-          e.tabIndex = 0;
-          e.style.cssText = "position:fixed;width:160px;height:40px;" + edges;
-          e.focus();
-        }, edges);
+        await page.locator(".otk-project-chip-trigger").evaluate(
+          (el, edges) => {
+            const e = el as HTMLElement;
+            e.tabIndex = 0;
+            e.style.cssText = "position:fixed;width:160px;height:40px;" + edges;
+            e.focus();
+          },
+          edges,
+        );
         await page.keyboard.press("ContextMenu");
-        const g = await positioned(page, ".otk-tabs-project");
+        const g = await positioned(page, ".otk-project-chip-trigger");
         expect(g.rows.length).toBeGreaterThan(0);
         expect(g.rows.every(Boolean)).toBe(true);
         await shot(`menu-rect-${i}-${theme.id}`);
         await close(page);
       }
-      await page.locator(".otk-tabs-project").evaluate((el) =>
+      await page.locator(".otk-project-chip-trigger").evaluate((el) =>
         (el as HTMLElement).removeAttribute("style")
       );
       for (const [width, height] of [[1280, 657], [720, 360]]) {
@@ -772,7 +843,7 @@ export async function surfaces(
           const g = await positioned(page, ".otk-display-menu > button");
           expect(g.scroll).toBeGreaterThan(g.body);
           await page.locator(
-            ".otk-display-menu :popover-open .otk-surface-body",
+            ".otk-display-menu :popover-open > .otk-surface > .otk-surface-scroll > .otk-surface-body",
           ).evaluate((el) => el.scrollTop = el.scrollHeight);
           expect(
             await page.locator(".otk-display-menu input[name=animationsOff]")
@@ -802,6 +873,7 @@ export async function surfaces(
       key: "collapseFileChanges",
       value: false,
     });
+    await clipboard(page);
     for (const theme of themes) {
       await paint(theme);
       for (
@@ -814,14 +886,26 @@ export async function surfaces(
           ["diff", ".otk-diff .otk-diff-text"],
           [
             "hunk",
-            "[data-tool=edit] .otk-diff-content:nth-of-type(2) .otk-diff-text",
+            diffHunk("[data-tool=edit]", 10, 10) + " .otk-diff-text",
           ],
         ]
       ) {
         await reveal(page, selector);
+        if (name === "hunk") {
+          await expectDiffHunk(
+            page,
+            diffHunk("[data-tool=edit]", 10, 10),
+            "const previous = true;",
+            "const current = true;",
+          );
+        }
         await page.locator(selector).first().click({ button: "right" });
         await menuGeometry(page);
         await shot(`menu-source-${name}-${theme.id}`);
+        if (name === "hunk") {
+          await pick(page, "Copy code");
+          await copied(page, "const current = true;");
+        }
         await close(page);
       }
     }
@@ -872,7 +956,14 @@ export async function lights(
                 ).trim(),
                 body: body.display,
                 shape: shape.display,
-                glyph: el.textContent?.trim(),
+                // StateShape draws state geometry; no font glyph carries it.
+                figure: Array.from(
+                  el.querySelectorAll(".otk-lamp-shape > *"),
+                  (part) =>
+                    part.tagName.toLowerCase() +
+                    (part.getAttribute("d") ?? ""),
+                ),
+                text: el.textContent?.trim(),
                 border: body.borderTopWidth,
                 rim: body.boxShadow,
                 gradient: body.backgroundImage,
@@ -892,7 +983,7 @@ export async function lights(
           "Needs you",
           "Working",
           "Finished, not seen",
-          "Running in terminal (0)",
+          "Running in terminal (1)",
           "No known activity",
         ]);
         for (const lamp of lamps) {
@@ -902,7 +993,10 @@ export async function lights(
           expect(lamp.color).toBe(lamp.token);
           expect(lamp.token).toMatch(/^#[\da-f]{6}$/i);
           expect(lamp.body).toBe(reduced ? "none" : "block");
-          expect(lamp.shape).toBe(reduced ? "block" : "none");
+          // The terminal dependency diamond identifies the state in both modes.
+          expect(lamp.shape).toBe(
+            reduced || lamp.state === "dependencies" ? "block" : "none",
+          );
           if (!reduced) {
             expect(lamp.border).toBe("0px");
             expect(lamp.rim).toContain("0px 0px 0px 1px");
@@ -971,18 +1065,11 @@ export async function lights(
             expect(v).toBeGreaterThanOrEqual(i === 0 || i % 2 ? 4.5 : 3)
           );
         }
-        expect(lamps.slice(0, 5).map((l) => l.glyph)).toEqual([
-          "\u00d7",
-          "\u25d0",
-          "\u2713",
-          "",
-          "\u25cb",
-        ]);
-        await expect(
-          page.locator(
-            '[data-theme-lamps] [data-state="dependencies"] .otk-lamp-dependency-shape path',
-          ),
-        ).toHaveAttribute("d", "M6 1 11 6 6 11 1 6ZM4 6h4");
+        const figures = lamps.slice(0, 5).map((l) => l.figure);
+        expect(lamps.map((l) => l.text)).toEqual(lamps.map(() => ""));
+        expect(figures.map((f) => f.map((part) => part.slice(0, 4))))
+          .toEqual([["path"], ["circ", "path"], ["path"], ["path"], ["circ"]]);
+        expect(new Set(figures.map((f) => f.join("|"))).size).toBe(5);
         const connections = await page.locator(
           "[data-theme-connections] .otk-connection-light",
         ).evaluateAll((els) =>
@@ -997,7 +1084,14 @@ export async function lights(
                 .getPropertyValue("--otk-connection-" + slot).trim(),
               size: el.getBoundingClientRect().width,
               label: el.getAttribute("aria-label"),
-              glyph: el.textContent?.trim(),
+              // StateShape draws connection geometry; no font glyph carries it.
+              figure: Array.from(
+                el.querySelectorAll(".otk-connection-shape > *"),
+                (part) =>
+                  part.tagName.toLowerCase() + (part.getAttribute("d") ?? "") +
+                  (part.getAttribute("stroke-dasharray") ?? ""),
+              ),
+              text: el.textContent?.trim(),
               dot: getComputedStyle(el.querySelector(".otk-connection-dot")!)
                 .display,
               shape:
@@ -1013,13 +1107,14 @@ export async function lights(
           "disconnected",
           "error",
         ]);
-        expect(connections.map((c) => c.glyph)).toEqual([
-          "\u2713",
-          "\u25cc",
-          "\u21bb",
-          "\u25cb",
-          "\u00d7",
-        ]);
+        expect(connections.map((c) => c.text)).toEqual(
+          connections.map(() => ""),
+        );
+        expect(
+          connections.map((c) => c.figure.map((part) => part.slice(0, 4))),
+        ).toEqual([["path"], ["circ"], ["path"], ["circ"], ["path"]]);
+        expect(new Set(connections.map((c) => c.figure.join("|"))).size)
+          .toBe(5);
         for (const connection of connections) {
           expect(connection.color).toBe(connection.token);
           expect(connection.token).toMatch(/^#[\da-f]{6}$/i);
@@ -1037,13 +1132,12 @@ export async function lights(
                 return [s.textDecorationStyle, s.textDecorationLine];
               })
             ),
-          ).toEqual([["solid", "none"], ["dotted", "underline"], [
-            "wavy",
-            "underline",
-          ], ["double", "underline"]]);
-          await expect(page.locator(".otk-activity-shape")).toHaveText(
-            "\u25d0",
-          );
+          ).toEqual(Array.from({ length: 4 }, () => ["solid", "none"]));
+          // The reduced activity shape is StateShape's half disc, not a glyph.
+          const activity = page.locator(".otk-activity-shape");
+          await expect(activity).toHaveText("");
+          await expect(activity.locator(":scope > circle")).toHaveCount(1);
+          await expect(activity.locator(":scope > path")).toHaveCount(1);
           await expect(page.locator(".otk-activity-spinner")).toHaveCSS(
             "display",
             "none",

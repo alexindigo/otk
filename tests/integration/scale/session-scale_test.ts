@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { start } from "../../../main.ts";
 import { cfg } from "../../support/config.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
-import { freePort, waitFor } from "../../support/opencode.ts";
+import { waitFor } from "../../support/opencode.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
 import { SCALE } from "../../support/session-scale.ts";
 import {
@@ -33,7 +33,7 @@ test("real-version scale summaries match independent totals with bounded serving
   // Full-duty pressure is stronger serving-isolate stress; readiness duration
   // remains a measurement, not a slower default-duty scheduling test.
   config.digest.cpu = 1;
-  config.server.port = freePort();
+  config.server.port = 0;
   config.auth.type = "none";
   config.state.path = join(root, "otk");
   config.harness.url = fixture.url;
@@ -81,7 +81,7 @@ test("real-version scale summaries match independent totals with bounded serving
     },
   });
   resources().defer("scale application", () => app.stop());
-  const client = new WsClient(`http://127.0.0.1:${config.server.port}`);
+  const client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
   const requested = fixture.manifest.sessions.filter((row) =>
     row.directory === fixture.directory
   );

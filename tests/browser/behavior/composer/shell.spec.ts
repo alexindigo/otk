@@ -7,8 +7,11 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { pasteText, prompt } from "../../pages/composer.ts";
+import { activity } from "../../pages/sessions.ts";
 import {
+  expandTool,
   openRecord,
+  readRecordBody,
   revealTool,
   shellOutput,
   shellRun,
@@ -20,6 +23,44 @@ import {
 } from "../../pages/composer-error.ts";
 
 test.use({ profile: "transport-shell" });
+test.describe("running shell roster", () => {
+  test.use({ profile: "contract-sessions-default" });
+  test(
+    "composer.shells.open-list-empties-closes-to-header",
+    { tag: ["@composer", "@isolated"] },
+    async ({ isolatedState: state, page }) => {
+      const root = "tstv1-otk";
+      await openSession(state, page, root);
+      await activity(state, root, "freeze");
+      const roster = (action: "hold" | "release") =>
+        state.controller.call("scenario", {
+          lease: state.lease.lease,
+          action,
+          target: "header-shells",
+        });
+      await roster("hold");
+      const pill = page.locator(".otk-live-work-trigger");
+      await expect(pill).toHaveAccessibleName("Running work: 2 shells");
+      await pill.click();
+      const list = page.getByRole("list", { name: "Running shells" });
+      await expect(list.getByRole("listitem")).toHaveCount(2);
+      const rowControl = list.getByRole("button").first();
+      await rowControl.focus();
+      await expect(rowControl).toBeFocused();
+
+      await roster("release");
+      await expect(list).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(page.locator(".otk-composer-activity")).toBeFocused();
+
+      await roster("hold");
+      await expect(pill).toHaveAccessibleName("Running work: 2 shells");
+      await expect(pill).toHaveAttribute("aria-expanded", "false");
+      await expect(list).toHaveCount(0);
+    },
+  );
+});
+
 test("composer.literal-pasted-bang-and-ordinary-native-typing", {
   tag: ["@composer", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
@@ -59,9 +100,12 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("Home");
   await prompt(page).press("!");
   await prompt(page).press("Enter");
-  // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
-  await revealTool(page, shellRun(state, "completed"));
-  await openRecord(page, shellRun(state, "completed"));
+  const isV2 = state.controller.info!.version.startsWith("2.");
+  // D74 / wl-5: V2 background shell records stay in the transcript;
+  // only V1's tool needs Work acquisition before opening its body.
+  const completed = shellRun(state, "completed");
+  if (isV2) await openRecord(page, completed);
+  else await expandTool(page, completed);
   const output = shellOutput(state, page, "completed");
   await expect(output).toContainText("otk");
   // Negative oracle control: keep the echoed command, remove only its output.
@@ -84,31 +128,48 @@ test("composer.shell-native-output-local-mode-exit-and-real-long-command", {
   await prompt(page).press("!");
   await prompt(page).pressSequentially("sleep 31; echo long-shell-finished");
   await prompt(page).press("Enter");
-  await revealTool(page, shellRun(state, "running"));
+  if (!isV2) await revealTool(page, shellRun(state, "running"));
+  // Join the exact running record, not an earlier completed shell with
+  // the same native record kind.
   await expect(page.locator(shellRun(state, "running"))).toBeVisible();
-  await expect(prompt(page)).toHaveValue("sleep 31; echo long-shell-finished");
+  await expect(prompt(page)).toHaveValue("");
   await expect(page.locator(".otk-operation-feedback[role=status]"))
     .toContainText("Running command");
+  await expect(composerSend(page)).toHaveAccessibleName("Stop");
+  await expect(composerSend(page)).toBeEnabled();
   await prompt(page).fill("next draft during command");
   await expect(prompt(page)).toBeEditable();
   await expect(page.locator(".otk-composer-dock [role=alert]")).toHaveCount(0);
-  // The running command holds the one send intent; Send says so.
-  await expectPrimaryBlocked(composerSend(page), "Sending");
-  const completedRun = page.locator(shellRun(state, "completed")).filter({
+  // A new draft returns the control to Send without settling the shell RPC.
+  await expect(composerSend(page)).toHaveAccessibleName("Send");
+  await expectPrimaryBlocked(
+    composerSend(page),
+    "Previous message still sending",
+  );
+  const completedRun = page.locator(completed).filter({
     hasText: "long-shell-finished",
   });
   await expect(completedRun).toBeVisible({ timeout: 60_000 });
-  const completedSource = await completedRun.evaluate((element, selector) => {
-    const message = element.closest("[data-message]")!,
-      row = element.closest("[data-virtual-key]")!;
-    return `[data-message=${
-      JSON.stringify(message.getAttribute("data-message"))
-    }] ` +
-      `[data-virtual-key=${
+  if (isV2) {
+    const completedSource = await completedRun.evaluate((element, selector) => {
+      const message = element.closest("[data-message]")!,
+        row = element.closest("[data-virtual-key]")!;
+      return `[data-message=${
+        JSON.stringify(message.getAttribute("data-message"))
+      }] [data-virtual-key=${
         JSON.stringify(row.getAttribute("data-virtual-key"))
       }] ${selector}`;
-  }, shellRun(state, "completed"));
-  await openRecord(page, completedSource);
+    }, completed);
+    await readRecordBody(page, completedSource);
+  } else {
+    const run = await completedRun.evaluate((element) =>
+      element.closest("[data-work-run]")!.getAttribute("data-work-run")
+    );
+    await expandTool(
+      page,
+      `[data-work-run=${JSON.stringify(run)}] ${completed}`,
+    );
+  }
   await expect(
     shellOutput(state, page, "completed").filter({
       hasText: "long-shell-finished",

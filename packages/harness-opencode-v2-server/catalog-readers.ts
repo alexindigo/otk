@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { basename, isAbsolute, relative, resolve } from "@std/path";
-import { ignoredFiles } from "./ignored-files.ts";
 import {
   arrayReadCodec,
   catalogFileCodec,
   catalogModelCodec,
+  ignoredFiles,
   type ProviderReadCodecs,
   type ProviderReaders,
 } from "@otk/harness";
@@ -21,6 +21,7 @@ import type {
 } from "@otk/protocol";
 import type { OpenCodeClient, V2Client } from "./client.ts";
 import { nativeCommands } from "./command-vocabulary.ts";
+import { readProject, readRepository } from "./project-presentation.ts";
 
 export type NativeAgent = Awaited<
   ReturnType<OpenCodeClient["agent"]["list"]>
@@ -269,6 +270,10 @@ export function catalogReaders(
   wait: <T>(value: Promise<T>) => Promise<T> = (value) => value,
 ): ProviderReaders {
   return {
+    "catalog.project": ({ directory }, signal) =>
+      readProject(client(), directory, signal),
+    "catalog.repository": ({ directory }, signal) =>
+      readRepository(client(), directory, signal),
     "catalog.agents": async ({ directory }, signal) =>
       mapAgents(
         (await client().read(
@@ -390,6 +395,8 @@ export function catalogReaders(
   };
 }
 export const catalogReadCodecs: ProviderReadCodecs = {
+  "catalog.project": arrayReadCodec(),
+  "catalog.repository": arrayReadCodec(),
   "catalog.agents": arrayReadCodec(),
   "catalog.commands": arrayReadCodec(),
   "catalog.skills": arrayReadCodec(),

@@ -7,11 +7,13 @@ import {
 } from "@otk/protocol";
 import { markdown } from "@otk/content";
 import { HarnessError } from "@otk/harness";
+import { createHash } from "node:crypto";
 import type { Info, RawPart } from "./types.ts";
 import { preview } from "./previews.ts";
 import type { NativeMessage } from "./messages.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { taskEnvelope } from "./tool-results.ts";
+import { helperFailure } from "./request-failure.ts";
 
 /** Native content evidence, not a header's declared user role, establishes a prompt. */
 const promptTypes = ["text", "file", "agent"] as const;
@@ -97,6 +99,7 @@ export function nativeSource(
   const text = typeof raw === "string" ? raw : JSON.stringify(raw) ?? "";
   return {
     kind: `opencode-v1/${kind}`,
+    revision: createHash("sha256").update(text).digest("hex"),
     preview: value.text,
     bytes: new TextEncoder().encode(text).length,
     truncated: value.truncated,
@@ -129,6 +132,7 @@ export function recordPart(part: RawPart): ExternalPart {
   }));
   const activity: ExternalPart["activity"] = {
     kindLabel: part.type,
+    summary: { kind: part.type, noun: "record", plural: "records" },
     layout: "row",
     category: "record",
     tone: "normal",
@@ -143,9 +147,24 @@ export function recordPart(part: RawPart): ExternalPart {
           const failed = task.state === "error";
           return {
             ...common,
+            ...(failed
+              ? {
+                failure: helperFailure(
+                  task.text,
+                  ids.encode(task.sessionID),
+                  task.summary,
+                  part.id,
+                ),
+              }
+              : {}),
             activity: {
               ...activity,
               category: "delegation",
+              summary: {
+                kind: failed ? "subagent-failure" : "subagent",
+                noun: failed ? "helper failed" : "helper finished",
+                plural: failed ? "helpers failed" : "helpers finished",
+              },
               title: failed
                 ? "Task failed"
                 : task.state === "running"
@@ -183,6 +202,13 @@ export function recordPart(part: RawPart): ExternalPart {
     case "snapshot":
       activity.title = "Snapshot";
       activity.detail = part.snapshot;
+      activity.category = "snapshots";
+      activity.fold = true;
+      activity.summary = {
+        kind: "snapshot",
+        noun: "snapshot",
+        plural: "snapshots",
+      };
       break;
     case "patch":
       activity.title = "Changed files";
@@ -204,13 +230,28 @@ export function recordPart(part: RawPart): ExternalPart {
       activity.title = "Session compaction";
       activity.layout = "boundary";
       activity.category = "compaction";
+      activity.boundary = { key: part.messageID };
       break;
     case "step-start":
       activity.title = "Step started";
+      activity.category = "stepMarkers";
+      activity.fold = true;
+      activity.summary = {
+        kind: "step-marker",
+        noun: "step marker",
+        plural: "step markers",
+      };
       break;
     case "step-finish":
       activity.title = "Step finished";
       activity.detail = part.reason;
+      activity.category = "stepMarkers";
+      activity.fold = true;
+      activity.summary = {
+        kind: "step-marker",
+        noun: "step marker",
+        plural: "step markers",
+      };
       break;
   }
   return { ...common, activity };
@@ -321,6 +362,11 @@ export function eventRecord(
       source,
       activity: {
         kindLabel: retry ? "retry" : permission ? "permission" : "question",
+        summary: {
+          kind: retry ? "retry" : permission ? "permission" : "question",
+          noun: retry ? "retry" : permission ? "permission" : "question",
+          plural: retry ? "retries" : permission ? "permissions" : "questions",
+        },
         category: "record",
         layout: "row",
         title,

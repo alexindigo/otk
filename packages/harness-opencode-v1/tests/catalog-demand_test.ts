@@ -10,14 +10,13 @@ Deno.test("retaining agent decoration does not retain file discovery demand", as
   });
   const catalogs = new DirectoryCatalogs(
     {
-      read: () => Promise.resolve([]),
+      read: () => Promise.resolve({ physical: "/p", items: [] }),
       release() {},
     } as unknown as ProviderReadPort,
     {
       pending: 8,
       contributions: {
         agents: () => Promise.resolve([]),
-        files: () => Promise.resolve([]),
       },
       watch: () =>
         ({

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { wire } from "../../fixtures/wire.ts";
 import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-default" });
-test("sessions.project-default-attention-exact-child-and-newest-root", {
+test("sessions.project-memory-precedes-attention-and-defaults-are-visible", {
   tag: ["@sessions", "@attention", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
   const directory = state.directory;
@@ -32,11 +33,41 @@ test("sessions.project-default-attention-exact-child-and-newest-root", {
   await remember("tstv1-remembered-child");
   await activity(state, "tstv1-urgent-child", "freeze");
   // A cold project route and reload use the same default as a click.
-  await page.goto(projectURL);
-  await selected("tstv1-urgent-child");
+  // Make the collection cold too: either task membership or session rows
+  // can already prove the project has items independently of route lookup.
+  const stream = await wire(page);
+  stream.hold((frame, request) => {
+    if (frame.t === "inbox.snapshot" || frame.t === "inbox.patch") return true;
+    if (request?.method === "sessions.list") {
+      return frame.t === "request.result" || frame.t === "load.chunk";
+    }
+    return frame.t === "request.result" &&
+      request?.method === "navigation.default";
+  });
+  try {
+    await page.goto(projectURL);
+    await expect.poll(() =>
+      stream.held.filter(({ request }) =>
+        request?.method === "navigation.default"
+      ).length
+    ).toBe(1);
+    await expect.poll(() =>
+      stream.held.some(({ request }) => request?.method === "sessions.list")
+    ).toBe(true);
+    await expect.poll(() =>
+      stream.held.some(({ frame }) => frame.t === "inbox.snapshot")
+    ).toBe(true);
+    await expect(page.getByText("Loading sessions...", { exact: true }))
+      .toBeVisible();
+    await expect(page.getByText("Choose a session", { exact: true }))
+      .toHaveCount(0);
+  } finally {
+    stream.release();
+  }
+  await selected("tstv1-remembered-child");
   await page.goto(projectURL);
   await page.reload();
-  await selected("tstv1-urgent-child");
+  await selected("tstv1-remembered-child");
   await activity(state, "tstv1-urgent-child", "release");
   await expect.poll(() =>
     state.product("navigation.default", {
@@ -61,20 +92,20 @@ test("sessions.project-default-attention-exact-child-and-newest-root", {
     }] .otk-project-open`,
   ).click();
   await selected("tstv1-remembered-child");
-  // Same-project clicks must not bypass the resolver with the current selection.
+  // Same-project clicks must keep the accepted selection despite new attention.
   await activity(state, "tstv1-urgent-child", "freeze");
   await expect.poll(() =>
     state.product("navigation.default", {
       directory,
       preferred: "tstv1-remembered-child",
     })
-  ).toBe("tstv1-urgent-child");
+  ).toBe("tstv1-remembered-child");
   await page.locator(
     `.otk-project-row[data-project=${
       JSON.stringify(directory)
     }] .otk-project-open`,
   ).click();
-  await selected("tstv1-urgent-child");
+  await selected("tstv1-remembered-child");
   await activity(state, "tstv1-urgent-child", "release");
   await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-remembered-child`);
   await selected("tstv1-remembered-child");
@@ -97,11 +128,21 @@ test("sessions.project-default-attention-exact-child-and-newest-root", {
   await page.goto(`${state.url}/#/local/tstv1-atmosphera`);
   await selected("tstv1-atmosphera");
   await remember();
+  // Seed persisted state for a fresh owner. A bookkeeping broadcast must not
+  // replace this tab's own accepted destination while it is still alive.
+  await page.goto("about:blank");
   await page.goto(projectURL);
   await selected("tstv1-newest-root");
+  await expect(page.locator(".otk-selection-notice")).toContainText(
+    "No remembered session",
+  );
   await page.goto(`${state.url}/#/local/tstv1-atmosphera`);
   await selected("tstv1-atmosphera");
   await remember("tstv1-missing");
+  await page.goto("about:blank");
   await page.goto(projectURL);
   await selected("tstv1-newest-root");
+  await expect(page.locator(".otk-selection-notice")).toContainText(
+    "no longer available",
+  );
 });

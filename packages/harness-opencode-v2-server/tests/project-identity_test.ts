@@ -40,7 +40,7 @@ Deno.test("historical membership survives pruning on warm and cold imports", () 
   const cold = new ProjectIdentity();
   cold.learn([seed("/tree/src", "/tree", ["/repo"])]);
   assertEquals(cold.topology("/tree")?.parentDirectory, "/repo");
-  assertEquals(cold.availability("/tree"), "removed");
+  assertEquals(cold.availability("/tree"), "unknown");
 });
 
 Deno.test("unavailable inventory changes availability, never membership", () => {

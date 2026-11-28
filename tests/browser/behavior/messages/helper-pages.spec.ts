@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 test.use({ profile: "messages-helper-pages" });
@@ -22,7 +23,6 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
     { parent, child, work, tool } = seed.helper;
   await page.setViewportSize({ width: 1280, height: 900 });
   // This progress-paint contract explicitly opts into visible helper bodies.
-  await state.product("prefs.set", { key: "expandWork", value: true });
   await state.product("prefs.set", { key: "expandDelegation", value: true });
   await page.addInitScript(() => {
     const Native = WebSocket;
@@ -44,7 +44,7 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
       if (
         start !== undefined &&
         cards.some((e) =>
-          e.textContent!.includes("Preparing progress…") &&
+          e.textContent!.includes("Preparing progress...") &&
           e.getBoundingClientRect().bottom > 0 &&
           e.getBoundingClientRect().top < innerHeight
         )
@@ -64,6 +64,7 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
     requestAnimationFrame(inspect);
   });
   await page.goto(state.url + "/helper-review/#/local/" + parent.id);
+  await openLatestWork(page);
   await expect.poll(() =>
     page.evaluate(() =>
       (globalThis as typeof globalThis & { helperPaint?: { cards: number } })
@@ -117,6 +118,7 @@ test("messages.helper-held-parent-paint-progress-removal-reload", {
     ),
   ).toEqual([]);
   await page.reload();
+  await openLatestWork(page);
   await expect(
     page.locator(".otk-task-card").filter({ hasText: "0 tool calls" }).first(),
   ).toBeAttached({ timeout: 60000 });

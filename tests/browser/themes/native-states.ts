@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import { menuGeometry } from "./overlays.ts";
+import { cssLength } from "../pages/css-length.ts";
 export async function nativeStates({
   state,
   page,
@@ -29,9 +30,9 @@ export async function nativeStates({
       (await state.observe<{ native: { automaticReplying: boolean } }>()).native
         .automaticReplying
     ).toBe(true);
-    await expect(page.locator(".otk-auto-approving")).toHaveText(
-      "Auto-approving\u2026",
-    );
+    // 9937b571 keeps policy on the shield and retained records, not a transient
+    // composer paragraph. The held native reply and shield below still prove it.
+    await expect(page.locator(".otk-auto-approving")).toHaveCount(0);
     for (const theme of themes) {
       await paint(theme);
       await expect(
@@ -68,7 +69,7 @@ export async function nativeStates({
       .toContainText(
         "Quiet automatic reply completed",
       );
-    await page.locator('[data-panel-view="activity"]').click();
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
     await expect(page.locator(".otk-permission-activity")).toContainText(
       "quiet-auto.txt",
     );
@@ -86,16 +87,16 @@ export async function nativeStates({
       await expect(page.locator(".otk-permission-activity")).not.toContainText(
         "Stored failure fixture",
       );
-      await expect(
-        page.locator(
-          ".otk-permission-activity [role=status]:not([aria-hidden=true])",
-        ),
-      ).toHaveCount(0);
+      // Record-owned status labels are valid; the ready journal has no
+      // remaining pane-level loading status.
+      await expect(page.locator(
+        ".otk-permission-activity [role=status]:not([aria-hidden=true],[data-activity] *)",
+      )).toHaveCount(0);
       await shot(`native-auto-activity-${theme.id}`);
     }
     // Sidebar measurements own the Sessions projection, never the Activity
     // projection deliberately left by the persisted activity scenes above.
-    await page.locator('[data-panel-view="sessions"]').click();
+    await page.getByRole("tab", { name: "Sessions", exact: true }).click();
     await expect(page.locator(`[data-session="${native.automaticID}"]`))
       .toBeVisible();
     for (const enabled of [false, true]) {
@@ -143,9 +144,10 @@ export async function nativeStates({
       await shot(`native-interrupt-confirmation-${theme.id}`);
     }
     await page.keyboard.press("Escape");
-    await expect(page.locator(".otk-message-footer")).toContainText(
-      "interrupted",
-    );
+    await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+      .toContainText(
+        "interrupted",
+      );
     for (const theme of themes) {
       await paint(theme);
       // An interruption is terminal evidence acknowledged by this open view.
@@ -162,7 +164,7 @@ export async function nativeStates({
             getComputedStyle(el.querySelector(".otk-lamp-body")!).borderRadius,
           ];
         }),
-      ).toEqual([8, 0, "50%"]);
+      ).toEqual([await cssLength(marker, "--lamp-size"), 0, "50%"]);
       await shot(`native-interrupted-marker-${theme.id}`);
     }
   });

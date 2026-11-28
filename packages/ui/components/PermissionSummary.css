@@ -2,7 +2,7 @@
 .otk-permission-summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -15,22 +15,20 @@
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
 }
-.otk-permission-command {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
-  background: var(--otk-bg-code);
-  border: 1px solid var(--otk-border-code);
-  border-radius: var(--radius-card);
-  padding: 8px var(--item-inset);
-}
 .otk-permission-patterns ul {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
 }
 .otk-permission-summary ul {
   list-style-type: disc;
 }
 .otk-permission-compact {
-  gap: 4px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.otk-permission-compact > .otk-permission-kind {
+  flex: none;
+}
+.otk-permission-compact > .otk-path {
+  min-inline-size: 0;
 }

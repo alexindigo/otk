@@ -1,4 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestAgeText } from "./format.ts";
+export interface NotificationLocation {
+  readonly project: { readonly name: string; readonly color?: string };
+  readonly task: string;
+  readonly session: string;
+}
+export interface NoteSession {
+  readonly sidecar: string;
+  readonly session: string;
+}
 export interface NoteAction {
   readonly label: string;
   readonly description?: string;
@@ -8,11 +18,19 @@ export interface NoteAction {
 }
 export interface Note {
   readonly id: string;
-  readonly kind: "done" | "permission" | "question" | "error" | "info";
-  readonly sessionRef?: { readonly sidecar: string; readonly session: string };
+  readonly kind:
+    | "done"
+    | "permission"
+    | "question"
+    | "error"
+    | "info"
+    | "server";
+  readonly sessionRef?: NoteSession;
+  /** A delivery snapshot borrowed from the target's project and task owners. */
+  readonly location?: NotificationLocation;
   readonly title: string;
   readonly body?: string;
-  readonly context?: string;
+  readonly context?: RequestAgeText;
   /** Native request identity, distinct from the replaceable root note ID. */
   readonly dismissalKey?: string;
   /** Feature-owned, structured-cloneable detail; channels may ignore it. */
@@ -60,6 +78,7 @@ export class NotificationHub {
     readonly policy: NotificationPolicy,
     readonly run: (command: string, args?: unknown) => Promise<unknown>,
     readonly error: (error: unknown, note?: Note, action?: NoteAction) => void,
+    readonly locate?: (target: NoteSession) => NotificationLocation | undefined,
   ) {}
   registerChannel(channel: NotificationChannel): () => void {
     if (!channel.id || this.#channels.has(channel.id)) {
@@ -81,14 +100,23 @@ export class NotificationHub {
   publish(input: Note): Note {
     return this.#publish(input, true);
   }
-  #publish(input: Note, fresh: boolean): Note {
+  #publish(input: Note, fresh: boolean, dismissed?: ReadonlySet<string>): Note {
     this.retract(input.id);
+    const location = (input.sessionRef && this.locate?.(input.sessionRef)) ??
+      input.location;
     const note: Note = Object.freeze({
       ...input,
       detail: input.detail === undefined
         ? undefined
         : structuredClone(input.detail),
       sessionRef: input.sessionRef && Object.freeze({ ...input.sessionRef }),
+      ...(location &&
+        {
+          location: Object.freeze({
+            ...location,
+            project: Object.freeze({ ...location.project }),
+          }),
+        }),
       actions: Object.freeze(input.actions.map((action) =>
         Object.freeze({
           ...action,
@@ -102,9 +130,10 @@ export class NotificationHub {
       note,
       deliveries: new Map(),
       dismissed: new Set(
-        input.dismissalKey
-          ? this.#dismissed.get(input.id)?.get(input.dismissalKey)
-          : [],
+        dismissed ??
+          (input.dismissalKey
+            ? this.#dismissed.get(input.id)?.get(input.dismissalKey)
+            : []),
       ),
     };
     this.#notes.set(note.id, active);
@@ -112,7 +141,16 @@ export class NotificationHub {
     return note;
   }
   replace(previous: Note, input: Note): Note | undefined {
-    return this.current(previous) ? this.#publish(input, false) : undefined;
+    const active = this.#notes.get(previous.id);
+    return active?.note === previous
+      ? this.#publish(
+        input,
+        false,
+        previous.id === input.id && previous.dismissalKey === input.dismissalKey
+          ? active.dismissed
+          : undefined,
+      )
+      : undefined;
   }
   retract(id: string): void {
     const active = this.#notes.get(id);

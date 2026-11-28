@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -15,7 +15,10 @@ test("menus.palette-project-and-slash-share-native-create-command", {
   });
   const frames = await wire(page);
   await openSession(state, page, seed.id);
-  await page.locator(".otk-sidebar-commands button").first().click();
+  // Style7 moved shipped navigation into ProjectInbox; its action name is stable.
+  // notes/2026-11-21-style7fix.md, component ownership; decision 54.
+  await page.getByRole("button", { name: "Search commands", exact: true })
+    .click();
   await expect(page.locator(palette)).toBeVisible();
   await page.locator("input[name=command-search]").fill("New session");
   await page.locator('[data-command="session.new"]').click();
@@ -89,11 +92,9 @@ test("menus.escape-layer-priority-then-double-escape-native-interrupt", {
   await expect(page.locator("[data-interrupt-confirmation]")).toHaveText(
     "Esc again to interrupt",
   );
-  // Triage decision 5: an empty draft keeps Send visible, disabled with reason.
-  await expectPrimaryBlocked(
-    page.locator(".otk-prompt button[type=submit]"),
-    "Write a message",
-  );
+  // The empty running composer presents Stop; Escape uses the same owner.
+  await expect(send(page)).toHaveAccessibleName("Stop");
+  await expect(send(page)).toBeEnabled();
   await page.keyboard.press("Escape");
   await expect(page.locator(`[data-session="${seed.id}"]`)).toHaveAttribute(
     "data-status",
@@ -172,7 +173,9 @@ test("menus.essential-agent-forward-reverse-newline-and-native-selection", {
   });
   const frames = await wire(page);
   await openSession(state, page, seed.id);
-  await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
+  await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+    "Build",
+  );
   await prompt(page).click();
   for (
     const [key, agent] of [["Tab", "Plan"], ["Shift+Tab", "Build"], [
@@ -181,7 +184,9 @@ test("menus.essential-agent-forward-reverse-newline-and-native-selection", {
     ]]
   ) {
     await page.keyboard.press(key);
-    await expect(page.locator(".otk-composer-agent")).toHaveText(agent);
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      agent,
+    );
   }
   await state.queue(["Selected plan replied."]);
   await prompt(page).pressSequentially("Use the selected agent");
@@ -230,7 +235,8 @@ isolatedTest.describe("configured primary order", () => {
       ]);
       const frames = await wire(page);
       await openSession(state, page, seed.id);
-      await expect(page.locator(".otk-composer-agent")).toHaveText("Plan");
+      await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+        .toHaveText("Plan");
       await state.queue(["Default plan replied."]);
       await prompt(page).fill("Keep the backend default");
       await sendPrompt(page);
@@ -247,7 +253,8 @@ isolatedTest.describe("configured primary order", () => {
         ]]
       ) {
         await page.keyboard.press(key);
-        await expect(page.locator(".otk-composer-agent")).toHaveText(agent);
+        await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+          .toHaveText(agent);
       }
       await state.queue(["Cycled build replied."]);
       await prompt(page).pressSequentially("Send the cycled agent");

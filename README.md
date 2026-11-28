@@ -385,14 +385,17 @@ single replaceable session preview. Pin, double-click or send in a phantom to
 make a task. Tasks share one row equally down to 90px, then scroll sideways.
 Wheel over the strip to scroll; edge triangles page with the last fully visible
 tab becoming the first (mirrored going back). Selection and resizing keep the
-active tab in view. Tasks follow attention priority, then newest activity. Task
-breadcrumbs switch sessions and their helpers in one measured row with their own
-More menu; the selected or editing chip stays in place. The meter shows reported
-token usage and whole-session reported cost. The collapsible right panel hosts
-feature-registered views; its collapsed rail keeps their icons available and
-clicking an icon opens that view. Sessions shows the selected project's
-task-grouped parent/child tree with status lights and title search. Switching
-projects restores the last session and its task tab, including after reload;
+active tab in view. Task order changes only through explicit moves. Task
+breadcrumbs show only the open session's complete ancestry, with every title
+clickable. Crowding compacts titles to a whole first word and a fitting tail.
+The composer header's Subagents control lists working, blocked and finished but
+undelivered helpers, with lamps, navigable titles and running times. The meter
+shows reported token usage and whole-session reported cost. The collapsible
+right panel hosts feature-registered views; its collapsed rail keeps their icons
+available and clicking an icon opens that view. Sessions shows the selected
+project's task-grouped parent/child tree with status lights and title search.
+Switching projects restores the last session's proven human root and its task
+tab, including project-route reloads; explicit helper URLs remain helper views;
 missing or closed sessions fall back to the default project session. Click to
 preview or double-click to make a task. Panel width (280–480px) and selected
 view persist with its collapsed state per user. Close session in the context
@@ -483,13 +486,13 @@ start collapsed with their path and reported change counts in the header.
 Display's Expand file changes by default toggle restores expanded defaults;
 helper cards start expanded. Typed tool cards show bash output,
 read/search/fetch/skill operations, file diffs and diagnostics, todos, read-only
-questions and subagent progress. Click a task to open its child; the subagent
-bar returns to the parent or cycles siblings. Child sessions are read-only. Code
-highlighting runs in a shared Shiki worker with on-demand grammars; cooling
-releases each session's source while other live content can retain the worker.
-The Display menu persists preferences in the serving sidecar's `otk.db` and
-updates other connected tabs. Reverted turns appear in the joined composer
-strip.
+questions and subagent progress. Click a task to open its child. Child sessions
+start with the composer collapsed; choose **Join the conversation** to send to
+the child. Code highlighting runs in a shared Shiki worker with on-demand
+grammars; cooling releases each session's source while other live content can
+retain the worker. The Display menu persists preferences in the serving
+sidecar's `otk.db` and updates other connected tabs. Reverted turns appear in
+the joined composer strip.
 
 Pasted or dropped images appear once as thumbnail attachment chips, separate
 from prompt text. Image-only prompts can be sent directly. Sent images render as

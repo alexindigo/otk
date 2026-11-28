@@ -15,13 +15,23 @@ for (const kind of ["permission", "question", "form"] as const) {
       const primary = page.locator("[data-primary-action]");
       await expect(primary).toBeVisible();
       const original = await primary.elementHandle();
+      if (kind === "question") {
+        await expect(primary).toBeDisabled();
+        await expect(page.getByText("Sending answer", { exact: true }))
+          .toHaveCount(1);
+        await expect(page.locator(".otk-question-dock dd")).toHaveText("A");
+        await expect(page.getByRole("button", { name: "B", exact: true }))
+          .toHaveCount(0);
+        await primary.dispatchEvent("click");
+        await expect(page.getByRole("alert")).toHaveCount(0);
+        await expect(page.locator("[data-settlement-frames]")).toHaveAttribute(
+          "data-settlement-frames",
+          "1",
+        );
+        return;
+      }
       if (kind === "permission") {
         await page.getByRole("button", { name: "Reject", exact: true }).click();
-      } else if (kind === "question") {
-        await page.getByRole("button", { name: "B", exact: true }).click();
-        await primary.click();
-        await expect(page.getByRole("tab", { name: "Confirm", exact: true }))
-          .toHaveAttribute("aria-selected", "true");
       } else {
         await page.locator('[data-field="choice"] input').fill("B");
         await primary.click();
@@ -33,11 +43,36 @@ for (const kind of ["permission", "question", "form"] as const) {
       await expect(failure).toContainText(
         "A different response was already sent for this request",
       );
-      await expect(failure).toContainText("This one was not sent");
-      await expect(
-        failure.getByRole("link", { name: "Reply target", exact: true }),
-      )
-        .toHaveAttribute("href", "#/remote/tstv1-settlement-fixture");
+      // Forms retain in-flow field feedback; only the joined composer row
+      // moves certainty into Details.
+      const owner = kind === "form"
+        ? failure
+        : page.locator(".otk-failure-content.is-feedback").filter({
+          has: failure,
+        });
+      if (kind === "form") {
+        await expect(owner).toContainText("This one was not sent");
+      } else {
+        await expect(owner).toHaveCount(1);
+        const details = owner.locator(".otk-failure-detail-body");
+        await expect(details).toHaveCount(0);
+        // Issue 2.114: the alert announces the headline; the notice owns
+        // the sibling Details disclosure and its recovery text.
+        const trigger = owner.getByRole("button", {
+          name: "Details",
+          exact: true,
+        });
+        await expect(trigger).toHaveAttribute("aria-expanded", "false");
+        await trigger.click();
+        await expect(trigger).toHaveAttribute("aria-expanded", "true");
+        await expect(details.locator(".otk-failure-recovery")).toHaveText(
+          "This one was not sent",
+        );
+      }
+      // UI conventions suppress the open session's inline self-target. The
+      // fixture's captured target and single-frame admission stay authoritative.
+      await expect(owner.getByRole("link")).toHaveCount(0);
+      await expect(owner).not.toContainText("Reply target");
       await expect(page.locator("[data-settlement-frames]")).toHaveAttribute(
         "data-settlement-frames",
         "1",

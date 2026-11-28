@@ -11,14 +11,14 @@ test.describe("unreported live usage", () => {
     await expect(trigger).toContainText("Cost unavailable");
     await trigger.hover();
     const row = page.locator(".otk-usage-breakdown tbody tr");
-    await expect(row.locator(":scope > *").nth(3)).toHaveText("Not reported");
-    await expect(row.locator(":scope > *").nth(8)).toHaveText("Not reported");
+    await expect(row.getByRole("cell").nth(2)).toHaveText("Not reported");
+    await expect(row.getByRole("cell").nth(7)).toHaveText("Not reported");
     await state.controller.call("scenario", {
       lease: state.lease.lease,
       action: "succeed",
     });
-    await expect(row.locator(":scope > *").nth(3)).toHaveText("0");
-    await expect(row.locator(":scope > *").nth(8)).toHaveText("$0.00");
+    await expect(row.getByRole("cell").nth(2)).toHaveText("0");
+    await expect(row.getByRole("cell").nth(7)).toHaveText("$0.00");
   });
 });
 test.describe("unknown prices", () => {
@@ -31,7 +31,7 @@ test.describe("unknown prices", () => {
     await expect(trigger).toHaveText("1 model call · 240 tokens · $0.43");
     await trigger.hover();
     await expect(page.locator(".otk-usage-breakdown tbody tr")).toHaveText(
-      "1answered19010020304050$0.430.0s",
+      "1answered19010020304050$0.430s",
     );
     expect(
       await trigger.evaluate((t) => {
@@ -77,7 +77,7 @@ test.describe("queued provider identity", () => {
       "80,000$0.06",
       "100,000$0.45",
       "$0.86",
-      "0.0s",
+      "0s",
     ]);
   });
 });

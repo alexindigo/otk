@@ -2,10 +2,9 @@
 import { For, Show } from "solid-js";
 import type { FormDraft } from "@otk/client";
 import type { FormField as Field, FormValue } from "@otk/protocol";
-import { selection } from "./selection.ts";
-import SelectionContent from "./SelectionContent.tsx";
+import { ChoiceFrame } from "./ChoiceFrame.tsx";
 import ContentTextarea from "./ContentTextarea.tsx";
-import TaskMarker from "./TaskMarker.tsx";
+import Checkbox from "./Checkbox.tsx";
 import { CloseIcon } from "./ChromeIcons.tsx";
 import "./FormField.css" with { type: "text" };
 /** The same native toggle as preference controls, with explicit unanswered state. */
@@ -14,8 +13,7 @@ function FormToggle(
 ) {
   return (
     <label class="otk-form-toggle">
-      <input
-        type="checkbox"
+      <Checkbox
         role="switch"
         aria-label={props.label}
         checked={props.value === true}
@@ -31,7 +29,7 @@ function FormToggle(
     </label>
   );
 }
-/** One value row owns its label, selection marker and optional square remove slot. */
+/** One choice renderer for legacy questions and typed form values. */
 export function FormChoice(props: {
   label: string;
   description?: string;
@@ -42,51 +40,27 @@ export function FormChoice(props: {
   row?(element: HTMLElement): void;
 }) {
   return (
-    <div class="otk-form-choice-row">
-      <button
-        type="button"
-        data-question-row
-        data-otk-selection="vertical"
-        ref={props.row}
-        {...selection({
-          class: "otk-question-row",
-          kind: "pressed",
-          selected: props.selected,
-        })}
-        onClick={props.onPick}
-      >
-        <SelectionContent
-          class="otk-question-content"
-          leading={props.multiple
-            ? (
-              <span aria-hidden="true">
-                <TaskMarker done={props.selected} />
-              </span>
-            )
-            : undefined}
-        >
-          <span class="otk-control-label" title={props.label}>
-            {props.label}
-          </span>
-          <Show when={props.description}>
-            <span class="otk-muted otk-control-label" title={props.description}>
-              {props.description}
-            </span>
-          </Show>
-        </SelectionContent>
-      </button>
-      <Show when={props.onRemove}>
-        <button
-          type="button"
-          class="otk-icon-button"
-          aria-label={`Remove ${props.label}`}
-          title={`Remove ${props.label}`}
-          onClick={() => props.onRemove?.()}
-        >
-          <CloseIcon />
-        </button>
-      </Show>
-    </div>
+    <ChoiceFrame
+      label={props.label}
+      description={props.description}
+      selected={props.selected}
+      multiple={props.multiple}
+      onPick={props.onPick}
+      row={props.row}
+      accessory={props.onRemove
+        ? () => (
+          <button
+            type="button"
+            class="otk-icon-button"
+            aria-label={`Remove ${props.label}`}
+            title={`Remove ${props.label}`}
+            onClick={() => props.onRemove?.()}
+          >
+            <CloseIcon />
+          </button>
+        )
+        : undefined}
+    />
   );
 }
 /** One choice renderer for legacy questions and typed form fields. */
@@ -119,43 +93,24 @@ export function FormChoices(props: {
         )}
       </For>
       <Show when={props.custom}>
-        <div
-          data-question-row
-          data-otk-selection="vertical"
-          role="button"
-          tabindex="-1"
-          ref={(el) => props.row?.(el, props.options.length)}
-          {...selection({
-            class: "otk-question-row",
-            kind: "pressed",
-            selected: !!props.ownChosen,
-          })}
-          onClick={(event) => {
+        <ChoiceFrame
+          label="Type your own answer"
+          selected={!!props.ownChosen}
+          multiple={props.multiple}
+          row={(el) => props.row?.(el, props.options.length)}
+          onPick={(event) => {
             if (event.target !== input) {
               props.onOwn();
               input?.focus();
             }
           }}
-        >
-          <SelectionContent
-            class="otk-question-content"
-            leading={props.multiple
-              ? (
-                <span aria-hidden="true">
-                  <TaskMarker done={!!props.ownChosen} />
-                </span>
-              )
-              : undefined}
-          >
-            <span class="otk-control-label" title="Type your own answer">
-              Type your own answer
-            </span>
+          editor={() => (
             <ContentTextarea
               ref={(el) => {
                 input = el;
                 props.input?.(el);
               }}
-              class="otk-question-own"
+              class="otk-choice-editor"
               aria-label="Custom answer"
               name="question-answer"
               rows={1}
@@ -163,8 +118,8 @@ export function FormChoices(props: {
               value={props.own}
               onInput={(event) => props.onText(event.currentTarget.value)}
             />
-          </SelectionContent>
-        </div>
+          )}
+        />
       </Show>
     </div>
   );

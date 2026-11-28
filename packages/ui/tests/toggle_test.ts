@@ -11,15 +11,24 @@ Deno.test("binary on state binds pressed semantics without selection marks", () 
   }
 });
 
-Deno.test("toggle consumers cannot acquire selection marks; native switches and disclosures stay distinct from panel choices", async () => {
+Deno.test("toggle consumers cannot acquire selection marks; shared checkboxes and disclosures stay distinct from panel choices", async () => {
   const read = (path: string) =>
     Deno.readTextFile(new URL(`../${path}`, import.meta.url));
   const auto = await read("features/prompt/approvals.tsx");
   assert(auto.includes("...toggle({"));
   assert(!/selection\(|SelectionContent|data-otk-selection/.test(auto));
   const controls = await read("components/PreferenceControls.tsx");
-  assert(controls.includes('type="checkbox"'));
-  assert(!/selection\(|data-otk-selection/.test(controls));
+  const binary = controls.match(
+    /<label class="otk-preference-toggle">[\s\S]*?<\/label>/,
+  )?.[0];
+  assert(binary);
+  assert(binary.includes("<Checkbox"));
+  const checkbox = await read("components/Checkbox.tsx");
+  assert(checkbox.includes('type="checkbox"'));
+  assert(!/selection\(|data-otk-selection/.test(checkbox));
+  assert(!/selection\(|data-otk-selection/.test(binary));
+  assert(controls.includes('control().kind === "segmented"'));
+  assert(controls.includes('data-otk-selection="horizontal"'));
   const shell = await read("shell/Shell.tsx");
   for (const match of shell.matchAll(/<button\b[\s\S]*?<\/button>/g)) {
     if (!match[0].includes("aria-expanded=")) continue;

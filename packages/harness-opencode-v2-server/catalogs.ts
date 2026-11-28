@@ -139,6 +139,8 @@ const invalidations: Record<string, readonly (keyof DirectoryCatalogKinds)[]> =
     "mcp.resources.changed": ["resources", "resourceTemplates"],
     "mcp.status.changed": ["resources", "resourceTemplates"],
     "filesystem.changed": ["files"],
+    "project.updated": ["project"],
+    "vcs.branch.updated": ["repository"],
   };
 export class V2Catalogs {
   readonly catalogs: DirectoryCatalogs;
@@ -168,6 +170,18 @@ export class V2Catalogs {
       watchFiles: true,
       diagnostic,
       contributions: {
+        project: (directory, signal, owner, intent) =>
+          source.read("catalog.project", { directory }, {
+            owner,
+            signal,
+            priority: intent === "warm" ? "background" : "user",
+          }),
+        repository: (directory, signal, owner, intent) =>
+          source.read("catalog.repository", { directory }, {
+            owner,
+            signal,
+            priority: intent === "warm" ? "background" : "user",
+          }),
         config: (directory, signal, owner, intent) =>
           source.read("catalog.config", { directory }, {
             owner,
@@ -226,7 +240,11 @@ export class V2Catalogs {
     directory: string,
     listener: (value: DirectoryCatalog) => void,
     signal: AbortSignal,
+    files?: true,
   ): Promise<DirectoryCatalog> {
+    if (files) {
+      return Promise.resolve(this.catalogs.retainFiles(directory, signal));
+    }
     signal.throwIfAborted();
     const lease = this.catalogs.acquire(directory, true);
     const release = () => {
@@ -256,7 +274,7 @@ export class V2Catalogs {
     kinds?: readonly (keyof DirectoryCatalogKinds)[],
   ): Promise<void> {
     signal?.throwIfAborted();
-    const lease = this.catalogs.acquire(directory);
+    const lease = this.catalogs.acquire(directory, false, "read");
     try {
       await lease.refresh(signal, kinds);
       signal?.throwIfAborted();

@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { cssLength } from "../../pages/css-length.ts";
 
 const tags = { tag: ["@visual", "@menus", "@contracts"] };
 async function gutters(page: Page) {
@@ -15,13 +16,11 @@ async function gutters(page: Page) {
       )
     )
   );
+  const gutter = await cssLength(panel, "--popover-gutter");
   const g = await panel.evaluate((el) => {
     const r = el.getBoundingClientRect(),
       s = el.querySelector(".otk-surface")!.getBoundingClientRect();
     return {
-      gutter: parseFloat(
-        getComputedStyle(el).getPropertyValue("--popover-gutter"),
-      ),
       edges: [r.left, r.top, innerWidth - r.right, innerHeight - r.bottom],
       paint: [
         s.left - r.left,
@@ -34,12 +33,12 @@ async function gutters(page: Page) {
   });
   expect(g.size.every((n) => n > 0), JSON.stringify(g)).toBe(true);
   for (const edge of g.edges) {
-    expect(edge, JSON.stringify(g)).toBeGreaterThanOrEqual(g.gutter - .5);
+    expect(edge, JSON.stringify(g)).toBeGreaterThanOrEqual(gutter - .5);
   }
   for (const delta of g.paint) {
     expect(Math.abs(delta), JSON.stringify(g)).toBeLessThanOrEqual(.5);
   }
-  return g.gutter;
+  return gutter;
 }
 async function close(page: Page) {
   await page.keyboard.press("Escape");
@@ -88,6 +87,9 @@ test.describe("shared anchor gutters", () => {
     tags,
     async ({ isolatedState: state, page }) => {
       await openSession(state, page, "tstv1-otk");
+      // D74: keep conversation anchors exposed throughout the narrow probes.
+      await page.getByRole("button", { name: "Collapse right panel" }).click();
+      await expect(page.locator(".otk-right-rail")).toBeVisible();
       for (const [width, height] of [[300, 400], [800, 600], [1280, 900]]) {
         await page.setViewportSize({ width, height });
         for (
@@ -106,23 +108,26 @@ test.describe("shared anchor gutters", () => {
             height - 40,
           ]]
         ) {
-          await page.locator(".otk-tabs-project").evaluate((el, [x, y]) => {
-            const node = el as HTMLElement;
-            node.tabIndex = 0;
-            Object.assign(node.style, {
-              position: "fixed",
-              width: "160px",
-              height: "40px",
-              left: x + "px",
-              top: y + "px",
-            });
-            node.focus();
-          }, [x, y]);
+          await page.locator(".otk-project-chip-trigger").evaluate(
+            (el, [x, y]) => {
+              const node = el as HTMLElement;
+              node.tabIndex = 0;
+              Object.assign(node.style, {
+                position: "fixed",
+                width: "160px",
+                height: "40px",
+                left: x + "px",
+                top: y + "px",
+              });
+              node.focus();
+            },
+            [x, y],
+          );
           await page.keyboard.press("ContextMenu");
           await gutters(page);
           await close(page);
         }
-        await page.locator(".otk-tabs-project").evaluate((el) =>
+        await page.locator(".otk-project-chip-trigger").evaluate((el) =>
           el.removeAttribute("style")
         );
         const trigger = page.locator(".otk-display-menu > button");

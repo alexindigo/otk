@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import {
@@ -11,6 +11,7 @@ import { labels } from "./labels.ts";
 import { fixedContent } from "./content.ts";
 import { readyMenuBox } from "../pages/menus.ts";
 import { expandedFailure } from "../pages/failure-geometry.ts";
+import { revealAcquired } from "../pages/transcript.ts";
 interface Inputs {
   state: TestState;
   page: Page;
@@ -24,6 +25,7 @@ interface Checkboxes {
   controls: {
     width: number;
     height: number;
+    line: number;
     padding: number;
     right: number;
     parentRight: number;
@@ -58,6 +60,13 @@ const bounds = async (page: Page, selector: string) =>
     const r = el.getBoundingClientRect();
     return [r.x, r.y, r.width, r.height];
   });
+/** Layout stays relative to its owner while native input may scroll the viewport. */
+const ownedBounds = (locator: Locator, owner: string) =>
+  locator.evaluate((el, owner) => {
+    const r = el.getBoundingClientRect();
+    const origin = el.closest(owner)!.getBoundingClientRect();
+    return [r.x - origin.x, r.y - origin.y, r.width, r.height];
+  }, owner);
 export async function remainder(
   { state, page, themes, scenes, content, paint, shot }: Inputs,
 ) {
@@ -115,11 +124,12 @@ export async function remainder(
           "readOnly",
           true,
         );
-        await expect(page.locator(".otk-form-choice-value")).toHaveValue(
+        await expect(page.locator(".otk-select-value")).toHaveValue(
           "Alpha",
         );
         await page.evaluate(`styleTest.fieldFailure('${name}')`);
-        const field = page.locator(`[name=${name}]`);
+        // Select keeps a hidden native value; the visible control owns validity.
+        const field = page.locator(`[name=${name}]:not([type=hidden])`);
         await expect(field).toHaveAttribute("aria-invalid", "true");
         const description = await field.evaluate((el) => {
           const ids = el.getAttribute("aria-describedby")!.split(" ");
@@ -277,9 +287,17 @@ export async function remainder(
               row = el.closest("[data-project]")!.getBoundingClientRect(),
               action = el.closest("[data-project]")!.querySelector(
                 ".otk-project-open",
-              )!.getBoundingClientRect();
-            return r.top >= action.bottom && r.bottom <= row.bottom &&
-              r.left >= action.left && r.right <= row.right;
+              )!.getBoundingClientRect(),
+              track = el.closest(".otk-sidebar-row-feedback")!
+                .getBoundingClientRect(),
+              frame = el.closest(".otk-sidebar-row")!
+                .getBoundingClientRect();
+            // SidebarRow owns one full-width feedback track below its action.
+            return track.top >= action.bottom && track.bottom <= row.bottom &&
+              Math.abs(track.left - frame.left) <= .5 &&
+              Math.abs(track.right - frame.right) <= .5 &&
+              r.top >= track.top && r.bottom <= track.bottom &&
+              r.left >= track.left && r.right <= track.right;
           },
         ),
       ).toBe(true);
@@ -296,86 +314,78 @@ export async function remainder(
       rightView: "sessions",
     });
     await page.goto(state.url + "/#/local/" + content.sessionID);
-    await page.locator("[data-role=assistant] .otk-message-agent").first()
+    const promptMessage = '[data-message="prompt"]';
+    const replyMessage = '[data-message="reading"]';
+    await revealAcquired(page, replyMessage);
+    await page.locator(
+      "[data-role=assistant] [data-reply-source] .otk-entity-pill",
+    ).first()
       .scrollIntoViewIfNeeded();
+    await revealAcquired(page, replyMessage + " .otk-message-footer");
     await page.mouse.move(1, 1);
-    const reply = page.locator("[data-role=assistant]").first();
-    await expect(reply.locator(".otk-message-actions")).toHaveCSS(
-      "opacity",
-      "0",
-    );
-    await reply.evaluate((el) => {
-      el.addEventListener(
-        "mouseenter",
-        () =>
-          el.setAttribute("data-theme-hover-start", String(performance.now())),
-        { once: true },
-      );
-      el.addEventListener(
-        "mouseleave",
-        () =>
-          el.setAttribute("data-theme-leave-start", String(performance.now())),
-        { once: true },
-      );
-      const observer = new MutationObserver(() => {
-        if (el.classList.contains("is-revealed")) {
-          el.setAttribute(
-            "data-theme-hover-open",
-            String(
-              performance.now() -
-                Number(el.getAttribute("data-theme-hover-start")),
-            ),
-          );
-        } else if (el.hasAttribute("data-theme-leave-start")) {
-          el.setAttribute(
-            "data-theme-hover-close",
-            String(
-              performance.now() -
-                Number(el.getAttribute("data-theme-leave-start")),
-            ),
-          );
-          observer.disconnect();
-        }
-      });
-      observer.observe(el, { attributes: true, attributeFilter: ["class"] });
+    const reply = page.locator(replyMessage);
+    // Code blocks now have their own actions; hover continuity is a contract
+    // of the reply's footer, not of nested block controls.
+    const footer = reply.locator(".otk-message-footer").filter({
+      has: page.locator('[data-message-command="reply.copy"]'),
     });
-    await reply.locator(".otk-message-content").hover();
-    await expect.poll(async () =>
-      Number(await reply.getAttribute("data-theme-hover-open"))
-    ).toBeGreaterThanOrEqual(500);
-    const fixed = await bounds(page, "[data-role=assistant]");
+    const actions = footer.locator(".otk-message-actions");
+    // The nested source-pill clock can yield; the outcome clock owns this row.
+    const outcome = ".otk-message-details > .otk-chrome-meta > time[title]";
+    await expect(actions).toHaveCSS(
+      "opacity",
+      "1",
+    );
+    // Pointer actionability may scroll the viewport. Compare the article in its
+    // owning flow so that exact equality measures layout, not reader position.
+    const replyBounds = () => ownedBounds(reply, ".otk-message-flow");
+    const fixed = await replyBounds();
+    await footer.hover();
+    await expect(footer.locator(outcome)).toBeVisible();
     expect(
-      await reply.locator(".otk-message-footer").evaluate((footer) => {
+      await footer.evaluate((footer, outcome) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
             .getBoundingClientRect(),
-          b = footer.querySelector(".otk-last-output-time")!
+          b = footer.querySelector(outcome)!.parentElement!
             .getBoundingClientRect();
-        return b.left - a.right ===
-          parseFloat(getComputedStyle(footer).columnGap);
-      }),
+        return b.right <= a.left &&
+          Math.abs(b.y + b.height / 2 - a.y - a.height / 2) < .5;
+      }, outcome),
     ).toBe(true);
     await page.mouse.move(1, 1);
     await expect(reply).not.toHaveClass(/is-revealed/);
-    expect(Number(await reply.getAttribute("data-theme-hover-close")))
-      .toBeGreaterThanOrEqual(150);
-    expect(await bounds(page, "[data-role=assistant]")).toEqual(fixed);
+    await expect(actions).toHaveCSS(
+      "opacity",
+      "1",
+    );
+    expect(await replyBounds()).toEqual(fixed);
     for (const theme of themes) {
       await paint(theme);
       const selectors = [
         "html",
-        ".otk-project-name",
-        ".otk-text",
-        ".otk-code pre",
+        ".otk-sidebar-title-text",
+        replyMessage + " .otk-text p",
+        replyMessage + " .otk-code pre",
         ".otk-prompt textarea",
-        ".otk-server-connection",
+        // The visit label borrows ChromeMeta; connection frames aren't metadata.
+        ".otk-project-visit",
       ];
-      const read = () =>
-        page.evaluate((selectors) =>
-          selectors.map((selector) => {
-            const el = document.querySelector(selector)!,
-              s = getComputedStyle(el);
-            return [s.fontSize, s.lineHeight];
-          }), selectors);
+      const read = async () => {
+        const styles: string[][] = [];
+        for (const selector of selectors) {
+          // A text-size change can retire previously mounted transcript blocks.
+          if (selector.startsWith(replyMessage)) {
+            await revealAcquired(page, selector);
+          }
+          styles.push(
+            await page.locator(selector).first().evaluate((el) => {
+              const s = getComputedStyle(el);
+              return [s.fontSize, s.lineHeight];
+            }),
+          );
+        }
+        return styles;
+      };
       const baseline = await read();
       await page.locator("html").evaluate((el) => {
         const s = (el as HTMLElement).style;
@@ -419,52 +429,49 @@ export async function remainder(
         ].forEach((key) => (el as HTMLElement).style.removeProperty(key))
       );
       expect(await read()).toEqual(baseline);
-      const clock = page.locator(".otk-last-output-time").first();
+      const footerClock =
+        ".otk-message-details > .otk-chrome-meta > time[title]";
+      await revealAcquired(page, `${replyMessage} ${footerClock}`);
+      const clock = footer.locator(footerClock);
       await clock.scrollIntoViewIfNeeded();
       await page.mouse.move(1, 1);
-      const date = page.locator(".otk-last-output-date").first();
-      await expect(date).toHaveCSS("visibility", "hidden");
+      await expect(clock).toHaveCSS("visibility", "visible");
       const rect = await clock.boundingBox();
       await clock.hover();
-      await expect(date).toHaveCSS("visibility", "visible");
       const g = await clock.evaluate((el) => {
         const footer = el.closest(".otk-message-footer")!,
-          date = footer.querySelector(".otk-last-output-date")!,
-          d = date.getBoundingClientRect(),
           t = el.getBoundingClientRect(),
           f = footer.getBoundingClientRect();
         return {
-          date: date.textContent!.trim(),
-          expected: new Date((el as HTMLTimeElement).dateTime)
-            .toLocaleDateString(),
-          gap: t.left - d.right,
-          centers: Math.abs(d.y + d.height / 2 - t.y - t.height / 2),
-          right: Math.abs(f.right - t.right),
+          title: el.getAttribute("title"),
+          expected: new Date((el as HTMLTimeElement).dateTime).toLocaleString(
+            undefined,
+            { timeZoneName: "short" },
+          ),
+          contained: t.left >= f.left && t.right <= f.right,
           left: t.left,
           width: t.width,
           color: getComputedStyle(footer).color === getComputedStyle(el).color,
         };
       });
-      expect(g.date).toBe(g.expected);
-      expect(g.gap).toBeGreaterThan(0);
-      expect(g.centers).toBeLessThan(.5);
-      expect(g.right).toBeLessThan(.5);
+      expect(g.title).toBe(g.expected);
+      expect(g.contained).toBe(true);
       expect(g.color).toBe(true);
       expect(Math.abs(g.left - rect!.x)).toBeLessThan(.5);
       expect(Math.abs(g.width - rect!.width)).toBeLessThan(.5);
       await shot(`timestamps-hover-${theme.id}`);
       for (const role of ["user", "assistant"]) {
-        const trigger = page.locator(`[data-role=${role}] .otk-created-trigger`)
-          .first();
-        const created = page.locator(`[data-role=${role}] .otk-created-time`)
-          .first();
-        await trigger.scrollIntoViewIfNeeded();
-        await trigger.hover();
+        const message = role === "user" ? promptMessage : replyMessage;
+        await revealAcquired(page, `${message} ${footerClock}`);
+        const created = page.locator(`${message} ${footerClock}`);
+        await created.scrollIntoViewIfNeeded();
+        await created.hover();
         await expect(created).toHaveCSS("visibility", "visible");
         await shot(`timestamps-created-${role}-${theme.id}`);
         await page.mouse.move(1, 1);
-        await expect(created).toHaveCSS("visibility", "hidden");
+        await expect(created).toHaveCSS("visibility", "visible");
       }
+      await revealAcquired(page, promptMessage + " .otk-message-footer time");
       const ink = await page.evaluate(() => {
         const canvas = document.createElement("canvas");
         canvas.width = canvas.height = 1;
@@ -485,19 +492,20 @@ export async function remainder(
             .reduce((a, b) => a + b, 0);
         };
         return [
-          color(document.querySelector(".otk-created-time")!),
-          color(document.querySelector(".otk-created-trigger")!),
+          color(document.querySelector(".otk-user-meta time")!),
+          color(document.querySelector(".otk-user-bubble")!),
         ];
       });
       if (theme.id === "otk-dark") expect(ink[0]).toBeLessThan(ink[1]);
       else expect(ink[0]).toBeGreaterThan(ink[1]);
+      await revealAcquired(page, replyMessage + " .otk-message-footer");
       const fork = reply.locator('[data-message-command="reply.fork"]');
-      const forkBox = await fork.boundingBox();
+      const forkBox = await ownedBounds(fork, ".otk-message-footer");
       await page.keyboard.press("Tab");
       for (const action of ["focus", "blur", "hover", "leave"]) {
-        const agent = reply.locator(".otk-message-agent");
+        const control = reply.locator('[data-message-command="reply.copy"]');
         if (action === "focus") {
-          await agent.evaluate((el) =>
+          await control.evaluate((el) =>
             (el as HTMLElement).focus({ preventScroll: true })
           );
         }
@@ -506,34 +514,34 @@ export async function remainder(
             (el as HTMLElement).focus({ preventScroll: true })
           );
         }
-        if (action === "hover") await agent.hover();
+        if (action === "hover") await control.hover();
         if (action === "leave") await page.mouse.move(1, 1);
         await expect.poll(() =>
-          reply.locator(".otk-created-time").evaluate((el) =>
-            getComputedStyle(el).display !== "none"
-          )
-        ).toBe(action === "focus" || action === "hover");
-        expect(await fork.boundingBox()).toEqual(forkBox);
+          clock.evaluate((el) => getComputedStyle(el).visibility === "visible")
+        ).toBe(true);
+        expect(await ownedBounds(fork, ".otk-message-footer")).toEqual(forkBox);
       }
+      await revealAcquired(page, promptMessage);
       const copy = page.locator(
         '[data-role=user] [data-message-command="prompt.copy"]',
       ).first();
       await page.locator(".otk-user-bubble").first().scrollIntoViewIfNeeded();
-      const slot = await copy.boundingBox();
+      const slot = await ownedBounds(copy, ".otk-message-footer");
       await page.locator(".otk-user-bubble").first().focus();
       await expect(
         page.locator("[data-role=user] .otk-message-actions").first(),
       ).toHaveCSS("opacity", "1");
-      expect(await copy.boundingBox()).toEqual(slot);
+      expect(await ownedBounds(copy, ".otk-message-footer")).toEqual(slot);
       await page.context().grantPermissions([
         "clipboard-read",
         "clipboard-write",
       ]);
       await copy.click();
-      expect(await copy.boundingBox()).toEqual(slot);
+      expect(await ownedBounds(copy, ".otk-message-footer")).toEqual(slot);
       await state.product("prefs.set", { key: "timestamps", value: true });
       await expect.poll(() =>
-        page.locator(".otk-created-time").evaluateAll((els) =>
+        page.locator(".otk-message-footer time[title]").evaluateAll((els) =>
+          els.length > 0 &&
           els.every((el) => getComputedStyle(el).visibility === "visible")
         )
       ).toBe(true);
@@ -743,24 +751,30 @@ export async function remainder(
           rightCollapsed: true,
           leftCollapsed: false,
         });
-        await expect(page.locator(".otk-tool-error-toggle").first())
+        await expect(
+          page.locator(".otk-tool-line.is-error .otk-failure-details").first(),
+        )
           .toBeVisible();
         expect(
-          await page.locator(".otk-tool-error-toggle").first().evaluate(
-            (action) => {
-              const row = action.parentElement!,
-                summary = row.querySelector(".otk-tool-brief")!,
-                r = row.getBoundingClientRect(),
-                a = action.getBoundingClientRect(),
-                s = summary.getBoundingClientRect();
-              return a.right <= r.right + .5 && s.right <= a.left + .5 &&
-                action.scrollWidth <= action.clientWidth &&
-                summary.getAttribute("title")!.includes(
-                  "every affected consumer",
-                ) && getComputedStyle(summary).textOverflow === "ellipsis" &&
-                summary.scrollWidth > summary.clientWidth;
-            },
-          ),
+          await page.locator(".otk-tool-line.is-error .otk-failure-details")
+            .first().evaluate(
+              (action) => {
+                const row = action.closest(".otk-tool-line")!,
+                  header = row.querySelector(".otk-tool-state")!
+                    .getBoundingClientRect(),
+                  summary = row.querySelector(".otk-tool-brief")!,
+                  r = row.getBoundingClientRect(),
+                  a = action.getBoundingClientRect(),
+                  s = summary.getBoundingClientRect();
+                return a.right <= r.right + .5 &&
+                  s.right <= header.right + .5 && a.top >= header.bottom - .5 &&
+                  action.scrollWidth <= action.clientWidth &&
+                  summary.getAttribute("title")!.includes(
+                    "every affected consumer",
+                  ) && getComputedStyle(summary).textOverflow === "ellipsis" &&
+                  summary.scrollWidth > summary.clientWidth;
+              },
+            ),
         ).toBe(true);
         await labels(page);
         await shot(`labels-transcript-${width}-${theme.id}`);
@@ -788,12 +802,24 @@ export async function remainder(
           await shot(`labels-${kind}-${width}-${theme.id}`);
           await page.keyboard.press("Escape");
         }
-        await page.locator(".otk-tool-error-toggle").first().click();
-        await expect(page.locator(".otk-tool-error[role=alert]").first())
+        await page.locator(".otk-tool-line.is-error .otk-failure-details")
+          .first().getByRole("button", { name: "Details", exact: true })
+          .click();
+        await expect(
+          page.locator(
+            ".otk-tool-line.is-error .otk-feedback-status[role=alert]",
+          ).first(),
+        )
           .toBeVisible();
+        await expect(
+          page.locator(".otk-tool-line.is-error .otk-failure-detail-body")
+            .first(),
+        ).toBeVisible();
         await labels(page);
         await shot(`labels-error-${width}-${theme.id}`);
-        await page.locator(".otk-tool-error-toggle").first().click();
+        await page.locator(".otk-tool-line.is-error .otk-failure-details")
+          .first().getByRole("button", { name: "Details", exact: true })
+          .click();
         await page.locator(".otk-tool-toggle").first().focus();
         await page.keyboard.press("Shift+F10");
         await expect(page.locator(":popover-open [role=menu]")).toBeVisible();
@@ -823,22 +849,21 @@ export async function remainder(
         const crowded = await page.locator(".otk-tool-toggle").evaluateAll(
           (els) =>
             els.map((el) => {
-              const row = el.parentElement!,
-                action = row.querySelector(".otk-tool-error-toggle")!,
+              const row = el.closest(".otk-tool-line")!,
+                action = row.querySelector(".otk-failure-details")!,
                 e = el.getBoundingClientRect(),
                 a = action.getBoundingClientRect(),
                 r = row.getBoundingClientRect(),
-                sameRow =
-                  Math.abs((e.top + e.bottom - a.top - a.bottom) / 2) < .5;
+                below = a.top >= e.bottom - .5;
               return {
-                sameRow,
+                below,
                 fits: el.scrollWidth <= el.clientWidth &&
                   e.right <= r.right + .5 && a.right <= r.right + .5 &&
-                  (sameRow ? e.right <= a.left : a.top >= e.bottom),
+                  action.scrollWidth <= action.clientWidth,
               };
             }),
         );
-        expect(crowded.every((r) => r.fits && r.sameRow === (width === 1280)))
+        expect(crowded.every((r) => r.fits && r.below))
           .toBe(true);
         await shot(`labels-panel-${width}-${theme.id}`);
         await state.product("layout.patch", { rightCollapsed: true });
@@ -879,21 +904,20 @@ export async function remainder(
       await paint(theme);
       await page.locator(".otk-display-menu > button").click();
       const g = await page.evaluate<Checkboxes>(
-        `(()=>{const bounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value};}),tasks:(${taskMarkerGeometry})()};})()`,
+        `(()=>{const bounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),label=el.closest('label'),p=label.getBoundingClientRect();return {width:r.width,height:r.height,line:parseFloat(getComputedStyle(label).lineHeight),padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),t=el.closest('label').querySelector('.otk-control-label').getBoundingClientRect(),p=el.closest('label').getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu .otk-select')].map(el=>{const trigger=el.querySelector('button'),r=trigger.getBoundingClientRect(),row=el.closest('.otk-preference-control'),t=row.querySelector(':scope > .otk-control-label').getBoundingClientRect(),p=row.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(trigger).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.querySelector('input[type=hidden]').value};}),tasks:(${taskMarkerGeometry})()};})()`,
       );
       expect(g.controls.length).toBe(g.labels.length);
       expect(g.labels.length).toBeGreaterThan(0);
       for (const c of g.controls) {
         expect(c.width).toBeGreaterThan(0);
-        expect(c.width).toBeLessThanOrEqual(18);
+        expect(c.width).toBe(c.line);
         expect(c.height).toBeGreaterThan(0);
-        expect(c.height).toBeLessThanOrEqual(18);
+        expect(c.height).toBe(c.line);
         expect(c.padding).toBe(0);
         expect(c.right).toBeLessThanOrEqual(c.parentRight);
       }
       for (const l of g.labels) {
-        expect(l.gap).toBeGreaterThanOrEqual(9.05);
-        expect(l.gap).toBeLessThanOrEqual(15);
+        expect(Math.abs(l.gap - 8)).toBeLessThanOrEqual(.05);
         expect(l.centers).toBeLessThanOrEqual(.5);
         expect(l.right).toBeLessThanOrEqual(l.parentRight + .5);
       }
@@ -955,12 +979,13 @@ export async function remainder(
           name: string;
           width: number;
           height: number;
+          line: number;
           padding: number;
           gap: number;
           centers: number;
           fits: boolean;
         }[]
-      >(`(()=>{const textBounds=${labelTextBounds};return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=textBounds(el),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),fits:s.right<=p.right+.5}})})()`);
+      >(`(()=>{return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const label=el.closest('label'),r=el.getBoundingClientRect(),s=label.querySelector('.otk-control-label').getBoundingClientRect(),p=label.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,line:parseFloat(getComputedStyle(label).lineHeight),padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),fits:s.right<=p.right+.5}})})()`);
       expect(notifications.map((c) => c.name)).toEqual([
         "notify.toast",
         "notify.os",
@@ -969,12 +994,11 @@ export async function remainder(
       ]);
       for (const c of notifications) {
         expect(c.width).toBeGreaterThan(0);
-        expect(c.width).toBeLessThanOrEqual(18);
+        expect(c.width).toBe(c.line);
         expect(c.height).toBeGreaterThan(0);
-        expect(c.height).toBeLessThanOrEqual(18);
+        expect(c.height).toBe(c.line);
         expect(c.padding).toBe(0);
-        expect(c.gap).toBeGreaterThanOrEqual(9.7);
-        expect(c.gap).toBeLessThanOrEqual(15);
+        expect(Math.abs(c.gap - 8)).toBeLessThanOrEqual(.05);
         expect(c.centers).toBeLessThanOrEqual(.5);
         expect(c.fits).toBe(true);
       }

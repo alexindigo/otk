@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ProjectSeed } from "@otk/harness";
-import type { ProjectTopology } from "@otk/protocol";
-import type { CheckoutAuthority, CheckoutRecord } from "@otk/store";
+import type { ProjectIdentityFact, ProjectSeed } from "@otk/harness";
+import {
+  type ProjectTopology,
+  remoteProjectGroup,
+  UNKNOWN_REPOSITORY,
+} from "@otk/protocol";
+import type {
+  CheckoutAuthority,
+  CheckoutRecord,
+  CheckoutRemote,
+  CheckoutRemoteAnchor,
+} from "@otk/store";
 
 const key = (r: Pick<CheckoutRecord, "source" | "repoID" | "scope">) =>
   JSON.stringify([r.source, r.repoID, r.scope]);
@@ -19,30 +28,63 @@ const unchanged = (): IdentityChange => ({
 });
 const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
   a.size === b.size && [...a].every((v) => b.has(v));
+interface IdentityRecord extends CheckoutRecord {
+  /** Live coverage cannot survive restart as authority for absence. */
+  inventory: "current" | "unknown";
+}
+type RemoteGroup = {
+  key: string;
+  anchor: string;
+  members: ReadonlySet<string>;
+};
+const pathOrder = (a: string, b: string) =>
+  a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+function availability(
+  record: Pick<CheckoutRecord, "leafDirectory" | "kind" | "proven">,
+  inventory: ProjectIdentityFact["inventory"],
+): CheckoutRecord["availability"] {
+  if (inventory === undefined || !record.proven) return "unknown";
+  if (inventory.some((row) => row.directory === record.leafDirectory)) {
+    return "present";
+  }
+  return record.kind === "worktree" ? "removed" : "unknown";
+}
 /** Sole owner of native repository membership and historical checkout boundaries. */
 export class ProjectIdentity {
   #revision = 0;
   get revision(): number {
     return this.#revision;
   }
-  #records = new Map<string, CheckoutRecord>();
-  #scopes = new Map<string, CheckoutRecord[]>();
-  #leaves = new Map<string, CheckoutRecord[]>();
+  #records = new Map<string, IdentityRecord>();
+  #scopes = new Map<string, IdentityRecord[]>();
+  #leaves = new Map<string, IdentityRecord[]>();
   #sources = new Set<string>();
   #current = new Map<string, ReadonlySet<string>>();
   #authoritative = false;
+  #remotes = new Map<string, CheckoutRemote>();
+  #anchors = new Map<string, string>();
+  #groups = new Map<string, RemoteGroup>();
+  #successors = new Map<string, string>();
   constructor(
     readonly history?: {
       list(): CheckoutRecord[];
       authority?(): CheckoutAuthority | undefined;
+      remotes?(): CheckoutRemote[];
+      anchors?(): CheckoutRemoteAnchor[];
       save(
         rows: readonly CheckoutRecord[],
         authority?: CheckoutAuthority,
+        remotes?: readonly CheckoutRemote[],
+        anchors?: readonly CheckoutRemoteAnchor[],
       ): void;
     },
   ) {
     for (const r of history?.list() ?? []) {
-      this.#records.set(key(r), { ...r, availability: "unknown" });
+      this.#records.set(key(r), {
+        ...r,
+        availability: "unknown",
+        inventory: "unknown",
+      });
       this.#sources.add(r.source);
     }
     const authority = history?.authority?.();
@@ -55,6 +97,16 @@ export class ProjectIdentity {
       );
       this.#authoritative = true;
     }
+    this.#remotes = new Map(history?.remotes?.().map((r) => [r.repository, r]));
+    this.#anchors = new Map(
+      history?.anchors?.().map((a) => [a.remote, a.repository]),
+    );
+    this.#groups = this.#remoteGroups(
+      this.#records,
+      this.#sources,
+      this.#current,
+      this.#remotes,
+    ).groups;
     this.#index();
   }
   records(): CheckoutRecord[] {
@@ -78,13 +130,16 @@ export class ProjectIdentity {
     ) return unchanged();
     const leafDirectory = recordedRoot ?? this.leaf(directory, repoID);
     const known = rows.find((r) => r.leafDirectory === leafDirectory);
-    const record: CheckoutRecord = {
-      ...rows[0],
+    const { repository: _, ...base } = rows[0];
+    const record: IdentityRecord = {
+      ...base,
       scope: directory,
       leafDirectory,
       proven: recordedRoot !== undefined || known?.proven === true,
       kind: known?.kind ?? "unknown",
       availability: known?.availability ?? "unknown",
+      inventory: known?.inventory ?? "unknown",
+      ...(known?.repository ? { repository: known.repository } : {}),
     };
     const records = new Map(this.#records);
     records.set(key(record), record);
@@ -116,11 +171,29 @@ export class ProjectIdentity {
       ),
     );
     const selected = sources.size ? sources : new Set(this.#sources);
-    const put = (r: CheckoutRecord) => {
+    const put = (r: IdentityRecord) => {
       const k = key(r);
-      if (JSON.stringify(records.get(k)) === JSON.stringify(r)) return;
+      const before = records.get(k);
+      // Git evidence describes the leaf, not the native scope that reports it.
+      if (
+        before?.leafDirectory === r.leafDirectory &&
+        before.repository !== undefined
+      ) {
+        r = {
+          ...r,
+          repository: before.repository,
+          kind: before.kind,
+          availability: before.availability,
+          inventory: before.inventory,
+        };
+      }
+      if (JSON.stringify(before) === JSON.stringify(r)) return;
       records.set(k, r);
     };
+    const evidence = new Map<
+      string,
+      NonNullable<ProjectIdentityFact["repository"]>
+    >();
     for (const seed of seeds) {
       const facts = seed.identities ??
         (seed.topology &&
@@ -143,16 +216,15 @@ export class ProjectIdentity {
           "";
         // Canonical relocation and pruning update facts, never discard affiliation.
         for (const r of same) {
+          const kind = fact.inventory?.find((i) =>
+            i.directory === r.leafDirectory
+          )?.kind ?? r.kind;
           put({
             ...r,
             canonicalRoot,
-            availability: fact.inventory === undefined
-              ? "unknown"
-              : r.proven
-              ? fact.inventory.some((i) => i.directory === r.leafDirectory)
-                ? "present"
-                : "removed"
-              : "unknown",
+            kind,
+            inventory: fact.inventory === undefined ? "unknown" : "current",
+            availability: availability({ ...r, kind }, fact.inventory),
           });
         }
         const previous = records.get(
@@ -180,6 +252,9 @@ export class ProjectIdentity {
           r.directory === leafDirectory
         );
         const proven = root !== undefined;
+        const kind = registered?.kind ??
+          same.find((r) => r.leafDirectory === leafDirectory)?.kind ??
+          (leafDirectory === canonicalRoot ? "checkout" : "unknown");
         put({
           source: fact.source,
           repoID: fact.repoID,
@@ -187,38 +262,75 @@ export class ProjectIdentity {
           canonicalRoot,
           leafDirectory,
           proven,
-          kind: registered?.kind ??
-            (leafDirectory === canonicalRoot
-              ? "checkout"
-              : previous?.kind ?? "unknown"),
-          availability: fact.inventory === undefined || !proven
-            ? "unknown"
-            : registered
-            ? "present"
-            : "removed",
+          kind,
+          inventory: fact.inventory === undefined ? "unknown" : "current",
+          availability: availability(
+            { leafDirectory, kind, proven },
+            fact.inventory,
+          ),
         });
+        if (fact.repository?.checkout === leafDirectory) {
+          evidence.set(leafDirectory, fact.repository);
+        }
       }
       // Legacy null means loss of inventory, not loss of a durable native edge.
       if (seed.topology === null && !seed.identities) {
         for (const r of records.values()) {
           if (r.scope === seed.directory) {
-            put({ ...r, availability: "removed" });
+            put({
+              ...r,
+              availability: "unknown",
+              inventory: "unknown",
+            });
           }
         }
       }
+    }
+    for (const [checkout, fact] of evidence) {
+      const repository = recordedRepository(records, checkout, fact);
+      for (const [k, r] of records) {
+        if (r.leafDirectory !== checkout) continue;
+        const next: IdentityRecord = {
+          ...r,
+          repository,
+          kind: repository === UNKNOWN_REPOSITORY
+            ? r.kind
+            : repository === checkout
+            ? "checkout"
+            : "worktree",
+          availability: fact.present ? "present" : "removed",
+          inventory: "current",
+        };
+        if (JSON.stringify(r) !== JSON.stringify(next)) records.set(k, next);
+      }
+    }
+    const remotes = new Map(this.#remotes);
+    const now = Date.now();
+    for (const { present, root, remote } of evidence.values()) {
+      if (!present || !root || remote === undefined) continue;
+      const previous = remotes.get(root);
+      remotes.set(root, {
+        repository: root,
+        remote: remote?.key ?? null,
+        ...(remote?.owner ? { owner: remote.owner } : {}),
+        firstSeen: previous?.firstSeen ?? now,
+        readAt: now,
+      });
     }
     return this.#accept(
       records,
       selected,
       current,
       this.#authoritative || reported.size > 0,
+      remotes,
     );
   }
   #accept(
-    records: Map<string, CheckoutRecord>,
+    records: Map<string, IdentityRecord>,
     sources: ReadonlySet<string>,
     current: Map<string, ReadonlySet<string>>,
     authoritative: boolean,
+    remotes = this.#remotes,
   ): IdentityChange {
     const repos = new Set<string>(), directories = new Set<string>();
     const changed = [...records].filter(([k, r]) =>
@@ -230,9 +342,56 @@ export class ProjectIdentity {
     );
     const affectedScopes = new Set(scopeChanges.map(([scope]) => scope));
     const affectedRecords = new Set(changed.map(([k]) => k));
+    const remoteUpdates = [...remotes.values()].filter((remote) => {
+      const before = this.#remotes.get(remote.repository);
+      return !before || before.remote !== remote.remote ||
+        before.owner !== remote.owner || before.readAt !== remote.readAt;
+    });
+    if (
+      !changed.length && !scopeChanges.length && !sourceChanged &&
+      authoritative === this.#authoritative && !remoteUpdates.length
+    ) return unchanged();
+    const { groups, anchors } = this.#remoteGroups(
+      records,
+      sources,
+      current,
+      remotes,
+    );
+    const targetChanges = new Set<string>();
+    const successors = new Map(this.#successors);
+    for (const [repository, group] of this.#groups) {
+      const next = groups.get(repository);
+      if (group.anchor === repository) {
+        const successor = anchors.get(group.key);
+        if (successor && successor !== repository) {
+          successors.set(repository, successor);
+        }
+      }
+      if (
+        !next || next.key !== group.key || next.anchor !== group.anchor ||
+        !sameSet(next.members, group.members)
+      ) targetChanges.add(repository);
+    }
+    for (const [repository, group] of groups) {
+      if (!this.#groups.has(repository)) targetChanges.add(repository);
+      if (repository === group.anchor) successors.delete(repository);
+    }
+    for (const remote of remoteUpdates) {
+      const previous = this.#remotes.get(remote.repository);
+      if (
+        previous?.remote !== remote.remote || previous?.owner !== remote.owner
+      ) {
+        targetChanges.add(remote.repository);
+      }
+    }
+    const anchorUpdates = [...anchors].flatMap(([remote, repository]) =>
+      this.#anchors.get(remote) === repository ? [] : [{ remote, repository }]
+    );
+    for (const directory of targetChanges) directories.add(directory);
     for (const r of [...this.#records.values(), ...records.values()]) {
       if (
         !sourceChanged && !affectedRecords.has(key(r)) &&
+        !(r.repository && targetChanges.has(r.repository)) &&
         !affectedScopes.has(JSON.stringify([r.source, r.scope]))
       ) continue;
       repos.add(r.repoID);
@@ -240,10 +399,6 @@ export class ProjectIdentity {
         if (directory) directories.add(directory);
       }
     }
-    if (
-      !changed.length && !scopeChanges.length && !sourceChanged &&
-      authoritative === this.#authoritative
-    ) return unchanged();
     this.history?.save(
       changed.map(([, row]) => row),
       authoritative
@@ -255,11 +410,20 @@ export class ProjectIdentity {
           }),
         }
         : undefined,
+      remoteUpdates,
+      anchorUpdates,
     );
     this.#records = records;
     this.#sources = new Set(sources);
     this.#current = current;
     this.#authoritative = authoritative;
+    this.#remotes = remotes;
+    this.#groups = groups;
+    for (const { remote, repository } of anchorUpdates) {
+      this.#anchors.set(remote, repository);
+    }
+    this.#successors = successors;
+    if (!repos.size && !directories.size) return unchanged();
     this.#revision++;
     this.#index();
     return { repos, directories };
@@ -283,6 +447,59 @@ export class ProjectIdentity {
       }
     }
   }
+  /** Remote equivalence comes only from recorded Git evidence, never native IDs. */
+  #remoteGroups(
+    records: ReadonlyMap<string, IdentityRecord>,
+    sources: ReadonlySet<string>,
+    current: ReadonlyMap<string, ReadonlySet<string>>,
+    remotes: ReadonlyMap<string, CheckoutRemote>,
+  ): { groups: Map<string, RemoteGroup>; anchors: Map<string, string> } {
+    const repositories = new Map<string, Set<string>>();
+    const canonicals = new Set<string>();
+    const presence = new Map<string, boolean>();
+    for (const r of records.values()) {
+      if (!sources.has(r.source)) continue;
+      const owners = current.get(JSON.stringify([r.source, r.scope]));
+      if (owners && !owners.has(r.repoID)) continue;
+      const root = r.repository;
+      const remote = root && remotes.get(root);
+      if (!root || !remote || !remote.remote) continue;
+      const members = repositories.get(remote.remote) ?? new Set();
+      members.add(root);
+      repositories.set(remote.remote, members);
+      if (remotes.get(r.canonicalRoot)?.remote === remote.remote) {
+        canonicals.add(r.canonicalRoot);
+      }
+      if (r.leafDirectory === root) {
+        const removed = r.inventory === "current" &&
+          r.availability === "removed";
+        presence.set(root, (presence.get(root) ?? true) && removed);
+      }
+    }
+    const groups = new Map<string, RemoteGroup>();
+    const anchors = new Map<string, string>();
+    for (const [key, members] of repositories) {
+      const previous = this.#anchors.get(key);
+      if (members.size < 2 && !previous) continue;
+      const ordered = [...members].sort((a, b) =>
+        remotes.get(a)!.firstSeen - remotes.get(b)!.firstSeen || pathOrder(a, b)
+      );
+      const live = ordered.filter((r) => presence.get(r) !== true);
+      const options = live.length ? live : ordered;
+      const anchor = previous && members.has(previous) &&
+          (presence.get(previous) !== true || live.length === 0)
+        ? previous
+        : (!previous
+          ? options.find((root) => canonicals.has(root))
+          : undefined) ?? options[0];
+      anchors.set(key, anchor);
+      if (members.size > 1) {
+        const group = { key, anchor, members };
+        for (const repository of members) groups.set(repository, group);
+      }
+    }
+    return { groups, anchors };
+  }
   leaf(directory: string, repoID?: string): string {
     const rows = (this.#scopes.get(directory) ?? []).filter((r) =>
       repoID === undefined || r.repoID === repoID
@@ -300,6 +517,30 @@ export class ProjectIdentity {
   }
   topology(directory: string): ProjectTopology | undefined {
     const rows = this.#leaves.get(directory) ?? [];
+    const repositories = new Set(
+      rows.flatMap((r) => r.repository === undefined ? [] : [r.repository]),
+    );
+    if (repositories.size === 1) {
+      // A recorded repository outranks native project claims about this path.
+      const root = [...repositories][0];
+      const owners = root === UNKNOWN_REPOSITORY
+        ? rows
+        : this.#leaves.get(root)?.length
+        ? this.#leaves.get(root)!
+        : rows;
+      const repoID = owners.map((r) => r.repoID).sort()[0];
+      const group = this.#groups.get(root);
+      const parent = group?.anchor ?? root;
+      return {
+        repoID,
+        group: group?.key ?? `repo:${repoID}`,
+        canonicalRoot: parent,
+        leafDirectory: directory,
+        ...(parent === directory || parent === UNKNOWN_REPOSITORY
+          ? {}
+          : { parentDirectory: parent }),
+      };
+    }
     const owners = new Set(
       rows.map((r) => JSON.stringify([r.source, r.repoID, r.canonicalRoot])),
     );
@@ -308,12 +549,36 @@ export class ProjectIdentity {
     if (!r.canonicalRoot) return;
     return {
       repoID: r.repoID,
+      group: `repo:${r.repoID}`,
       canonicalRoot: r.canonicalRoot,
       leafDirectory: directory,
       ...(directory === r.canonicalRoot
         ? {}
         : { parentDirectory: r.canonicalRoot }),
     };
+  }
+  owner(directory: string): string | undefined {
+    const root = this.topology(directory)?.canonicalRoot ?? directory;
+    return this.#remotes.get(root)?.owner;
+  }
+  /** A persisted remote group may have been learned before its order write. */
+  grouped(directory: string): boolean {
+    return remoteProjectGroup(this.topology(directory)) !== undefined;
+  }
+  successor(directory: string): string | undefined {
+    return this.#successors.get(directory);
+  }
+  /** A standalone root needs positive Git evidence to leave an existing alias. */
+  separates(directory: string, previousRoot: string): boolean {
+    return this.availability(directory) === "present" &&
+      this.#remotes.has(directory) && this.#remotes.has(previousRoot) &&
+      (this.#remotes.get(directory)!.remote === null ||
+        !this.compatibleRemote(directory, previousRoot));
+  }
+  compatibleRemote(directory: string, previousRoot: string): boolean {
+    const current = this.#remotes.get(directory),
+      previous = this.#remotes.get(previousRoot);
+    return !current || !previous || current.remote === previous.remote;
   }
   availability(directory: string): CheckoutRecord["availability"] | undefined {
     const rows = this.#leaves.get(directory);
@@ -333,11 +598,60 @@ export class ProjectIdentity {
       leafDirectory: r.leafDirectory,
       availability: r.availability,
       kind: r.kind,
+      inventory: r.inventory,
     }));
+  }
+  archived(directory: string): boolean {
+    const rows = this.#leaves.get(directory);
+    return !!rows?.length &&
+      rows.every((r) =>
+        (r.kind === "worktree" || r.repository === UNKNOWN_REPOSITORY ||
+          this.topology(directory)?.parentDirectory !== undefined &&
+            this.#groups.has(directory)) &&
+        r.inventory === "current" && r.availability === "removed"
+      );
   }
   topologies(): ProjectTopology[] {
     return [...this.#leaves.keys()].flatMap((directory) =>
       this.topology(directory) ?? []
     );
   }
+}
+
+/**
+ * A present checkout's own Git names its repository. A removed checkout keeps
+ * its recorded repository; else retained Git registration, then OTK's stored
+ * affiliation records, then `<repo>.<name>` naming of an existing repository.
+ */
+function recordedRepository(
+  records: ReadonlyMap<string, CheckoutRecord>,
+  checkout: string,
+  fact: NonNullable<ProjectIdentityFact["repository"]>,
+): string {
+  if (fact.present && fact.root) return fact.root;
+  const rows = [...records.values()];
+  const sole = (values: (string | undefined)[]) => {
+    const set = new Set(values.filter((v): v is string => !!v));
+    return set.size === 1 ? [...set][0] : undefined;
+  };
+  const own = rows.filter((r) => r.leafDirectory === checkout);
+  const recorded = sole(
+    own.map((r) =>
+      r.repository === UNKNOWN_REPOSITORY ? undefined : r.repository
+    ),
+  );
+  if (recorded) return recorded;
+  if (fact.evidence === "worktree-metadata" && fact.root) return fact.root;
+  const claimed = sole(
+    own.map((r) => r.canonicalRoot === checkout ? undefined : r.canonicalRoot),
+  );
+  if (claimed) return claimed;
+  if (
+    rows.some((r) =>
+      r.leafDirectory !== checkout &&
+      (r.canonicalRoot === checkout || r.repository === checkout)
+    )
+  ) return checkout;
+  if (fact.evidence === "name" && fact.root) return fact.root;
+  return UNKNOWN_REPOSITORY;
 }

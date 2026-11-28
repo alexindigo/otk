@@ -17,9 +17,11 @@ test("settings.default-port-and-config-hints", {
   for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     await state.product("prefs.set", { key: "theme", value: theme });
     await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
-    await settings.locator(":scope > .otk-scroll").evaluate((node) => {
-      node.scrollTop = 0;
-    });
+    await settings.locator(":scope > .otk-scroll-frame > .otk-scroll").evaluate(
+      (node) => {
+        node.scrollTop = 0;
+      },
+    );
     await info.attach(`${theme}-settings-top`, {
       body: await page.screenshot(),
       contentType: "image/png",
@@ -79,14 +81,18 @@ test("settings.header-and-scrollport-share-one-frame", {
     ) {
       await page.setViewportSize(viewport);
       const frame = page.locator(".otk-settings");
-      const scrollport = frame.locator(":scope > .otk-scroll");
+      const scrollport = frame.locator(
+        ":scope > .otk-scroll-frame > .otk-scroll",
+      );
       await scrollport.evaluate((node) => {
         node.scrollTop = 0;
       });
       const geometry = () =>
         frame.evaluate((node) => {
           const header = node.querySelector(":scope > header")!;
-          const body = node.querySelector(":scope > .otk-scroll")!;
+          const body = node.querySelector(
+            ":scope > .otk-scroll-frame > .otk-scroll",
+          )!;
           const rect = node.getBoundingClientRect();
           const h = header.getBoundingClientRect();
           const b = body.getBoundingClientRect();

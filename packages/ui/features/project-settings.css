@@ -1,0 +1,35 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-native-project-settings {
+  width: 100%;
+  max-width: var(--lane-width);
+  margin-inline: auto;
+}
+.otk-project-icon-field {
+  display: grid;
+  gap: var(--space-2);
+}
+.otk-project-colors legend {
+  margin-block-end: var(--space-2);
+}
+.otk-project-color {
+  --selection-padding: 0;
+  display: grid;
+  place-items: center;
+  width: var(--form-control-size);
+  height: var(--form-control-size);
+  padding: 0;
+}
+.otk-project-color-swatch {
+  width: calc(18 * var(--otk-unit));
+  height: calc(18 * var(--otk-unit));
+  border-radius: var(--radius-inline-code);
+  background: var(--project-swatch);
+}
+.otk-project-startup-hints p {
+  margin: 0;
+}
+.otk-project-dismiss {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-end: var(--space-5);
+}

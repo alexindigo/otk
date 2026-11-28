@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { derivedValue } from "@otk/protocol";
+import { canonicalRequest, derivedValue } from "@otk/protocol";
 import {
   compareTranscriptVersion,
   type ContentClock,
@@ -86,10 +86,16 @@ export function createSessionUsage(
     summary?: string;
     witness?: string;
   }
+  // Usage summaries cross independent wire/store producers. Compare their JSON
+  // values, not producer property insertion order or framework object identity.
+  const summaryKey = (value: unknown): string | undefined =>
+    value === undefined
+      ? undefined
+      : canonicalRequest(JSON.parse(JSON.stringify(value)));
   const demand = (target: UsageTarget): Demand => {
     const result = indexed(target)?.digest.turns[target.turnID];
     return {
-      summary: JSON.stringify(derivedValue(result)),
+      summary: summaryKey(derivedValue(result)),
       witness: result?.state === "known"
         ? JSON.stringify([result.witness.source, result.witness.revision])
         : undefined,
@@ -143,9 +149,7 @@ export function createSessionUsage(
         bytes: 0,
         overflow: false,
         again: false,
-        summary: JSON.stringify(
-          derivedValue(indexed(target)?.digest.turns[target.turnID]),
-        ),
+        summary: demand(target).summary,
       };
       resources.set(key, resource);
       let unleased = [...resources.values()].filter((item) =>
@@ -296,7 +300,7 @@ export function createSessionUsage(
             resource.again = true;
             return;
           }
-          throw new Error("Refreshing usage breakdown…");
+          throw new Error("Refreshing usage breakdown...");
         }
         if (
           value.sessionID !== target.sessionID ||
@@ -304,7 +308,7 @@ export function createSessionUsage(
             call.turnID !== target.turnID
           )
         ) throw new Error("Usage detail identity mismatch");
-        if (resource.overflow) throw new Error("Refreshing usage breakdown…");
+        if (resource.overflow) throw new Error("Refreshing usage breakdown...");
         const ledger = new UsageLedger(
           value.sessionID,
           value.calls,
@@ -354,7 +358,7 @@ export function createSessionUsage(
           const uncovered = requested && (
             (admittedDemand.witness !== undefined &&
               requested.witness !== admittedDemand.witness) ||
-            JSON.stringify(resource.value?.summary) !== requested.summary
+            summaryKey(resource.value?.summary) !== requested.summary
           );
           resource.pending = undefined;
           resource.pendingDemand = undefined;
@@ -435,7 +439,7 @@ export function createSessionUsage(
           resource.summary = requested.summary;
           if (
             resource.pending || (changed &&
-              JSON.stringify(resource.value?.summary) !== requested.summary)
+              summaryKey(resource.value?.summary) !== requested.summary)
           ) {
             void load(resource.target, true);
           }

@@ -1,22 +1,21 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-select {
   --control-height: var(--form-control-size);
-  --control-border: 1px;
-  --control-inner-size: calc(var(--control-height) - 2 * var(--control-border));
+  --control-border: calc(1 * var(--otk-unit));
   display: grid;
   min-inline-size: 0;
 }
-.otk-select > * {
-  grid-area: 1 / 1;
-  min-inline-size: 0;
-}
-.otk-select > select {
-  appearance: none;
-  block-size: var(--control-height);
+.otk-select-trigger {
+  inline-size: 100%;
+  min-block-size: var(--control-height);
+  border: var(--control-border) solid var(--muted);
+  border-radius: var(--radius-control);
+  background: var(--bg);
   padding-block: 0;
-  padding-inline-end: calc(var(--control-inner-size) + var(--control-border));
+  padding-inline: var(--space-2) 0;
+  text-align: start;
 }
-.otk-select-decoration {
-  margin: var(--control-border);
-  pointer-events: none;
+.otk-select-value {
+  block-size: var(--form-control-size);
+  padding-block: 0;
 }

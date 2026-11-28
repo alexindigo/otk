@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fixture } from "./config.ts";
+import { markdown } from "@otk/content";
+import { codeblockExamples } from "../fixtures/codeblock-examples.ts";
 import { messageWindowScenario } from "./message-window-scenario.ts";
 import { messageUsageScenario } from "./message-usage-scenario.ts";
 import { messageCostScenario } from "./message-cost-scenario.ts";
@@ -12,6 +14,7 @@ import { publicUiScenario } from "./public-ui-scenario.ts";
 import { recordedMessageScenario } from "./recorded-message-scenario.ts";
 import { pendingInventoryScenario } from "./pending-inventory-scenario.ts";
 import { returnAnchorScenario } from "./return-anchor-scenario.ts";
+import { runningTranscriptScenario } from "./running-transcript-scenario.ts";
 import { coreBackendFixture } from "./core-backend.ts";
 import { WsClient } from "./ws-client.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
@@ -36,6 +39,9 @@ import type {
 
 /** External-backend message contracts retain their original real core/UI owner. */
 export async function messagesScenario(profile: Profile) {
+  if (profile === "contract-messages-running-layout") {
+    return await runningTranscriptScenario();
+  }
   if (profile === "contract-messages-failure-ownership") {
     return await failureOwnershipScenario();
   }
@@ -211,6 +217,19 @@ export async function messagesScenario(profile: Profile) {
       prompt: () => Promise.resolve(),
       abort: () => Promise.resolve(),
     };
+  } else if (profile === "contract-messages-codeblocks") {
+    prefix = codeblockExamples.map((text, index) => ({
+      id: `codeblock-${index}`,
+      sessionID,
+      role: "user",
+      time: { created: 1000 + index },
+      parts: [{
+        id: `source-${index}`,
+        kind: "text",
+        synthetic: false,
+        blocks: markdown(text),
+      }],
+    }));
   } else if (profile === "contract-messages-highlight") {
     messages = [highlight("Baseline")];
   } else if (profile === "contract-messages-context") {
@@ -419,6 +438,16 @@ export async function messagesScenario(profile: Profile) {
             output: "A short preview from another backend.",
             outputTruncated: true,
           },
+        },
+        // FX40/WP2: reply identity is attached to actual prose, not work-only sources.
+        {
+          id: "facts-reply",
+          kind: "text",
+          synthetic: false,
+          blocks: [{
+            b: "paragraph",
+            inline: [{ i: "text", text: "Backend-owned reply." }],
+          }],
         },
       ],
     }];
@@ -634,8 +663,8 @@ export async function messagesScenario(profile: Profile) {
           ) {
             f.app.connections.content(sessionID, {
               op: "session.revert",
-              messageID: "user",
-              messageCount: 1,
+              boundaryID: "user",
+              messageIDs: ["user"],
               files: [{ path: "example.ts", additions: 1, deletions: 1 }],
             });
             return null;

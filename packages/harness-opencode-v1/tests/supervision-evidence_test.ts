@@ -3,6 +3,25 @@ import { assertEquals } from "@std/assert";
 import { nativeMetadata, terminalFacts, terminalToken } from "../db-hints.ts";
 import { terminalSessions } from "../db-hints.ts";
 import { DatabaseSync } from "node:sqlite";
+import { mapIndex } from "../map.ts";
+
+Deno.test("V1 session metadata only reports the native session agent", () => {
+  const session = {
+    id: "fixture",
+    projectID: "p",
+    directory: "/fixture",
+    title: "Fixture",
+    time: { created: 1, updated: 1 },
+  };
+  const withAgent = { ...session, agent: "explore" };
+  assertEquals(Reflect.get(mapIndex(withAgent), "agent"), "explore");
+  assertEquals(Object.hasOwn(mapIndex(session), "agent"), false);
+  assertEquals(
+    Reflect.get(nativeMetadata({ id: "fixture", agent: "explore" }), "agent"),
+    "explore",
+  );
+  assertEquals(Object.hasOwn(nativeMetadata({ agent: null }), "agent"), false);
+});
 
 Deno.test("V1 intermediate calls and scalar candidates cannot publish a proven finish", () => {
   const info = {
@@ -17,18 +36,19 @@ Deno.test("V1 intermediate calls and scalar candidates cannot publish a proven f
   assertEquals(terminalToken({ ...info, finish: "stop" }), 20);
   assertEquals(terminalFacts({ ...info, finish: "stop" }), {
     terminal: 20,
+    runID: "message",
     outcome: "succeeded",
   });
   assertEquals(
     terminalFacts({ ...info, error: { name: "APIError", data: {} } }),
-    { terminal: 20, outcome: "failed" },
+    { terminal: 20, runID: "message", outcome: "failed" },
   );
   assertEquals(
     terminalFacts({
       ...info,
       error: { name: "MessageAbortedError", data: {} },
     }),
-    { terminal: 20, outcome: "interrupted" },
+    { terminal: 20, runID: "message", outcome: "interrupted" },
   );
   assertEquals(
     terminalToken({
@@ -76,6 +96,17 @@ Deno.test("V1 later intermediate or unfinished calls cannot erase an earlier pro
     );
     assertEquals(terminalSessions(db, "", 1)[0]?.activity?.terminal, 20);
     assertEquals(
+      Object.hasOwn(terminalSessions(db, "", 1)[0]!, "agent"),
+      false,
+    );
+    db.exec(
+      "ALTER TABLE session ADD COLUMN agent TEXT; UPDATE session SET agent='explore'",
+    );
+    assertEquals(
+      Reflect.get(terminalSessions(db, "", 1)[0]!, "agent"),
+      "explore",
+    );
+    assertEquals(
       terminalSessions(db, "", 1)[0]?.activity?.outcome,
       "succeeded",
     );
@@ -90,7 +121,10 @@ Deno.test("V1 later intermediate or unfinished calls cannot erase an earlier pro
     );
     assertEquals(terminalSessions(db, "", 1)[0]?.activity, {
       terminal: 70,
+      runID: "failed",
+      legacyAcknowledgement: { terminal: 70, runID: "failed" },
       outcome: "failed",
+      terminalOrigin: "historical",
     });
   } finally {
     db.close();

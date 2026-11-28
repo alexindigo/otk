@@ -50,7 +50,10 @@ export interface DirtySession {
 }
 export interface DigestPort extends ProviderReadPort {
   /** Aggregate native permission shared with serving-isolate finite reads. */
-  admission?(signal: AbortSignal): Promise<() => void>;
+  admission?(
+    signal: AbortSignal,
+    lane?: import("./read-admission.ts").NativeReadLane,
+  ): Promise<() => void>;
   /** Optional publication budget for a consumer's live metadata reconciliation. */
   readonly publishrows?: number;
   start(): Promise<void>;
@@ -141,6 +144,10 @@ export interface DigestExecution {
   readonly examined?: number;
 }
 export interface DigestSink {
+  /** Plugin-private durable acknowledgement projection, no native I/O. */
+  delivered?(
+    ids: readonly string[],
+  ): import("./provider-reads.ts").DeliveryScalar[];
   identity: string;
   catalog(
     signal: AbortSignal,

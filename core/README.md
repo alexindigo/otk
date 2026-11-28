@@ -10,6 +10,12 @@ mutable locators. Recorded checkout roots and learned history survive pruning,
 native restarts and canonical relocation. `present | removed | unknown` is an
 independent availability fact, never an automatic inactivity policy.
 
+Only a recorded `worktree` missing from a current authoritative inventory can be
+removed and project `archived: true`. Unequal paths, legacy topology loss and
+historical roots do not prove worktree kind. Live inventory coverage resets to
+unknown on restart; durable kind and affiliation survive. Archival is
+independent of the user's manual Inactive policy and of supervision lamps.
+
 Summary `memberships` retain exact scopes and every native owner on shared
 paths. Clients consume these exact mappings and never perform prefix inference.
 Insufficient root evidence remains unresolved instead of merging a removed
@@ -26,6 +32,12 @@ retained empty siblings. Stored exact policy scopes remain unchanged and resolve
 to retained presentation leaves.
 
 ## Session hierarchy
+
+EntityStates owns the task's helper roster and resolves the Finished selection
+for `sessions.acknowledge`. Subtree acknowledgement uses the same published
+session terminals and full hierarchy across checkouts. Both bulk acknowledgement
+and `sessions.seen` use the per-user `Seen` watermark; neither settles live
+inputs. A later terminal is still unseen until acknowledged in its own right.
 
 `IndexStore.hierarchy` is the single `SessionHierarchy` owner. It retains only
 demanded structural identities, not digests or transcripts. Native family
@@ -91,6 +103,25 @@ observation clocks. Old clocks survive but cannot acknowledge proven history.
 Native viewed state is neither read nor written. Completion requires a proven
 terminal.
 
+Plugins can additionally supply `activity.delivered`: a parent-owned receipt
+correlated to one exact child terminal. SessionSupervision alone computes
+effective acknowledgement from explicit per-user seen and that delivered token,
+and publishes `unseen` independently of the winning work/input state. Delivery
+does not rewrite seen marks or finish/outcome history, and cannot acknowledge a
+later run. Every count, mandatory family, lamp and notification borrows this
+projection.
+
+Failed helpers require explicit per-user acknowledgement: delivery to a parent
+does not acknowledge the failure. Their unacknowledged terminal takes needs-you
+priority through this same supervision owner, including project rollups.
+
+Historical delivery acquisition uses the existing worker/native connection and
+credited `supervision.deliveries` channel. Plugin-private digest tables retain
+only receipt scalars and resumable parent coverage. Coalesced parent work gives
+retained terminal helpers priority and yields between bounded keysets. It does
+not block startup, acquire browser transcripts or read a parent for each child.
+Unavailable or ambiguous native proof leaves a helper unseen.
+
 ## View-scoped publication (protocol 20)
 
 A selected socket view parks optional work until the first message page settles.
@@ -106,6 +137,9 @@ acquisition and explicit eviction, separately from authoritative deletion. Only
 selection retains turn summaries; other leased entries carry scalar digest
 summaries. Feature-owned connection projections scope inbox tasks/marks and
 approval metadata. All projects retain their server-owned row/lamp summaries.
+The socket acknowledges an installed epoch with `view.ready` after its source
+baselines have been published. An overtaken baseline cannot acknowledge a newer
+lease. That acknowledgement is separate from first-page settlement.
 `sessions.list` supplies bounded project/query pages (20 by default, at most
 200), independently of catalog completeness. Cached rows publish through a
 request-correlated `load.chunk`; the ordinary result completes only that page's
@@ -114,13 +148,15 @@ same view, without preloading transcripts. Hierarchy and task grouping come from
 the shared server projection. Remembered selection uses authoritative keyed
 identity validation through `NavigationDefault`. Project clicks and
 cold/reloaded project routes share this read: supervision attention in the
-existing priority order, exact remembered identity (including children), then
-the newest top-level session across checkout scopes. Attention borrows
-SessionHierarchy membership; the fallback reads at most one native root per
-exact scope and never scans a transcript or acquires the project population.
-Host-sidecar layout memory is passed as a candidate, never accepted by a
-client-side shortcut. Recall resolves the selected identity before reading its
-project, never discovered sources.
+existing priority order, remembered identity, then the newest top-level session
+across checkout scopes. Attention borrows SessionHierarchy membership; the
+fallback reads at most one native root per exact scope and never scans a
+transcript or acquires the project population. Host-sidecar layout memory is
+passed as a candidate, never accepted by a client-side shortcut. Attention and
+remembered helpers resolve only through the hierarchy's complete `rootID` proof
+to their human root. Unresolved or cyclic ancestry falls through to the newest
+proven root, never an unproven helper. Recall resolves the selected identity
+before reading its project, never discovered sources.
 
 Index publication has one outstanding bounded chunk per socket. `index.applied`
 returns credit only after client reduction. Updates coalesce by key while credit
@@ -138,10 +174,11 @@ and close own its lifetime.
 RequestAttention contributes a feature-owned lease for pending manual
 permissions and questions on every connected server. Outside the ordinary view
 it publishes only routing identities, titles, project/parent links and pending
-counts, with no digest, usage or activity history. Existing permission/question
-reads deliver the pending request through their request-owned lifetime.
-Settlement evicts this metadata unless another view still owns it; automatic
-permissions do not acquire the user-attention lease.
+counts plus pending request identities/freshness, with no digest, usage or work
+history. Presentation grace borrows those same identities across project scopes.
+Existing permission/question reads deliver the pending request through their
+request-owned lifetime. Settlement evicts this metadata unless another view
+still owns it; automatic permissions do not acquire the user-attention lease.
 
 `FormsFeature` registers typed `form.list/reply/cancel` operations and publishes
 volatile `forms.pending` attention state. Answer values remain typed; completion
@@ -176,13 +213,14 @@ upgrade instructions.
 ## Public discovery
 
 Served HTML extends the existing mount-relative base transform with one inert
-`otk-bootstrap` JSON value containing only `clientRequestPolicy(cfg)`. This safe
-numeric projection supplies the application's initial connection policy before
-any local or saved remote session read succeeds. It never serializes operator
-config, auth credentials or backend identity. The browser composition validates
-it and injects it into the shell; reusable client/UI packages do not read HTML
-or invent defaults. A remote's checked session and welcome replace this initial
-policy with that remote's authority. Static-only callers may omit config.
+`otk-bootstrap` JSON value containing the served `build` and
+`clientRequestPolicy(cfg)`. This safe numeric projection supplies the initial
+connection policy before any local or saved remote session read succeeds. It
+never serializes operator config, auth credentials or backend identity. The
+browser composition validates it and injects it into the shell; reusable
+client/UI packages do not read HTML or invent defaults. A remote's checked
+session and welcome replace this initial policy with that remote's authority.
+Static-only callers may omit config.
 
 The existing plain and tracked `/api/session` responses also carry `defaults`,
 an allowlisted `{ defaultPort }` projection from the shipped
@@ -191,12 +229,14 @@ Listener overrides do not change the advertised default; discovery's exact
 response and CORS stay unchanged.
 
 `GET /api/discovery` is reflectively discovered and returns only
-`{ product: "otk", protocol, version, originAllowed, signIn }`. Versions come
-from the protocol owner. `originAllowed` evaluates the request's Origin through
-the same origin predicate as normal API admission; missing and opaque (`null`)
-origins are not allowed. `signIn` describes the server requirement: `setup` for
-unconfigured auth, `login` for password/TOTP, and `none` for auth disabled. It
-does not describe or validate the caller's session.
+`{ product: "otk", protocol, version, build, originAllowed, signIn }`. Versions
+come from the protocol owner; `build` is computed once from the served index and
+shared with the HTML bootstrap, health and WebSocket handshake. `originAllowed`
+evaluates the request's Origin through the same origin predicate as normal API
+admission; missing and opaque (`null`) origins are not allowed. `signIn`
+describes the server requirement: `setup` for unconfigured auth, `login` for
+password/TOTP, and `none` for auth disabled. It does not describe or validate
+the caller's session.
 
 This metadata is public even to a refused Origin. GET and OPTIONS on this exact
 path alone use wildcard CORS without credentialed mode. Clients fetch it with
@@ -207,6 +247,14 @@ values or backend identity are exposed. Other routes retain their existing
 origin, auth and cookie behavior. Discovery adds no automatic time limit.
 
 ## Resumable request services
+
+`registerProjectEdit` selects the optional native project editor. It validates
+captured project ownership and writable fields before invoking the native
+effect, checkpoints only per-field hashes, and requires authoritative read-back.
+An uncertain outcome reconciles against the captured native project without
+re-dispatch; a newer resource witness prevents old intent confirmation. Startup
+scripts and icon bytes never become durable request receipts. This feature does
+not alter session/family permission policy.
 
 Native registrations use `nativeExecution` and `nativeEffect`: the core fences
 independent backends before invocation, adapters repeat the fence at I/O, and
@@ -611,15 +659,14 @@ optional `FrameSource.connection` hook, including the initial connecting state
 before backend startup. Automatic scans retain dirty owners while disconnected
 and run on connection readiness, not on a metadata publication that may precede
 the native client. Connection edges fence in-flight scans independently of index
-replacement. Proven-not-dispatched unavailable replies finish their journal
-intent and become eligible on the next connected edge. Explicit index
-replacement (`index.snapshot`) also clears failed-request memoization and
-re-enqueues enabled sessions, allowing unavailable replies to be retried without
-another connected edge. Actual refusals stay memoized by request fingerprint
-across connection edges; uncertain dispatched replies stay unconfirmed and
-cannot be resent. Unrelated index updates cannot repeat a failed attempt or
-journal row. Policy revisions and affected-family activity invalidations are
-separate feature-owned frames.
+replacement. Automatic dispatch belongs to the session/request identity, never
+its mutable details, an index snapshot or a location's temporary absence.
+Proven-not-dispatched unavailable replies alone may retry, after 250 ms then
+1000 ms backoff, at most three attempts total and only while connected.
+Readiness and snapshot changes cannot bypass the delay or reset the bound.
+Actual refusals stay suppressed across all publications; uncertain dispatched
+replies stay unconfirmed and cannot be resent. Policy revisions and
+affected-family activity invalidations are separate feature-owned frames.
 
 Permission activity stores application-selected `PublicFailure` facts separately
 from legacy diagnostic error text. The existing activity row shows its safe
@@ -721,6 +768,24 @@ borrow those scopes for task and mandatory metadata without changing native list
 or stored task identities.
 
 ## Worker-backed digest services
+
+Storage availability is process-wide and memory-only. The serving store's
+`StorageAvailability` aggregates the digest worker's status across its existing
+generation-fenced bridge. `StorageFeature` contributes a snapshot/live frame and
+a lifetime-owned bounded real-commit probe timer. The existing failure presenter
+owns one replaceable server-storage notice and a recovery notice that names the
+observation gap. Recovery re-admits known derived identities and native catalog
+reconciliation; it does not claim that missing observation was complete.
+Replacement workers inherit unresolved storage recovery and commit a real probe
+before reporting healthy; reopening alone cannot clear the parent's fault.
+
+`StorageRequests` uses volatile receipts and admission windows for reloadable
+reads, while mutations lazily persist their window and receipt atomically.
+Mutations never fall back to volatile storage. Failed local completion retains
+its durable nonterminal request without reporting success or trying to save
+another failed result. Proven storage recovery resumes that request; native
+dispatch fences still require recovery rather than redispatch. HTTP and new read
+connections therefore do not require disk writes just to observe state.
 
 Derived units carry their own pending/unavailable/known result independently of
 refresh activity. Known values retain their source witness and finality through

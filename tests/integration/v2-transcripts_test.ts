@@ -82,7 +82,7 @@ Deno.test({
       await a.start();
       a.value.core.subscriptions(target.id, 1);
       const page = await a.value.core.listMessages(target.id, {});
-      projection.replace(page.items);
+      projection.reset(page.items);
       await native.prompt(target.id, "live transcript fixture");
       await waitFor(() => body(projection.messages()), (text) =>
         text.includes("one"), 30000);
@@ -92,7 +92,7 @@ Deno.test({
         body(projection.messages()), (value) =>
         value.includes("start one two three four five done"), 30000);
       const final = await a.value.core.listMessages(target.id, {});
-      projection.replace(final.items);
+      projection.reset(final.items);
       assert(
         body(projection.messages()).includes(
           "start one two three four five done",
@@ -142,7 +142,7 @@ Deno.test({
       await a.start();
       a.value.core.subscriptions(target.id, 1);
       const initial = await a.value.core.listMessages(target.id, {});
-      projection.replace(initial.items);
+      projection.reset(initial.items);
       await native.prompt(target.id, "read note.txt");
       await completed(native, target.id);
       await waitFor(
@@ -243,7 +243,7 @@ Deno.test({
       assertEquals(timelinePrompts(all).length, 7);
       assertEquals(new Set(all.map((m) => m.id)).size, all.length);
       const projection = createTranscriptProjection();
-      projection.replace([...all].reverse());
+      projection.reset([...all].reverse());
       assertEquals(projection.state.messageIDs, all.map((m) => m.id));
       const boundary = all.find((m) =>
         m.role === "user" && body([m]).includes("prompt-4")
@@ -256,7 +256,7 @@ Deno.test({
       });
       await waitFor(
         () => a.value.core.getSession(forkID),
-        (s) => s.revert?.messageID === boundary.id,
+        (s) => s.revert?.boundaryID === boundary.id,
       );
       const visible = await a.value.core.listMessages(forkID, {});
       assert(!body(visible.items).includes("prompt-4"));

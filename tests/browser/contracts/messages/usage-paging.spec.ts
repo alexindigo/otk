@@ -141,7 +141,7 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   await expect(page.locator(".otk-usage-breakdown tfoot tr")).toHaveCount(1);
   expect(
     await rows.evaluateAll((rows) =>
-      rows.reduce((sum, row) => sum + Number(row.children[2].textContent), 0)
+      rows.reduce((sum, row) => sum + Number(row.children[1].textContent), 0)
     ),
   ).toBe(102);
   const foot = page.locator(".otk-usage-breakdown tfoot tr");
@@ -152,10 +152,10 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   expect(
     await rows.evaluateAll((rows) =>
       rows.every((row) =>
-        Number(row.children[2].textContent) ===
-          Number(row.children[3].textContent) +
-            Number(row.children[6].textContent) +
-            Number(row.children[7].textContent)
+        Number(row.children[1].textContent) ===
+          Number(row.children[2].textContent) +
+            Number(row.children[5].textContent) +
+            Number(row.children[6].textContent)
       )
     ),
   ).toBe(true);
@@ -167,7 +167,7 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
     await rows.evaluateAll((rows) =>
       rows.reduce(
         (sum, row) =>
-          sum + Number(row.children[8].textContent!.replace("$", "")),
+          sum + Number(row.children[7].textContent!.replace("$", "")),
         0,
       ).toFixed(
         2,
@@ -177,7 +177,11 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   expect(await foot.evaluate((row) => row.children[7].textContent)).toBe(
     "$1.02",
   );
-  await expect(page.locator(".otk-turn-time")).toHaveText("Worked for 102.0s");
+  // This retained summary is explicitly nonfinal while its source is held.
+  await expect(page.locator(".otk-turn-time")).toHaveText(
+    "Worked for 1m 42s counting...",
+  );
+  await expect(page.locator(".otk-turn-time em")).toHaveText("counting...");
   await page.locator(".otk-usage-scroll").hover();
   await page.mouse.wheel(0, 5000);
   await expect.poll(() =>

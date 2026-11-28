@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export { default as ProgressStatus } from "./components/ProgressStatus.tsx";
 export { default as ControlValue } from "./components/ControlValue.tsx";
+export { TreeItem, TreeNode } from "./components/Tree.tsx";
 export { default as Select } from "./components/Select.tsx";
 export { default as OverflowRow } from "./components/OverflowRow.tsx";
 export { default as AuthColumn } from "./components/AuthColumn.tsx";
@@ -28,6 +29,8 @@ export { default as Blocks } from "./components/Blocks.tsx";
 export { default as Code } from "./components/Code.tsx";
 export { default as Diff } from "./components/Diff.tsx";
 export { default as Message } from "./components/Message.tsx";
+export { default as EntityPill } from "./components/EntityPill.tsx";
+export { default as ActionButton } from "./components/ActionButton.tsx";
 export { default as ToolLine } from "./components/ToolLine.tsx";
 export { default as ToolFrame } from "./components/tools/ToolFrame.tsx";
 export { default as ToolOutput } from "./components/tools/ToolOutput.tsx";
@@ -53,6 +56,7 @@ export { default as ListRow } from "./components/ListRow.tsx";
 export { default as RightPanel } from "./components/RightPanel.tsx";
 export { registerSessionsPanel } from "./features/sessions.tsx";
 export { registerTimelinePanel } from "./features/timeline.tsx";
+export { registerWorkPanel } from "./features/work.tsx";
 export { default as Timeline } from "./components/Timeline.tsx";
 export { registerActivityPanel } from "./features/approvals.tsx";
 export {
@@ -62,6 +66,10 @@ export {
 export { registerTerminalPrompt } from "./features/prompt/terminal.tsx";
 export { registerAutoApprovePrompt } from "./features/prompt/approvals.tsx";
 export { default as ProjectTabs } from "./components/ProjectTabs.tsx";
+export {
+  default as ProjectChip,
+  ProjectAvatar,
+} from "./components/ProjectChip.tsx";
 export { registerTaskDialogs, type TaskNameInput } from "./features/tasks.tsx";
 export { registerCommandDialogs } from "./features/dialogs.tsx";
 export {
@@ -75,11 +83,6 @@ export {
 export * from "./shell/context.tsx";
 export { default as Sidebar } from "./components/Sidebar.tsx";
 export { default as StatusLight } from "./components/StatusLight.tsx";
-export {
-  type AttentionLampScope,
-  type AttentionPresentation,
-  AttentionProvider,
-} from "./registries/attention.tsx";
 export { default as ConnectionLight } from "./components/ConnectionLight.tsx";
 export { default as ActivityIndicator } from "./components/ActivityIndicator.tsx";
 export {
@@ -112,7 +115,10 @@ export {
   default as ComposerNotice,
 } from "./components/ComposerNotice.tsx";
 export { ForkFact } from "./components/ForkNote.tsx";
-export { RolledBackContent } from "./components/RolledBackStrip.tsx";
+export {
+  default as RevertGroup,
+  RevertConfirmation,
+} from "./components/RevertGroup.tsx";
 export {
   default as PermissionDock,
   registerPermissionDock,
@@ -133,6 +139,7 @@ export { solidState } from "./state/binding.ts";
 export { selection } from "./components/selection.ts";
 export { contextTarget } from "./components/context-target.ts";
 export { default as ContextMenu } from "./components/ContextMenu.tsx";
+export { DisclosuresProvider } from "./components/Disclosure.tsx";
 export {
   type ContentIdentity,
   ContentIdentityProvider,
@@ -146,6 +153,7 @@ export * from "./registries/context.tsx";
 export * from "./registries/session.tsx";
 export * from "./registries/composer.tsx";
 export { default as RequestAge } from "./components/RequestAge.tsx";
+export { default as TimeText } from "./components/TimeText.tsx";
 export * from "./registries/shell.ts";
 export { default as DialogHost } from "./components/DialogHost.tsx";
 export { default as ComposerTakeovers } from "./components/ComposerTakeovers.tsx";
@@ -215,7 +223,7 @@ export {
   registerOsChannel,
 } from "./features/notify/os.ts";
 export { registerSoundChannel } from "./features/notify/sound.ts";
-export { registerBadgeChannel } from "./features/notify/badge.ts";
+export { attentionBadge } from "./features/notify/badge.ts";
 export { default as Toasts } from "./components/Toasts.tsx";
 export {
   default as NotificationSettings,
@@ -227,3 +235,4 @@ export {
   registerFormTakeover,
   registerGlobalForms,
 } from "./components/FormDock.tsx";
+export { registerFilePreviewDialog } from "./components/FilePreview.tsx";

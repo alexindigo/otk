@@ -1,10 +1,29 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fromFileUrl, join } from "@std/path";
 import { type Capabilities, ContentReplay, type Harness } from "@otk/harness";
+import type { PermissionRequest } from "@otk/protocol";
 import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
 import { resources } from "./resources.ts";
 import { fixturePage } from "./message-pages.ts";
+
+/** External backend scenes publish both their payloads and native input keys. */
+export function publishFixturePermissions(
+  app: Awaited<ReturnType<typeof startApplication>>,
+  sessionID: string,
+  pending: readonly PermissionRequest[],
+): void {
+  const entry = app.index.getMetadata(sessionID);
+  if (!entry) throw new Error(`Missing fixture session: ${sessionID}`);
+  app.index.upsertMetadata({
+    ...entry,
+    attention: { ...entry.attention, permissions: pending.length },
+    activity: {
+      ...entry.activity,
+      permissions: { keys: pending.map(({ id }) => id), fresh: true },
+    },
+  });
+}
 
 /** Real core composition with caller-supplied optional backend capabilities. */
 export async function coreBackendFixture(

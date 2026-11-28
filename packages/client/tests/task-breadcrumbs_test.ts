@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { taskBreadcrumbs } from "./supervision-fixture.ts";
 import type { IndexEntry } from "@otk/protocol";
-Deno.test("breadcrumbs keep member order, include active nested helpers and cannot duplicate grouped children or cycles", () => {
+Deno.test("D67 breadcrumbs keep only the selected root without siblings or cycles", () => {
   const make = (id: string, parentID?: string): IndexEntry => ({
     id,
     parentID,
@@ -36,17 +36,15 @@ Deno.test("breadcrumbs keep member order, include active nested helpers and cann
   ];
   assertEquals(
     taskBreadcrumbs(task, entries).map((c) => [c.id, c.depth]),
-    [["a", 0], ["helper", 1], ["nested", 2], ["b", 0]],
+    [["a", 0]],
   );
   assertEquals(taskBreadcrumbs(task, entries).map((c) => c.id), [
     "a",
-    "helper",
-    "nested",
-    "b",
   ]);
   entries[0].parentID = "nested";
+  // A cycle remains in Sessions but cannot establish a human task identity.
   assertEquals(
     new Set(taskBreadcrumbs(task, entries).map((c) => c.id)).size,
-    4,
+    0,
   );
 });

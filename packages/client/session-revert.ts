@@ -1,52 +1,146 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { PublicFailure, RevertInfo } from "@otk/protocol";
-import { type FailureValue, failureValue } from "./failure-features.ts";
+import {
+  compareMessages,
+  type Message,
+  type PublicFailure,
+  randomID,
+  type RevertInfo,
+} from "@otk/protocol";
+import {
+  errorFeedback,
+  type FailureValue,
+  failureValue,
+  placeFailure,
+} from "./failure-features.ts";
 import { type Feedback, RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import type { ContentState } from "./reduce.ts";
+import type { TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { Drafts } from "./drafts.ts";
 import { historyDraft } from "./prompt-history.ts";
+import {
+  type BranchHistory,
+  type BranchHistoryState,
+  savedBranchMatches,
+} from "./branch-history.ts";
 
 export interface RevertStrip {
-  count: number;
+  boundaryID: string;
+  messageIDs: string[];
   preview: string;
-  prompts: NonNullable<RevertInfo["prompts"]>;
-  more: number;
   files: RevertInfo["files"];
 }
 type RevertIntent = "revert" | "code" | "restore" | "undo" | "redo";
+export type RevertPhase =
+  | "idle"
+  | "confirming"
+  | "staging"
+  | "staged"
+  | "saving"
+  | "saved"
+  | "failed"
+  | "restoring";
 export interface SessionRevertState {
+  phase?: RevertPhase;
+  record?: RevertInfo;
+  messages?: Message[];
+  confirmation?: { kind: "revert" | "code" | "undo"; messageID: string };
+  dismissed?: boolean;
+  /** Explicit archive deletion keeps native staging, without recreating the copy. */
+  copyRemoved?: boolean;
   pending?: RevertIntent;
   error?: FailureValue;
   key?: string;
   failure?: PublicFailure;
 }
+type RevertFlow = SessionRevertState & { preview?: Message[] };
 /** One projection for the rollback owner and its borrowed request feedback. */
 export function revertPresentation(
   state: SessionRevertState,
   feedback?: Feedback,
-  branchFailure?: FailureValue,
-): { state: SessionRevertState; feedback?: Feedback } {
+  history?: BranchHistoryState,
+): {
+  state: SessionRevertState;
+  recordFailure?: Feedback;
+  recordStatus?: string;
+  branchFeedback?: Feedback;
+  permanenceFeedback?: Feedback;
+  recordRecovery: boolean;
+  noticeRecovery: boolean;
+  feedback?: Feedback;
+} {
+  const branch = errorFeedback(history?.error);
+  const ownsRecord = !!state.record && !state.dismissed;
+  const copyRecovery = history?.recovery;
+  const recordRecovery = ownsRecord &&
+    copyRecovery?.boundaryID === state.record?.boundaryID;
+  const failure = (recordRecovery ? branch : undefined) ??
+    errorFeedback(state.error);
+  const recordFailure = ownsRecord && failure?.failure
+    ? placeFailure(failure.failure.value, {
+      surface: "record",
+      view: failure.failure.value.facts?.target,
+    })
+    : undefined;
+  const permanence = history?.permanence;
+  const permanenceFeedback = errorFeedback(permanence?.error);
+  const recordOwnsBranch = !!recordFailure &&
+    recordFailure.diagnosticID === branch?.diagnosticID;
+  const recordOwnsCause = !!recordFailure &&
+    recordFailure.diagnosticID === permanence?.causeID;
+  const branchFeedback = !recordOwnsBranch &&
+      (!permanence || !branch?.diagnosticID ||
+        branch.diagnosticID !== permanence.causeID)
+    ? branch
+    : undefined;
   const sameRequest = feedback?.identity && state.key === feedback.identity;
   const sameFailure = feedback?.diagnosticID &&
     state.failure?.diagnosticID === feedback.diagnosticID;
-  const sameBranchFailure = branchFailure && branchFailure.diagnosticID &&
-    state.failure?.diagnosticID === branchFailure.diagnosticID;
+  const sameBranchFailure = branch?.diagnosticID &&
+    feedback?.diagnosticID === branch.diagnosticID;
   const ownsPending = sameRequest && state.pending &&
     feedback?.kind === "pending" && !feedback.failure;
   return {
-    state: (!ownsPending && sameRequest) || sameFailure || sameBranchFailure
-      ? { ...state, pending: undefined, error: undefined }
-      : state,
-    feedback: ownsPending ? undefined : feedback,
+    state,
+    recordFailure,
+    recordStatus: recordFailure &&
+        (recordRecovery ||
+          recordFailure.failure?.value.code.startsWith("branch-history.")) &&
+        state.phase === "failed"
+      ? "Copy not saved"
+      : recordFailure?.failure?.heading,
+    branchFeedback,
+    permanenceFeedback: recordOwnsCause && permanenceFeedback?.failure
+      ? placeFailure({
+        ...permanenceFeedback.failure.value,
+        facts: {
+          ...permanenceFeedback.failure.value.facts,
+          reason: "The replacement was not sent.",
+          details: undefined,
+        },
+      }, {
+        surface: "feedback",
+        view: permanenceFeedback.failure.value.facts?.target,
+      })
+      : permanenceFeedback,
+    recordRecovery: !!recordRecovery,
+    noticeRecovery: !!copyRecovery && !recordRecovery && !permanence,
+    feedback: ownsPending || sameRequest || sameFailure || sameBranchFailure
+      ? undefined
+      : feedback,
   };
 }
 export interface SessionRevert {
   readonly state: SessionRevertState;
   matches(target: Selection): boolean;
+  ready(target: Selection): Promise<void> | undefined;
   revertTo(messageID: string, code?: boolean): Promise<void>;
+  confirm(): Promise<void>;
+  cancel(): void;
+  retry(): Promise<void>;
+  dismiss(): void;
   restore(): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
@@ -56,44 +150,338 @@ export interface SessionRevert {
 }
 /** One selected-session operation lifetime; server content is never optimistic. */
 export function createSessionRevert(options: {
-  session: Pick<ClientSession, "state" | "subscribe">;
+  session:
+    & Pick<ClientSession, "state" | "subscribe">
+    & {
+      transcripts?: {
+        get(target: Selection): Pick<TranscriptOwner, "ensure"> | undefined;
+      };
+    };
   actions:
     & Pick<SessionActions, "revert" | "restore" | "abort">
     & Partial<Pick<SessionActions, "group">>;
   drafts: Drafts;
+  branchHistory?:
+    & Pick<BranchHistory, "prepare" | "state">
+    & Partial<
+      Pick<
+        BranchHistory,
+        | "subscribe"
+        | "stageEnded"
+        | "committed"
+        | "preservationWarning"
+        | "retryCopy"
+      >
+    >;
+  storage?: Pick<Storage, "getItem" | "setItem"> | null;
+  server?(target: Selection): string;
   status: {
     working(target: Selection): boolean;
     subscribe(listener: () => void): () => void;
   };
   factory?: StateFactory;
 }): SessionRevert {
-  const store = (options.factory ?? createState)<SessionRevertState>({});
+  const store = (options.factory ?? createState)<SessionRevertState>({
+    phase: "idle",
+  });
+  const flows = new Map<string, RevertFlow>();
   const identity = () => {
     const t = options.session.state.selection;
     return t ? `${t.sidecarId}/${t.sessionID}` : "";
   };
   let key = identity(), generation = 0, pending = false, alive = true;
+  let observedCommit: import("@otk/protocol").RevertCommit | undefined;
+  let closedStage = false;
   let operation: AbortController | undefined;
+  let previewRead: AbortController | undefined;
+  const settlements = new Map<string, Promise<void>>();
+  const flow = () => flows.get(key) ?? { phase: "idle" as const };
+  const publish = () =>
+    store.update((state) => {
+      for (const field of Object.keys(state)) {
+        Reflect.deleteProperty(state, field);
+      }
+      const { preview, ...value } = flow();
+      Object.assign(state, value);
+      if (state.phase === "confirming" || state.confirmation && !state.record) {
+        state.messages = preview;
+      }
+      // Capture outcomes may arrive during native reconciliation. The active
+      // mutation owns its phase until that publication wait has settled.
+      if (state.pending) {
+        state.phase = state.pending === "restore" || state.pending === "redo"
+          ? "restoring"
+          : "staging";
+      }
+    });
+  const updateAt = (
+    targetKey: string,
+    change: (state: RevertFlow) => void,
+  ) => {
+    const next = { ...flows.get(targetKey) };
+    change(next);
+    flows.set(targetKey, next);
+    if (targetKey === key) publish();
+  };
+  const update = (change: (state: RevertFlow) => void) => updateAt(key, change);
+  const dismissalKey = (target: Selection, boundaryID: string) =>
+    "otk.revert-dismiss.v1/" +
+    encodeURIComponent(
+      JSON.stringify([
+        options.server?.(target) ?? target.sidecarId,
+        target.sessionID,
+        boundaryID,
+      ]),
+    );
+  const dismissed = (target: Selection, boundaryID: string) => {
+    try {
+      return options.storage?.getItem(dismissalKey(target, boundaryID)) ===
+        "true";
+    } catch {
+      return false;
+    }
+  };
+  const setStage = (
+    state: SessionRevertState,
+    target: Selection,
+    record: RevertInfo,
+  ) => {
+    if (state.record?.boundaryID !== record.boundaryID) {
+      state.dismissed = dismissed(target, record.boundaryID);
+      state.copyRemoved = undefined;
+    }
+    state.record = record;
+  };
+  const retirePreview = () => {
+    previewRead?.abort();
+    previewRead = undefined;
+  };
   const reset = () => {
+    retirePreview();
+    update((state) => {
+      state.pending = undefined;
+      state.key = undefined;
+      if (state.phase === "staging" || state.phase === "restoring") {
+        state.phase = state.record ? "staged" : "idle";
+      }
+    });
     generation++;
     operation?.abort();
     operation = undefined;
     pending = false;
-    store.update((state) => {
-      state.pending = undefined;
+  };
+  const captures = new Map<string, Promise<void>>();
+  const savedCopy = (
+    record: RevertInfo,
+    target = options.session.state.selection,
+  ) => {
+    const state = options.branchHistory?.state;
+    if (
+      state?.target &&
+      (state.target.sidecarId !== target?.sidecarId ||
+        state.target.sessionID !== target?.sessionID)
+    ) return;
+    return state?.branches.find((branch) => savedBranchMatches(branch, record));
+  };
+  const save = (target: Selection, record: RevertInfo): Promise<void> => {
+    const capturedKey = `${target.sidecarId}/${target.sessionID}`;
+    const captureKey = JSON.stringify([capturedKey, record.boundaryID]);
+    const running = captures.get(captureKey);
+    if (running) return running;
+    if (!options.branchHistory) return Promise.resolve();
+    if (options.branchHistory.preservationWarning?.()) return Promise.resolve();
+    const completion = Promise.withResolvers<void>();
+    captures.set(captureKey, completion.promise);
+    updateAt(capturedKey, (state) => {
+      state.phase = "saving";
+      state.copyRemoved = undefined;
       state.error = undefined;
-      state.key = undefined;
       state.failure = undefined;
     });
+    void Promise.resolve().then(() =>
+      options.branchHistory!.prepare(target, record.boundaryID, record)
+    ).then(() => {
+      updateAt(capturedKey, (state) => {
+        if (state.record?.boundaryID !== record.boundaryID) return;
+        if (key !== capturedKey) {
+          state.phase = "staged";
+          return;
+        }
+        const copy = savedCopy(record, target);
+        state.phase = copy ? "saved" : "failed";
+        if (!copy) {
+          state.error = failureValue(
+            new RequestFailure({
+              code: "branch-history.missing",
+              retry: "new-intent",
+              diagnosticID: randomID(),
+              facts: {
+                actionLabel: "Saving the earlier conversation",
+                target,
+                reason: "The earlier conversation has not been saved.",
+                recovery: "Retry, or Keep without a saved copy.",
+              },
+            }),
+          );
+        }
+        if (copy) {
+          state.messages = record.messageIDs.map((id) =>
+            copy.messages.find((m) => m.id === id)!
+          );
+        }
+      });
+      completion.resolve();
+    }, (cause) => {
+      updateAt(capturedKey, (state) => {
+        if (state.record?.boundaryID !== record.boundaryID) return;
+        state.phase = "failed";
+        state.error = failureValue(cause);
+        state.failure = cause instanceof RequestFailure
+          ? cause.failure
+          : undefined;
+      });
+      completion.resolve();
+    }).finally(() => {
+      if (captures.get(captureKey) === completion.promise) {
+        captures.delete(captureKey);
+      }
+    });
+    return completion.promise;
   };
   const observe = () => {
     const next = identity();
     if (next !== key) {
-      key = next;
       reset();
+      key = next;
+      observedCommit = undefined;
+      closedStage = false;
+      publish();
+    }
+    if (!alive) return;
+    const target = options.session.state.selection;
+    if (!target) return;
+    const { revert: record, revertCommitted: fact } =
+      options.session.state.content;
+    if (
+      fact && (fact.boundaryID !== observedCommit?.boundaryID ||
+        fact.at !== observedCommit?.at)
+    ) {
+      observedCommit = fact;
+      options.branchHistory?.committed?.(target, fact.boundaryID, fact.at);
+    }
+    if (pending) return;
+    const candidate = options.branchHistory?.state;
+    const history = !candidate?.target ||
+        candidate.target.sidecarId === target.sidecarId &&
+          candidate.target.sessionID === target.sessionID
+      ? candidate
+      : undefined;
+    if (!record) {
+      if (
+        options.session.state.continuity === "ready" &&
+        !options.session.state.loading
+      ) {
+        if (flow().record) {
+          flows.set(key, { phase: "idle" });
+          publish();
+        }
+        if (
+          !closedStage && history?.branches.some((branch) => branch.pending)
+        ) {
+          closedStage = true;
+          options.branchHistory?.stageEnded?.(target);
+        }
+      }
+      return;
+    }
+    closedStage = false;
+    if (flow().record?.boundaryID !== record.boundaryID) {
+      retirePreview();
+      update((state) => {
+        setStage(state, target, record);
+        state.phase = "staged";
+        state.confirmation = undefined;
+        state.preview = undefined;
+        state.error = undefined;
+        state.failure = undefined;
+        state.messages = options.session.state.content.messages.filter((m) =>
+          record.messageIDs.includes(m.id)
+        );
+      });
+    }
+    const copy = savedCopy(record);
+    if (history?.recovery?.boundaryID === record.boundaryID && !copy) {
+      update((state) => {
+        state.phase = history.pending ? "saving" : "failed";
+        state.error = history.error;
+        state.failure = errorFeedback(history.error)?.failure?.value;
+      });
+      return;
+    }
+    if (
+      !copy && flow().failure?.code.startsWith("branch-history.") &&
+      !history?.error
+    ) {
+      update((state) => {
+        state.phase = "staged";
+        state.copyRemoved = true;
+        state.error = undefined;
+        state.failure = undefined;
+      });
+    }
+    if (copy && flow().phase !== "restoring") {
+      update((state) => {
+        state.phase = "saved";
+        state.messages = record.messageIDs.map((id) =>
+          copy.messages.find((m) => m.id === id)!
+        );
+      });
+    } else if (flow().phase === "saved") {
+      update((state) => {
+        state.phase = "staged";
+        state.copyRemoved = true;
+      });
+    } else if (
+      flow().phase === "staged" &&
+      !flow().copyRemoved &&
+      options.session.state.continuity === "ready" &&
+      !options.session.state.loading
+    ) {
+      void save({ ...target }, record);
     }
   };
   const release = options.session.subscribe(observe);
+  const releaseHistory = options.branchHistory?.subscribe?.(observe);
+  const candidates = () => {
+    const state = flow();
+    const retained = state.record
+      ? savedCopy(state.record)?.messages ?? state.messages ?? []
+      : [];
+    return [
+      ...new Map(
+        [...options.session.state.content.messages, ...retained].map((
+          m,
+        ) => [m.id, m]),
+      ).values(),
+    ].sort(compareMessages);
+  };
+  const preview = (messageID: string) => {
+    const messages = candidates();
+    const at = messages.findIndex((message) => message.id === messageID);
+    return at < 0 ? undefined : messages.slice(at);
+  };
+  const cancelConfirmation = () => {
+    retirePreview();
+    if (!flow().confirmation) return;
+    update((state) => {
+      state.confirmation = undefined;
+      state.phase = state.record ? "staged" : "idle";
+      state.preview = undefined;
+      state.error = undefined;
+      state.failure = undefined;
+    });
+    observe();
+  };
   const waitFor = (
     ready: () => boolean,
     subscribe: (listener: () => void) => () => void,
@@ -125,24 +513,27 @@ export function createSessionRevert(options: {
     observe();
     const target = options.session.state.selection;
     if (!alive || !target || pending) return;
-    if (kind === "undo") {
+    if (kind === "undo" && !messageID) {
       messageID = options.session.state.latestPrompt?.id;
     }
     if (
       (kind === "undo" || kind === "revert" || kind === "code") && !messageID
     ) return;
+    retirePreview();
     const captured = { ...target }, current = generation;
     const group = options.actions.group?.(captured);
     const interrupt = group?.options("interrupt", captured.sessionID);
     const change = group?.options("boundary", captured.sessionID);
     const stopping = kind === "undo" && options.status.working(captured);
-    const previousBoundary = options.session.state.content.revert?.messageID;
+    const previousBoundary = options.session.state.content.revert?.boundaryID;
     const previousEpoch = options.session.state.clock?.epoch;
     const active = () => {
       observe();
       return alive && generation === current;
     };
     const draftKey = key;
+    const settled = Promise.withResolvers<void>();
+    settlements.set(draftKey, settled.promise);
     const transaction = kind === "undo" || kind === "revert" || kind === "code"
       ? options.drafts.reverts.capture(draftKey, previousBoundary)
       : undefined;
@@ -153,8 +544,11 @@ export function createSessionRevert(options: {
     const controller = operation = new AbortController();
     let nativeCleared = false;
     pending = true;
-    store.update((state) => {
+    update((state) => {
       state.pending = kind;
+      state.phase = kind === "restore" || kind === "redo"
+        ? "restoring"
+        : "staging";
       state.error = undefined;
       state.failure = undefined;
       state.key = (stopping ? interrupt : change)?.intent?.key;
@@ -170,7 +564,7 @@ export function createSessionRevert(options: {
         );
       }
       if (!active()) return;
-      store.update((state) => {
+      update((state) => {
         state.key = change?.intent?.key;
       });
       const result = kind === "revert" || kind === "undo" || kind === "code"
@@ -181,18 +575,29 @@ export function createSessionRevert(options: {
           kind === "code",
         )
         : await options.actions.restore(captured, change);
-      if (result.revert) transaction?.staged(result.revert.messageID);
+      if (result.revert) transaction?.staged(result.revert.boundaryID);
       nativeCleared = (kind === "restore" || kind === "redo") && !result.revert;
       if (!active()) return;
+      if (result.revert) {
+        const kept = [...flow().preview ?? [], ...candidates()];
+        update((state) => {
+          setStage(state, captured, result.revert!);
+          const visible = new Map(kept.map((message) => [message.id, message]));
+          state.messages = result.revert!.messageIDs.flatMap((id) => {
+            const message = visible.get(id);
+            return message ? [message] : [];
+          });
+        });
+      }
       // RPC completion admits the mutation. The selected transcript remains
       // authoritative, including a resync that is still reading its messages.
-      const boundary = result.revert?.messageID;
+      const boundary = result.revert?.boundaryID;
       await waitFor(
         () => {
           const state = options.session.state;
           if (
             state.loading || state.continuity !== "ready" ||
-            state.content.revert?.messageID !== boundary
+            state.content.revert?.boundaryID !== boundary
           ) return false;
           if (
             boundary === previousBoundary && kind !== "code" &&
@@ -207,13 +612,19 @@ export function createSessionRevert(options: {
       );
       if (!active()) return;
       const entry = result.revert?.prompt;
-      if (kind === "undo" && entry) {
+      if (transaction && entry) {
         transaction!.recall(historyDraft(entry));
       }
+      update((state) => {
+        state.phase = result.revert ? "staged" : "idle";
+        state.confirmation = undefined;
+        state.preview = undefined;
+      });
     } catch (error) {
       observe();
       if (alive && generation === current) {
-        store.update((state) => {
+        update((state) => {
+          state.phase = "failed";
           state.error = failureValue(error);
           state.failure = error instanceof RequestFailure
             ? error.failure
@@ -228,39 +639,139 @@ export function createSessionRevert(options: {
       if (alive && generation === current) {
         pending = false;
         operation = undefined;
-        store.update((state) => {
+        update((state) => {
           state.pending = undefined;
         });
+        observe();
       }
+      if (settlements.get(draftKey) === settled.promise) {
+        settlements.delete(draftKey);
+      }
+      settled.resolve();
     }
   };
+  const request = async (
+    kind: "revert" | "code" | "undo",
+    messageID?: string,
+  ) => {
+    observe();
+    if (!alive || pending || !options.session.state.selection || !messageID) {
+      return;
+    }
+    const target = { ...options.session.state.selection };
+    cancelConfirmation();
+    const read = previewRead = new AbortController();
+    const transcript = options.session.transcripts?.get(target);
+    try {
+      let messages = preview(messageID);
+      if (!messages && transcript) {
+        await transcript.ensure(messageID, read.signal);
+        if (read.signal.aborted) return;
+        messages = preview(messageID);
+      }
+      if (!messages) return;
+      update((state) => {
+        state.phase = "confirming";
+        state.confirmation = { kind, messageID };
+        state.preview = JSON.parse(JSON.stringify(messages));
+        state.error = undefined;
+        state.failure = undefined;
+      });
+    } catch (error) {
+      if (!read.signal.aborted) throw error;
+    } finally {
+      if (previewRead === read) previewRead = undefined;
+    }
+  };
+  observe();
   return {
     state: store.state,
+    ready: (target) =>
+      settlements.get(`${target.sidecarId}/${target.sessionID}`),
     matches: (target) => {
       const selected = options.session.state.selection;
       return !!selected && selected.sidecarId === target.sidecarId &&
         selected.sessionID === target.sessionID;
     },
-    revertTo: (id, code) => run(code ? "code" : "revert", id),
+    revertTo: (id, code) => request(code ? "code" : "revert", id),
+    async confirm() {
+      const confirmation = flow().confirmation;
+      if (!confirmation || pending) return;
+      const current = preview(confirmation.messageID);
+      if (!current) {
+        cancelConfirmation();
+        return;
+      }
+      if (
+        JSON.stringify(current.map((m) => m.id)) !==
+          JSON.stringify(flow().preview?.map((m) => m.id))
+      ) {
+        update((state) => {
+          state.preview = JSON.parse(JSON.stringify(current));
+        });
+        return;
+      }
+      await run(confirmation.kind, confirmation.messageID);
+    },
+    cancel() {
+      if (!pending) cancelConfirmation();
+    },
+    retry() {
+      return options.branchHistory?.retryCopy?.().catch(() => {
+        // The branch-history owner publishes the failure for placement.
+      }) ?? Promise.resolve();
+    },
+    dismiss() {
+      const target = options.session.state.selection, record = flow().record;
+      if (!target || !record) return;
+      update((state) => {
+        state.dismissed = true;
+      });
+      try {
+        options.storage?.setItem(
+          dismissalKey(target, record.boundaryID),
+          "true",
+        );
+      } catch {
+        update((state) => {
+          state.error = failureValue(
+            new RequestFailure({
+              code: "revert.dismiss-storage",
+              retry: "new-intent",
+              diagnosticID: randomID(),
+              facts: {
+                actionLabel: "Saving the revert display choice",
+                target: {
+                  sidecarId: target.sidecarId,
+                  sessionID: target.sessionID,
+                },
+                reason: "This browser could not save the dismissal.",
+                recovery:
+                  "Restore browser storage access, then dismiss it again to keep the choice after reload.",
+              },
+            }),
+          );
+        });
+      }
+    },
     restore: () => run("restore"),
-    undo: () => run("undo"),
+    undo: () => request("undo", options.session.state.latestPrompt?.id),
     redo: () => run("redo"),
     hasPrompt: () => !!options.session.state.latestPrompt,
     strip(content) {
       const revert = content.revert;
       if (!revert) return;
-      const prompts = revert.prompts ?? [];
       return {
-        count: revert.messageCount,
-        preview: prompts[0]?.preview ?? "",
-        prompts,
-        more: Math.max(0, revert.messageCount - prompts.length),
+        boundaryID: revert.boundaryID,
+        messageIDs: revert.messageIDs,
+        preview: revert.prompt?.input.split("\n")[0] ?? revert.boundaryID,
         files: revert.files,
       };
     },
     dispose() {
       alive = false;
       release();
+      releaseHistory?.();
       reset();
     },
   };

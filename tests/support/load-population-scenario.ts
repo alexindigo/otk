@@ -5,7 +5,7 @@ import { join } from "@std/path";
 import { start } from "../../main.ts";
 import { cfg } from "./config.ts";
 import { FakeLlm } from "./fake-llm.ts";
-import { freePort, OpencodeTest, waitFor } from "./opencode.ts";
+import { OpencodeTest, waitFor } from "./opencode.ts";
 import { nativeBinary, nativeKind, nativeVersion } from "./native.ts";
 import { V2SessionScale } from "./v2-session-scale.ts";
 import {
@@ -161,7 +161,7 @@ export async function loadPopulationScenario(large: boolean) {
   resources().defer("load native proxy", () => proxy.shutdown());
   const config = cfg();
   config.auth.type = "none";
-  config.server.port = freePort();
+  config.server.port = 0;
   config.state.path = join(native.root, "load-state");
   config.harness.url = `http://127.0.0.1:${proxy.addr.port}`;
   config.harness.db = native.db;
@@ -196,12 +196,12 @@ export async function loadPopulationScenario(large: boolean) {
   await rpc.dispatch("layout.patch", { rightCollapsed: true });
   const info = {
     root: native.root,
-    url: `http://127.0.0.1:${config.server.port}`,
+    url: `http://127.0.0.1:${app.server.addr.port}`,
     nativeUrl: native.url,
     binary: nativeBinary,
     version: nativeVersion,
     pids: [Deno.pid, native.process.pid!],
-    ports: [config.server.port, native.port, proxy.addr.port],
+    ports: [app.server.addr.port, native.port, proxy.addr.port],
   };
   const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
   if (record) await Deno.writeTextFile(record, JSON.stringify(info));

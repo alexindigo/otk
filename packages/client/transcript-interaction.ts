@@ -1,30 +1,47 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { DisclosureCategory, Preferences } from "@otk/protocol";
 import {
-  DEFAULT_PREFS,
-  type DisclosureCategory,
-  type Preferences,
-} from "@otk/protocol";
+  createDisclosures,
+  type DisclosureIdentity,
+  type DisclosureKind,
+  type Disclosures,
+} from "./disclosure.ts";
 import type { WindowAnchor } from "./window.ts";
 export interface TranscriptAnchor extends WindowAnchor {
   messageID?: string;
 }
 
+interface Disclosure {
+  value(): boolean | undefined;
+  expanded(
+    category: DisclosureCategory,
+    prefs?: Partial<Preferences>,
+    required?: boolean,
+  ): boolean;
+  set(value: boolean): void;
+}
+
 /** Source-free choices survive virtual unmount and body cooling, not deletion. */
 export interface TranscriptInteraction {
+  readonly disclosures: Disclosures;
+  identify(
+    id: string,
+    generation?: string,
+    placement?: DisclosureIdentity["placement"],
+  ): DisclosureIdentity;
   defaultFor(
     category: DisclosureCategory,
     prefs?: Partial<Preferences>,
   ): boolean;
-  disclosure(key: string, generation: string): {
-    value(): boolean | undefined;
-    expanded(
-      category: DisclosureCategory,
-      prefs?: Partial<Preferences>,
-      required?: boolean,
-    ): boolean;
-    set(value: boolean): void;
-  };
+  disclosure(kind: DisclosureKind, key: string, generation: string): Disclosure;
   retire(key: string): void;
+  subscribe(
+    listener: () => void,
+    kind: DisclosureKind,
+    key: string,
+    generation: string,
+  ): () => void;
+  reveal(ancestors: readonly string[]): void;
   generation(identity: string): string;
   retireIdentity(identity: string): void;
   measurements(window: string): Map<string, number>;
@@ -32,55 +49,64 @@ export interface TranscriptInteraction {
   anchor(value: TranscriptAnchor | null): void;
   clear(): void;
 }
-export function createTranscriptInteraction(): TranscriptInteraction {
-  const choices = new Map<string, { generation: string; open?: boolean }>();
+export function createTranscriptInteraction(
+  disclosures: Disclosures = createDisclosures({}),
+  scope = "standalone",
+): TranscriptInteraction {
   const generations = new Map<string, number>();
+  const generation = (id: string) => `${id}:${generations.get(id) ?? 0}`;
+  const identify: TranscriptInteraction["identify"] = (
+    id,
+    version = generation(id),
+    placement,
+  ) => ({
+    scope,
+    id,
+    generation: version,
+    ...(placement && { placement }),
+  });
   const windows = new Map<string, Map<string, number>>();
   let anchor: TranscriptAnchor | undefined;
-  const defaultFor = (
-    category: DisclosureCategory,
-    prefs: Partial<Preferences> = {},
+  const disclosure: TranscriptInteraction["disclosure"] = (
+    kind,
+    key,
+    version,
   ) => {
-    const defaults = { ...DEFAULT_PREFS, ...prefs };
-    const categories: Record<DisclosureCategory, boolean> = {
-      work: defaults.expandWork,
-      toolOutput: defaults.expandToolOutput,
-      reasoning: defaults.thinking === "show",
-      fileChanges: !defaults.collapseFileChanges,
-      system: defaults.expandSystem,
-      delegation: defaults.expandDelegation,
-      outgoing: defaults.expandOutgoing,
-      compaction: defaults.expandCompaction,
-      record: defaults.expandRecords,
-      source: defaults.expandSource,
+    const state = disclosures.bind(kind, identify(key, version));
+    const value = () => state.chosen() ? state.open() : undefined;
+    return {
+      value,
+      expanded: (category, prefs = {}, required = false) =>
+        value() ??
+          disclosures.defaultFor(kind, {
+            category,
+            prefs: () => prefs,
+            required: () => required,
+          }),
+      set(open) {
+        void state.set(open);
+      },
     };
-    return categories[category];
   };
   return {
-    defaultFor,
-    disclosure(key, generation) {
-      let value = choices.get(key);
-      if (value?.generation !== generation) {
-        value = { generation };
-        choices.set(key, value);
-      }
-      const owner = value;
-      return {
-        value: () => choices.get(key) === owner ? owner.open : undefined,
-        expanded: (category, prefs, required = false) =>
-          (choices.get(key) === owner ? owner.open : undefined) ??
-            (required || defaultFor(category, prefs)),
-        set(open) {
-          if (choices.get(key) === owner) owner.open = open;
-        },
-      };
+    disclosures,
+    identify,
+    defaultFor: (category, prefs = {}) =>
+      disclosures.defaultFor("recordKinds", { category, prefs: () => prefs }),
+    disclosure,
+    subscribe(listener, kind, key, version) {
+      return disclosures.subscribe(listener, kind, identify(key, version));
     },
-    retire: (key) => {
-      choices.delete(key);
+    reveal(ancestors) {
+      disclosures.reveal("activity", ancestors.map((key) => identify(key)));
+      disclosures.reveal("silent", ancestors.map((key) => identify(key)));
     },
-    generation: (id) => `${id}:${generations.get(id) ?? 0}`,
+    retire: (id) => disclosures.retire({ scope, id }),
+    generation,
     retireIdentity(id) {
+      const previous = generation(id);
       generations.set(id, (generations.get(id) ?? 0) + 1);
+      disclosures.retire({ scope, generation: previous });
     },
     measurements(window) {
       let sizes = windows.get(window);
@@ -104,10 +130,10 @@ export function createTranscriptInteraction(): TranscriptInteraction {
       return anchor && { ...anchor };
     },
     clear() {
-      choices.clear();
       generations.clear();
       windows.clear();
       anchor = undefined;
+      disclosures.retire({ scope });
     },
   };
 }

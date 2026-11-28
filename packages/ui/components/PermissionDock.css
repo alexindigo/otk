@@ -8,20 +8,20 @@
   overflow-wrap: anywhere;
 }
 .otk-permission-confirm ul {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
 }
 .otk-permission-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-permission-confirm,
 .otk-permission-reject,
 .otk-permission-reject label {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .otk-permission-confirm p {
   margin: 0;
@@ -30,16 +30,9 @@
   min-height: 4rem;
 }
 .otk-rejection-reason {
-  flex: 1;
-  min-width: 160px;
-  width: auto;
+  flex: 1 1 0;
+  min-inline-size: 0;
   border-radius: var(--radius-pill);
-  padding: 4px var(--item-inset);
+  padding: var(--space-1) var(--item-inset);
   background: transparent;
-}
-.otk-auto-approving {
-  margin: 0;
-  padding: 4px 12px;
-  color: var(--secondary);
-  font-size: var(--text-meta);
 }

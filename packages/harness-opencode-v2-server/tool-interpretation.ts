@@ -4,7 +4,7 @@ import type { FileDiff, ToolBase, ToolCall } from "@otk/protocol";
 import { stripVTControlCharacters } from "node:util";
 import type { NativeMessage } from "./messages.ts";
 import { optionalSessionID } from "./ids.ts";
-import { fileLanguage } from "./language.ts";
+import { fileLanguage } from "@otk/content";
 import { toolContent } from "./tool-results.ts";
 import { nativeSource } from "./native-source.ts";
 
@@ -14,6 +14,10 @@ const record = (v: unknown): Record<string, unknown> =>
     : {};
 const text = (v: unknown): string | undefined =>
   typeof v === "string" ? v : undefined;
+export function toolChild(metadata: unknown): string | undefined {
+  const value = record(metadata);
+  return text(value.sessionID) ?? text(value.sessionId);
+}
 const failureText = (...values: unknown[]): string | undefined =>
   values.map(text).find((value) =>
     value !== undefined && value.trim().length > 0
@@ -52,7 +56,7 @@ const fields = {
     "id",
     "name",
   ],
-  metadata: ["title", "description", "sessionID", "sessionId"],
+  metadata: ["title", "description", "sessionID", "sessionId", "status"],
 } as const;
 export function toolScalarSQL(data: string): string {
   const project = (kind: keyof typeof fields) =>
@@ -94,7 +98,7 @@ export function interpretTool(
       sessionID: text(input.sessionID) ?? text(input.task_id),
     },
     metadata,
-    child: text(metadata.sessionID) ?? text(metadata.sessionId),
+    child: toolChild(metadata),
     title: text(metadata.title) ?? text(metadata.description) ??
       (sharedToolName(name) === "bash"
         ? text(input.command)?.slice(0, 200)

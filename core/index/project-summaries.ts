@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type IndexMetadata,
-  PROJECT_STATUS_PRIORITY,
-  type ProjectStatus,
   type ProjectSummary,
   type ProjectTopology,
+  UNKNOWN_REPOSITORY,
 } from "@otk/protocol";
 import { SessionSupervision } from "./supervision.ts";
+import { EntityStates } from "./entity-states.ts";
 import { type IdentityChange, ProjectIdentity } from "./project-identity.ts";
 import type { SessionHierarchy } from "./session-hierarchy.ts";
+import type { ProjectMetadata } from "@otk/harness";
 
 /** Scalar, keyed project owner. It never reads native APIs, digests or usage. */
 export class ProjectSummaries {
@@ -16,16 +17,12 @@ export class ProjectSummaries {
   #sessions = new Map<string, { entry: IndexMetadata; leaf: string }>();
   #repoSessions = new Map<string, Set<string>>();
   #projects = new Map<string, Map<string, IndexMetadata>>();
-  #facts = new Map<
-    string,
-    { status: ProjectStatus; unseen: number; time: number }
-  >();
+  /** Inventory facts only; attention is read from the entity-state owner. */
+  #facts = new Map<string, { time: number }>();
   #totals = new Map<
     string,
     {
       count: number;
-      unseen: number;
-      statuses: Map<ProjectStatus, number>;
       times: Map<number, number>;
       last: number;
     }
@@ -65,6 +62,8 @@ export class ProjectSummaries {
   #known = new Set<string>();
   #retained = new Set<string>();
   #seeds = new Map<string, import("@otk/harness").ProjectSeed>();
+  #projectScopes = new Map<string, Set<string>>();
+  #metadataEvents = new Map<string, number>();
   #leafSeeds = new Map<
     string,
     Map<string, import("@otk/harness").ProjectSeed>
@@ -88,17 +87,80 @@ export class ProjectSummaries {
     const change = this.identity.learn(values);
     this.#seeded = true;
     for (const value of values) {
+      const previous = this.#seeds.get(value.directory);
+      const id = value.presentation?.id;
+      if (previous?.presentation && previous.presentation.id !== id) {
+        const scopes = this.#projectScopes.get(previous.presentation.id);
+        scopes?.delete(value.directory);
+        if (!scopes?.size) this.#projectScopes.delete(previous.presentation.id);
+      }
+      if (id) {
+        const scopes = this.#projectScopes.get(id) ?? new Set<string>();
+        scopes.add(value.directory);
+        this.#projectScopes.set(id, scopes);
+      }
+      // Inventory may have started before a newer metadata event was handled.
+      const newer = previous?.presentation?.id === id &&
+        previous?.nativeProject &&
+        value.nativeProject &&
+        previous.nativeProject.topology === value.nativeProject.topology &&
+        previous.nativeProject.updated > value.nativeProject.updated;
       this.#seeds.set(value.directory, {
         ...value,
-        hasSessions: value.hasSessions ??
-          this.#seeds.get(value.directory)?.hasSessions,
+        ...(newer
+          ? {
+            presentation: previous!.presentation,
+            nativeProject: previous!.nativeProject,
+          }
+          : {}),
+        hasSessions: value.hasSessions ?? previous?.hasSessions,
       });
     }
     const affected = this.#reconcile(change, dirty);
     for (const seed of values) dirty.add(this.leaf(seed.directory));
+    this.admit?.(dirty, change.directories);
     this.#flush(dirty);
     this.retain(this.#known);
     return affected;
+  }
+  /** Replace presentation in place. Identity, population and attention do not change. */
+  metadata(project: ProjectMetadata, source: "event" | "reply"): boolean {
+    const { presentation, updated, topology } = project;
+    const id = presentation.id;
+    const scopes = this.#projectScopes.get(id);
+    if (!scopes?.size) return false;
+    const seeds = [...scopes].map((scope) => this.#seeds.get(scope)!);
+    if (seeds.some((seed) => seed.nativeProject?.topology !== topology)) {
+      return false;
+    }
+    if (source === "event") {
+      this.#metadataEvents.set(
+        id,
+        Math.max(updated, this.#metadataEvents.get(id) ?? 0),
+      );
+    }
+    const leaves = new Set<string>();
+    for (const seed of seeds) {
+      const before = seed.nativeProject!.updated;
+      if (
+        updated < before ||
+        (source === "reply" && this.#metadataEvents.get(id) === updated)
+      ) continue;
+      seed.nativeProject = { updated, topology };
+      if (
+        seed.presentation?.name === presentation.name &&
+        seed.presentation?.color === presentation.color
+      ) continue;
+      seed.presentation = presentation;
+      leaves.add(this.leaf(seed.directory));
+    }
+    for (const leaf of leaves) {
+      const direct = this.#direct.get(leaf);
+      if (direct?.presentation?.id !== id) continue;
+      this.#direct.set(leaf, { ...direct, presentation });
+      this.#publish(leaf);
+    }
+    return true;
   }
   /** Both native seeds and recorded roots revise the same shared projection. */
   #reconcile(change: IdentityChange, dirty: Set<string>): IndexMetadata[] {
@@ -116,6 +178,7 @@ export class ProjectSummaries {
       this.#projects.get(row.leaf)?.delete(id);
       dirty.add(row.leaf);
       row.leaf = leaf;
+      this.states.member(id, leaf);
       const entries = this.#projects.get(leaf) ?? new Map();
       entries.set(id, row.entry);
       this.#projects.set(leaf, entries);
@@ -147,7 +210,11 @@ export class ProjectSummaries {
       const leaves = this.#leaves.get(topology.canonicalRoot) ?? new Set();
       leaves.add(topology.leafDirectory);
       this.#leaves.set(topology.canonicalRoot, leaves);
-      if (!this.#topology.has(topology.canonicalRoot)) {
+      // An unknown repository is a placement, never a fabricated project row.
+      if (
+        topology.canonicalRoot !== UNKNOWN_REPOSITORY &&
+        !this.#topology.has(topology.canonicalRoot)
+      ) {
         this.#topology.set(topology.canonicalRoot, {
           ...topology,
           leafDirectory: topology.canonicalRoot,
@@ -174,6 +241,8 @@ export class ProjectSummaries {
     }
     for (const directory of dirty) this.#publish(directory);
   }
+  /** Status and unseen counts belong to this owner; summaries place members. */
+  readonly states: EntityStates;
   constructor(
     readonly marks: (id: string) => { seen: number; finish: number },
     readonly publish: (summary: ProjectSummary) => void,
@@ -181,7 +250,25 @@ export class ProjectSummaries {
     readonly supervision = new SessionSupervision(),
     readonly identity = new ProjectIdentity(),
     readonly hierarchy?: SessionHierarchy,
-  ) {}
+    states?: EntityStates,
+    clock?: EntityStates["clock"],
+    readonly admit?: (
+      directories: Iterable<string>,
+      revised?: Iterable<string>,
+    ) => void,
+  ) {
+    // Standalone summaries own a private, unpublished entity-state owner.
+    this.states = states ?? new EntityStates(
+      supervision,
+      {
+        getMetadata: (id) => this.#sessions.get(id)?.entry,
+        ancestors: () => [],
+        descendants: (id) => new Set([id]),
+      },
+      () => {},
+      clock,
+    );
+  }
   ensure(directory: string): void {
     this.#known.add(directory);
     directory = this.leaf(directory);
@@ -210,6 +297,7 @@ export class ProjectSummaries {
       this.#totals.delete(directory);
       this.#direct.delete(directory);
       this.values.delete(directory);
+      this.states.drop(directory);
       this.retire(directory);
     }
   }
@@ -236,6 +324,7 @@ export class ProjectSummaries {
     }
     const directory = this.leaf(entry.directory, entry.projectID);
     this.#sessions.set(entry.id, { entry, leaf: directory });
+    this.states.member(entry.id, directory);
     const repo = this.#repoSessions.get(entry.projectID) ?? new Set();
     repo.add(entry.id);
     this.#repoSessions.set(entry.projectID, repo);
@@ -245,6 +334,7 @@ export class ProjectSummaries {
     this.#contribute(entry, 1, directory);
     const dirty = new Set([directory, ...before ? [before.leaf] : []]);
     const affected = change.repos.size ? this.#reconcile(change, dirty) : [];
+    if (change.directories.size) this.admit?.([], change.directories);
     this.#flush(dirty);
     if (change.repos.size) this.retain(this.#known);
     return affected;
@@ -254,6 +344,8 @@ export class ProjectSummaries {
     if (!before) return;
     this.#contribute(before.entry, -1, before.leaf);
     this.#sessions.delete(id);
+    this.states.member(id);
+    this.states.remove(id);
     this.#repoSessions.get(before.entry.projectID)?.delete(id);
     const directory = before.leaf;
     this.#projects.get(directory)?.delete(id);
@@ -268,6 +360,11 @@ export class ProjectSummaries {
       this.#update(row.leaf);
     }
   }
+  /** Re-read one directory's attention from the owner. */
+  touch(directory: string): void {
+    const leaf = this.leaf(directory);
+    if (this.#projects.has(leaf)) this.#update(leaf);
+  }
   permissions(lookup: (id: string) => number): void {
     this.supervision.permissions(lookup);
     this.refresh();
@@ -280,33 +377,22 @@ export class ProjectSummaries {
     for (const directory of this.#projects.keys()) this.#update(directory);
   }
   #contribute(entry: IndexMetadata, sign: 1 | -1, directory: string): void {
+    if (sign > 0) {
+      // The owner interprets the session once; this summary reads its state.
+      const marks = this.marks(entry.id);
+      this.states.session(entry, marks.seen, marks.finish);
+    }
     if (entry.deleted) return;
     let totals = this.#totals.get(directory);
     if (!totals) {
-      totals = {
-        count: 0,
-        unseen: 0,
-        statuses: new Map(),
-        times: new Map(),
-        last: 0,
-      };
+      totals = { count: 0, times: new Map(), last: 0 };
       this.#totals.set(directory, totals);
     }
-    const marks = this.marks(entry.id);
-    const value = this.supervision.session(entry, marks.seen, marks.finish);
-    const unseen = Number(value.terminal > marks.seen);
-    const fact = sign === -1 ? this.#facts.get(entry.id)! : {
-      status: this.supervision.status(value),
-      unseen,
-      time: entry.timeUpdated,
-    };
+    const fact = sign === -1
+      ? this.#facts.get(entry.id)!
+      : { time: entry.timeUpdated };
     if (!fact) return;
     totals.count += sign;
-    totals.unseen += sign * fact.unseen;
-    totals.statuses.set(
-      fact.status,
-      (totals.statuses.get(fact.status) ?? 0) + sign,
-    );
     const count = (totals.times.get(fact.time) ?? 0) + sign;
     if (count) totals.times.set(fact.time, count);
     else totals.times.delete(fact.time);
@@ -345,12 +431,16 @@ export class ProjectSummaries {
     }
     const entries = this.#projects.get(directory)!;
     const totals = this.#totals.get(directory);
-    const count = totals?.count ?? 0,
-      unseen = totals?.unseen ?? 0,
-      last = totals?.last ?? 0;
     const previous = this.values.get(directory);
     const locationForms = this.#locationForms[directory] ?? 0;
-    const dependencies = this.#terminalCounts.get(directory) ?? 0;
+    const checkout = this.states.checkout(
+      directory,
+      locationForms,
+      this.#terminalCounts.get(directory),
+    );
+    const count = totals?.count ?? 0,
+      unseen = checkout.counts.unseen,
+      last = totals?.last ?? 0;
     const authority = this.#authority === "stale"
       ? previous?.authority === "unknown" ? "unknown" : "stale"
       : locationForms
@@ -358,13 +448,7 @@ export class ProjectSummaries {
       : entries.size
       ? "current"
       : this.#authority;
-    const status = locationForms
-      ? "blocked"
-      : PROJECT_STATUS_PRIORITY.find((s) =>
-        (totals?.statuses.get(s) ?? 0) > 0 ||
-        s === "dependencies" && dependencies > 0
-      ) ??
-        "none";
+    const status = checkout.state;
     const knownCount = this.#catalog;
     const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];
     const seed = seeds.length
@@ -385,14 +469,22 @@ export class ProjectSummaries {
       : undefined;
     const summary: ProjectSummary = {
       directory,
+      ...(seeds.length &&
+          seeds.every((seed) =>
+            seed.presentation?.id === seeds[0].presentation?.id
+          ) &&
+          seeds[0].presentation
+        ? { presentation: seeds[0].presentation }
+        : {}),
       ...(this.identity.availability(directory)
         ? {
           availability: this.identity.availability(directory),
+          archived: this.identity.archived(directory),
           memberships: this.identity.memberships(directory),
         }
         : {}),
       ...(locationForms ? { locationForms } : {}),
-      ...(dependencies ? { dependencies } : {}),
+      ...(checkout.dependencies ? { dependencies: checkout.dependencies } : {}),
       hasSessions: count > 0 ? true : seed ? seed.hasSessions : false,
       status,
       sessionCount: seed
@@ -424,6 +516,7 @@ export class ProjectSummaries {
         : {}),
     };
     this.#direct.set(directory, summary);
+    this.states.placement(summary);
     if (!publish) return;
     this.#publish(directory);
     const parent = summary.topology?.parentDirectory;
@@ -437,18 +530,15 @@ export class ProjectSummaries {
       [...leaves].map((leaf) => this.#direct.get(leaf)).filter((
         s,
       ): s is ProjectSummary => !!s);
+    const project = this.states.project(
+      directory,
+      summaries?.length ? summaries.map((s) => s.directory) : [directory],
+    );
     const summary: ProjectSummary = summaries?.length
       ? {
         ...direct,
         direct,
-        ...(summaries.some((s) => s.dependencies)
-          ? {
-            dependencies: summaries.reduce(
-              (n, s) => n + (s.dependencies ?? 0),
-              0,
-            ),
-          }
-          : {}),
+        ...(project.dependencies ? { dependencies: project.dependencies } : {}),
         ...(summaries.some((s) => s.locationForms)
           ? {
             locationForms: summaries.reduce(
@@ -466,14 +556,12 @@ export class ProjectSummaries {
           ? summaries.reduce((n, s) => n + s.sessionCount!, 0)
           : null,
         unseenCount: summaries.every((s) => s.unseenCount !== null)
-          ? summaries.reduce((n, s) => n + s.unseenCount!, 0)
+          ? project.counts.unseen
           : null,
         lastActivity: summaries.every((s) => s.lastActivity !== null)
           ? Math.max(...summaries.map((s) => s.lastActivity!))
           : null,
-        status: PROJECT_STATUS_PRIORITY.find((status) =>
-          summaries.some((s) => s.status === status)
-        ) ?? "none",
+        status: project.state,
         authority: summaries.some((s) => s.authority === "unknown")
           ? "unknown"
           : summaries.some((s) => s.authority === "stale")
@@ -490,12 +578,16 @@ export class ProjectSummaries {
       !this.#retained.has(directory) &&
       !this.#projects.get(directory)?.size
     ) {
-      if (this.values.delete(directory)) this.retire(directory);
+      if (this.values.delete(directory)) {
+        this.states.drop(directory);
+        this.retire(directory);
+      }
       return;
     }
     if (
       JSON.stringify(summary) === JSON.stringify(this.values.get(directory))
     ) return;
+    if (!this.values.has(directory)) this.admit?.([directory]);
     this.values.set(directory, summary);
     this.publish(summary);
   }

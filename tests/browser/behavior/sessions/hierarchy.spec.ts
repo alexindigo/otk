@@ -37,7 +37,7 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
   }]);
   await expect(
     page.locator("[data-session=tstv1-nested]").locator(
-      "xpath=ancestor::*[@data-depth][1]",
+      "xpath=ancestor::*[@data-parent and @data-depth][1]",
     ),
   ).toHaveAttribute("data-depth", "2");
   for (
@@ -46,13 +46,18 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
       "blocked",
     ], ["tstv1-finished", "finished"]]
   ) {
-    await expect(page.locator(`[data-session=${id}] .otk-status-light`))
+    await expect(
+      page.locator(
+        `.otk-project-sessions .otk-session-row[data-session=${id}] .otk-tree-node-slot .otk-status-light`,
+      ),
+    )
       .toHaveAttribute("data-state", status);
   }
   const search = page.locator("input[type=search]");
   await search.fill("references");
-  await expect(page.locator("[data-session]")).toHaveCount(3);
-  await expect(page.locator("[data-session=tstv1-nested]")).toBeVisible();
+  await expect(page.locator(".otk-session-row[data-session]")).toHaveCount(3);
+  await expect(page.locator(".otk-session-row[data-session=tstv1-nested]"))
+    .toBeVisible();
   await search.fill("no such title");
   await expect(page.locator(".otk-project-sessions")).toContainText(
     "No matching sessions",

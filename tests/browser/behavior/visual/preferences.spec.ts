@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { openWorkLogs, prompt } from "../../pages/transcript.ts";
+import { openLatestWork, prompt } from "../../pages/transcript.ts";
 import { receivedPrompt } from "../../fixtures/provider.ts";
 import { independentPage } from "../../pages/visual.ts";
 test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
@@ -34,20 +34,16 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
     }),
   ).toHaveText("Preference proof.");
   await expect(page.locator(".otk-response-progress")).toHaveCount(0);
-  // Step-finish follows the answer text on both lanes, so transparent bookkeeping forms
-  // a second work group. Observe the completed turn, not a streaming prefix.
-  const folds = page.locator(".otk-work-fold");
-  const count = 2;
-  await expect(folds).toHaveCount(count);
-  for (let i = 0; i < count; i++) {
-    await expect(folds.nth(i)).toHaveAttribute("aria-expanded", "false");
-  }
-  await openWorkLogs(page);
-  await expect(page.locator(".otk-reasoning > button")).toContainText(
+  // The reply owns one Work log, including bookkeeping after the answer.
+  const folds = page.locator(".otk-work-strip");
+  await expect(folds).toHaveCount(1);
+  await expect(folds).not.toHaveAttribute("aria-current", "true");
+  await openLatestWork(page);
+  await expect(page.locator(".otk-reasoning-heading")).toContainText(
     "Thought",
   );
   await expect(page.locator(".otk-reasoning-body")).toHaveCount(0);
-  await page.locator(".otk-reasoning > button").click();
+  await page.locator(".otk-reasoning-heading").click();
   await expect(page.locator(".otk-reasoning-body")).toContainText(
     "Reasoning body visible",
   );
@@ -55,19 +51,19 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
   await expect(page.locator("input[name=thinking]")).not.toBeChecked();
   await page.locator("input[name=thinking]").click();
   await expect(page.locator("input[name=thinking]")).toBeChecked();
-  await page.locator("input[name=timestamps]").click();
+  await expect(page.locator("input[name=timestamps]")).toHaveCount(0);
   await expect.poll(() =>
     page.locator(".otk-user-meta time").evaluate((el) =>
       getComputedStyle(el).visibility
     )
   ).toBe("visible");
   await page.reload();
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await expect(page.locator(".otk-reasoning-body")).toBeVisible();
   await expect(page.locator("input[name=thinking]")).toBeChecked();
   const { page: other, errors } = await independentPage(state, browser);
   await other.goto(state.url + `/#/local/${session.id}`);
-  await openWorkLogs(other);
+  await openLatestWork(other);
   await expect(other.locator(".otk-reasoning-body")).toBeVisible();
   await page.locator(".otk-display-menu > button").click();
   await page.locator("input[name=thinking]").click();
@@ -82,7 +78,6 @@ test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
   ).toEqual([
     { key: "models.recent", value: [{ provider: "fake", model: "scripted" }] },
     { key: "thinking", value: "show" },
-    { key: "timestamps", value: true },
     { key: "thinking", value: "hide" },
   ]);
   expect(errors).toEqual([]);

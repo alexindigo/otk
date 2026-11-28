@@ -115,12 +115,18 @@ test("every native feature fences its backend effect, checkpoints only metadata 
       },
       shell: {
         shell: (_input, operation) =>
-          effect("session.shell", operation, undefined),
+          effect("session.shell", operation, {
+            messageID: "shell",
+            state: "accepted" as const,
+          }),
       },
       commands: {
         listCommands: () => Promise.resolve([]),
         command: (_input, operation) =>
-          effect("session.command", operation, undefined),
+          effect("session.command", operation, {
+            messageID: "command",
+            state: "accepted" as const,
+          }),
       },
       sessionActions: {
         compact: (_id, _model, operation) =>
@@ -140,7 +146,11 @@ test("every native feature fences its backend effect, checkpoints only metadata 
         revert: (_id, messageID, operation) =>
           effect("session.revertCode", operation, {
             ...base,
-            revert: { messageID, messageCount: 1, files: [] },
+            revert: {
+              boundaryID: messageID,
+              messageIDs: [messageID],
+              files: [],
+            },
           }),
       },
       revert: {
@@ -148,8 +158,8 @@ test("every native feature fences its backend effect, checkpoints only metadata 
           effect("session.revert", operation, {
             ...base,
             revert: {
-              messageID,
-              messageCount: 1,
+              boundaryID: messageID,
+              messageIDs: [messageID],
               files: [],
               prompt: {
                 input: "private prompt must never be stored",
@@ -331,6 +341,13 @@ test("every native feature fences its backend effect, checkpoints only metadata 
       assertEquals(calls.get(counter), (before.get(counter) ?? 0) + 1, method);
       const resumed = events.at(-1);
       assert(resumed?.t === "request.result" && resumed.outcome.ok, method);
+      if (method === "session.shell" || method === "session.command") {
+        assertEquals(
+          resumed.outcome.result,
+          result.outcome.result,
+          "Native identity survives receipt replay without another effect",
+        );
+      }
     }
     uncertain = true;
     for (const [method, params] of cases) {

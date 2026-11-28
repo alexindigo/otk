@@ -98,7 +98,7 @@ for (const kind of ["model", "provider"] as const) {
         );
       }
       const projection = createTranscriptProjection();
-      projection.replace(page.items);
+      projection.reset(page.items);
       assert(
         projection.state.repliesByID[`reply:${prompt.id}`].messageIDs.includes(
           failure.id,
@@ -176,11 +176,10 @@ test("request failures: source-backed native submit rejections persist without a
       ]
     ) assert(shown.includes(text), shown);
     await ws.close();
-    const port = app.port;
+    const statePath = app.statePath;
     await app.stop();
     app = await SidecarTest.start(endpoint, {
-      server: { port },
-      state: { path: `${native.root}/otk-${port}` },
+      state: { path: statePath },
     });
     ws = new WsClient(app.url);
     await ws.connect(native.directory, session.id);

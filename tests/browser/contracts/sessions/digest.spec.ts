@@ -56,9 +56,10 @@ test.describe("unknown summary", () => {
     await expect(page.locator(".otk-turn-usage :popover-open [role=alert]"))
       .toHaveText(/OTK has no further details/);
     await expect(page.locator(".otk-usage-breakdown")).toHaveCount(0);
-    await expect(page.locator(".otk-message-footer")).not.toContainText(
-      "$0.00",
-    );
+    await expect(page.locator("[data-role=assistant] .otk-message-footer")).not
+      .toContainText(
+        "$0.00",
+      );
   });
 });
 test.describe("summary-only backend", () => {
@@ -67,9 +68,10 @@ test.describe("summary-only backend", () => {
     tag: ["@sessions", "@contracts", "@isolated"],
   }, async ({ isolatedState: state, page }) => {
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    await expect(page.locator(".otk-message-footer")).toContainText(
-      "1 model call",
-    );
+    await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+      .toContainText(
+        "1 model call",
+      );
     await expect(page.locator(".otk-turn-usage-trigger")).toHaveCount(0);
     await page.locator("[data-role=assistant]").click({ button: "right" });
     await expect(

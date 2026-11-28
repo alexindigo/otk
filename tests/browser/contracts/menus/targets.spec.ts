@@ -48,7 +48,11 @@ test("menus.captured-session-task-and-project-effects", {
   ) {
     await rightClick(page, selector);
     expect(await menuLabels(page)).toEqual(
-      name === "row" ? [...expected, ...panelActions] : expected,
+      name === "row"
+        ? [...expected, ...panelActions]
+        : name === "chip"
+        ? ["Open link in new tab", "Copy link address", ...expected]
+        : expected,
     );
     expect(
       await contextMenu(page).getByRole("menuitem").filter({
@@ -171,6 +175,8 @@ test("menus.captured-session-task-and-project-effects", {
   const project = '[data-project$="/projects/otk"] .otk-project-open';
   await rightClick(page, project);
   expect(await menuLabels(page)).toEqual([
+    "Move up",
+    "Move down",
     "Mark inactive",
     "Add project",
     "Collapse projects",
@@ -181,6 +187,8 @@ test("menus.captured-session-task-and-project-effects", {
     .toHaveAttribute("data-inactive", "true");
   await rightClick(page, project);
   expect(await menuLabels(page)).toEqual([
+    "Move up",
+    "Move down",
     "Mark active",
     "Add project",
     "Hide inactive projects",
@@ -227,12 +235,19 @@ test("menus.stale-task-and-session-commands-preserve-captured-identities", {
   );
   await expect(page).toHaveURL(/\/tstv1-otk$/);
   await rightClick(page, '[data-tab="tstv1-otk"]');
+  // Right click completes before the owner's post-pointerup opening task.
+  // Capture the original session action before changing the route.
+  const copyTitle = contextMenu(page).getByRole("menuitem", {
+    name: "Copy session title",
+    exact: true,
+  });
+  await expect(copyTitle).toBeVisible();
   await page.evaluate(() =>
     location.hash = location.hash.slice(0, location.hash.lastIndexOf("/") + 1) +
       "tstv1-atmosphera"
   );
   await expect(page).toHaveURL(/\/tstv1-atmosphera$/);
-  await pick(page, "Copy session title");
+  await copyTitle.click();
   await copied(page, "Execution");
   await expect(page).toHaveURL(/\/tstv1-atmosphera$/);
 });
@@ -240,7 +255,13 @@ test("menus.stale-task-and-session-commands-preserve-captured-identities", {
 test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   tag: ["@menus", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
-  await openSession(state, page, "tstv1-otk");
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "hold",
+    sessionID: "tstv1-crumb-path",
+  });
+  await page.goto(`${state.url}/#/local/tstv1-otk`);
+  await expect(page.locator(".otk-breadcrumb-row")).toBeVisible();
   const task = await state.product("tasks.create", {
     directory: state.directory,
     name: "Compact menus",
@@ -251,7 +272,7 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   ];
   await state.product("tasks.sessions", { id: task.id, sessions: ids });
   await page.locator(`[data-tab="${task.id}"]`).click();
-  await expect(page.locator(".otk-folded-crumbs > button")).toBeVisible();
+  await expect(page.locator(".otk-subagents > button")).toBeVisible();
   await page.locator('[data-crumb="tstv1-otk"]').click();
   await rightClick(page, '[data-crumb="tstv1-otk"]');
   expect(await menuLabels(page)).toContain("Copy session title");
@@ -276,18 +297,20 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   await dismiss(page);
   expect(await page.evaluate(() => !!getSelection()!.toString())).toBe(true);
   for (
-    const [trigger, menu, arrow, last] of [
+    const [trigger, menu, arrow, last, titleAction] of [
       [
         '[data-project$="/projects/otk"] .otk-project-menu > button',
         ".otk-project-menu :popover-open [role=menu]",
         "ArrowDown",
         false,
+        undefined,
       ],
       [
-        ".otk-folded-crumbs > button",
-        ".otk-folded-crumbs :popover-open [role=menu]",
+        ".otk-subagents > button",
+        ".otk-subagents :popover-open [role=menu]",
         "ArrowUp",
         true,
+        "Clear finished",
       ],
     ] as const
   ) {
@@ -300,7 +323,19 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
     await page.keyboard.press("Escape");
     await expect(page.locator(":popover-open")).toHaveCount(0);
     await page.keyboard.press("Enter");
-    await keyboardItem(panel.getByRole("menuitem").first());
+    const first = panel.getByRole("menuitem").first();
+    await keyboardItem(first);
+    // Issue 2.101 adds a title-band action, not a different entry point.
+    if (titleAction) {
+      const clear = page.locator(".otk-subagents :popover-open").getByRole(
+        "button",
+        { name: titleAction, exact: true },
+      );
+      await page.keyboard.press("Tab");
+      await expect(clear).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await keyboardItem(first);
+    }
     await page.keyboard.press("Escape");
     await expect(page.locator(":popover-open")).toHaveCount(0);
   }

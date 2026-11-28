@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-visual-settings {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .otk-visual-settings h2 {
   font-size: var(--text-heading);

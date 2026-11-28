@@ -1,16 +1,105 @@
 # @otk/client
 
+## Deploy and reload custody
+
+Version skew is `client outdated`, not a transport failure. It retires the
+socket/retry lifetime while retaining request and input owners. The application
+supplies Reload; the client never navigates implicitly. Legacy `error/protocol`
+frames and incompatible welcomes share this classification.
+
+`createReload` joins feature-owned snapshot/restore ports in one tab-local
+sessionStorage checkpoint. It preserves own-undefined values and Sets, writes
+and reads back the complete checkpoint before navigation, and refuses reload
+when storage or an unfinished file read cannot preserve input. Drafts include
+attachment bytes, editor buffers and revert provenance. Transcripts contribute
+uncommitted local sends; request trackers contribute their exact captured input,
+principal and original intent identity, excluding bootstrap credentials. This
+explicit reload handoff is separate from the ordinary payload-free request
+metadata store. Restoration precedes transport startup and resumes receipts,
+never creates a second native send. Feature state not yet mounted remains in the
+checkpoint until its original keyed owner remounts.
+
+Restored local sends reattach to `SessionDelivery` and the original request
+operation before transport startup. The same native-rejection and observation
+deadline paths remain authoritative. Input whose preparation had not dispatched
+stays visible as not sent; reload never repeats that preparation. Corrupt or
+unrestorable checkpoints leave startup usable but prevent overwriting the saved
+work or navigating through the owned Reload action.
+
+`createTranscriptProjection` owns local sends and native messages in the same
+entry collection. Normal Send captures its request identity and native message
+ID together before preparation, publishes the ordinary user message immediately,
+then commits that entry on native identity evidence, including evidence
+preceding acknowledgement. Pending and failed entries survive reconnect and OTK
+process replacement in the open browser; no prompt payload is persisted in
+server request receipts. Cooling releases committed local bindings, while
+unresolved input stays owned by its entry. The ten-second observation bound
+starts at Send. Timeout Retry only reacquires existing source; definitive
+refusal offers an explicit send retry.
+
+The delivery callback marks the native dispatch boundary. A refusal before that
+boundary retires only the unsubmitted local entry, retaining the draft and its
+preparation owner's feedback. Native identity evidence still wins over late
+refusal; dispatched failures retain their original entry and Retry action.
+
+`SessionActions` also owns source-free, session-bound submission receipts.
+Native acceptance carries a message identity; only the canonical transcript can
+admit it, and only the viewport can report its presentation. The ten-second
+observation deadline is not a mutation timeout: recovery reloads canonical
+messages and never resends input. Own sends switch the existing viewport to
+follow; canonical append revisions expose new messages even near the tail.
+
+`entityFacts(identity, sources)` projects explicit session, turn and tool
+scopes. Reply facts use canonical `TurnTiming`, retain known/final/active
+markers and never borrow session/helper clocks. Session-now presentation borrows
+the serving entity replica handle, including when a metadata entry is not
+leased. The same retained historical fact uses current state and permission
+grace instead of copying a status from its record. Every EntityPill producer
+uses that binding. `sessionShells` reads the owner's fresh session shell roster,
+count and lamp. `liveWork` supplies current helper stop candidates; transcript
+paging is not an input. `createLiveWork` owns capability checks and joined stop
+admission across presentation lifetimes; elapsed labels describe running time,
+not working time.
+
+The helper inventory follows native ancestry and fresh positive work keys,
+independently of task/checkout boundaries and attention priority. Blocked
+helpers remain in the count with their own attention lamps. Cross-project
+routing keeps work facts for these demanded descendants while unrelated pending
+identities remain request-only. Helper title/work changes refresh only family
+ancestors even when the lamp counts do not change. The task's helper roster
+supplies the helper pill and subgroup lamps, separate from the task verdict.
+Each helper popover item uses its own session entity.
+
+`EntityStateStore.observeChanges` observes accepted evidence and staleness
+independently of `subscribe`'s notification transitions. Canonical transcripts
+borrow it for `evidence.work`, including when work starts/stops under a stable
+blocked lamp. Retry text borrows `evidence.retry`; missing retry time or message
+is not invented. Serving transport staleness clears these observations.
+
 Failure facts and failed completion update one session-outcome notification in
 the notification owner, in either arrival order. Terminal-only delivery remains
 available and later facts enrich it without adding a second toast. Transcript
 reply groups cannot precede their known causal prompt, including inbox prompts
 whose acquired source position follows an early selection failure.
 
+Terminal provenance follows the adapter through supervision and the attention
+projection. Snapshots, historical acquisition, lease admission and
+equal-terminal acknowledgement replay seed notification clocks without alerting.
+Restoring unseen eligibility never creates another terminal edge. Live failures
+borrow the paired native public cause and recovery, including when no transcript
+is acquired.
+
 Outcome enrichment carries its prior notification identity to quiet channel
 replacement; unchanged facts do not redeliver, and distinct failure diagnostics
 still alert. Input retirement precedes root-ID completion publication. Reply
 group ordering uses the canonical first message's sort change, not the aggregate
 display clock; causal dependents are reinserted on prompt removal too.
+
+Timing presentation uses a discriminated TimeValue: known, counting or unknown.
+`messageTimeValue`, `workingTimeValue` and `entityTimeValue` own finality and
+explanation selection; views only render the result. Unknown has one label and a
+reason, while missing or nonfinal evidence keeps the counting cue separate from
+a measured duration.
 
 ProgressEstimate derives EWMA completion rate and variance-aware ETA from worker
 active-work facts, resetting at scope/generation replacement. createProgress
@@ -36,24 +125,33 @@ selected warm baseline uses the same callback. No view component owns background
 admission.
 
 ServerResources owns project/selection/crumb demand and visible Sessions keys.
-SidecarConnection retains that view across reconnects, sends it with hello and
-fences older scoped frames. Project changes incrementally acquire their entries
-and evict retired entries without deleting native or user metadata. Sessions
-borrows the project's structural catalog, keeps hierarchy/task grouping in its
-shared client owner and reports its VirtualList range; rows acquire scalar
-digests while only selection receives turn summaries. Standalone connections
-call `view({selected, crumbs: [], rows: []})` before connecting. Other projects
+SidecarConnection retains that view across reconnects and fences older scoped
+frames. Hello borrows the current lease; at welcome, the connection reconciles
+any newer intent before replaying subscription and request demand. A fresh index
+baseline and the peer's `view.ready` for the latest epoch precede the recovered
+status. First-page acceptance waits for that lease's acknowledgement before
+settling. Project changes incrementally acquire their entries and evict retired
+entries without deleting native or user metadata. Sessions borrows the project's
+structural catalog, keeps hierarchy/task grouping in its shared client owner and
+reports its VirtualList range; rows acquire scalar digests while only selection
+receives turn summaries. Standalone connections call
+`view({selected, crumbs: [], rows: []})` before connecting. Other projects
 remain visible through P3 summaries. Prompt recall uses only the currently
 viewed server/project.
 
 Sessions mounts its measured hierarchy after its demanded list page and the
 project's inbox baseline agree. Its page/query resource requests source-wide
-search and older pages near the acquired end, retains last-good rows while
+search and older pages near the projected end, retains last-good rows while
 loading, and acquires necessary ancestor context by key. Same-project
 visible-row lease changes keep readiness and keyed row DOM, including focus and
 retained scroll anchors. Query replacement and reconnect fence retired request
-identities, epochs and revisions. Child navigation follows the same bounded list
-cursor.
+identities, epochs and revisions.
+
+List advancement borrows the current hierarchy/task/stable-order projection from
+ServerResources, including after request settlement. Native activity-page order
+never defines the visible paging frontier. Standalone lists can use their source
+order; projected consumers supply the current visible-order accessor at the same
+viewport boundary.
 
 Changing tasksFollowParent sends the new view before refreshing hierarchy list
 owners. Active lists replace their reads; inactive cached lists become dirty
@@ -128,6 +226,19 @@ coalesce complete-baseline recovery and stale baselines cannot replace newer
 accepted state. Action receipts settle operations; only this stream owns current
 task membership.
 
+Presentation order uses `createStableOrder`: saved positions seed task/project
+order, otherwise immutable creation or source discovery order seeds the list.
+Existing identities never move on activity, state, title or refresh. Projects
+also carry their server's rank in the configured server list, so the order never
+depends on which server answers first. An arrival takes its saved-key place
+(server rank, then saved position) without moving known rows; rows without one
+append. Only changed saved positions reorder existing positioned slots. The tabs
+model owns the strip and Sessions task-group permutation. Sidebar rows borrow
+the same contract within their repository topology. Counted holds retain
+departing pointer/focus and portalled-origin targets until every borrower
+releases them; arrivals append without displacing those targets. Lamps stay
+live.
+
 Prompt recall uses the shared `PROMPT_HISTORY_LIMIT` window. `loadHistory`
 preserves originating sidecar IDs and valid partial histories when another
 source definitively rejects. If every requested source definitively rejects, it
@@ -137,12 +248,13 @@ there is no recall-specific failure timer.
 
 ## Request event consumers
 
-`createPrimaryAction` owns the composer's persistent primary affordance, live
-availability/reason, synchronous pending admission and invocation. Its inputs
-borrow current draft, connection and request state; it retains no second draft
-or RPC lifetime. `promptUnavailable` projects ordinary Send's draft facts. Every
-invocation rechecks the same contract, including after asynchronous preparation,
-while the existing submission intent retains captured send settlement.
+`createComposerAction` owns composer activation. Its `composerAction` projection
+combines draft, transport, capability, takeover and session activity facts for
+the button, Enter and explicit interrupt. One reservation spans preparation and
+Send; after preparation the owner rechecks the same projection. Explicit local
+commands do not acquire a native Send reservation. Refusals leave the draft
+untouched and publish the live reason; custody begins only at dispatch.
+`createPrimaryAction` is the generic primary owner for request docks.
 
 `createFormIntent({capture, presenter, diagnostic?})` owns a form's captured
 values, synchronous pending reservation, joined submission promise and safe
@@ -152,16 +264,6 @@ the captured values and a later explicit submit gets a new key. Presentation
 subscriptions can detach without cancelling the captured work. `failureFeedback`
 handles typed request failures, silent releases and locally diagnosed exceptions
 through one presenter, without rendering arbitrary exception text.
-
-`createSubmissionIntent` separates input preparation from captured send
-settlement. Repeated preparation joins synchronously and repeated sends cannot
-replace an in-flight payload. A later input command can still prepare and run
-while a send or its follow-up bookkeeping remains pending; command handling is
-not mistaken for a duplicate send. Send eligibility is captured at activation:
-preparation that starts during Sending cannot admit a prompt, shell or native
-command effect after the earlier send settles. A later explicit activation can
-send the retained draft. Both lifetimes stay framework-free, with native input
-and focus owned by the UI adapter.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and
@@ -256,7 +358,13 @@ composition can re-read configured state or offer an explicit fresh sign-in.
 `HttpRequests.read` gives read-only bootstrap observation a terminal transport
 failure and joined cancellation, without changing mutation receipt recovery.
 Admission status and event references/shapes are validated before tracker
-delivery. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
+delivery. HTTP readiness/proxy failures are availability observations, not event
+validation errors. The connection owner retries fresh session reads with backoff
+and honors Retry-After beyond its normal backoff cap. Only repeated malformed
+data across fresh attempts becomes an error, with its local validation reason.
+Its reconnecting state supplies the shared informational status; the next
+welcome renews request-window authority and clears the notice without a page
+reload. `createDiscovery` owns the connecting, OTK identity/origin and sign-in
 steps. Each started step retains one result and its elapsed time. Elapsed time
 never creates a deadline: only a reported failure or explicit cancellation ends
 a held read. Public `/api/discovery` uses omitted credentials; the existing
@@ -338,15 +446,25 @@ Native Source previews have one transcript-owned per-reference resource.
 does not read. Structural ownership follows the current path when an opaque
 reference moves. Accepted changes invalidate the matching structural owner
 without decoding plugin references; open demand refreshes automatically and
-coalesces pending replacements. Obsolete results cannot publish. Unchanged
+coalesces pending replacements. Producer-owned exact-source revisions
+distinguish equal replays from raw-only changes; sources without a revision
+retain conservative invalidation. Obsolete results cannot publish. Unchanged
 remounts and themes reuse both successful and failed outcomes; Retry explicitly
 refreshes. The existing 64-entry reuse cache never evicts retained folds. Body
 removal, cooling and stop retire source values and pending reads.
 
 Usage refreshes during a held read retain only the latest demand, clearing an
-obsolete successor when demand returns to its admitted witness.
+obsolete successor when demand returns to its admitted witness. Summary equality
+uses canonical JSON values, never a producer's property insertion order.
 
 ## Public API
+
+`createProjectEditor` owns one captured project's authoritative baseline,
+editable values, supported fields, dirty dismissal and joined save. Native
+refreshes update clean fields without overwriting dirty input. A confirmed save
+re-reads native settings; edits made while it runs remain dirty. Image-read
+generations fence removal and retired editors. The view supplies field events,
+image decoding and confirmation; it never calls a native API.
 
 `publicDefaultsFrom` reads the allowlisted `{ defaultPort }` session-bootstrap
 projection. Connections publish it through `ConnectionSink.defaults` into each
@@ -376,39 +494,6 @@ unsubscribe function and notify after updates, without an initial notification.
 Treat state as read-only outside model methods. A UI binding can supply a
 `StateFactory` implementing draft updates and reconciliation. The application's
 thin Solid binding retains granular updates at the UI boundary.
-
-`terminalBoxFor(connection, sessionID, factory?)` owns that session's in-memory
-closed/docked/expanded presentation intent independently of mounted surfaces.
-Toggle, expand, collapse and close never own terminal channels or persist state.
-The connection owner calls `releaseTerminalBoxes` when removed or stopped.
-
-`TerminalSocket(connection)` is one lazy `/api/terminal` transport per sidecar.
-It shares numbered channels, decodes base64 checkpoints, frames input with the
-channel prefix and reconnects retained channels from fresh snapshots. Reuse the
-connection's injected socket factory for authenticated native consumers. The
-relay restores complete raw output when available, otherwise an active-screen
-checkpoint; its initial snapshot reports `restore: "replay" | "checkpoint"`. Raw
-replay follows the empty reset through the same ordered byte stream as live
-output. Truncated checkpoint fallback cannot recover the inactive normal screen.
-Initial/reconnect snapshots call the sink's `reset`; ordered live resize events
-call `resize` without replaying a checkpoint, preserving renderer scrollback and
-the saved primary screen while an alternate-screen program runs.
-
-The attachment retains its latest desired grid while connecting or disconnected
-and reapplies it after every attachment acknowledgement without another reset.
-An active terminal transport retires after 45 seconds without an incoming frame;
-idle and stopped transports release that liveness timer.
-
-`SessionTerminals(socket, connection, sessionID, factory?)` owns `state.list`,
-`state.selected`, `state.disconnected` and loading/error feedback through that
-same state/subscribe contract (not framework signals). `refresh`, `create`,
-`close` and `show` own list and selection intents. `show(id, sink)` returns the
-input/resize attachment and retains four sinks in LRU order; hidden retained
-sinks keep receiving bytes. Reusing a different sink takes a fresh snapshot.
-`dispose` detaches only that session; `socket.stop` releases the shared owner.
-Terminated channels refresh without reattach; repeated lag within 10 seconds
-stays disconnected until explicit `show`. Natural exit keeps the terminal in the
-refreshed list; closing its tab terminates it through RPC.
 
 `ClientIndex` owns its keyed entry dictionary synchronously and publishes keyed
 clocks through the binding. `get(sidecarID,sessionID)` is the invocation-current
@@ -450,6 +535,13 @@ The server's supervision projection governs lamps independently of population
 readiness. Missing supervision is `none`, rendered grey as "No known activity".
 There is no raw-status fallback. Unknown population counts remain null.
 
+Unread names/counts borrow supervision's explicit `unseen`, not raw finish and
+seen clocks. Outcome notifications carry that same eligibility through the
+attention projection, including equal-terminal acknowledgement changes. A
+delivered helper result retracts its outcome notification and mandatory family
+crumb, while a selected helper retains its path and the parent's result record
+remains history. Entity/Activity lamps already borrow the same supervision.
+
 The inbox owns accepted metadata synchronously and publishes a binding clock,
 matching the keyed index: projection observers and commands never wait for a
 framework to expose an accepted mark, task or project update.
@@ -465,12 +557,12 @@ consumers, while the existing full-entry ports remain available for digest
 consumers.
 
 Session pages publish essential session/message data independently of optional
-attention and sibling reads. Optional failures retain last-good data and expose
-diagnostics. Live attention changes replay over their own resource snapshot. The
-selected owner consumes the coordinated `MessagePage` directly; it makes no
-parallel `session.get`. Continuation stays opaque, and exhaustion comes only
-from `older: null`, including exact-multiple and short pages. `latestPrompt()`
-and `state.latestPrompt` supply composer/Undo metadata outside the loaded ten
+attention reads. Optional failures retain last-good data and expose diagnostics.
+Live attention changes replay over their own resource snapshot. The selected
+owner consumes the coordinated `MessagePage` directly; it makes no parallel
+`session.get`. Continuation stays opaque, and exhaustion comes only from
+`older: null`, including exact-multiple and short pages. `latestPrompt()` and
+`state.latestPrompt` supply composer/Undo metadata outside the loaded ten
 messages. `state.clock` identifies accepted page authority. Pending live replay
 is bounded by the connection's injected/welcomed policy. Duplicates are ignored;
 gaps, epoch changes and overflow invalidate the baseline and coalesce a retry.
@@ -481,6 +573,9 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+Same-authority newest-page reconciliation retains acquired messages preceding
+its covered suffix. Covered absences, explicit removals, a complete source page
+and changed epoch or transcript version still retire their authoritative scope.
 Replacement pages and recovery parts preserve last-good unfinished text when
 native source coverage is shorter or empty. The existing stream stamp carries
 optional UTF-16 `sourceLength`, so Markdown presentation changes do not
@@ -508,6 +603,11 @@ scoped, clocked invalidation when the producer loses bounded fine recovery keys;
 the same resource coalesces a replacement page. Neither operation creates
 another body cache or an append seed from HTTP.
 
+Only explicit `refetch()` carries `retryRecovery` on its message-page intent.
+Initial acquisition, older pages and automatic continuity repair do not retry
+failed native replacement reads. Page installation preserves unavailable
+recovery state instead of presenting a failed checkpoint as still reading.
+
 Canonical transcripts bind task-part identities to the shared reduced child
 index's `digest.helper`. Borrowed digest and standalone `task.progress` delivery
 use the same identity/revision reducer, so equal progress cannot apply twice.
@@ -515,12 +615,15 @@ Helper updates preserve parent source/native completion clocks and unrelated
 reply identities; removal, cooling and replacement release the source-free link
 index. No helper RPC, child transcript cache or timer belongs to the view.
 
-`createTranscripts({connection, entry, factory?, clock?})` owns one canonical
-`createTranscript` per `sessionKey(server, session)`. `setDemand` replaces
-active scope/screen demand, `interact` refreshes that scope's clock, and
-`preload` gives an attention scope its temporary lease. Resources wait for an
-explicit/welcomed policy. One shared queue bounds page reads per server and
-prioritizes selection, attention and recently interacted scopes. Hydration
+`createTranscripts({connection, entry, entities?, factory?, clock?})` owns one
+canonical `createTranscript` per `sessionKey(server, session)`. `setDemand`
+replaces active scope/screen demand, `interact` refreshes that scope's clock,
+and `preload` gives an attention scope its temporary lease. Resources wait for
+an explicit/welcomed policy. One shared queue bounds page reads per server and
+prioritizes selection, attention and recently interacted scopes. Atomic body
+pushes can paint before scalar metadata, but the shared admission slot belongs
+to the full page request until coverage completes or it retires. Warm hydration
+cannot turn early painting into unbounded unfinished metadata. Hydration
 publishes newest10 before acquiring next10. `viewport({first,last})` uses native
 message identities to refill at `MESSAGE_ADMISSION_WATERMARK` (20), with a
 ten-message reserve; `ensure(id)` follows the same cursor chain and `pin(ids)`
@@ -538,17 +641,27 @@ Cancellation releases only the caller's wait, not canonical recovery or other
 consumers. Readiness also requires the serving transport's current `connected`
 fact and a linked native source; retained bodies do not certify either link.
 
-`snapshotPage(target,before?,signal?)` uses that canonical transcript's bounded
-admission queue for retained `history.messages` pages, without reducing them
-into the live view or opening Source folds. Native continuations distinguish
-retained archive reads from visible pages. BranchHistory owns one keyed,
-cancellable background capture after reversible Revert; its page-local
+`snapshotPage(target,before?,signal?,scope?)` uses that canonical transcript's
+bounded admission queue for retained `history.messages` pages, without reducing
+them into the live view or opening Source folds. Native continuations
+distinguish retained archive reads from visible pages. BranchHistory owns one
+keyed, cancellable background capture after reversible Revert; its page-local
 source/prompt workers use configured message concurrency and preserve exact
 payload order. Every committing submission and Compact joins preservation before
 native admission. Restore does not wait for capture and fences late saves. A
 staged session after reload reacquires its missing browser copy before
 committing. Failed saves retain FP1 action, target, reason and recovery by
 target across selection changes.
+
+A staged capture passes its fixed `messageIDs` as the snapshot scope. Each
+harness reads those native identities directly, without scanning older bodies.
+The existing replay owner supplies per-ID revision witnesses in the same epoch;
+witness-only validation acquires no bodies. Unrelated sequence advances are
+irrelevant. A changed captured identity alone is read and materialized again.
+Transient reads and changing records retry with bounded exponential backoff;
+Retry starts a fresh capture after a final failure. New archives contain exactly
+the staged identity set. Older, larger archives still count as preserved when
+they contain every identity in the record.
 
 Archive updates load the current stored branch after asynchronous reads before
 merging drafts or native bookkeeping. Reuse and explicit draft choices made
@@ -669,7 +782,14 @@ and focus stay with the UI adapter. `historyDraft` and `PromptHistory` expose
 the metadata-only projection and cursor for independent consumers.
 
 `recordRecentModel(recent, sentModel)` returns a deduplicated most-recent-first
-list (max 10) after a successful send, using the submission's captured model.
+list (max 10) after a successful send. The shipped shell's `createModelRecency`
+serializes preference writes from its own canonical native prompt admissions,
+using the model actually applied by the backend. Unknown pre-send defaults never
+require catalog waits or lose recency. The delivery owner fences admission by
+the captured native identity and reports its applied model once, independently
+of composer replacement or receipt presentation. Native queue/admission may
+precede model metadata; an identity-only bookkeeping obligation survives until
+that metadata arrives. Historical and unrelated prompts do not record recency.
 `toggleFavouriteModel(favourites, model)` toggles exact provider/model pairs,
 putting additions first (max 50; a full list keeps existing favourites). These
 helpers own no persistence: callers save `models.recent` and `models.favourite`
@@ -777,10 +897,16 @@ records with explicit neutral `active:true` facts. `hasActiveRecord` supplies
 that shared classification to queue admission and UI presentation. Part-owned
 record settlement updates the same queue; no component owns a second queue.
 Mixed replies retain assistant metadata independently of final source position.
+That metadata includes producer-owned `outcomeTime`; message presentation
+carries it independently of digest working time, including when a failed call
+has no streamed interval. Saved presentation preserves the same native instant.
 Context records before or after an assistant remain ordered source segments,
 without replacing its usage, terminal state or action eligibility. Removing the
 last assistant retires that turn's pending membership; context-only groups stay
-context. Ordinary part updates reuse the indexed assistant header.
+context. Ordinary part updates reuse the indexed assistant header. Each borrowed
+assistant segment also retains its own agent and native clock; metadata-only
+clock updates replace only that source segment. Reply grouping, source order and
+canonical action boundaries remain unchanged.
 `TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
 its original cursor chain only on explicit copy, then resolves source through
 the consumer's injected part presenters.
@@ -789,6 +915,29 @@ the consumer's injected part presenters.
 chronological prompt identities, creation clocks, shared queued flags and
 borrowed source parts. It retains no content or paging state; consumers present
 parts through their own registry and page through the original session owner.
+
+The canonical projection's `records` value owns one stable background interval
+between conversation messages, identical-fact folds, reveal ancestry and
+presentation revisions. An interval needs admitted part content before offering
+a disclosure; headers alone retain their source rows. A populated interval keeps
+all its records, including empty breakouts. Its first record mints the frame
+even while queued. Settlement changes child presentation, never the root
+partition. Folded frames show a client-worded failure count and only their
+chronological breakouts. They never partition successful stretches into
+additional disclosure rows; all children remain in the one frame's details.
+Pending, active, blocked, unknown and failed records break out inside that frame
+in source order, then rejoin its compact children when settled. Native plugins
+supply opaque summary kinds and singular/plural nouns; headings never classify
+records. Records without producer-owned summary facts remain visible breakouts.
+Producer-declared footer completions retain their original source and reveal
+paths. A success-only interval is silent until explicitly disclosed through the
+preceding reply footer or revealed; mixed intervals retain those completion
+facts in their original chronology, but not their summary. Failure counts do not
+borrow producer nouns and include failures without summary facts. The existing
+transcript interaction owner retains all disclosure choices and opens reveal
+ancestors. Measurements use presentation revisions separately from logical row
+identity, so a topology or streamed-content revision cannot borrow an old
+extent, including when an unmounted row was previously empty.
 
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
@@ -866,15 +1015,6 @@ checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
 
-Running-terminal dependencies are separate supervision facts. `inboxStatus`
-keeps each session's own lamp unchanged; `aggregateStatus`, `rollup` and
-`dependencyCount` supply task/phantom/project activity. `dependencies` ranks
-below working and above none. Positive counts retain an ungrouped phantom and
-lift Inactive; zero retires dependency-only attention immediately. No terminal
-completion/seen latch is created. Scalar summaries include orphaned PTYs without
-inventing sessions, and keyed projection caches invalidate on count-only
-changes.
-
 `fitOverflow({keys,widths,available,required,preferred?,moreWidth,gap})`
 projects one measured snapshot into ordered visible/overflow identities.
 Required values never enter overflow, even if their labels must shrink.
@@ -884,24 +1024,25 @@ framework or item count folding threshold. The UI retains stable frames and
 supplies measured widths.
 
 Breadcrumbs use the one-line shrinking contract, with independent More controls
-for omitted identities. Task strips render the client-owned urgency/recency
-order directly in a horizontal scroll lane, without overflow fitting or
-wrapping.
+for omitted identities. Task strips render the client-owned stable saved order
+directly in a horizontal scroll lane, without overflow fitting or wrapping.
 
-`createInputGuard({drafts, key, confirm})` owns dirty-input marks and
-confirmation policy. Release reads the invocation-current draft through
-`Drafts.current(key)` (non-creating and independent of framework publication)
-and clears only an accepted editor, preserving the prompt and choices;
-navigation clears attention marks only when the session identity changes.
-`permit` checks a single input owner without consuming its dirty state.
-`release({draft: "kept" | "dropped", keys?})` states whether released stored
-drafts survive. Ordinary navigation defaults to kept. Dropping unsent content
-asks first, including background/family drafts named by keys; consent does not
-consume those drafts before the mutation succeeds. Deleted native lifetimes keep
-unsent attention input in the same guard until normal guarded release; the
-metadata-only details surface can display it without a native send control.
-`Drafts.drop(key)` removes committed deletions and retires captured writers, so
-late uploads/sends cannot resurrect their deleted draft lifetime.
+`createInputGuard({drafts, key, confirm})` owns loss checks, not draft custody.
+Ordinary routing keeps keyed prompt/editor drafts and request-owned drafts;
+navigation clears only view marks when the session identity changes. `permit`
+checks one input owner without consuming it. A destructive release reads
+invocation-current input through `Drafts.current(key)` without creating drafts.
+`release({draft: "dropped", keys?})` asks only if it would lose input and
+returns a captured discard callback to run after successful deletion, not on
+consent or later navigation. It checks recoveries only for the keys that would
+be dropped. Native deletion retains request-owned input for the metadata-only
+details view. Closing that view calls `keepDeleted()` after membership succeeds
+and while the route is still current (2.159). Exact request values from proven
+deletions transfer to the selected key's existing `Drafts` recovery entries
+before request custody is released. Recover exchanges any nonempty current draft
+and X discards only the offered value (2.145); no send is created. `Drafts.drop`
+removes committed deletions and retires captured writers, so late uploads/sends
+cannot resurrect their deleted draft lifetime.
 
 `createShellNavigation({resources, actions, guard, drafts, session, presence,
 environment?, factory?})`
@@ -922,11 +1063,17 @@ session/project/application title projection.
 Project clicks and cold/reloaded project routes call `navigation.default` on the
 selected server. One core resolver uses SessionHierarchy membership and the
 shared attention order first, then validates the exact remembered session
-(children included), then compares one newest native root per exact checkout
-scope. Explicit session links remain explicit selections, not project-default
-intents. ShellNavigation applies the result only while its captured revision is
-current; same-project clicks do not bypass resolution. Locations live in the
-existing host-sidecar `shellLayout` preference; `layout.location` merges one
+(helpers resolve to their proven human root), then compares one newest native
+root per exact checkout scope. Explicit session links remain explicit
+selections, not project-default intents. Worktree clicks retain their checkout
+and choose its exact urgent or remembered session, even a helper. The separate
+project lamp requests `navigation.default` with `attention: true`: it opens the
+exact urgent session across the repository's checkout scopes, without human-root
+redirection. Mandatory descendants in other checkouts remain scalar family
+leases; only the selected ancestry crosses task boundaries in the trail.
+ShellNavigation applies the result only while its captured revision is current;
+same-project clicks do not bypass resolution. Locations live in the existing
+host-sidecar `shellLayout` preference; `layout.location` merges one
 server/directory intent at the persistence owner, so concurrent project visits
 cannot overwrite one another. Pending saves bridge immediate switches;
 preference broadcasts own the saved snapshot. Current task membership resolves
@@ -981,23 +1128,39 @@ retain the whole grouped reply.
 `compact(target, model)` captures the session/server and explicit next-prompt
 model through the same non-submitting `act` owner, without task promotion.
 
+Revert state is identified by `boundaryID` and its fixed native `messageIDs`,
+never a prompt count. The reducer admits a context-only boundary. Legacy saved
+browser archives normalize their real record identities only on read, without
+rewriting stored data.
+
 `revert(target, messageID)` and `restore(target)` use the same captured-target
 `act` owner. `createSessionRevert({session, actions, drafts, status, factory?})`
-serializes selected-session revert/restore/undo/redo intents, exposes
-pending/error and projects the authoritative `content.revert` into the composer
-strip. Selection changes retire late results and errors; no RPC result
-optimistically mutates session content. `dispose` releases its subscription. No
-file-overlap confirmation is added.
+owns a boundary-keyed flow per session: confirming, staging, staged, saving,
+saved, failed and restoring. Revert and Undo first publish the actual message
+identities for confirmation. Only Confirm starts a native mutation; Cancel sends
+nothing. A changed preview requires confirmation again. The authoritative native
+publication still settles the action, never its RPC result alone. The same owner
+ingests reverts staged by another client. Dismissal is a separate browser-stored
+choice per server, session and boundary, with no native effect; clear or commit
+retires the record. `dispose` releases its subscriptions. The owner's published
+phase gives an active native mutation priority over background archive outcomes
+until authoritative reconciliation settles. A late save success or failure
+cannot replace an ongoing Restore with saved/failed UI. Its target-bound `ready`
+port joins authoritative publication and draft settlement, not merely native RPC
+completion. SessionActions borrows that wait and joins its own in-flight native
+boundary changes before any committing submission or Compact.
 
-Undo targets the last visible prompt, interrupts a working captured session,
-then remains pending until authoritative idle before reverting. `Drafts.reverts`
-owns one browser-lifetime transaction per server/session, capturing the complete
-pre-revert draft before asynchronous work, including attachment bytes, mention
-coordinates, choices, own-undefined Default and editor buffer. Repeated pending
-boundaries keep that first snapshot. Its history refill preserves prompt choices
-and replaces only empty or transaction-owned content, never edits made during
-the operation. Restore and Redo share exact pre-revert restoration when the
-draft is unchanged. Selection and operation-owner replacement do not retire
+After confirmation, Undo targets the last visible prompt, interrupts a working
+captured session, then remains pending until authoritative idle before
+reverting. `Drafts.reverts` owns one browser-lifetime transaction per
+server/session, capturing the complete pre-revert draft before asynchronous
+work, including attachment bytes, mention coordinates, choices, own-undefined
+Default and editor buffer. Repeated pending boundaries keep that first snapshot.
+After authoritative staging, every revert kind refills from the boundary prompt,
+preserving prompt choices and retaining the displaced draft for Restore. Edits
+made during the operation still win. Only then does the revert owner start the
+earlier-branch capture. Restore and Redo share exact pre-revert restoration when
+the draft is unchanged. Selection and operation-owner replacement do not retire
 completed provenance. Newer text, attachments, choices and editors remain
 untouched; `reverts.get(key)` retains the old/current pair for the
 branch-history owner's saved/current choice. Drafts remains in memory; the
@@ -1010,25 +1173,47 @@ target for that same owner.
 
 `createBranchHistory` owns browser-local earlier branches, separately from live
 transcripts and Drafts. On a history-capable server, OTK-initiated revert
-captures every ordinary cursor page before staging the native boundary,
-including unloaded messages. `connectBranchHistory` composes its ports in the
-client. Detached archive pages use the canonical transcript owner's admission
-queue and lifetime cancellation, without changing the live paging boundary or
-projection. This precedes prompt/command, Compact and version-specific native
-commit paths. Exact selected prompts come from the plugin's `history.prompt`
-reader, independently of the 50-entry recall window; attachment references are
-resolved before deletion. Plugin-owned bounded Source previews are materialized
-too; saved Source folds never query the live native transcript. Common
+captures exactly the staged identities after authoritative settlement, including
+unloaded messages. `connectBranchHistory` composes its ports in the client.
+Detached archive pages use the canonical transcript owner's admission queue and
+lifetime cancellation, without changing the live paging boundary or projection.
+Per-ID revision witnesses tolerate unrelated sequence advances and retry only
+changed captured records. This precedes prompt/command, Compact and
+version-specific native commit paths. Exact selected prompts come from the
+plugin's `history.prompt` reader, independently of the 50-entry recall window;
+attachment references are resolved before deletion. Plugin-owned bounded Source
+data is retained too; saved Source folds never query the live native transcript.
+The archive codec stores repeated content once across messages, Source, prompts
+and drafts. JSON Source previews are derived lazily from saved structure;
+schema-1 browser archives remain readable without rewriting them. Common
 submission and Compact admission retain the current draft before dispatch. The
 archive is not native history and never restores files. Operations initiated
 elsewhere cannot recover content this browser never captured.
 
 Prompt-history absence is a separate capability result, not an exception-based
-fallback. Revert and sending still proceed without archive reads or writes,
-while `preservationWarning()` supplies the visible pre-send strip notice. The
-notice is derived from the selected server's capability and the native revert
-strip, so it survives reload. A failed advertised reader or storage write still
-blocks the destructive action with its normal failure feedback.
+fallback. Revert still proceeds without archive reads or writes, while
+`preservationWarning()` supplies the visible in-flow limitation after reload.
+Before Send enters SessionDelivery, `beforeSend` captures the target, draft and
+staged boundary/IDs. An unsaved stage presents Save copy, Send anyway or Cancel.
+Save copy retries preservation; only Send anyway grants explicit discard
+consent. The invocation-scoped BranchSendPermit is revalidated after attachment
+preparation, including continued copy existence unless discard was explicitly
+chosen. Restore cancels a waiting Send. Failed saving keeps both the draft and
+choice.
+
+The capture owner keeps its exact ID record and retained drafts independently of
+the worker lifetime. Restore recapture requires that record and cannot fall back
+to paging a whole session. Capture failures describe their actual operation;
+only the Send gate reports an unsent replacement. After Restore, an unsaved copy
+offers Retry or an explicit choice to keep the live conversation without a saved
+copy. Background failures use those same controls if the reverted group is
+dismissed or no longer present. Neither choice clears the current draft or
+bypasses the separate Send consent gate.
+
+Pre-publication Send admission borrows an acquired, connected transcript
+baseline instead of adding an unconditional native read before the local pending
+entry. Native state and exact permit identities are still revalidated at
+dispatch.
 
 Entries are kept in this browser's localStorage, keyed by exact server URL and
 session plus a branch ID, across reloads until explicit per-branch Delete. No
@@ -1050,16 +1235,15 @@ target and draft effects run. There is no browser failure deadline for that
 publication wait; selection/disposal retires the observation. RPC admission
 never substitutes for the consumer seeing the result.
 
-The hierarchy owner also exports `sessionFamily`, `familyTask` and
-`familySelection`. Shell's location projection intentionally matches only the
-requested ID and the selected root without filtering directories; its task
-membership predicate uses full ancestry and the indexed directory. These remain
-distinct call shapes of the same pure task projection.
+The hierarchy helpers export `sessionFamily`, `familyTask` and
+`familySelection`. `familyTask` is a compatibility lookup of raw saved
+membership, not a task-identity authority. Shipped session actions borrow the
+same scoped tab partition as the strip, crumbs and Sessions for task labels and
+membership.
 
-Family membership resolves the nearest grouped identity before task order. Tab
-preview, accepted metadata reconciliation and remembered-session validation
-share that projection, so late task/ancestry data cannot strand a helper in an
-idle phantom or replace the viewed identity with its root.
+Tab preview, accepted metadata reconciliation and remembered-session validation
+share human-root ownership. Late task/ancestry data cannot strand a helper in an
+independent phantom or replace the viewed identity with its root.
 
 `createServerResources({sidecars, index, factory?})` constructs its sidecar
 collection through the injected receiver factory and owns lazily cached inbox,
@@ -1086,23 +1270,35 @@ the local layout/preference RPC ports share this owner.
 `createInbox(rpc, factory?, report?)` receives connection-local `inbox.snapshot`
 and `inbox.patch` frames, including the snapshot sent on every hello.
 `openProject`, `openSession` and `act` reset the server-owned visit clock;
-opening a session also acknowledges its captured terminal token. Wrap sends,
-approvals, answers and interrupts in `act(directory, callback)`. Successful
-actions request activation through the same visit bookkeeping port;
-opening/viewing never requests activation. Session creation is tracked by the
-server's creation registration. For submissions,
+opening a session also acknowledges its captured terminal token. Wrap approvals,
+answers and interrupts in `act(directory, callback)`. Successful actions request
+activation through the same visit bookkeeping port; opening/viewing never
+requests activation. Session creation is tracked by the server's creation
+registration. For submissions,
 `createSessionSubmission({sessionID, directory, inbox, tabs})` is the shared
-session-bound admission port: it resolves the captured project's directory,
-enters the existing tab `send` promotion, then runs the mode-specific callback
-through inbox `act`. Normal prompts, shell commands and native commands
-(including palette execution) use this same port. Promotion failure prevents
-native admission; action failure propagates without recording a successful
-visit. Concurrent submissions reuse the tab owner's promotion, independently of
-metadata broadcast delivery. Approvals, answers and interrupts use `act`
-directly, without promoting a session merely for responding to it.
-`promote(session)` creates a title-named task with its initial session
-atomically. These are UI-independent ports: callers own navigation guards,
-action callbacks and failure presentation.
+session-bound admission port. Normal prompts, shell commands and native commands
+(including palette execution) dispatch against the captured session without
+waiting for project identity or tab promotion. The tab owner still coalesces
+promotion; directory, promotion and visit failures stay separate from the native
+result. A failed native action does not record a successful visit. Approvals,
+answers and interrupts use `act` directly, without promoting a session merely
+for responding to it. `promote(session)` creates a title-named task with its
+initial session atomically. These are UI-independent ports: callers own
+navigation guards, action callbacks and failure presentation.
+
+`SessionSubmission`, `SessionActions.prompt` and `SessionDelivery.send` return
+the closed `SendOutcome`: committed with a canonical native message ID, refused
+with a reason, failed with a reason and Retry, or explicitly unconfirmed with a
+reason when the native API cannot correlate its message. Native acceptance alone
+does not certify commitment; for a prompt with a pending transcript entry it
+ends as `accepted`, and that entry (which carries OTK's supplied identity) owns
+commitment in place or its bounded observation failure with Retry, unchanged
+from 2.39. UI adapters use `requireCommittedSend` before clearing captured
+input; it admits committed and accepted, and all other outcomes retain the input
+and borrow the existing failure presenter. Observation Retry reads existing
+authority without another native mutation. A refusal citing a captured send
+retires only its exact diagnostic when that send settles; later bookkeeping
+cannot clear its feedback.
 
 After a successful action, a failed `projects.visit` is a separate bookkeeping
 diagnostic: `act` still returns the exact action result, so an admitted send or
@@ -1156,20 +1352,21 @@ keyed project owner. Active means known sessions, Discovered means
 template-only, and Inactive requires explicit user policy unless mandatory
 activity lifts it. `source` retains provenance separately. Scalar seeds own
 population counts, so hydrating an existing session cannot increment them. Every
-project row has a light. `INBOX_STATUS_PRIORITY` owns aggregate light priority:
-needs you, finished but unseen, working, none. Project and task lights consume
-supervision; presentation does not rank states. Finished children retain unseen
-attention until acknowledged. Task tabs sort by this priority, then newest
-family `timeUpdated`, with identity as a stable tie-break. Stored task order
-remains available for future pinning; it does not drive the strip. Discovery
-retains its recency/name order.
+project row has a light. The protocol's `ROLLUP_PRIORITY` / `rollupStatus` own
+aggregate lamp display (D78). Navigation borrows those ranks through
+`urgentStatus`; it still owns the session candidates and tie-breaking. Project
+and task lights consume supervision; presentation does not rank states. Finished
+children retain unseen attention until acknowledged. Task tabs use saved task
+order, and phantoms use immutable creation order. Discovery retains source
+inventory order when it has no saved position or native creation clock. Activity
+never orders these lists.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project
 projection borrows topology and scalar repo/leaf status from inbox summaries;
 views never scan sessions for rollups. Inactive children retain their repo
-label, and working/blocked/unseen leaves remain Active under stale authority
-too. That same keyed owner resolves nested metadata/tasks into their
+label, and non-archived working/blocked/unseen leaves remain Active under stale
+authority too. That same keyed owner resolves nested metadata/tasks into their
 authoritative checkout leaf and supplies exact source scopes to tabs and
 Sessions. Navigation uses the leaf while promotion, execution and persisted task
 directories retain their original paths. Sessions borrows bounded native pages
@@ -1177,35 +1374,82 @@ for those exact scopes through its existing list resources; no flat nested
 project or second project projection is created. Topology changes re-route only
 affected repo membership.
 
+Server-proven archived worktrees carry `archived` separately from manual
+`inactive`. `projectPlacement` owns section and removal annotation together for
+both snapshot and keyed projections. Live work and blockers keep an archived
+leaf live, even when an unseen finish wins its lamp. The Archived disclosure
+reads the server's archive entity for the lamp and unseen count. Manual
+activity-policy changes cannot unarchive a checkout.
+
+`projectTree` supplies the branch representation shared by `projectHierarchy`
+and the sidebar. Server, repository and canonical-root identity prove each edge;
+missing or cyclic parents remain visible roots. Disclosure is independent of
+project status, which remains with the existing rollup owner. `projectHierarchy`
+also assigns row level and artwork before section filtering; worktrees keep
+their own checkout basename and never receive project avatars, including when
+their root is absent. Native repository names remain project-only.
+`projectBranchPresentation` hides all descendants and the archive when
+collapsed, regardless of attention, from one topology/disclosure snapshot.
+`createTreeDisclosure` retains immediate local choices by kind, server and
+stable ID. Per-key saves are ordered, old outcomes cannot overwrite newer
+intent, and the affected branch retains a refusal and explicit retry. Archive
+and Inactive borrow the same owner without adding persistence; Discovered and
+project choices retain their existing preference stores. A matching
+authoritative value retires the successful local overlay; independent future
+preference changes remain live. `projectCollapse(project, collapsed)` sends one
+keyed `layout.project` intent to the serving layout owner. `treePaths` supplies
+virtual session-row continuation flags from the complete projected preorder,
+never mounted DOM neighbours.
+
 `createTabs(inbox.promote, factory?)` takes
-`update({directory, entries, inbox})` and exposes task, mandatory phantom and
-single-preview tabs. Every ungrouped mandatory session, including a child, has
-its own phantom and lamp. `projectTabGroups` assigns each session exactly one
-presentation group: its saved task, its independent mandatory/retained phantom,
-or its nearest ancestor's group within the checkout. Group member sets are
-disjoint, including quiet descendants. Selection, remembered members, lamps,
-breadcrumbs and metadata demand borrow this same partition; ancestry alone never
-adds another group's sessions. Helper navigation selects its own phantom when it
-has one, otherwise its ancestor's group. Native family identity, local anchors
-and task ownership come from SessionHierarchy; standalone consumers use the same
-neutral projector. `tasksFollowParent` defaults off and crosses server
-connections through the view, not by rewriting stored membership or native
-paths. `select`, `preview`, `pin` (also the double-click action),
-`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
-transitions. Required activity tabs never disappear when a preview is replaced;
-an idle/seen selected phantom remains until selection leaves. Inputs remain
-owned by their index/metadata models, and tabs never delete sessions. Concurrent
-pins share promotion; late completion cannot steal a newer selection.
-`belongsToTab(tabID, sessionID)` borrows complete group membership for lamp
-presentation, including quiet descendants. Mandatory ungrouped descendants have
-independent groups, so a parent's lamp still reflects its own activity (D35).
-Consumers do not reconstruct membership from raw ancestry.
+`update({directory, entries, inbox, entities?})` and exposes saved task and
+human-root phantom groups. `projectTabGroups` is the task-identity owner:
+helpers belong to their proven human root's group, never an independent
+activity/selection group. Legacy helper-only task records cannot split that
+group. Unresolved or cyclic ancestry cannot establish a task identity; Sessions
+retains those rows. Group member sets are disjoint, including quiet descendants.
+Selection, remembered views, lamps, breadcrumbs and metadata demand borrow this
+partition. Opening a helper keeps its exact view but selects the human group's
+tab. Pin and send promote that root, never the helper; helper rename is not task
+promotion. Native ancestry comes from SessionHierarchy. `tasksFollowParent`
+defaults off and crosses server connections through the view, not by rewriting
+stored membership or native paths. `select`, `preview`, `pin` (also the
+double-click action), `rename(sessionID, title, callback)` and
+`send(sessionID, callback)` own tab transitions. Required activity tabs never
+disappear when a preview is replaced; an idle/seen selected phantom remains
+until selection leaves. Inputs remain owned by their index/metadata models, and
+tabs never delete sessions. Concurrent pins share promotion; late completion
+cannot steal a newer selection. `projectTabGroups` lives in protocol and is
+re-exported by client: server demand and browser placement share the same
+partition. The server publishes task states only for open view projections.
+Their opaque identities include group kind, group ID, directory and
+follow-parent mode; unpinned human groups are task aggregates too. Last view
+release retires those aggregates. `belongsToTab(tabID, sessionID)` borrows
+complete membership, including quiet descendants. `tabEntityKey(tab)` names that
+server aggregate, while each crumb reads its own session entity (D35).
+`entities()` exposes the borrowed replica to presentation. Standalone callers
+can supply `inbox.entities` instead. Metadata, supervision and client operation
+overlays never manufacture tab state. State revision and grace expiry invalidate
+cached paint without borrowing the catalog.
 
 Directly selecting a validated phantom preserves that exact tab and viewed
 session across metadata updates. Preview and reconciliation share that same
-group selection. Breadcrumbs borrow complete ancestry context and insert foreign
-links relative to their displayed ancestors and descendants, preserving explicit
-local member order even when intermediate links are quiet.
+group selection. The trail owner supplies complete ancestry and a separate
+eligible in-task helper inventory to the two D67 views.
+
+`task-breadcrumbs.ts/buildTrail` alone builds the D67/D66/D3 model. It borrows
+the disjoint partition and entity-state replica. `crumbs` and `path` contain
+every known native ancestor followed by the selected session, including quiet
+and delivered sessions. The main shows only itself; siblings never enter that
+path. Independently, `helpers` includes working and blocked in-task descendants
+plus finished helpers whose terminal has no matching parent delivery receipt.
+Human seen does not substitute for delivery. Delivered failures may still need
+human attention elsewhere but do not remain merely for that reason. Entities
+supply eligibility, lamps and native run clocks. `family` borrows `helpers`;
+`working` supplies positive execution lifetimes for Stop admission. `TaskTrail`
+delegates whole-first-word plus fitting-tail compaction to `OverflowRow`,
+keeping every ancestor reachable. `Subagents` renders the same owner's helper
+set in the composer header, using the shared Menu and duration formatter.
 
 `taskReady(id, signal?)` joins canonical task publication. A retiring borrower's
 signal settles only its own wait as false; the shared model and other waiters
@@ -1222,10 +1466,10 @@ lookup). Tab commands read current inputs before validation, so a deferred
 rendering effect cannot reject a newly available tab. Pin/send resolve missing
 session metadata without waiting for index replication; concurrent calls share
 resolution and promotion, and validate the invocation's project and session
-identity before acting. `TabSession` contains only identity, directory and
-title: promotion never requires a replicated status/attention row. `update`
-remains the view-invalidation port and the input port for consumers that update
-synchronously.
+identity before acting. `TabSession` contains identity, directory, title and
+parent identity: promotion never requires a replicated status/attention row.
+`update` remains the view-invalidation port and the input port for consumers
+that update synchronously.
 
 Tab state also exposes its selected `sessionID` and an input `revision` for
 reactive bindings. `sessionFor(taskID)` resolves a still-owned remembered
@@ -1241,21 +1485,21 @@ supplies the limit and a clamped fill fraction; unknown windows stay unknown.
 The session's shared catalog loads independently of the transcript and rejects
 stale results; refresh errors retain last good metadata. The meter binds the
 owner's whole-session reported cost directly, independently of its
-latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` uses the
-shared partition and preserves explicit membership order. Visible crumbs contain
-explicit task members (or a phantom's own session), mandatory group members and
-the open group member. Quiet helpers retire when no longer open, including quiet
-intermediate members on the open session's ancestry. Mandatory membership
-borrows both aggregate supervision and the resolved hierarchy's mandatory flag.
-Tabs and standalone crumbs share per-entry hierarchy resolution: compatible
-published nodes survive mixed catalogs, while missing or mismatched nodes use
-the neutral projection. An explicit absent task member can pass ownership to a
-present child within its resolved checkout scope; unknown parents cannot create
-phantoms or cross checkout boundaries. `TaskCrumb.kind` separates `member` from
-`ancestor`: parents outside the group and cross-checkout parents are orientation
-links, never duplicate membership. Traversal is iterative and cycle-safe. Helper
-URLs retain native ancestry independently of selected group; removing task
-membership preserves a mandatory helper's own phantom.
+latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` delegates to
+the same trail owner and disjoint partition. Quiet selected helpers remain
+visible as the final crumb; quiet background helpers remain orientation
+metadata. The separate helper disclosure borrows the same entity replica's
+activity, delivery and run-clock evidence; task and phantom lamps read their
+published task entities. Tabs and standalone crumbs share hierarchy resolution:
+compatible published nodes survive mixed catalogs, while missing or mismatched
+nodes use the neutral projection. An explicit absent task member can pass
+ownership to a present child within its resolved checkout scope; unknown parents
+cannot create phantoms or cross checkout boundaries. `TaskCrumb.kind`
+distinguishes local `member`, orientation `ancestor` and disclosure `helper`
+links. Cross-checkout ancestors are orientation links even with inherited
+membership. Traversal is iterative and cycle-safe. Helper URLs retain native
+ancestry independently of selected group; removing task membership preserves the
+human group's phantom while its helpers need attention.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;
@@ -1266,28 +1510,39 @@ Repeating an intent is idempotent; adding a member owned by another task still
 rejects rather than moving it implicitly.
 
 `sessionTree(entries, tasks, directory, query?)` projects ordered task groups
-followed by “Not in a task”, with parent/child depth. Helpers inherit the
-nearest explicitly grouped ancestor; explicit helper membership takes
-precedence. Title search retains matching ancestor paths, while missing parents
-and malformed cycles cannot hide sessions. Keep each server's entries separate
-at the caller.
+followed by “Not in a task”, with parent/child depth. Helpers inherit the same
+human-root task partition; helper membership never creates a new heading. Title
+search retains matching ancestor paths, while missing parents and malformed
+cycles cannot hide sessions. Keep each server's entries separate at the caller.
 
 Hierarchy construction indexes parents, explicit membership, inherited ownership
 and child adjacency once, then walks iteratively. Deep chains cannot overflow
 the JavaScript stack; cycles and missing parents remain reachable. Task members
 retain explicit order. `createSessionTree().rows(...)` caches flattened keyed
 headings/session descriptors using stable structural/search inputs, without a
-serialized population signature. The project projection supplies those inputs
-through `ServerResources.sessionRows`. Live row facts continue to come from
-`ClientIndex.get`, never cached hierarchy entries.
+serialized population signature. Tasks key it through an owned signature of only
+the tasks that can own or scope its rows: callers may edit task records in
+place, and other projects' membership changes cost no derivation. The project
+projection supplies those inputs through `ServerResources.sessionRows`. Live row
+facts continue to come from `ClientIndex.get`, never cached hierarchy entries.
 
 The same project owner supplies stable `projectMetadata` and keyed
-`metadataEntry` selectors to tabs, crumbs and Sessions. `ClientTabs.tabs` and
-`crumbs` share one keyed family/adjacency derivation; `entry` resolves crumb
-titles without a population search. `ClientIndex.partition` is cached by its
-partition clock, while `projectProgress` borrows incrementally maintained
-digest-state counts. Digest-only frames do not rebuild metadata or hierarchy
-inputs.
+`metadataEntry` selectors to tabs, crumbs and Sessions. `path`, `family`,
+`working` and `crumbs` borrow the one TrailModel. `path()` holds the open
+session and known ancestors; `family()` borrows its eligible D66 helpers.
+
+Crumb clicks forward only the explicit session identity to guarded navigation.
+The accepted route reconciles its actual owning tab; the previously selected
+task never assigns membership or overrides a crumb's target.
+
+`crumbs()` contains only native ancestry, ending at the open session. Parent
+delivery removes finished helpers from `family()` without removing session
+history. `working()` borrows positive entity work evidence for native
+descendants, including across checkouts, for the composer's separate work
+inventory. `entry` resolves crumb titles without a population search.
+`ClientIndex.partition` is cached by its partition clock, while
+`projectProgress` borrows incrementally maintained digest-state counts.
+Digest-only frames do not rebuild metadata or hierarchy inputs.
 
 `createWindow()` owns browser-independent measured viewport math. Supply ordered
 keys and role estimates with `update`, apply incremental sizes with `measure`,
@@ -1300,6 +1555,13 @@ above the viewport do not turn into positional selection or scroll jumps.
 Explicit pins remain materialized even when a borrowed window has zero visible
 height. An optional source-free measurement map preserves sizes across a
 window's virtual unmount without retaining its content.
+
+`measure(key, height, inlineSize?)` also records a row's inline footprint.
+`inlineSize()` is the acquired collection's maximum, independent of the visible
+range. An optional third numeric cache preserves it across nested unmounts. Key
+removal and measurement-identity replacement revoke both dimensions;
+`clearInline()` revokes inline measurements for a content reflow without
+discarding vertical anchors.
 
 `measured(key)` distinguishes recorded geometry from an equal-valued estimate.
 Zero-height rows are valid recorded geometry, so bookkeeping with no rendered
@@ -1337,6 +1599,18 @@ server removal retires only that server's values. Views can unmount and borrow
 the same interaction on return.
 
 ## Commands
+
+`CommandHub.control(id, args, {target, shown, unshown, recovery, active?})`
+binds an action's availability and effect to the same registered owner. Each
+activation rechecks availability, joins repeat activation while pending and
+resolves to `shown`, `refused` or `failed`. Success requires the injected
+consumer observation, not just a fulfilled effect. Failure wording is captured
+from the invoking registration before awaiting it. A borrowed `active` lifetime
+fences retired presentations. `subscribe` forwards registry changes without
+retaining the view. Existing direct command ports remain during M6 migration.
+`CommandContext.viewing` distinguishes a presented session from a retained
+selection behind Settings; navigation availability and its observation borrow
+that same input without dropping the selected command scope.
 
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A
 feature registers
@@ -1388,13 +1662,13 @@ public entry to update independent selected counters, resolve aliases and
 release ownership.
 
 Commands may contribute
-`context: {kind, title?, items?, order?, destructive?, confirm?}`. The kind is
-feature-owned (a string or a list of shared kinds for one action), and the
-optional title projects a captured target's data. A contribution can instead
-return `items(data) → [{key?, title, args}]` to offer several choices through
-one registration. Give choices stable keys when their order can change. The
-ordinary enabled predicate and run handler receive each choice's args (or the
-target data for a single action). `contextActions({kind, data})` exposes
+`context: {kind, title?, items?, arguments?, order?, destructive?, confirm?}`.
+The kind is feature-owned (a string or a list of shared kinds for one action),
+and the optional title projects a captured target's data. A contribution can
+instead return `items(data) -> [{key?, title, args}]` to offer several choices
+through one registration. Give choices stable keys when their order can change.
+The ordinary enabled predicate and run handler receive each choice's args (or
+the target data for a single action). `contextActions({kind, data})` exposes
 data-only available actions without exposing callbacks. Targets may declare
 `area: true` for an enclosing application region, through the same target
 contract and kinds. `contextGroups(hub, targets)` keeps the first two nonempty
@@ -1415,18 +1689,28 @@ projects an armed title as data on a ContextAction. The menu owns its
 press-twice lifetime; the hub still owns invocation-time availability and
 registration identity, including after an item was armed.
 
+Projection uses the invocation owner's schema and availability before calling a
+single action's title or confirmation factory. An enclosing area with a loading
+or invalid target therefore contributes no target-dependent action. Item
+factories likewise validate their source data before projection, using the
+command's argument schema by default. Only a transformation that requires a
+different source shape declares `context.arguments`; generated choices still
+pass ordinary invocation admission. Registration freezes that source schema as
+well as the command schema. Neither menus nor target components infer readiness
+or duplicate those checks.
+
 ## Notifications
 
 `createAttentionGrace({clock?, factory?})` owns one 500 ms deadline per
 sidecar/permission identity and one shared scheduler. Accepted evidence/content
 arrivals and settlements feed it independently of mounted views. Composer
-eligibility and reduced-motion lamp paint borrow that same deadline; late
-mounts, duplicates and preference changes never start another grace. A fresh
-inventory that no longer lists a presented request retires it from lamp grace
-but keeps its one deadline until the content removal settles it, so a reply's
-index update cannot hide and re-present the takeover. Questions remain
-immediate. Supervision, mandatory visibility, notification routing, badges and
-sound do not consume this presentation delay.
+eligibility, notification delivery and lamp paint borrow that same deadline;
+late mounts, duplicates and preference changes never start another grace. A
+fresh inventory that no longer lists a presented request retires it from lamp
+grace but keeps its one deadline until the content removal settles it, so a
+reply's index update cannot hide and re-present the takeover. Questions remain
+immediate. Supervision and mandatory visibility do not consume this presentation
+delay. Notification channels borrow request eligibility before delivery.
 
 Known question/form inputs retain their server/request identities across stale
 or absent evidence. Only a fresh per-session inventory, exact inputSettled call,
@@ -1470,20 +1754,23 @@ rows, tabs, badges, toasts and takeovers consume this same projection. The pure
 Owners register a `NotificationChannel` through `registerChannel`, returning an
 identity-bound release. A data-only `Note` has an ID, kind, optional
 sidecar/root reference and command-ID actions. Native input notes also carry a
-request-scoped dismissal key. The hub retains dismissed request identities
-across presentation replacement and connection resets; a new request ID can
-notify again. The shipped policy suppresses dismissed presentation and sound
-while the badge and canonical blocked attention remain. `publish` replaces the
-ID; `replace(previous,
-input)` enriches only the current identity without
-replaying sound. Delivery ports scope `current`, `dismiss`, `invoke` and
-`unavailable` to the exact note and channel registration. `currentNote` and
-`invokeDefault` retain a live logical note's default action across
-focus-triggered presentation retraction, including a native click queued after
-focus. Viewing, replacement and channel release invalidate that port. Stale
-timers, clicks and async lookups cannot consume a newer note. Invocation never
-assumes that a resolved command actually selected the session. Consumers call
-`viewed` after real guarded selection and focus.
+request-scoped dismissal key. The application supplies `notificationLocation` to
+project session deliveries through the current project, task membership and
+title owners. The hub snapshots the same location for both toast and OS
+channels; server and application notices without a session stay unscoped. The
+hub retains dismissed request identities across presentation replacement and
+connection resets; a new request ID can notify again. The shipped policy
+suppresses dismissed presentation and sound while the badge and canonical
+blocked attention remain. `publish` replaces the ID; `replace(previous,
+input)`
+enriches only the current identity without replaying sound. Delivery ports scope
+`current`, `dismiss`, `invoke` and `unavailable` to the exact note and channel
+registration. `currentNote` and `invokeDefault` retain a live logical note's
+default action across focus-triggered presentation retraction, including a
+native click queued after focus. Viewing, replacement and channel release
+invalidate that port. Stale timers, clicks and async lookups cannot consume a
+newer note. Invocation never assumes that a resolved command actually selected
+the session. Consumers call `viewed` after real guarded selection and focus.
 
 `NotificationTriggers.entriesChanged(server,changes)` consumes accepted shared
 projected deltas. It retains only per-root comparison facts and current note
@@ -1494,6 +1781,20 @@ delivery. Real eviction, reparenting, archival and tombstones retract the
 appropriate notes. The legacy frame constructor/read/project ports remain
 independently usable through the ordinary canonical reducer and the same compact
 comparison owner.
+
+The shipped composition injects the same `AttentionGrace` used by takeovers and
+lamps into `NotificationTriggers`. Permissions borrow its read-only `eligible`
+query and subscription with current request identities, never root/kind timers.
+Same-count replacements retain surviving deadlines; settled or absent requests
+cannot notify. Settlement also retires the displayed request before index counts
+catch up; remaining already-alerted requests replace it quietly. Questions
+remain immediate. Standalone count-only consumers may omit the grace port and
+retain immediate delivery; request-aware consumers inject their lifetime owner.
+`stop()` releases the borrowed subscription, not the owner.
+
+Routing-only attention leases retain pending permission/input identities and
+freshness for this same owner, but no work or activity history. Notification
+detail still comes from the existing permission read after eligibility.
 
 NotificationTriggers uses the first snapshot after each connection's `reset` as
 a silent baseline. Root attention roll-ups already include children; roots

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
 import { OperationFailure } from "@otk/protocol";
+import type { EventDispatchPressure } from "@otk/harness";
 import {
   decodeEvent,
   type StreamPorts,
@@ -88,7 +89,30 @@ async function until(check: () => boolean) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }
-Deno.test("V2 backpressured dispatch owns exactly one next transport chunk and preserves event order", async () => {
+Deno.test("V2 dispatch diagnostics expose native lag, queue progress and handler cost", async () => {
+  const samples: EventDispatchPressure[] = [];
+  const x = setup({ dispatch: (pressure) => samples.push(pressure) });
+  try {
+    await x.stream.start();
+    x.send({
+      type: "session.synthetic",
+      created: Date.now() - 2000,
+      data: { sessionID: "ses_diagnostics", text: "record" },
+    });
+    await until(() =>
+      x.applied.length === 1 && x.stream.pressure?.handled === 1
+    );
+    assertEquals(x.stream.pressure?.nativeLagMs! >= 2000, true);
+    assertEquals(x.stream.pressure?.maxNativeLagMs! >= 2000, true);
+    assertEquals(x.stream.pressure?.queued, 0);
+  } finally {
+    await x.stream.stop();
+  }
+  assertEquals(samples.at(-1)?.received, 1);
+  assertEquals(samples.at(-1)?.handled, 1);
+  assertEquals(samples.at(-1)?.handlerMs! >= 0, true);
+});
+Deno.test("V2 bounded dispatch exposes its queue and owns one next transport chunk while preserving order", async () => {
   const entered = Promise.withResolvers<void>(),
     release = Promise.withResolvers<void>();
   const delivered: number[] = [];
@@ -115,12 +139,18 @@ Deno.test("V2 backpressured dispatch owns exactly one next transport chunk and p
         data: { sessionID: "ses_1", order: i },
       });
     }
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    await until(() => x.stream.pressure?.backpressured === true);
     assertEquals(delivered, [0], "Parser dispatch remains serial");
     assertEquals(
+      x.stream.pressure?.queued,
+      3,
+      "Two budgeted events and one parser frame await dispatch",
+    );
+    assertEquals(x.stream.pressure?.activeType, "session.execution.started");
+    assertEquals(
       x.controllers[0].desiredSize,
-      -19,
-      "Only one of twenty later chunks can be read while dispatch is held",
+      -16,
+      "Only the bounded queue, parser frame and one next chunk can leave the transport",
     );
     release.resolve();
     await until(() => delivered.length === 21);
@@ -248,6 +278,31 @@ Deno.test("V2 mid-body reset is caught by the stream loop and reconnects", async
     x.send({ type: "session.execution.started", data: { sessionID: "ses_1" } });
     await until(() => x.applied.length === 1);
     assertEquals(disconnected, [1]);
+  } finally {
+    await x.stream.stop();
+  }
+});
+
+Deno.test("V2 projection exceptions reconnect and resync instead of dropping native facts", async () => {
+  const failure = new Error("unknown native shape");
+  let broken = true;
+  const x = setup({
+    event: () => {
+      if (broken) throw failure;
+    },
+  });
+  try {
+    await x.stream.start();
+    const previous = x.stream.client;
+    x.send({
+      type: "session.message.content.updated",
+      data: { sessionID: "ses_1", messageID: "msg_1" },
+    });
+    await until(() => x.order.filter((e) => e === "ready").length === 2);
+    assertEquals(previous.signal.aborted, true);
+    assertEquals(x.diagnostics, [failure]);
+    assertEquals(x.order.filter((e) => e === "snapshot").length, 2);
+    broken = false;
   } finally {
     await x.stream.stop();
   }

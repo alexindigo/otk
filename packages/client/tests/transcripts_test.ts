@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import type {
   ClientFrame,
   ContentOp,
+  FormRequest,
   Message,
   MessagePolicy,
   PermissionRequest,
@@ -13,6 +19,7 @@ import { SidecarConnection } from "../connection.ts";
 import { RequestReleased } from "../failures.ts";
 import {
   connectRequests,
+  fixtureFailure,
   replyRequest,
 } from "../../../tests/support/request-wire.ts";
 import { createState, type StateFactory } from "../state.ts";
@@ -56,7 +63,11 @@ const scope = (directory = "/a") => ({ sidecarId: "server", directory });
 const turns = async () => {
   for (let i = 0; i < 15; i++) await Promise.resolve();
 };
-function fixture(policy?: MessagePolicy) {
+function fixture(
+  policy?: MessagePolicy,
+  entry: (id: string) => import("@otk/protocol").IndexEntry | undefined = () =>
+    undefined,
+) {
   const time = clock();
   const requests: Extract<ClientFrame, { t: "request" }>[] = [];
   const subscriptions = new Set<string>();
@@ -78,7 +89,7 @@ function fixture(policy?: MessagePolicy) {
   };
   const owner = createTranscripts({
     connection: () => connection,
-    entry: () => undefined,
+    entry: (_sidecar, id) => entry(id),
     clock: time.value,
   });
   const messages = (id: string, count = 80): Message[] =>
@@ -126,6 +137,436 @@ const policy = {
   preloadms: 30,
   concurrency: 4,
 };
+
+Deno.test("work-log intent outlives step removal but not deletion of the reply", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    let seq = 0;
+    const apply = (event: ContentOp) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: ++seq },
+        event,
+      }, true);
+    const step: Message = {
+      id: "first",
+      sessionID: "a",
+      role: "assistant",
+      replyTo: "a-079",
+      model: { provider: "test", model: "test" },
+      agent: "build",
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      time: { created: 80 },
+      parts: [],
+    };
+    apply({ op: "message.upsert", message: step });
+    apply({ op: "message.upsert", message: { ...step, id: "last" } });
+    const transcript = f.owner.get(target("a"))!;
+    const key = transcript.projection.entry(step.id)!.key;
+    const disclosure = transcript.interaction.disclosure(
+      "activity",
+      key,
+      transcript.interaction.generation(key),
+    );
+    disclosure.set(true);
+    apply({ op: "message.remove", messageID: step.id });
+    assertEquals(disclosure.value(), true);
+    apply({ op: "message.remove", messageID: "last" });
+    assertEquals(disclosure.value(), undefined);
+    apply({ op: "message.upsert", message: step });
+    disclosure.set(true);
+    assertEquals(
+      transcript.interaction.disclosure(
+        "activity",
+        key,
+        transcript.interaction.generation(key),
+      ).value(),
+      undefined,
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+for (
+  const replacement of [
+    "same",
+    "epoch",
+    "generation",
+    "revision",
+    "complete",
+  ] as const
+) {
+  Deno.test(`newest page reconciles acquired history under ${replacement} authority`, async () => {
+    const f = fixture(policy);
+    try {
+      f.owner.setDemand({
+        scope: scope(),
+        sessions: [target("a")],
+        selected: target("a"),
+      });
+      await f.reply();
+      await f.reply();
+      const transcript = f.owner.get(target("a"))!;
+      const visible = transcript.state.messagesByID["a-060"];
+      assert(visible);
+      const boundary = {
+        turnID: visible.id,
+        firstID: visible.id,
+        lastID: visible.id,
+        complete: true,
+      };
+      transcript.projection.boundaries([boundary]);
+      const recovery = {
+        messageID: visible.id,
+        partID: "source",
+        generation: 1,
+        state: "unavailable" as const,
+      };
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: 1 },
+        event: { op: "stream.recovery", ...recovery },
+      }, true);
+      assertEquals(transcript.state.recovering, [recovery]);
+      const publications: boolean[] = [];
+      const release = transcript.subscribe((state) =>
+        publications.push(!!state.messagesByID[visible.id])
+      );
+      const work = transcript.refetch();
+      const request = f.requests.shift()!;
+      const messages = replacement === "complete"
+        ? f.messages("a", 5)
+        : f.messages("a");
+      const page = fixturePage("a", messages);
+      page.from = page.clock = { epoch: "fixture", seq: 1 };
+      if (replacement === "same") {
+        page.items = page.items.filter((message) => message.id !== "a-075");
+      }
+      if (replacement === "epoch") {
+        page.from = page.clock = { epoch: "new", seq: 0 };
+      }
+      if (replacement === "revision") page.version.revision++;
+      if (replacement === "generation") page.version.generation++;
+      replyRequest(f.connection.rpc, request, page);
+      await work;
+      await turns();
+      release();
+      if (replacement === "same") {
+        assert(publications.length > 0);
+        assert(
+          publications.every(Boolean),
+          "no accepted publication may drop materialized history outside page coverage",
+        );
+        assertEquals(transcript.state.messagesByID[visible.id], visible);
+        assertEquals(transcript.projection.boundary(visible.id), boundary);
+        assertEquals(transcript.state.recovering, [recovery]);
+        assertEquals(
+          transcript.state.messagesByID["a-075"],
+          undefined,
+          "absence inside the replacement's covered suffix is authoritative",
+        );
+        f.owner.receive("server", {
+          t: "content",
+          sessionID: "a",
+          clock: { epoch: "fixture", seq: 2 },
+          event: { op: "message.remove", messageID: visible.id },
+        }, true);
+        assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else if (replacement === "complete") {
+        assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else {
+        assert(publications.length > 0 && publications.every(Boolean));
+        assertStrictEquals(transcript.state.messagesByID[visible.id], visible);
+      }
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+Deno.test("reload retains removed-server sends without creating a transcript or blocking another server", () => {
+  const f = fixture(policy);
+  const send = {
+    intent: { clientID: "tab", key: "send" },
+    message: f.messages("a", 1)[0],
+    phase: "pending" as const,
+    dispatched: true,
+  };
+  const removed = {
+    target: { sidecarId: "removed", sessionID: "a" },
+    sends: [send],
+  };
+  try {
+    const resumed: string[] = [];
+    assertEquals(
+      f.owner.restore(
+        [removed, { target: target("a"), sends: [send] }],
+        (target) => {
+          resumed.push(target.sidecarId);
+        },
+        (id) => id === "server",
+      ),
+      1,
+    );
+    assertEquals(resumed, ["server"]);
+    assertEquals(f.owner.get(removed.target), undefined);
+    assert(
+      (f.owner.snapshot() as typeof removed[]).some(({ target }) =>
+        target.sidecarId === "removed"
+      ),
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("refetch reacquires older source after a same-version clock gap", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    const visible = a.state.messagesByID["a-060"];
+    assert(visible);
+    const messages = f.messages("a");
+    messages[60].parts = [{
+      id: "edited",
+      kind: "text",
+      synthetic: false,
+      blocks: [{ b: "paragraph", inline: [{ i: "text", text: "edited" }] }],
+    }];
+    const page = (before?: string) =>
+      fixturePage("a", messages, before, undefined, {
+        epoch: "fixture",
+        seq: 40,
+      });
+    const refetch = a.refetch();
+    replyRequest(f.connection.rpc, f.requests.shift()!, page());
+    await refetch;
+    assertStrictEquals(a.state.messagesByID["a-060"], visible);
+
+    const source = a.source("a-060", (part) => part.id);
+    const older = f.requests.shift()!;
+    assertEquals((older.params as { before?: string }).before, "fixture:70");
+    replyRequest(f.connection.rpc, older, page("fixture:70"));
+    assertEquals(await source, "edited");
+    assertEquals(a.state.messagesByID["a-060"].parts[0].id, "edited");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("refetch reads every missing page before joining a disjoint range", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    while (f.requests.length) await f.reply();
+    assert(a.state.messagesByID["a-060"]);
+    const seen: string[][] = [];
+    const release = a.subscribe((state) => seen.push([...state.messageIDs]));
+    const refetch = a.refetch();
+    await f.reply(0, 110);
+    await refetch;
+    const ids = f.messages("a", 110).map((m) => m.id);
+    assertEquals(seen.find((rows) => rows.includes("a-109")), [
+      ...ids.slice(60, 80),
+      ...ids.slice(100),
+    ]);
+    for (const before of [100, 90, 80]) {
+      assertEquals(
+        (f.requests[0]?.params as { before?: string })?.before,
+        `fixture:${before}`,
+      );
+      await f.reply(0, 110);
+    }
+    release();
+    assertEquals(a.state.messageIDs, ids.slice(60));
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("native overlap preserves the acquired frontier when the head cursor shifts", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    const work = a.refetch();
+    // Newest 75..84 overlaps 70..79 without repeating its cursor (70).
+    await f.reply(0, 85);
+    await work;
+    assertEquals(
+      a.state.messageIDs,
+      f.messages("a", 85).slice(60).map((m) => m.id),
+    );
+    assertEquals(a.state.olderCursor, "fixture:60");
+    assertEquals(f.requests.length, 0);
+  } finally {
+    f.stop();
+  }
+});
+
+for (const boundary of ["baseline", "projection"]) {
+  Deno.test(`content ${boundary} exceptions preserve their reason and reacquire canonical authority`, async () => {
+    const f = fixture(policy);
+    try {
+      f.owner.setDemand({
+        scope: scope(),
+        sessions: [target("a")],
+        selected: target("a"),
+      });
+      await f.reply();
+      await f.reply();
+      const transcript = f.owner.get(target("a"))!;
+      const message = {
+        ...f.messages("a")[79],
+        id: "new",
+        time: { created: 80 },
+      };
+      const reason = `deliberate ${boundary} failure`;
+      if (boundary === "baseline") {
+        Object.defineProperty(message, "parts", {
+          get() {
+            throw new Error(reason);
+          },
+        });
+      } else {
+        transcript.projection.apply = () => {
+          throw new Error(reason);
+        };
+      }
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        event: { op: "message.upsert", message },
+        clock: { epoch: "fixture", seq: 1 },
+      }, true);
+      assertEquals(transcript.state.continuity, "missing");
+      assertEquals(
+        transcript.deliveryDiagnostics?.get("a").last?.reason,
+        reason,
+      );
+      assertEquals(
+        transcript.deliveryDiagnostics?.get("a").last?.state,
+        "projection-error",
+      );
+      assertEquals(transcript.deliveryDiagnostics?.get("a").accepted?.seq, 0);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+Deno.test("failed reconnect inventory retains authority and local dismissal", async () => {
+  const f = fixture(policy);
+  f.connection.supports = (capability) => capability === "questions";
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    const question = { id: "retained", sessionID: "a", questions: [] };
+    replyRequest(f.connection.rpc, f.requests.shift()!, [question]);
+    await turns();
+    await f.reply(0, 1);
+    const parent = f.owner.get(target("a"))!;
+    f.connection.attention.dismiss("question", question.id);
+    f.owner.receive("server", { t: "harness", state: "reconnecting" }, true);
+    f.owner.receive("server", { t: "harness", state: "connected" }, true);
+    f.owner.receive("server", { t: "bootstrap.complete" }, true);
+    const inventory = f.requests.shift()!;
+    assertEquals(inventory.method, "question.list");
+    replyRequest(
+      f.connection.rpc,
+      inventory,
+      undefined,
+      fixtureFailure("unavailable"),
+    );
+    await turns();
+    assertEquals(parent.state.content.questions, [question]);
+    assertEquals(f.connection.attention.questions("a", undefined, true), []);
+    assert(parent.state.error);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("child retirement updates the open parent without reacquiring its body", async () => {
+  const entries = new Map<string, import("@otk/protocol").IndexEntry>([
+    ["a", { id: "a", status: "idle" } as import("@otk/protocol").IndexEntry],
+    [
+      "child",
+      {
+        id: "child",
+        parentID: "a",
+        status: "idle",
+      } as import("@otk/protocol").IndexEntry,
+    ],
+  ]);
+  const f = fixture(policy, (id) => entries.get(id));
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const parent = f.owner.get(target("a"))!;
+    f.owner.receive("server", {
+      t: "content",
+      sessionID: "child",
+      event: {
+        op: "question.upsert",
+        request: { id: "orphan", sessionID: "child", questions: [] },
+      },
+    }, true);
+    assertEquals(parent.state.content.questions.length, 1);
+    entries.set("child", {
+      ...entries.get("child")!,
+      deleted: { at: 2, how: "provider" },
+    });
+    f.owner.receive("server", { t: "index.patch" } as never, true);
+    assertEquals(parent.state.content.questions, []);
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("archive pages share canonical body admission without changing live paging or projection", async () => {
   const f = fixture({ ...policy, concurrency: 1 });
@@ -302,6 +743,11 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     await f.reply();
     await f.reply();
     const a = f.owner.get(target("a"))!;
+    const before = [...a.state.messageIDs];
+    const publications: string[][] = [];
+    const release = a.subscribe((state) =>
+      publications.push([...state.messageIDs])
+    );
     f.owner.receive(
       "server",
       { t: "welcome", messages: policy } as never,
@@ -321,7 +767,15 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     assertEquals(a.state.loading, true);
     await f.reply();
     await shared;
-    await f.reply();
+    while (f.requests.length) await f.reply();
+    release();
+    assert(publications.length > 0);
+    assert(publications.every((ids) => before.every((id) => ids.includes(id))));
+    assertEquals(
+      a.state.messageIDs.length,
+      20,
+      "same-source recovery retains the acquired reserve",
+    );
     assertEquals(a.state.continuity, "ready");
     assertEquals(f.requests, []);
   } finally {
@@ -385,7 +839,9 @@ Deno.test("tail readiness waits through the disconnected interval before reconne
     assertEquals(ready, false, "welcome still requires the new baseline");
     await f.reply();
     await pending;
-    await f.reply();
+    while (f.requests.length) await f.reply();
+    assertEquals(a.state.messageIDs.length, 20);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
@@ -421,7 +877,9 @@ Deno.test("tail readiness also waits for native link recovery and its current ba
     );
     await f.reply();
     await pending;
-    await f.reply();
+    while (f.requests.length) await f.reply();
+    assertEquals(a.state.messageIDs.length, 20);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
@@ -568,6 +1026,47 @@ Deno.test("warm transcripts reduce permission and question replacement before re
       [next],
       "Reselection cannot expose the previous approval target",
     );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("form publication leaves the transcript clock and live reply intact", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    while (f.requests.length) await f.reply();
+    const transcript = f.owner.get(target("a"))!;
+    const form: FormRequest = {
+      id: "form",
+      owner: { kind: "session", sessionID: "a" },
+      directory: "/a",
+      title: "Plan approval",
+      fields: [],
+    };
+    const receive = (event: ContentOp, seq?: number) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        event,
+        ...(seq === undefined ? {} : { clock: { epoch: "fixture", seq } }),
+      }, true);
+    receive({ op: "form.upsert", request: form });
+    assertEquals(transcript.state.content.forms, [form]);
+    receive({ op: "form.remove", requestID: form.id });
+    assertEquals(transcript.state.content.forms, []);
+    const message = {
+      ...f.messages("a")[79],
+      id: "a-080",
+      time: { created: 80 },
+    };
+    receive({ op: "message.upsert", message }, 1);
+    assertEquals(transcript.state.messagesByID[message.id], message);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
@@ -871,6 +1370,11 @@ Deno.test("warm live tails stay bounded, visited pages survive until cooling and
       "only visited identities plus the live tail survive",
     );
     assert(a.state.messagesByID["a-070"]);
+    assertEquals(
+      a.state.messageIDs,
+      f.messages("a", 180).slice(160).map((message) => message.id),
+      "warm custody does not join visited bodies across an evicted interval",
+    );
     f.time.advance(100);
     assertEquals(a.state.messageIDs, []);
     assertEquals(Object.keys(a.state.messagesByID), []);
@@ -1009,3 +1513,47 @@ Deno.test("a warm tail admits a newly observed message within its retained chron
     f.stop();
   }
 });
+
+for (const warm of [false, true]) {
+  Deno.test(`native source order admits a new identity with a copied old timestamp: warm=${warm}`, async () => {
+    const f = fixture(policy);
+    try {
+      f.owner.setDemand({
+        scope: scope(),
+        sessions: [target("a")],
+        selected: target("a"),
+      });
+      const messages = f.messages("a").map((message, sourceOrder) => ({
+        ...message,
+        sourceOrder,
+      }));
+      for (let i = 0; i < 2; i++) {
+        const request = f.requests.shift()!;
+        replyRequest(
+          f.connection.rpc,
+          request,
+          fixturePage(
+            "a",
+            messages,
+            (request.params as { before?: string }).before,
+          ),
+        );
+        await turns();
+      }
+      if (warm) f.owner.setDemand({ scope: scope("/b"), sessions: [] });
+      const message = { ...messages[0], id: "native-new", sourceOrder: 80 };
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: 1 },
+        event: { op: "message.upsert", message },
+      }, true);
+      assertEquals(
+        f.owner.get(target("a"))?.state.messageIDs.at(-1),
+        "native-new",
+      );
+    } finally {
+      f.stop();
+    }
+  });
+}

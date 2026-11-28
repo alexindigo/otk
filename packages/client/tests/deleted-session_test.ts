@@ -6,6 +6,7 @@ import type { SidecarConnection } from "../connection.ts";
 import { shellEntry } from "./shell-fixture.ts";
 import { createInputGuard } from "../input-guard.ts";
 import { createDrafts } from "../drafts.ts";
+import { RequestLifetimes } from "../request-lifetime.ts";
 // Q5 page reads carry a reserved intent and its cancellation in RequestOptions.
 const intent = () => ({
   key: crypto.randomUUID(),
@@ -17,6 +18,7 @@ Deno.test("deleted selection is metadata-only, aborts live content, and resurrec
   entry.deleted = { at: 1, how: "provider" };
   const calls: unknown[] = [];
   const c = {
+    attention: new RequestLifetimes(),
     messages: fixtureMessagePolicy,
     subscribe: (...args: unknown[]) => calls.push(args),
     supports: () => false,
@@ -55,12 +57,14 @@ Deno.test("deleted selection is metadata-only, aborts live content, and resurrec
     session.stop();
   }
 });
-Deno.test("deleted attention input survives view release until the normal guard is accepted", () => {
-  let deleted = false, allow = false;
+Deno.test("deleted attention input survives unmount and ordinary navigation never asks to discard", () => {
+  let deleted = false;
   const guard = createInputGuard({
     drafts: createDrafts(),
     key: () => "local/tstv1-one",
-    confirm: () => allow,
+    confirm: () => {
+      throw new Error("Unexpected confirmation");
+    },
     ...{ retain: () => deleted },
   });
   guard.mark("permissions", true, "Keep this unsent feedback");
@@ -71,10 +75,8 @@ Deno.test("deleted attention input survives view release until the normal guard 
     owner: "permissions",
     value: "Keep this unsent feedback",
   }]);
-  assertEquals(guard.release(), false);
-  assertEquals(guard.retained().length, 1);
-  allow = true;
   assertEquals(guard.release(), true);
+  assertEquals(guard.retained().length, 1);
   guard.clear();
   assertEquals(guard.retained(), []);
 });
@@ -82,6 +84,7 @@ Deno.test("deleted attention input survives view release until the normal guard 
 Deno.test("removing a server retires its catalog readiness before a new direct selection", () => {
   const calls: string[] = [];
   const c = {
+    attention: new RequestLifetimes(),
     messages: fixtureMessagePolicy,
     subscribe() {},
     supports: () => false,

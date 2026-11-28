@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { SessionSupervision } from "../../core/index/supervision.ts";
 import type { IndexMetadata, SupervisionEvidence } from "@otk/protocol";
-import { inboxProjects, inboxStatus } from "@otk/client";
+import { createEntityStateStore, inboxProjects, lamp } from "@otk/client";
 import { ProjectSummaries } from "../../core/index/project-summaries.ts";
 
 function entry(
@@ -99,36 +99,64 @@ Deno.test("scalar indexing cannot erase a project lamp and children retain unsee
     finishes: {},
     pathTemplates: [],
     summaries: { "/fixture": summary },
+    entities: Object.fromEntries(summaries.states.values()),
   }, 0);
   assertEquals(rows[0]?.status, "finished");
 });
 Deno.test("client consumers never reconstruct activity from metadata or completion bookkeeping", () => {
   const row = entry({ work: { keys: ["run"], fresh: true } });
-  const inbox = { seen: {}, finishes: { [row.id]: 100 } };
-  assertEquals(inboxStatus(row, inbox), "none");
-  assertEquals(
-    inboxStatus(row, {
-      ...inbox,
-      supervision: { [row.id]: { state: "finishedUnseen", terminal: 100 } },
-    }),
-    "finished",
-  );
+  const inbox = { finishes: { [row.id]: 100 } };
+  const key = `session:${row.id}`;
+  let values = {};
+  const replica = createEntityStateStore({ read: () => values });
+  assertEquals(lamp(replica, key), "none");
+  values = {
+    [key]: {
+      kind: "session",
+      id: row.id,
+      state: "finished",
+      previous: "none",
+      counts: { blocked: 0, working: 0, finished: 1, unseen: 1 },
+    },
+  };
+  assertEquals(inbox.finishes[row.id], 100);
+  assertEquals(lamp(replica, key), "finished");
+  replica.stop();
 });
-
-Deno.test("terminal dependencies remain independent of native freshness and own-session state", () => {
+Deno.test("only an uncovered helper failure owns needs-you lamps and the project rollup", () => {
+  let seen = 0;
   const owner = new SessionSupervision();
-  let running = 2;
-  owner.dependencies(() => running);
-  owner.freshness(false);
-  const value = owner.session(entry(), 0);
-  assertEquals(value.state, "none");
-  assertEquals(value.dependencies, { running: 2 });
-  assertEquals(owner.status(value), "dependencies");
-  assertEquals(
-    owner.session({ ...entry(), deleted: { at: 1, how: "provider" } }, 0)
-      .dependencies,
-    undefined,
+  const row = entry({
+    terminal: 100,
+    outcome: "failed",
+  }, "opcv2-ses_parent");
+  const summaries = new ProjectSummaries(
+    () => ({ seen, finish: 100 }),
+    () => {},
+    () => {},
+    owner,
   );
-  running = 0;
-  assertEquals(owner.status(owner.session(entry(), 0)), "none");
+  summaries.entry(row);
+  assertEquals(owner.session(row, seen).state, "needsYou");
+  assertEquals(summaries.values.get("/fixture")?.status, "blocked");
+  const delivered = {
+    ...row,
+    activity: {
+      ...row.activity,
+      delivered: {
+        parentID: "opcv2-ses_parent",
+        receipt: "result",
+        terminal: 100,
+      },
+    },
+  };
+  assertEquals(owner.session(delivered, seen).state, "none");
+  assertEquals(owner.session(delivered, seen).outcome, "failed");
+  summaries.entry(delivered);
+  assertEquals(summaries.values.get("/fixture")?.status, "none");
+  summaries.entry(row);
+  seen = 100;
+  summaries.mark(row.id);
+  assertEquals(owner.session(row, seen).state, "none");
+  assertEquals(summaries.values.get("/fixture")?.status, "none");
 });

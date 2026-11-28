@@ -4,16 +4,21 @@ import type { PromptInput } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { promptParts } from "./prompt-parts.ts";
-import { nativeEffect, nativeExecution } from "../requests/policies.ts";
+import {
+  metadataReceipt,
+  nativeEffect,
+  nativeExecution,
+} from "../requests/policies.ts";
 import {
   completionReceipt,
   promptSelectionReceipt,
+  sentPromptReceipt,
 } from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.prompt;
   if (!capability) return;
-  const sent = completionReceipt("prompt-sent"),
+  const sent = sentPromptReceipt,
     interrupted = completionReceipt("interrupt-sent");
   rpc.register("session.prompt", {
     execution: {
@@ -33,11 +38,17 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       }
       const input: PromptInput = {
         sessionID: sessionID(p)!,
+        messageID: text(p, "messageID", true),
         parts,
         mode: "normal",
         agent: text(p, "agent", true),
         variant: text(p, "variant", true),
       };
+      if (
+        input.messageID && !/^msg_[a-zA-Z0-9]{20,40}$/.test(input.messageID)
+      ) {
+        throw new HarnessError("params", "Invalid prompt message identity");
+      }
       if (p.model !== undefined) {
         const model = object(p.model);
         input.model = {
@@ -49,8 +60,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
     },
     handler: (ctx, input) =>
       nativeEffect(ctx, async (operation) => {
-        await capability.prompt(input, operation);
-        return null;
+        return await capability.prompt(input, operation) ?? null;
       }, sent),
   });
   rpc.register("session.abort", {
@@ -64,5 +74,37 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
         await capability.abort(id, operation);
         return null;
       }, interrupted),
+  });
+  const withdraw = capability.withdraw?.bind(capability);
+  const withdrawal = metadataReceipt("prompt-withdrawal", (value) => {
+    const { state } = object(value);
+    if (
+      state !== "withdrawn" && state !== "started" && state !== "absent" &&
+      state !== "unconfirmed"
+    ) {
+      throw new TypeError("Invalid withdrawal receipt");
+    }
+    return { state };
+  });
+  rpc.register("session.withdraw", {
+    execution: {
+      ...nativeExecution(
+        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+        withdrawal,
+      ),
+      priority: "interrupt",
+    },
+    params: (p) => ({
+      sessionID: sessionID(p)!,
+      messageID: text(p, "messageID")!,
+    }),
+    handler: (ctx, input) =>
+      nativeEffect(
+        ctx,
+        (operation) =>
+          withdraw?.(input.sessionID, input.messageID, operation) ??
+            Promise.resolve({ state: "unconfirmed" }),
+        withdrawal,
+      ),
   });
 }

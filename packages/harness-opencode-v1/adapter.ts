@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { projectEditor } from "./project-edit.ts";
+import { nativeProjectMetadata } from "./project-presentation.ts";
+import { DeliveryBackfill, DeliveryJoin } from "@otk/harness";
 import {
   type DiagnosticSink,
   errorMessage,
@@ -49,7 +52,6 @@ import {
 import { MessageClocks } from "./message-clocks.ts";
 import {
   eventRecord,
-  isPrompt,
   isPromptPart,
   parseSourceRef,
   RecordProjection,
@@ -73,6 +75,7 @@ import type {
 import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
 import { prompt } from "./prompt.ts";
+import { submissionID } from "./submission-id.ts";
 import { files } from "./files.ts";
 import { mapQuestion, questions } from "./questions.ts";
 import { sessions } from "./sessions.ts";
@@ -83,12 +86,7 @@ import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
 import { type PendingPermission, permissions } from "./permissions.ts";
-import {
-  restore,
-  revert,
-  REVERT_PROMPT_LIMIT,
-  revertPreview,
-} from "./revert.ts";
+import { restore, revert } from "./revert.ts";
 import { historyEntry } from "./history.ts";
 import { sessionActions } from "./session-actions.ts";
 import { sessionDirectory } from "./directory.ts";
@@ -156,6 +154,10 @@ export class OpencodeV1Adapter implements Harness {
   #clocks: MessageClocks;
   #selectionIntents = new SelectionIntents();
   #revertReads = new Map<string, AbortController>();
+  #revertRecords = new Map<string, {
+    boundaryID: string;
+    record: Promise<RevertInfo>;
+  }>();
   get #stopped(): boolean {
     return !this.#run || this.#run.controller.signal.aborted;
   }
@@ -251,11 +253,18 @@ export class OpencodeV1Adapter implements Harness {
       // Startup inventory, a demand-driven inventory read and live asks all
       // admit through this owner, so a later outcome keeps the request facts.
       (request) =>
-        this.#retention.observe(
+        void this.#errors.retainHistory(
           request.sessionID,
-          `question:${request.id}`,
-          { ...request },
-          Date.now(),
+          `question.observe:${request.id}`,
+          () =>
+            this.#retention.observe(
+              request.sessionID,
+              `question:${request.id}`,
+              { ...request },
+              Date.now(),
+            ),
+        ).catch((error) =>
+          this.diagnostic("warn", "pending question history", error)
         ),
     );
     const catalogReads = digest ??
@@ -458,7 +467,6 @@ export class OpencodeV1Adapter implements Harness {
       },
       recovering: (id) => this.#recovery.snapshot(id),
       scopedRecovery: (id) => this.#recovery.scoped(id),
-      retryRecovery: (id) => this.#recovery.retry(id),
       reconciled: (id, messageID, partID) => {
         if (partID === undefined) this.#recovery.message(messageID, id);
         else this.#recovery.part(messageID, partID, id);
@@ -562,6 +570,12 @@ export class OpencodeV1Adapter implements Harness {
         return value;
       },
     );
+    const listMessages = this.core.listMessages.bind(this.core);
+    this.core.listMessages = async (id, input, signal) => {
+      if (input.retryRecovery) this.#recovery.retry(id);
+      await this.#errors.retryHistory(id);
+      return await listMessages(id, input, signal);
+    };
     this.core.hydrate = async (
       wanted,
       signal = new AbortController().signal,
@@ -617,17 +631,47 @@ export class OpencodeV1Adapter implements Harness {
           },
           cfg.attachments,
           (sessionID, messageID, origin) => {
+            const pending = this.#pendingPrompts.get(sessionID) ??
+              new Set<string>();
+            pending.add(messageID);
+            this.#pendingPrompts.set(sessionID, pending);
+            this.#completionChanged(sessionID);
             this.#retention.observe(sessionID, `submission:${messageID}`, {
-              origin,
+              ...(origin ? { origin } : {}),
             }, Date.now());
           },
+          this.#messages,
+          (id, messageID) =>
+            !!this.#retention.get(id, `submission:${messageID}`),
         );
         return {
           ...capability,
+          abort: async (id, operation) => {
+            const pending = [...this.#pendingPrompts.get(id) ?? []];
+            await capability.abort(id, operation);
+            for (const message of pending) {
+              this.#consumePrompt(id, message, false);
+            }
+            this.#completionChanged(id);
+            this.#confirmCompletion(id);
+          },
+          withdraw: async (id, messageID, operation) => {
+            const receipt = await capability.withdraw!(
+              id,
+              messageID,
+              operation,
+            );
+            if (receipt.state === "withdrawn" || receipt.state === "absent") {
+              this.#consumePrompt(id, messageID, false);
+              this.#confirmCompletion(id);
+            }
+            return receipt;
+          },
           prompt: async (
             input: Parameters<typeof capability.prompt>[0],
             operation?: Parameters<typeof capability.prompt>[1],
           ) => {
+            const messageID = input.messageID ?? submissionID();
             this.#admitFailureTurn(input.sessionID);
             const token = this.#errors.begin(
               input.sessionID,
@@ -635,8 +679,19 @@ export class OpencodeV1Adapter implements Harness {
               operation?.key.key,
             );
             try {
-              await capability.prompt(input, operation);
+              return await capability.prompt(
+                { ...input, messageID },
+                operation,
+              );
             } catch (error) {
+              if (
+                error instanceof OperationFailure &&
+                error.outcome === "rejected"
+              ) {
+                this.#consumePrompt(input.sessionID, messageID, false);
+                this.#completionChanged(input.sessionID);
+                this.#confirmCompletion(input.sessionID);
+              }
               if (!operation?.signal.aborted) {
                 this.#requestFailure(
                   input.sessionID,
@@ -655,6 +710,8 @@ export class OpencodeV1Adapter implements Harness {
         };
       })(),
     );
+    // V1 shell tools run inside a turn, outside the native PTY registry.
+    // V1 can run a shell command, but cannot advertise shell.terminate.
     registry.register("shell", shell(this.client, directory, launch));
     registry.register(
       "commands",
@@ -673,7 +730,7 @@ export class OpencodeV1Adapter implements Harness {
             operation?: Parameters<typeof capability.command>[1],
           ) => {
             try {
-              await capability.command(input, operation);
+              return await capability.command(input, operation);
             } catch (error) {
               if (!operation?.signal.aborted) {
                 this.#requestFailure(
@@ -694,7 +751,10 @@ export class OpencodeV1Adapter implements Harness {
     );
     registry.register("history", this.#history);
     registry.register("catalogs", {
-      watch: (directory, listener, signal) => {
+      watch: (directory, listener, signal, files) => {
+        if (files) {
+          return Promise.resolve(this.catalogs.retainFiles(directory, signal));
+        }
         signal.throwIfAborted();
         const lease = this.catalogs.acquire(directory, true);
         const stop = lease.subscribe(() => listener(lease.snapshot()));
@@ -713,7 +773,7 @@ export class OpencodeV1Adapter implements Harness {
         this.catalogs.demand(directory, demand, signal),
       refresh: async (directory, signal, kinds) => {
         signal?.throwIfAborted();
-        const lease = this.catalogs.acquire(directory);
+        const lease = this.catalogs.acquire(directory, false, "read");
         try {
           await lease.refresh(signal, kinds);
           signal?.throwIfAborted();
@@ -883,6 +943,18 @@ export class OpencodeV1Adapter implements Harness {
       "restore",
       restore(this.client, directory, (id) => this.core.getSession(id)),
     );
+    registry.register(
+      "projectEdit",
+      projectEditor(
+        this.client,
+        (project) => {
+          this.catalogs.invalidateAll(["project"]);
+          const update = nativeProjectMetadata({ ...project });
+          if (update) this.#sink?.projectMetadata?.(update, "reply");
+        },
+        () => this.#connection,
+      ),
+    );
     this.capabilities = registry.capabilities;
   }
   #start(sink: HarnessSink): Promise<void> {
@@ -918,6 +990,22 @@ export class OpencodeV1Adapter implements Harness {
       task: Promise.resolve(),
     };
     this.#sink = this.#publication(run.controller.signal);
+    if (this.digest) {
+      this.#deliveryJoin = new DeliveryJoin(
+        this.digest,
+        (id, fact) => this.#applyDelivered(id, fact),
+        (error) =>
+          this.diagnostic("warn", "delivery evidence unavailable", error),
+        this.digest.publishrows ?? this.cfg.digest.publishrows,
+        (id) => {
+          const entry = this.#index.getMetadata(id);
+          const runID = entry?.activity?.runID;
+          return entry?.parentID && runID
+            ? { parentID: entry.parentID, runID }
+            : undefined;
+        },
+      );
+    }
     const opening = this.digest?.start() ?? Promise.resolve();
     run.task = opening.then(async () => {
       if (!run.controller.signal.aborted) {
@@ -955,16 +1043,48 @@ export class OpencodeV1Adapter implements Harness {
       const permissions = [...this.#permissions.values()].filter((p) =>
         p.request.sessionID === entry.id && p.generation === this.#connection
       ).map((p) => p.request.id);
+      // Delivery is the digest store's durable fact. A published entry
+      // carries the last fact joined from that store; rows never replace it.
+      const published = this.#index.getMetadata(entry.id);
+      const delivered = published
+        ? published.activity?.delivered
+        : entry.activity?.delivered;
+      const terminal = this.#terminals.get(entry.id);
+      const execution = this.#liveWork.get(entry.id);
+      if (
+        entry.parentID && terminal?.terminal &&
+        (!delivered || delivered.parentID !== entry.parentID ||
+          (terminal.runID
+            ? terminal.runID !== delivered.runID
+            : terminal.terminal !== delivered.terminal))
+      ) this.#deliveryJoin?.request([entry.id]);
       return ({
         ...entry,
         activity: {
-          ...this.#terminals.get(entry.id),
+          ...terminal,
+          completion: !signal.aborted && this.#controller &&
+              !this.#controller.signal.aborted
+            ? this.#completionEvidence(entry.id)
+            : undefined,
+          ...(terminal?.terminal !== undefined &&
+              entry.activity?.terminal === terminal.terminal &&
+              entry.activity.terminalOrigin === "historical"
+            ? { terminalOrigin: "historical" as const }
+            : {}),
+          delivered,
           work: {
-            keys: this.#liveWork.has(entry.id)
-              ? [this.#liveWork.get(entry.id)!.key]
-              : [],
+            keys: execution ? [execution.key] : [],
             fresh: !signal.aborted &&
-              this.#liveWork.get(entry.id)?.generation === this.#connection,
+              execution?.generation === this.#connection,
+            items: execution
+              ? [{
+                id: execution.key,
+                kind: "execution",
+                label: "Execution",
+                title: entry.title,
+                startedAt: execution.startedAt,
+              }]
+              : [],
           },
           inputs: {
             keys: inputs,
@@ -991,13 +1111,122 @@ export class OpencodeV1Adapter implements Harness {
       },
     }, signal);
   }
-  #liveWork = new Map<string, { key: string; generation: number }>();
+  #liveWork = new Map<
+    string,
+    { key: string; generation: number; startedAt: number }
+  >();
+  /** V1 has no busy timestamp. Keep the first positive observation until idle. */
+  #observeExecution(id: string): void {
+    if (this.#liveWork.get(id)?.generation === this.#connection) return;
+    this.#liveWork.set(id, {
+      key: `execution:${this.#connection}:${id}`,
+      generation: this.#connection,
+      startedAt: Date.now(),
+    });
+  }
+  #pendingPrompts = new Map<string, Set<string>>();
+  #completionReads = new Map<string, object>();
+  #confirmedIdle = new Map<string, number>();
+  #completionEvidence(
+    id: string,
+  ): NonNullable<IndexEntry["activity"]>["completion"] {
+    const continuation = [...this.#pendingPrompts.get(id) ?? []];
+    const pending = [...continuation];
+    if (this.#completionReads.has(id)) pending.push("native-confirmation");
+    const confirmed = this.#confirmedIdle.get(id);
+    return pending.length || confirmed !== undefined
+      ? { pending, continuation, confirmed }
+      : undefined;
+  }
+  #completionChanged(id: string): void {
+    this.#completionReads.delete(id);
+    this.#confirmedIdle.delete(id);
+    const entry = this.#index.getMetadata(id);
+    if (entry) this.#sink.indexUpsert(entry);
+  }
+  #consumePrompt(id: string, message: string, causal: boolean): void {
+    const pending = this.#pendingPrompts.get(id);
+    if (!pending) return;
+    // V1's native message identities are ascending. The assistant's parent
+    // is the last user message in that pass, including earlier queued input.
+    for (const key of pending) {
+      if (key === message || causal && key < message) pending.delete(key);
+    }
+    if (!pending.size) this.#pendingPrompts.delete(id);
+  }
+  #confirmCompletion(id: string): void {
+    const controller = this.#controller, generation = this.#connection;
+    const entry = this.#index.getMetadata(id);
+    const terminal = entry?.activity?.terminal;
+    if (
+      !controller || !this.#current(controller) ||
+      this.#idle.get(id) !== generation ||
+      !terminal || entry?.activity?.outcome !== "succeeded" ||
+      this.#terminalCandidates.get(id)?.terminal !== terminal ||
+      this.#pendingPrompts.get(id)?.size ||
+      this.#confirmedIdle.get(id) === terminal || this.#completionReads.has(id)
+    ) return;
+    const read = {};
+    this.#completionReads.set(id, read);
+    this.#sink.indexUpsert(entry);
+    const current = () =>
+      this.#current(controller) && this.#connection === generation &&
+      this.#completionReads.get(id) === read;
+    // V1 tasks and model shell results join the native prompt loop. Its idle
+    // inventory plus the delivered input identities above form the barrier.
+    void this.client.json<Record<string, { type: string }>>("/session/status", {
+      query: { directory: entry.directory },
+      signal: controller.signal,
+    }).then((rows) => {
+      if (!current()) return;
+      const status = rows[ids.decode(id)];
+      if (
+        (!status || status.type === "idle") &&
+        this.#terminals.get(id)?.terminal === terminal
+      ) {
+        this.#confirmedIdle.set(id, terminal);
+      }
+    }).catch((error) => {
+      if (current()) {
+        this.diagnostic("warn", "native completion confirmation", error);
+      }
+    }).finally(() => {
+      if (!current()) return;
+      this.#completionReads.delete(id);
+      const entry = this.#index.getMetadata(id);
+      if (entry) this.#sink.indexUpsert(entry);
+    });
+  }
   #terminals = new Map<string, TerminalEvidence>();
+  #deliveries?: DeliveryBackfill;
+  #deliveryJoin?: DeliveryJoin;
+  #applyDelivered(
+    id: string,
+    fact: import("@otk/protocol").DeliveredEvidence | undefined,
+  ): void {
+    const entry = this.#index.getMetadata(id);
+    if (
+      !this.#run || !entry ||
+      JSON.stringify(entry.activity?.delivered) === JSON.stringify(fact)
+    ) return;
+    this.#target.indexUpsert({
+      ...entry,
+      activity: {
+        ...entry.activity,
+        delivered: fact,
+        terminalOrigin: "historical",
+      },
+    });
+  }
   #terminalCandidates = new Map<string, TerminalEvidence>();
   #idle = new Map<string, number>();
   #questionFresh = new Map<string, number>();
   #permissionInventories = new Map<string, number>();
   async #shutdown(): Promise<void> {
+    await this.#deliveries?.stop();
+    this.#deliveries = undefined;
+    await this.#deliveryJoin?.stop();
+    this.#deliveryJoin = undefined;
     this.#failureTurns.clear();
     this.#failureAttempts.clear();
     this.#helperObservation?.();
@@ -1015,11 +1244,15 @@ export class OpencodeV1Adapter implements Harness {
     this.#questionFresh.clear();
     this.#permissionInventories.clear();
     this.#liveWork.clear();
+    this.#pendingPrompts.clear();
+    this.#completionReads.clear();
+    this.#confirmedIdle.clear();
     this.#terminals.clear();
     this.#terminalCandidates.clear();
     this.#idle.clear();
     this.#selectionIntents.clear();
     this.#reverts.clear();
+    this.#revertRecords.clear();
     this.#transcript.release();
     this.#retired.clear();
     this.#attention.reset([], [], []);
@@ -1088,41 +1321,64 @@ export class OpencodeV1Adapter implements Harness {
     const id = ids.encode(session.id);
     if (!session.revert) {
       this.#reverts.delete(id);
+      this.#revertRecords.delete(id);
       return;
     }
     if (this.buffers.subscribed(id)) {
       this.#reverts.set(id, session.revert.messageID);
       this.#tasks.cutoff(id, session.revert.messageID);
     }
-    let messageCount = this.#db.revertedUserCount(
-      id,
-      session.revert.messageID,
-    );
-    const projected = this.#db.revertedPrompts(
-      id,
-      session.revert.messageID,
-      REVERT_PROMPT_LIMIT,
-    );
+    const previous = this.#revertRecords.get(id);
+    if (previous?.boundaryID === session.revert.messageID) {
+      const files = session.revert.diff
+        ? parseDiff(session.revert.diff)
+        : mapDiffs(session.summary?.diffs || []);
+      return {
+        ...await previous.record,
+        files: files.map(({ path, additions, deletions }) => ({
+          path,
+          additions,
+          deletions,
+        })),
+      };
+    }
+    const record = this.#resolveRevert(session, signal, priority);
+    this.#revertRecords.set(id, {
+      boundaryID: session.revert.messageID,
+      record,
+    });
+    try {
+      return await record;
+    } catch (error) {
+      if (this.#revertRecords.get(id)?.record === record) {
+        this.#revertRecords.delete(id);
+      }
+      throw error;
+    }
+  }
+  async #resolveRevert(
+    session: Session,
+    signal: AbortSignal | undefined,
+    priority: import("@otk/harness").ProviderReadOptions["priority"],
+  ): Promise<RevertInfo> {
+    const id = ids.encode(session.id), boundaryID = session.revert!.messageID;
+    let messageIDs = this.#db.revertedMessageIDs(id, boundaryID);
+    if (!messageIDs?.includes(boundaryID)) messageIDs = undefined;
     let prompt: import("@otk/protocol").HistoryEntry | undefined;
     try {
       prompt = await this.#history.entry(
         id,
-        session.revert.messageID,
+        boundaryID,
         signal,
         priority,
       );
     } catch (error) {
       signal?.throwIfAborted();
       // An unavailable native DB retains the existing API fallback boundary.
-      if (messageCount !== undefined && projected) throw error;
+      if (messageIDs !== undefined) throw error;
     }
-    let prompts = projected?.map(({ text, ...row }) => ({
-      ...row,
-      preview: revertPreview(text),
-    }));
-    if (messageCount === undefined || !prompts) {
-      messageCount = 0;
-      const bounded: NonNullable<RevertInfo["prompts"]> = [];
+    if (messageIDs === undefined) {
+      messageIDs = [];
       let boundary: import("./messages.ts").NativeMessage | undefined;
       let command: string | undefined;
       for await (
@@ -1130,7 +1386,7 @@ export class OpencodeV1Adapter implements Harness {
       ) {
         if (
           message.info.role === "assistant" &&
-          message.info.parentID === session.revert.messageID
+          message.info.parentID === boundaryID
         ) {
           const input = message.parts.find((p) =>
             p.type === "tool" && p.tool === "bash"
@@ -1138,31 +1394,13 @@ export class OpencodeV1Adapter implements Harness {
           if (typeof input === "string") command = input;
         }
         if (
-          isPrompt(message.info, message.parts) &&
-          message.info.id >= session.revert.messageID
+          message.info.id >= boundaryID
         ) {
-          messageCount++;
-          const text = message.parts.find((p) =>
-            p.type === "text" && !p.synthetic
-          )?.text ?? (message.parts.filter((p) =>
-            p.type === "file"
-          ).map((p) => p.filename ?? "attachment").join(", ") ||
-            (message.parts.some((p) =>
-                p.type === "compaction"
-              )
-              ? "Compacted conversation"
-              : ""));
-          bounded.push({
-            messageID: message.info.id,
-            time: message.info.time.created,
-            preview: revertPreview(text),
-          });
-          bounded.sort((a, b) => a.messageID.localeCompare(b.messageID));
-          if (bounded.length > REVERT_PROMPT_LIMIT) bounded.pop();
-          if (message.info.id === session.revert.messageID) boundary = message;
+          messageIDs.push(message.info.id);
+          if (message.info.id === boundaryID) boundary = message;
         }
       }
-      prompts = bounded;
+      messageIDs.sort();
       if (boundary) {
         const shell = boundary.parts.some((p) =>
           p.type === "text" && p.synthetic &&
@@ -1176,13 +1414,12 @@ export class OpencodeV1Adapter implements Harness {
         );
       }
     }
-    const files = session.revert.diff
-      ? parseDiff(session.revert.diff)
+    const files = session.revert!.diff
+      ? parseDiff(session.revert!.diff)
       : mapDiffs(session.summary?.diffs || []);
     return {
-      messageID: session.revert.messageID,
-      messageCount,
-      prompts,
+      boundaryID,
+      messageIDs,
       prompt,
       files: files.map(({ path, additions, deletions }) => ({
         path,
@@ -1237,34 +1474,11 @@ export class OpencodeV1Adapter implements Harness {
         outcome: error.outcome,
       },
     };
-    const prior = recordID
-      ? this.#retention.get(sessionID, recordID)?.message
-      : undefined;
-    const priorPart = prior?.parts.find((part) =>
-      part.kind === "external" && part.failure
-    );
-    const priorFailure = priorPart?.kind === "external"
-      ? priorPart.failure
-      : undefined;
-    if (priorFailure?.facts) {
-      failure.facts = {
-        ...failure.facts,
-        outcome: priorFailure.facts.outcome === "rejected"
-          ? "rejected"
-          : failure.facts.outcome,
-        status: failure.facts.status ?? priorFailure.facts.status,
-        reason: [
-          ...new Set(
-            [priorFailure.facts.reason, failure.facts.reason].filter(Boolean),
-          ),
-        ].join("\n"),
-      };
-    }
     const message = requestFailureRecord(
       sessionID,
       failure,
       this.#failureCreated(sessionID, recordID),
-      prior?.role === "context" ? prior.replyTo : undefined,
+      undefined,
       recordID,
     );
     // Keep the original native failure class/certainty and diagnostic identity;
@@ -1326,27 +1540,22 @@ export class OpencodeV1Adapter implements Harness {
       operation,
       options?.operation?.key.key,
     );
-    const failureAttempt = this.#failureAttempts.begin(
-      sessionID,
-      token.id,
-      options?.operation?.key.origin,
-    );
-    const settled = this.client.json(path, {
+    // V1 session.error has no request key. Only this HTTP continuation owns
+    // the launch record; the event path can only borrow observed prompt facts.
+    const recordID = `request:failure:launch:${token.id}`;
+    const settled = this.client.json<void>(path, {
       ...options,
       signal: controller.signal,
       classification: "effect",
-    }).then(() => {
-      this.#failureAttempts.settle(failureAttempt);
     });
     const request = settled.then(() => this.#errors.settled(token)).catch(
       (error) => {
         if (!this.#stopped && !controller.signal.aborted) {
-          this.#failureAttempts.settle(failureAttempt);
           this.#requestFailure(
             sessionID,
             operation,
             error,
-            failureAttempt.recordID,
+            recordID,
             options?.operation?.key.origin,
             token,
           );
@@ -1371,7 +1580,6 @@ export class OpencodeV1Adapter implements Harness {
         }
       },
     ).finally(() => {
-      this.#failureAttempts.settle(failureAttempt);
       this.#errors.settled(token);
       this.#commands.delete(controller);
     });
@@ -1596,6 +1804,11 @@ export class OpencodeV1Adapter implements Harness {
       }
     };
     const connection = ++this.#connection;
+    this.#completionReads.clear();
+    this.#confirmedIdle.clear();
+    this.#pendingPrompts.clear();
+    await this.#deliveries?.stop();
+    this.#deliveries = undefined;
     const seeds = await this.digest?.projects?.(
       connection,
       controller.signal,
@@ -1789,13 +2002,21 @@ export class OpencodeV1Adapter implements Harness {
       // Each native inventory qualifies only its own facts. A failed question
       // inventory cannot discard fresh status or permission evidence.
       if (statuses) {
+        const running = new Set(
+          statuses.filter(({ status }) => status !== "idle").map(({ id }) =>
+            id
+          ),
+        );
         for (const id of this.#liveWork.keys()) {
-          if (this.#index.getMetadata(id)?.directory === directory) {
+          if (
+            this.#index.getMetadata(id)?.directory === directory &&
+            !running.has(id)
+          ) {
             this.#liveWork.delete(id);
           }
         }
         await each(byDirectory.get(directory) ?? [], (entry) => {
-          this.#liveWork.delete(entry.id);
+          if (!running.has(entry.id)) this.#liveWork.delete(entry.id);
           this.#idle.set(entry.id, this.#connection);
           entry.status = "idle";
           entry.retry = undefined;
@@ -1803,13 +2024,7 @@ export class OpencodeV1Adapter implements Harness {
         await each(statuses, (status) => {
           if (status.status !== "idle") {
             this.#idle.delete(status.id);
-            this.#liveWork.set(
-              status.id,
-              {
-                key: `execution:${this.#connection}:${status.id}`,
-                generation: this.#connection,
-              },
-            );
+            this.#observeExecution(status.id);
           } else this.#idle.set(status.id, this.#connection);
           routing.add(status.id);
           const entry = entries.get(status.id) ??
@@ -1822,11 +2037,18 @@ export class OpencodeV1Adapter implements Harness {
       if (permissions) {
         this.#permissionInventories.set(directory, this.#connection);
         await each(permissions, (request) => {
-          this.#retention.observe(
+          void this.#errors.retainHistory(
             request.sessionID,
-            `permission:${request.id}`,
-            { ...request },
-            request.time,
+            `permission.observe:${request.id}`,
+            () =>
+              this.#retention.observe(
+                request.sessionID,
+                `permission:${request.id}`,
+                { ...request },
+                request.time,
+              ),
+          ).catch((error) =>
+            this.diagnostic("warn", "pending permission history", error)
           );
           routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
@@ -1961,6 +2183,34 @@ export class OpencodeV1Adapter implements Harness {
     if (this.digest) {
       await each(entries.values(), (entry) => sink.indexUpsert(entry));
     } else sink.indexReset([...entries.values()]);
+    if (this.digest) {
+      this.#deliveries = new DeliveryBackfill(
+        this.digest,
+        (parent, updates, reset) => {
+          if (
+            !this.#current(controller) || connection !== this.#connection
+          ) return;
+          const dirty = new Set(updates.map((row) => row.id));
+          if (reset) {
+            for (const entry of this.#index.snapshotEntries()) {
+              if (entry.parentID === parent) dirty.add(entry.id);
+            }
+          }
+          this.#deliveryJoin?.request(dirty);
+        },
+        (error) =>
+          this.diagnostic("warn", "delivery evidence unavailable", error),
+      );
+      const retainedParents = new Set(
+        (this.#target.retainedSessions ?? []).flatMap((id) => {
+          const parent = this.#index.getMetadata(id)?.parentID;
+          return parent ? [parent] : [];
+        }),
+      );
+      for (const parent of new Set([...retainedParents, ...terminalParents])) {
+        this.#deliveries.request(parent);
+      }
+    }
     sink.projectAuthority?.(hints ? "current" : "unknown");
   }
   /** Scalar routing/activity facts for IDs outside the demanded metadata window. */
@@ -1995,19 +2245,22 @@ export class OpencodeV1Adapter implements Harness {
       );
     } else this.#questions.remove(id);
   }
-  #disposeSession(id: string): void {
+  #disposeSession(id: string): Promise<void> {
     const sink = this.#sink;
+    this.#pendingPrompts.delete(id);
+    this.#completionReads.delete(id);
+    this.#confirmedIdle.delete(id);
     this.#liveWork.delete(id);
     this.#terminals.delete(id);
     this.#terminalCandidates.delete(id);
     this.#idle.delete(id);
     this.#abortCommands(id);
-    this.#errors.remove(id);
+    const history = this.#errors.remove(id);
     for (const [key, pending] of this.#permissions) {
       if (pending.request.sessionID !== id) continue;
       this.#permissions.delete(key);
       this.#attention.change(id, "permissions", -1);
-      if (!this.digest) {
+      {
         sink.content(id, {
           op: "permission.remove",
           requestID: key,
@@ -2019,7 +2272,7 @@ export class OpencodeV1Adapter implements Harness {
       if (request.sessionID !== id) continue;
       const key = request.id;
       this.#question(key);
-      if (!this.digest) {
+      {
         sink.content(id, {
           op: "question.remove",
           requestID: key,
@@ -2031,12 +2284,14 @@ export class OpencodeV1Adapter implements Harness {
     this.#tasks.dispose(id);
     this.#colors.release(id);
     this.#reverts.delete(id);
+    this.#revertRecords.delete(id);
     this.#recovery.release(id);
     this.#clocks.release(id);
     this.#releaseRevert(id);
     this.buffers.removeSession(id);
     this.#selectionIntents.release(ids.decode(id));
     this.#transcript.release(id);
+    return history;
   }
   /** Read the shared metadata identity for an accepted native authority fact. */
   #metadata(id: string): IndexEntry | undefined {
@@ -2048,7 +2303,7 @@ export class OpencodeV1Adapter implements Harness {
   /** End native ownership while retaining the authoritative metadata identity. */
   retireSession(id: string): void {
     this.#retired.add(id);
-    this.#disposeSession(id);
+    void this.#disposeSession(id);
     const entry = this.#index.getMetadata(id);
     if (entry) {
       entry.status = "idle";
@@ -2087,6 +2342,17 @@ export class OpencodeV1Adapter implements Harness {
     const catalogKinds = this.catalogs.event(event);
     if (catalogKinds) {
       if (catalogKinds.includes("agents")) this.#colors.reset();
+      if (catalogKinds.includes("project") && this.digest?.projects) {
+        if (type === "project.updated" && p) {
+          const update = nativeProjectMetadata(p);
+          if (update && sink.projectMetadata?.(update, "event")) return;
+        }
+        const seeds = await this.digest.projects(
+          this.#connection,
+          controller.signal,
+        );
+        if (this.#current(controller)) sink.projectSeeds?.(seeds.projects);
+      }
       return;
     }
     if (!p) throw new Error(`Malformed ${type} event: properties missing`);
@@ -2206,6 +2472,14 @@ export class OpencodeV1Adapter implements Harness {
     const info = p.info as Info | undefined;
     const raw = p.part as RawPart | undefined;
     const sessionID = typeof nativeID === "string" ? ids.encode(nativeID) : "";
+    if (
+      sessionID &&
+      (type === "message.part.updated" && raw &&
+          (raw.tool === "task" && raw.state?.status === "completed" ||
+            raw.type === "text" && raw.synthetic) ||
+        type === "message.part.removed" || type === "message.removed" ||
+        type === "session.updated")
+    ) this.#deliveries?.request(sessionID, true);
     if (sessionID) {
       const turn = this.#failureTurns.get(sessionID) ?? {};
       if (info?.time?.created !== undefined) {
@@ -2221,7 +2495,10 @@ export class OpencodeV1Adapter implements Harness {
       if (
         type === "message.updated" && info?.role === "assistant" &&
         info.parentID
-      ) turn.prompt = info.parentID;
+      ) {
+        turn.prompt = info.parentID;
+        this.#consumePrompt(sessionID, info.parentID, true);
+      }
       if (raw && raw.messageID === turn.candidate && isPromptPart(raw)) {
         turn.prompt = raw.messageID;
       }
@@ -2305,7 +2582,10 @@ export class OpencodeV1Adapter implements Harness {
         if (session.revert) {
           this.#reverts.set(mapped.id, session.revert.messageID);
           this.#tasks.cutoff(mapped.id, session.revert.messageID);
-        } else this.#reverts.delete(mapped.id);
+        } else {
+          this.#reverts.delete(mapped.id);
+          this.#revertRecords.delete(mapped.id);
+        }
         const local = new AbortController();
         this.#revertReads.set(mapped.id, local);
         const signal = AbortSignal.any([controller.signal, local.signal]);
@@ -2319,10 +2599,9 @@ export class OpencodeV1Adapter implements Harness {
           ) return;
           sink.content(mapped.id, {
             op: "session.revert",
-            messageID: revert?.messageID,
-            messageCount: revert?.messageCount || 0,
+            boundaryID: revert?.boundaryID,
+            messageIDs: revert?.messageIDs ?? [],
             files: revert?.files || [],
-            prompts: revert?.prompts,
             prompt: revert?.prompt,
           });
         }).catch((error) => {
@@ -2342,8 +2621,8 @@ export class OpencodeV1Adapter implements Harness {
       if (typeof id !== "string" || !id) {
         throw new Error("Malformed session.deleted: session id missing");
       }
+      await this.#disposeSession(ids.encode(id));
       this.#retention.remove(ids.encode(id));
-      if (!this.digest) this.#disposeSession(ids.encode(id));
       if (this.digest?.projects) {
         const seeds = await this.digest.projects(
           this.#connection,
@@ -2395,19 +2674,13 @@ export class OpencodeV1Adapter implements Harness {
       }
       if (entry) {
         if (status.type === "idle") this.#idle.set(sessionID, this.#connection);
-        else this.#idle.delete(sessionID);
-        if (status.type === "idle") this.#liveWork.delete(sessionID);
-        else if (
-          this.#liveWork.get(sessionID)?.generation !== this.#connection
-        ) {
-          this.#liveWork.set(
-            sessionID,
-            {
-              key: `execution:${this.#connection}:${sessionID}`,
-              generation: this.#connection,
-            },
-          );
+        else {
+          this.#idle.delete(sessionID);
+          this.#completionReads.delete(sessionID);
+          this.#confirmedIdle.delete(sessionID);
         }
+        if (status.type === "idle") this.#liveWork.delete(sessionID);
+        else this.#observeExecution(sessionID);
         entry.status = status.type as IndexEntry["status"];
         entry.activityAuthority = "current";
         entry.retry = entry.status === "retry"
@@ -2422,7 +2695,10 @@ export class OpencodeV1Adapter implements Harness {
       // publishes its independent clear observation against that same record.
       if (entry) sink.indexUpsert(entry);
       if (status.type === "busy") this.#errors.clear(sessionID);
-      if (status.type === "idle") this.#recovery.terminal(sessionID);
+      if (status.type === "idle") {
+        this.#recovery.terminal(sessionID);
+        this.#confirmCompletion(sessionID);
+      }
       return;
     }
     if (type === "session.error") {
@@ -2450,13 +2726,12 @@ export class OpencodeV1Adapter implements Harness {
         facts: {
           ...this.client.failureFacts(error),
           actionLabel: "Running session",
-          origin: this.#failureAttempts.origin(sessionID) ??
-            this.#retention.get(
-              sessionID,
-              `submission:${this.#failureTurns.get(sessionID)?.prompt}`,
-            )?.request?.origin as
-              | import("@otk/protocol").RequestOrigin
-              | undefined,
+          origin: this.#retention.get(
+            sessionID,
+            `submission:${this.#failureTurns.get(sessionID)?.prompt}`,
+          )?.request?.origin as
+            | import("@otk/protocol").RequestOrigin
+            | undefined,
           target: { sessionID, label: entry?.title },
           outcome: "rejected" as const,
         },
@@ -2536,13 +2811,6 @@ export class OpencodeV1Adapter implements Harness {
       const time = this.#permissions.get(request.id)?.request.time ??
         Date.now();
       const mapped = mapPermission(request, time);
-      this.#retention.observe(
-        sessionID,
-        `permission:${request.id}`,
-        p,
-        time,
-        true,
-      );
       const previous = this.#permissions.get(request.id)?.request.sessionID;
       this.#permissions.set(request.id, {
         request: mapped,
@@ -2561,33 +2829,21 @@ export class OpencodeV1Adapter implements Harness {
         op: "permission.upsert",
         request: mapped,
       });
+      await this.#errors.retainHistory(
+        sessionID,
+        `permission.ask:${request.id}`,
+        () =>
+          this.#retention.observe(
+            sessionID,
+            `permission:${request.id}`,
+            p,
+            time,
+            true,
+          ),
+      );
       return;
     }
     if (type === "permission.replied") {
-      const key = `permission:${String(p.requestID)}`;
-      const retained = this.#retention.get(sessionID, key);
-      const created = retained?.created ?? Date.now();
-      const message = eventRecord(
-        ids.decode(sessionID),
-        key,
-        created,
-        type,
-        p,
-        retained?.request,
-      );
-      this.#retention.put({
-        id: key,
-        sessionID,
-        created,
-        request: retained?.request,
-        message,
-      });
-      if (this.buffers.subscribed(sessionID)) {
-        sink.content(sessionID, {
-          op: "message.upsert",
-          message: recordReference(message),
-        });
-      }
       const previous = this.#permissions.get(String(p.requestID));
       this.#permissions.delete(String(p.requestID));
       if (previous) {
@@ -2598,6 +2854,32 @@ export class OpencodeV1Adapter implements Harness {
         requestID: String(p.requestID),
         sessionID,
       });
+      const key = `permission:${String(p.requestID)}`;
+      await this.#errors.retainHistory(sessionID, key, () => {
+        const retained = this.#retention.get(sessionID, key);
+        const created = retained?.created ?? Date.now();
+        const message = eventRecord(
+          ids.decode(sessionID),
+          key,
+          created,
+          type,
+          p,
+          retained?.request,
+        );
+        this.#retention.put({
+          id: key,
+          sessionID,
+          created,
+          request: retained?.request,
+          message,
+        });
+        if (this.buffers.subscribed(sessionID)) {
+          sink.content(sessionID, {
+            op: "message.upsert",
+            message: recordReference(message),
+          });
+        }
+      });
       return;
     }
     if (type === "question.asked") {
@@ -2605,50 +2887,58 @@ export class OpencodeV1Adapter implements Harness {
         throw new Error("Malformed question.asked: request id missing");
       }
       const request = mapQuestion(p as unknown as RawQuestion);
-      this.#retention.observe(
-        sessionID,
-        `question:${String(p.id)}`,
-        p,
-        Date.now(),
-        true,
-      );
       this.#question(String(p.id), request, event.directory);
       sink.content(sessionID, {
         op: "question.upsert",
         request,
       });
+      const created = Date.now();
+      await this.#errors.retainHistory(
+        sessionID,
+        `question.ask:${String(p.id)}`,
+        () =>
+          this.#retention.observe(
+            sessionID,
+            `question:${String(p.id)}`,
+            p,
+            created,
+            true,
+          ),
+      );
       return;
     }
     if (type === "question.replied" || type === "question.rejected") {
-      const key = `question:${String(p.requestID)}`;
-      const retained = this.#retention.get(sessionID, key);
-      const created = retained?.created ?? Date.now();
-      const message = eventRecord(
-        ids.decode(sessionID),
-        key,
-        created,
-        type,
-        p,
-        retained?.request,
-      );
-      this.#retention.put({
-        id: key,
-        sessionID,
-        created,
-        request: retained?.request,
-        message,
-      });
-      if (this.buffers.subscribed(sessionID)) {
-        sink.content(sessionID, {
-          op: "message.upsert",
-          message: recordReference(message),
-        });
-      }
       this.#question(String(p.requestID));
       sink.content(sessionID, {
         op: "question.remove",
         requestID: String(p.requestID),
         sessionID,
+      });
+      const key = `question:${String(p.requestID)}`;
+      await this.#errors.retainHistory(sessionID, key, () => {
+        const retained = this.#retention.get(sessionID, key);
+        const created = retained?.created ?? Date.now();
+        const message = eventRecord(
+          ids.decode(sessionID),
+          key,
+          created,
+          type,
+          p,
+          retained?.request,
+        );
+        this.#retention.put({
+          id: key,
+          sessionID,
+          created,
+          request: retained?.request,
+          message,
+        });
+        if (this.buffers.subscribed(sessionID)) {
+          sink.content(sessionID, {
+            op: "message.upsert",
+            message: recordReference(message),
+          });
+        }
       });
       return;
     }
@@ -2700,9 +2990,11 @@ export class OpencodeV1Adapter implements Harness {
         sessionID,
         latestTerminal(
           this.#terminalCandidates.get(sessionID),
-          terminalFacts(info),
+          { ...terminalFacts(info), terminalOrigin: "live" },
         ),
       );
+      const parent = this.#index.getMetadata(sessionID)?.parentID;
+      if (parent) this.#deliveries?.request(parent, true);
       const current = this.#index.getMetadata(sessionID);
       if (current) {
         current.timeUpdated = Math.max(
@@ -2710,6 +3002,7 @@ export class OpencodeV1Adapter implements Harness {
           terminalToken(info),
         );
         sink.indexUpsert(current);
+        this.#confirmCompletion(sessionID);
       }
     }
     if (type === "message.removed") {

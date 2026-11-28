@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration, wire } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork } from "../../pages/transcript.ts";
 
 test.describe("bootstrap", () => {
   test.use({ profile: "transport-bootstrap" });
@@ -92,11 +93,11 @@ test("transport.initial-native-permission", {
     await expect(page.locator(".otk-app")).toBeVisible();
     await expect.poll(() => frames.held.length).toBeGreaterThan(0);
     await expect(
-      page.locator(".otk-prompt button[type=submit],.otk-permission-dock"),
+      send(page).or(page.locator(".otk-permission-dock")),
     ).toHaveCount(0);
     frames.release();
-    await openWorkLogs(page);
-    await expect(page.locator(".otk-messages")).toContainText(
+    const work = await openLatestWork(page);
+    await expect(work).toContainText(
       "git status --short",
     );
     await expect(page.locator(".otk-permission-dock")).toBeVisible();

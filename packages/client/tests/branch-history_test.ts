@@ -55,15 +55,25 @@ function fixture() {
       Promise.resolve({
         ...info(t.sessionID),
         ...(staged
-          ? { revert: { messageID: "2", messageCount: 1, files: [] } }
+          ? { revert: { boundaryID: "2", messageIDs: ["2"], files: [] } }
           : {}),
       }),
-    page: (t: typeof target, before?: string): Promise<MessagePage> => {
+    page: (
+      t: typeof target,
+      before?: string,
+      _signal?: AbortSignal,
+      scope?: import("@otk/protocol").MessageSnapshotScope,
+    ): Promise<MessagePage> => {
       calls++;
       return Promise.resolve({
         sessionID: t.sessionID,
         session: info(t.sessionID),
-        items: [message(before ? "1" : "2")],
+        items: scope
+          ? scope.validate ? [] : scope.messageIDs.map(message)
+          : [message(before ? "1" : "2")],
+        revisions: Object.fromEntries(
+          (scope?.messageIDs ?? []).map((id) => [id, 0]),
+        ),
         clock: { epoch: "e", seq: 1 },
         from: { epoch: "e", seq: 1 },
         version: { generation: 1, revision: 1 },
@@ -115,6 +125,12 @@ function fixture() {
   owner.select(target);
   return {
     owner,
+    /** The fixture's staged revert identity unless a test supplies another. */
+    prepare: (
+      t: typeof target,
+      boundary: string,
+      record = { boundaryID: boundary, messageIDs: ["1", "2"], files: [] },
+    ) => owner.prepare(t, boundary, record),
     options,
     drafts,
     values,
@@ -128,6 +144,29 @@ function fixture() {
     calls: () => calls,
   };
 }
+Deno.test("legacy saved branches decode message identity without rewriting stored data", async () => {
+  const f = fixture();
+  await f.prepare(target, "2");
+  const key = [...f.values.keys()][0];
+  const stored = { ...f.owner.state.branches[0], schema: 1, replaced: true };
+  Reflect.set(stored.session, "revert", {
+    messageID: "2",
+    messageCount: 1,
+    files: [],
+  });
+  const raw = JSON.stringify(stored);
+  f.values.set(key, raw);
+  const reader = createBranchHistory(f.options);
+  reader.select(target);
+  assertEquals(Reflect.get(reader.state.branches[0], "replaced"), undefined);
+  assertEquals(Reflect.get(reader.state.branches[0], "committedAt"), undefined);
+  assertEquals(reader.state.branches[0].session.revert, {
+    boundaryID: "2",
+    messageIDs: ["2"],
+    files: [],
+  });
+  assertEquals(f.values.get(key), raw);
+});
 Deno.test("branch history saves complete retained pages and checkpoints edited draft before commit", async () => {
   const f = fixture();
   f.drafts.writer("server/a")({
@@ -136,7 +175,7 @@ Deno.test("branch history saves complete retained pages and checkpoints edited d
     variant: undefined,
     editor: { text: "Unsaved editor" },
   });
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const saved = f.owner.state.branches[0];
   assertEquals(saved.messages.map((m) => m.id), ["1", "2"]);
   assertEquals(saved.messages[0].source, {
@@ -162,8 +201,8 @@ Deno.test("branch history saves complete retained pages and checkpoints edited d
     ),
   );
   f.staged(false);
-  await f.owner.settled(target);
-  assertEquals(f.owner.state.branches[0].replaced, true);
+  f.owner.committed(target, "2", 42);
+  assertEquals(f.owner.state.branches[0].committedAt, 42);
   const reload = createBranchHistory(f.options);
   reload.select(target);
   assertEquals(reload.state.branches.length, 1);
@@ -174,6 +213,30 @@ Deno.test("branch history saves complete retained pages and checkpoints edited d
   const [key, raw] = [...f.values][0];
   assertEquals(reload.state.branches[0].bytes, 2 * (key.length + raw.length));
 });
+Deno.test("an unrelated fact cannot replace an archive; a matching fact can confirm a finished copy", async () => {
+  const f = fixture();
+  await f.prepare(target, "2");
+  const id = f.owner.state.branches[0].id;
+  f.staged(false);
+  f.owner.stageEnded(target);
+  assertEquals(f.owner.state.branches[0].pending, false);
+  assertEquals(Reflect.get(f.owner.state.branches[0], "replaced"), undefined);
+  assertEquals(
+    Reflect.get(f.owner.state.branches[0], "committedAt"),
+    undefined,
+  );
+  f.owner.committed({ ...target, sessionID: "another-session" }, "2", 5);
+  f.owner.committed(target, "unrelated", 6);
+  assertEquals(
+    Reflect.get(f.owner.state.branches[0], "committedAt"),
+    undefined,
+  );
+  f.owner.committed(target, "2", 7);
+  const reload = createBranchHistory(f.options);
+  reload.select(target);
+  assertEquals(reload.state.branches[0].id, id);
+  assertEquals(Reflect.get(reload.state.branches[0], "committedAt"), 7);
+});
 Deno.test("absent prompt history skips archive acquisition without blocking Revert or submission", async () => {
   const f = fixture();
   const owner = createBranchHistory({
@@ -181,10 +244,14 @@ Deno.test("absent prompt history skips archive acquisition without blocking Reve
     ...{ supportsHistory: () => false },
   });
   owner.select(target);
-  await owner.prepare(target, "2");
+  await owner.prepare(target, "2", {
+    boundaryID: "2",
+    messageIDs: ["1", "2"],
+    files: [],
+  });
   f.staged(true);
   await owner.beforeCommit(target);
-  await owner.settled(target);
+  owner.stageEnded(target);
   assertEquals(f.calls(), 0);
   assertEquals(f.values.size, 0);
   assertEquals(owner.state.error, undefined);
@@ -207,19 +274,27 @@ Deno.test("unavailable persistence mounts without a saved list but visibly refus
   assertEquals(f.calls(), 0);
   const error = owner.state.error;
   assert(error);
-  assert(error.failure?.reason.includes("localStorage is unavailable"));
+  assertEquals(
+    error.failure?.reason,
+    "The earlier conversation couldn't be saved: storage is unavailable.",
+  );
+  assert(error.failure?.details?.includes("localStorage is unavailable"));
+  assertEquals(
+    error.failure?.recovery,
+    "Check storage access, then Retry, or Keep without a saved copy.",
+  );
   assertEquals(f.drafts.current("server/a").input, "Never discarded");
 });
 Deno.test("branch history is keyed by exact server and session and never evicts old branches", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
-  await f.owner.prepare({ ...target, sessionID: "b" }, "2");
-  await f.owner.prepare({ ...target, sidecarId: "other" }, "2");
+  await f.prepare(target, "2");
+  await f.prepare({ ...target, sessionID: "b" }, "2");
+  await f.prepare({ ...target, sidecarId: "other" }, "2");
   assertEquals(f.values.size, 3);
   f.owner.select({ ...target, sessionID: "b" });
   assertEquals(f.owner.state.branches.length, 1);
   f.owner.select(target);
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   assertEquals(f.owner.state.branches.length, 2);
   assertEquals(f.values.size, 4);
 });
@@ -228,25 +303,25 @@ Deno.test("a failed advertised prompt-history reader is not a no-history degrada
   f.options.prompt = () =>
     Promise.reject(new Error("Exact prompt read failed"));
   await assertRejects(
-    () => f.owner.prepare(target, "2"),
+    () => f.prepare(target, "2"),
     Error,
-    "The earlier branch could not be saved",
+    "The earlier conversation couldn't be saved",
   );
   assertEquals(f.values.size, 0);
   assertEquals(f.owner.preservationWarning(), undefined);
 });
-Deno.test("branch history repeated pending revert keeps the complete original capture", async () => {
+Deno.test("a different pending revert acquires its own identity record", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   f.staged(true);
-  await f.owner.prepare(target, "1");
-  assertEquals(f.calls(), 3);
-  assertEquals(f.values.size, 1);
-  assertEquals(f.owner.state.branches[0].boundary, "2");
+  await f.prepare(target, "1");
+  assertEquals(f.calls(), 6);
+  assertEquals(f.values.size, 2);
+  assertEquals(f.owner.state.branches.find((b) => b.pending)?.boundary, "1");
 });
 Deno.test("branch history quota uses FP1 action target reason recovery and leaves old branches intact", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const original = [...f.values];
   f.staged(true);
   f.drafts.writer("server/a")({ ...emptyDraft(), input: "Not saved" });
@@ -255,19 +330,30 @@ Deno.test("branch history quota uses FP1 action target reason recovery and leave
   assertEquals([...f.values], original);
   const failure = f.owner.state.error;
   assert(failure);
-  assertEquals(failure.failure?.action, "Saving an earlier branch");
-  assert(failure.failure?.target.label);
-  assert(failure.failure?.reason.includes("not saved"));
-  assert(failure.failure?.reason.includes("bytes"));
-  assert(failure.failure?.recovery?.includes("Delete a saved branch"));
+  assertEquals(failure.failure?.action, "Saving the earlier conversation");
+  assertEquals(
+    failure.failure?.value.facts?.target?.sessionID,
+    target.sessionID,
+  );
+  assertEquals(failure.failure?.target, { label: "" });
+  assert(
+    failure.failure?.reason.includes("couldn't be saved: storage is full"),
+  );
+  assert(failure.failure?.details?.includes("bytes"));
+  assert(failure.failure?.details?.includes("localStorage is full"));
+  assert(failure.failure?.details?.includes("about 5 MB per origin"));
+  assertEquals(
+    failure.failure?.recovery,
+    "Free space, then Retry, or Keep without a saved copy.",
+  );
   assertEquals(f.drafts.current("server/a").input, "Not saved");
 });
 Deno.test("saved prompt reuse keeps exact text and attachment bytes and offers both drafts", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const branch = f.owner.state.branches[0],
     prompt = savedPromptDraft(branch.prompts[0].entry);
-  assertEquals(prompt.input, "Exact\n  prompt 2");
+  assertEquals(prompt.input, "Exact\n  prompt 1");
   assertEquals(prompt.chips[0].start, undefined);
   f.drafts.writer("server/a")({ ...emptyDraft(), input: "New draft" });
   f.owner.reuse(branch.id, prompt, "saved prompt");
@@ -297,9 +383,16 @@ Deno.test("saved prompt reuse keeps exact text and attachment bytes and offers b
 });
 Deno.test("saved labels have one sentence-case source including existing browser entries", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const key = [...f.values.keys()][0];
-  const stored = JSON.parse(f.values.get(key)!);
+  const stored = {
+    ...f.owner.state.branches[0],
+    schema: 1,
+    drafts: f.owner.state.branches[0].drafts.map((d) => ({
+      ...d,
+      defaultVariant: false,
+    })),
+  };
   stored.drafts.push({
     label: "saved prompt",
     value: emptyDraft(),
@@ -320,9 +413,9 @@ Deno.test("saved labels have one sentence-case source including existing browser
 });
 Deno.test("branch history explicit delete removes only that saved branch across reload", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const id = f.owner.state.branches[0].id;
-  await f.owner.prepare(target, "1");
+  await f.prepare(target, "1");
   f.owner.open(id);
   f.owner.delete(id);
   assertEquals(f.owner.state.opened, undefined);
@@ -337,7 +430,7 @@ Deno.test("pending Restore retains edited and original drafts and offers the sam
   const f = fixture();
   f.drafts.writer("server/a")({ ...emptyDraft(), input: "Original draft" });
   const transaction = f.drafts.reverts.capture("server/a");
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   transaction.staged("2");
   f.staged(true);
   f.drafts.writer("server/a")({
@@ -345,7 +438,7 @@ Deno.test("pending Restore retains edited and original drafts and offers the sam
     input: "Edited after revert",
   });
   await f.owner.beforeCommit(target, "Before restore");
-  await f.owner.settled(target, true);
+  f.owner.restored(target);
   assertEquals(f.drafts.current("server/a").input, "Edited after revert");
   assertEquals(f.owner.state.choice?.draft.input, "Original draft");
   const reload = createBranchHistory(f.options);
@@ -361,10 +454,10 @@ Deno.test("pending Restore retains edited and original drafts and offers the sam
 
 Deno.test("post-native archive bookkeeping failure cannot make an admitted send look unsent", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const original = [...f.values];
   f.quota(true);
-  await f.owner.settled(target);
+  f.owner.committed(target, "2", 42);
   assertEquals([...f.values], original);
   assert(f.owner.state.error);
   assert(
@@ -374,8 +467,9 @@ Deno.test("post-native archive bookkeeping failure cannot make an admitted send 
 
 Deno.test("branch capture preserves an invented harness part without assuming it owns NativeSource", async () => {
   const f = fixture(), page = f.options.page;
-  f.options.page = async (target, before) => {
-    const value = await page(target, before);
+  f.options.page = async (target, before, signal, scope) => {
+    const value = await page(target, before, signal, scope);
+    if (scope?.validate) return value;
     value.items[0].parts.push({
       kind: "branch-fixture",
       id: "third",
@@ -383,7 +477,7 @@ Deno.test("branch capture preserves an invented harness part without assuming it
     });
     return value;
   };
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   assertEquals(f.owner.state.branches[0].messages[0].parts, [{
     kind: "branch-fixture",
     id: "third",
@@ -391,76 +485,60 @@ Deno.test("branch capture preserves an invented harness part without assuming it
   }]);
 });
 
-Deno.test("explicit Delete fences a late native settlement and cannot resurrect the saved branch", async () => {
+Deno.test("a late native commit cannot resurrect an explicitly deleted copy", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const id = f.owner.state.branches[0].id;
-  const held = Promise.withResolvers<ContentSession>();
-  f.options.session = () => held.promise;
-  const settling = f.owner.settled(target);
   f.owner.delete(id);
-  held.resolve(info());
-  await settling;
+  f.owner.committed(target, "2", 42);
   assertEquals(f.values.size, 0);
   assertEquals(f.owner.state.branches, []);
   assertEquals(f.owner.state.choice, undefined);
 });
 
-for (const phase of ["commit", "settle"] as const) {
-  Deno.test(`archive ${phase} merges reuse drafts saved during its held read`, async () => {
-    const f = fixture();
-    await f.owner.prepare(target, "2");
-    const id = f.owner.state.branches[0].id;
-    f.staged(true);
-    f.drafts.writer("server/a")({
-      ...emptyDraft(),
-      input: "Captured before wait",
-    });
-    const entered = Promise.withResolvers<void>(),
-      gate = Promise.withResolvers<void>();
-    if (phase === "commit") {
-      const attachments = f.options.attachments;
-      f.options.attachments = async (parts) => {
-        entered.resolve();
-        await gate.promise;
-        return attachments(parts);
-      };
-    } else {
-      f.options.session = async () => {
-        entered.resolve();
-        await gate.promise;
-        return info();
-      };
-    }
-    const work = phase === "commit"
-      ? f.owner.beforeCommit(target)
-      : f.owner.settled(target);
-    await entered.promise;
-    f.drafts.writer("server/a")({
-      ...emptyDraft(),
-      input: "Newer current draft",
-    });
-    f.owner.reuse(
-      id,
-      { ...emptyDraft(), input: "Explicit saved choice" },
-      "Saved draft",
-    );
-    f.owner.choose(true);
-    gate.resolve();
-    await work;
-    const reload = createBranchHistory(f.options);
-    reload.select(target);
-    const inputs = reload.state.branches[0].drafts.map((d) => d.value.input);
-    assert(inputs.includes("Newer current draft"));
-    assert(inputs.includes("Explicit saved choice"));
-    if (phase === "commit") assert(inputs.includes("Captured before wait"));
-    assertEquals(f.drafts.current("server/a").input, "Explicit saved choice");
-    assertEquals(reload.state.branches[0].replaced, phase === "settle");
+Deno.test("archive dispatch merges reuse drafts saved during its held attachment read", async () => {
+  const f = fixture();
+  await f.prepare(target, "2");
+  const id = f.owner.state.branches[0].id;
+  f.staged(true);
+  f.drafts.writer("server/a")({
+    ...emptyDraft(),
+    input: "Captured before wait",
   });
-}
+  const entered = Promise.withResolvers<void>(),
+    gate = Promise.withResolvers<void>();
+  const attachments = f.options.attachments;
+  f.options.attachments = async (parts) => {
+    entered.resolve();
+    await gate.promise;
+    return attachments(parts);
+  };
+  const work = f.owner.beforeCommit(target);
+  await entered.promise;
+  f.drafts.writer("server/a")({
+    ...emptyDraft(),
+    input: "Newer current draft",
+  });
+  f.owner.reuse(
+    id,
+    { ...emptyDraft(), input: "Explicit saved choice" },
+    "Saved draft",
+  );
+  f.owner.choose(true);
+  gate.resolve();
+  await work;
+  const reload = createBranchHistory(f.options);
+  reload.select(target);
+  const inputs = reload.state.branches[0].drafts.map((d) => d.value.input);
+  assert(inputs.includes("Newer current draft"));
+  assert(inputs.includes("Explicit saved choice"));
+  assert(inputs.includes("Captured before wait"));
+  assertEquals(f.drafts.current("server/a").input, "Explicit saved choice");
+  assertEquals(reload.state.branches[0].committedAt, undefined);
+});
 Deno.test("capture decides pending archive membership after the session read settles", async () => {
   const f = fixture();
-  await f.owner.prepare(target, "2");
+  await f.prepare(target, "2");
   const first = f.owner.state.branches[0].id, original = f.options.session;
   const entered = Promise.withResolvers<void>(),
     gate = Promise.withResolvers<void>();
@@ -473,9 +551,9 @@ Deno.test("capture decides pending archive membership after the session read set
     }
     return original(t);
   };
-  const work = f.owner.prepare(target, "2");
+  const work = f.prepare(target, "2");
   await entered.promise;
-  await f.owner.settled(target);
+  f.owner.committed(target, "2", 42);
   f.staged(true);
   gate.resolve();
   await work;
@@ -483,10 +561,14 @@ Deno.test("capture decides pending archive membership after the session read set
   reload.select(target);
   assertEquals(reload.state.branches.length, 2);
   assertEquals(
-    reload.state.branches.find((b) => b.id === first)?.replaced,
-    true,
+    reload.state.branches.find((b) => b.id === first)?.committedAt,
+    42,
   );
-  assert(reload.state.branches.some((b) => b.id !== first && !b.replaced));
+  assert(
+    reload.state.branches.some((b) =>
+      b.id !== first && b.committedAt === undefined
+    ),
+  );
 });
 
 Deno.test("archive materialization admits bounded parallel reads within each page and keeps exact order", async () => {
@@ -496,12 +578,9 @@ Deno.test("archive materialization admits bounded parallel reads within each pag
   const owner = createBranchHistory({
     ...f.options,
     concurrency: () => 2,
-    page: async (t, before) => {
+    page: async (t, before, signal, scope) => {
       pages++;
-      const result = await f.options.page(t, before);
-      result.items = before
-        ? [message("1")]
-        : Array.from({ length: 10 }, (_, i) => message(String(i + 2)));
+      const result = await f.options.page(t, before, signal, scope);
       return result;
     },
     source: async (_t, ref) => {
@@ -522,7 +601,11 @@ Deno.test("archive materialization admits bounded parallel reads within each pag
     },
   });
   owner.select(target);
-  const capture = owner.prepare(target, "2");
+  const capture = owner.prepare(target, "2", {
+    boundaryID: "2",
+    messageIDs: Array.from({ length: 11 }, (_, i) => String(i + 1)),
+    files: [],
+  });
   await full.promise;
   assertEquals(
     pages,
@@ -537,7 +620,7 @@ Deno.test("archive materialization admits bounded parallel reads within each pag
   gate.resolve();
   await capture;
   assertEquals(maximum, 2);
-  assertEquals(pages, 3);
+  assertEquals(pages, 4);
   assertEquals(
     owner.state.branches[0].messages.map((m) => m.id),
     Array.from({ length: 11 }, (_, i) => String(i + 1)),

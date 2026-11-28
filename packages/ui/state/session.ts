@@ -16,6 +16,9 @@ export function createSession(
   catalogConnection?: (selection: Selection) => ModelCatalogConnection,
   changes?: (server: string) => IndexChanges | undefined,
   catalogs?: Parameters<typeof clientSession>[6],
+  entities?: Parameters<typeof clientSession>[7],
+  disclosures?: Parameters<typeof clientSession>[8],
+  retireTranscriptScope?: Parameters<typeof clientSession>[9],
 ): ClientSession {
   const session = clientSession(
     connection,
@@ -25,6 +28,9 @@ export function createSession(
     true,
     changes,
     catalogs,
+    entities,
+    disclosures,
+    retireTranscriptScope,
   );
   if (catalogConnection) {
     createEffect(() => {

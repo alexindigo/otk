@@ -1,36 +1,33 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-composer-dock {
+  --composer-content-inset: var(--space-4);
+  --composer-frame-stroke: 1px;
+  --composer-bottom-inset: calc(20 * var(--otk-unit));
+  position: relative;
   flex: 0 1 auto;
   min-height: 0;
-  padding: 0 var(--lane-gutter) 20px;
+  padding: 0 var(--lane-gutter) var(--composer-bottom-inset);
   display: flex;
   flex-direction: column;
   max-height: 100%;
   box-sizing: border-box;
 }
-.otk-composer,
-.otk-composer-surface {
+.otk-composer-dock .otk-composer {
+  position: relative;
+  --prompt-input-outline: none;
+}
+.otk-composer-dock .otk-composer {
   width: 100%;
   max-width: var(--lane-width);
   margin-inline: auto;
   box-sizing: border-box;
 }
-.otk-composer-surface {
-  height: calc(100dvh * 2 / 3);
-  flex: 0 1 calc(100dvh * 2 / 3);
-  min-height: 0;
-  display: flex;
-  margin-bottom: 8px;
-}
-.otk-composer-surface[hidden] {
-  display: none;
-}
-.otk-composer {
+.otk-composer-dock .otk-composer {
   --prompt-input-outline: none;
   flex: 0 0 auto;
   min-height: 0;
   background: var(--otk-bg-elevated);
-  border: 1px solid var(--otk-border);
+  border: var(--composer-frame-stroke) solid var(--otk-border);
   border-radius: var(--radius-composer);
   box-shadow: var(--otk-composer-shadow);
 }
@@ -40,6 +37,125 @@
 .otk-composer:focus-within {
   border-color: var(--otk-action-focus);
 }
-.otk-composer-body.is-noticed {
-  border-top: 1px solid var(--otk-border);
+.otk-composer-activity {
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  box-sizing: border-box;
+  border-inline: var(--composer-frame-stroke) solid transparent;
+  padding-inline: var(--composer-content-inset);
+  padding-block-end: var(--space-2);
+  flex: none;
+}
+.otk-composer-activity-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: calc(var(--control-size) + var(--space-2));
+}
+.otk-composer-route {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  gap: var(--space-3);
+}
+.otk-composer-target {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, max-content);
+  align-items: center;
+  gap: var(--space-1);
+}
+.otk-composer-target:has(.otk-composer-task) {
+  grid-template-columns: minmax(0, max-content) max-content minmax(0,
+    max-content);
+}
+.otk-composer-live-slot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+  gap: var(--space-4);
+}
+.otk-composer-live-slot:empty {
+  display: none;
+}
+.otk-composer-task,
+.otk-composer-destination {
+  /* A short title keeps its own width. Under pressure, the intrinsic
+     tracks share the remaining space and the label never exceeds its track. */
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min),
+    100%));
+}
+.otk-composer-activity-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-block-size: calc(var(--control-size) + var(--space-2));
+  font-size: var(--text-meta);
+  container: composer-activity / inline-size;
+  flex: none;
+}
+/* Only the pills wrap. The destination and its activity always share a line. */
+@container composer-activity (inline-size < 33em) {
+  .otk-composer-activity-line {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+  .otk-composer-route {
+    flex-basis: 100%;
+  }
+}
+@container composer-activity (inline-size < 16em) {
+  .otk-composer-live-slot {
+    max-inline-size: 100%;
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+}
+.otk-composer-takeover-layer {
+  position: absolute;
+  inset-inline: var(--lane-gutter);
+  inset-block-end: var(--composer-bottom-inset);
+  max-block-size: calc(100cqh - var(--composer-bottom-inset));
+  display: flex;
+  flex-direction: column;
+  z-index: var(--layer-content);
+  pointer-events: none;
+}
+.otk-composer-takeover-layer > * {
+  pointer-events: auto;
+}
+.otk-composer.is-suspended {
+  visibility: hidden;
+}
+.otk-composer-dock .otk-composer-feedback {
+  box-sizing: border-box;
+  border-inline: var(--composer-frame-stroke) solid transparent;
+  position: relative;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  inline-size: 100%;
+  min-block-size: 0;
+  flex: 0 1 auto;
+}
+.otk-composer-frame {
+  position: relative;
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+}
+.otk-composer-reopen:not(:empty) {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  padding-inline: var(--composer-content-inset);
+  padding-block-end: var(--space-2);
 }

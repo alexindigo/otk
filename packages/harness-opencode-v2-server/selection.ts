@@ -4,12 +4,24 @@ import { OperationFailure } from "@otk/protocol";
 import type { V2Client } from "./client.ts";
 import type { NativeSession } from "./messages.ts";
 
-/** Resolve neutral applied defaults before any native selection mutation.
- * V2 stops applying an agent's model defaults once a session model is selected. */
+/** Neutral agent/model/variant choice for one native submission. */
+export interface SelectionInput {
+  agent?: string;
+  model?: ModelRef;
+  variant?: string;
+}
+
+type Identity = { providerID: string; id: string };
+const sameModel = (a?: Identity | null, b?: Identity | null) =>
+  !!a && !!b && a.providerID === b.providerID && a.id === b.id;
+
+/** The only V2 builder of a native model value. Resolve neutral applied
+ * defaults before any native selection mutation: V2 stops applying an agent's
+ * model defaults once a session model is selected. */
 export async function selectionModel(
   client: V2Client,
   session: NativeSession,
-  input: { agent?: string; model?: ModelRef; variant?: string },
+  input: SelectionInput,
   operation?: OperationContext,
 ): Promise<NativeSession["model"] | undefined> {
   if (!input.model) {
@@ -21,6 +33,7 @@ export async function selectionModel(
       new Error("A model is required to choose a variant"),
     );
   }
+  const identity = { providerID: input.model.provider, id: input.model.model };
   let variant = input.variant;
   const agent = input.agent ?? session.agent;
   if (variant === undefined && agent) {
@@ -32,14 +45,44 @@ export async function selectionModel(
       operation?.signal,
     );
     const applied = agents.data.find((entry) => entry.id === agent)?.model;
-    if (
-      applied?.providerID === input.model.provider &&
-      applied.id === input.model.model
-    ) variant = applied.variant;
+    if (sameModel(applied, identity)) variant = applied?.variant;
   }
-  return {
-    providerID: input.model.provider,
-    id: input.model.model,
-    ...(variant === undefined ? {} : { variant }),
-  };
+  return { ...identity, ...(variant === undefined ? {} : { variant }) };
+}
+
+/** Apply an explicit agent/model choice before a native submission. Each
+ * native change is followed by the caller's metadata-only checkpoint. */
+export async function applySelection(
+  client: V2Client,
+  raw: NativeSession,
+  input: SelectionInput,
+  operation: OperationContext | undefined,
+  checkpoint: (
+    raw: NativeSession,
+    change: "agent" | "model",
+  ) => Promise<void>,
+): Promise<NativeSession> {
+  const model = await selectionModel(client, raw, input, operation);
+  if (input.agent !== undefined && input.agent !== raw.agent) {
+    await client.effect(
+      (api) =>
+        api.session.switchAgent({ sessionID: raw.id, agent: input.agent! }),
+      operation,
+    );
+    raw = { ...raw, agent: input.agent };
+    await checkpoint(raw, "agent");
+  }
+  if (
+    model &&
+    (!sameModel(model, raw.model) ||
+      (model.variant ?? "default") !== (raw.model?.variant ?? "default"))
+  ) {
+    await client.effect(
+      (api) => api.session.switchModel({ sessionID: raw.id, model }),
+      operation,
+    );
+    raw = { ...raw, model };
+    await checkpoint(raw, "model");
+  }
+  return raw;
 }

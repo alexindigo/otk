@@ -3,6 +3,7 @@ import { randomID } from "@otk/protocol";
 import {
   canonicalRequest,
   isSessionID,
+  REQUEST_WINDOW_EXPIRED_FACTS,
   requestFailureFacts,
   requestRef,
 } from "@otk/protocol";
@@ -27,9 +28,12 @@ import {
   RequestReleased,
 } from "./failures.ts";
 
+/** Preparation reserves identity, not transport authority. Welcome owns windows. */
+export type ClientIntent = Omit<IntentIdentity, "window">;
+
 export interface RequestOptions {
   signal?: AbortSignal;
-  intent?: IntentIdentity;
+  intent?: ClientIntent;
   owner?: string;
   origin?: import("@otk/protocol").RequestOrigin;
   facts?: import("@otk/protocol").FailureFacts;
@@ -40,10 +44,15 @@ export interface OperationState {
   owner?: string;
   facts?: import("@otk/protocol").FailureFacts;
   phase: "sending" | RequestPhase | "succeeded" | "failed" | "released";
-  connection: "connected" | "reconnecting" | "authentication-required";
+  connection:
+    | "connected"
+    | "reconnecting"
+    | "authentication-required"
+    | "client-outdated";
   seq: number;
   progress?: RequestProgress;
   error?: PublicFailure;
+  feedbackDismissed?: true;
 }
 export interface Operation<R> {
   readonly state: Readonly<OperationState>;
@@ -68,6 +77,8 @@ export interface RequestTrackerOptions {
   send(frame: RequestControl): void;
   /** Independent HTTP/bootstrap and socket readiness share the same intent owner. */
   available?(frame: RequestControl): boolean;
+  /** Retire the serving connection and obtain another welcome before read retry. */
+  renewWindow?(): void;
   clientID?: string;
   server?: string;
   sidecarId?: string;
@@ -94,6 +105,8 @@ interface Pending {
   settled: boolean;
   submitted: boolean;
   snapshot: boolean;
+  readRenewed: boolean;
+  awaitingWindow: boolean;
   cleanup(): void;
 }
 const active = (state: OperationState) =>
@@ -101,7 +114,10 @@ const active = (state: OperationState) =>
 
 /** One long-lived sidecar owner. It never turns elapsed time into a result. */
 export class RequestTracker {
-  readonly clientID: string;
+  #clientID: string;
+  get clientID(): string {
+    return this.#clientID;
+  }
   #pending = new Map<string, Pending>();
   #listeners = new Set<() => void>();
   #window?: RequestWindow;
@@ -119,7 +135,7 @@ export class RequestTracker {
     const saved = loaded && typeof loaded === "object"
       ? loaded as Partial<RememberedRequests>
       : undefined;
-    this.clientID = options.clientID ??
+    this.#clientID = options.clientID ??
       (saved?.version === 1 && saved.server === (options.server ?? "")
         ? saved.clientID
         : undefined) ??
@@ -186,6 +202,62 @@ export class RequestTracker {
       this.options.diagnostic?.(cause);
     }
   }
+  /** Explicit tab reload custody only. The normal metadata store stays payload-free. */
+  snapshot(): unknown {
+    return {
+      server: this.options.server ?? "",
+      clientID: this.clientID,
+      operations: [...this.#pending.values()].filter((item) =>
+        item.state.phase !== "released" &&
+        !item.state.method.startsWith("bootstrap.")
+      ).map(({ state, params, canonical, principal, submitted }) => ({
+        state,
+        params,
+        canonical,
+        principal,
+        submitted,
+      })),
+    };
+  }
+  restore(value: unknown): void {
+    const checkpoint = value as {
+      server: string;
+      clientID: string;
+      operations: Pick<
+        Pending,
+        "state" | "params" | "canonical" | "principal" | "submitted"
+      >[];
+    };
+    if (checkpoint.server !== (this.options.server ?? "")) {
+      throw new Error("Reload request custody belongs to another server");
+    }
+    // The tab checkpoint is self-contained even if the separate metadata write
+    // was refused. Identity may be adopted only before this tracker has work.
+    if (checkpoint.clientID !== this.clientID) {
+      if (this.#pending.size || this.#connected) {
+        throw new Error("Cannot replace active request custody");
+      }
+      this.#clientID = checkpoint.clientID;
+    }
+    for (
+      const saved of checkpoint.operations
+    ) {
+      if (saved.state.ref.clientID !== this.clientID) {
+        throw new Error("Reload request custody belongs to another tab");
+      }
+      const item = this.#pending.get(saved.state.ref.key) ??
+        this.#create({ ...saved.state, connection: "reconnecting" });
+      item.state = { ...saved.state, connection: "reconnecting" };
+      item.params = saved.params;
+      item.canonical = saved.canonical;
+      item.principal = saved.principal;
+      item.submitted = saved.submitted;
+      if (saved.state.phase === "failed" && saved.state.error) {
+        item.settled = true;
+        item.reject(new RequestFailure(saved.state.error));
+      }
+    }
+  }
   #publish(item: Pending): void {
     this.#save();
     for (const listener of new Set([...item.listeners, ...this.#listeners])) {
@@ -198,6 +270,13 @@ export class RequestTracker {
   }
   #send(frame: RequestControl): void {
     if (
+      frame.t === "request" && frame.ref.window !== "bootstrap" && !this.#window
+    ) {
+      // Availability callbacks may be reentrant during retirement. Only welcome
+      // establishes socket admission; bootstrap HTTP owns its separate window.
+      return;
+    }
+    if (
       this.#stopped ||
       !this.#connected && frame.t !== "request.resume" &&
         !this.options.available?.(frame)
@@ -208,7 +287,16 @@ export class RequestTracker {
     if (frame.t === "request") {
       const item = this.#pending.get(frame.ref.key);
       if (item && item.principal !== this.#principal) return;
-      if (item) item.submitted = true;
+      if (item && !item.submitted) {
+        // Only this dispatch boundary supplies admission authority. Composed
+        // intents may have waited through any number of replacement welcomes.
+        const window = item.state.method.startsWith("bootstrap.")
+          ? "bootstrap"
+          : this.#window?.id ?? "";
+        item.state = { ...item.state, ref: { ...item.state.ref, window } };
+        frame = { ...frame, ref: item.state.ref };
+        item.submitted = true;
+      }
     }
     try {
       this.options.send(frame);
@@ -260,6 +348,8 @@ export class RequestTracker {
       settled: false,
       submitted: state.phase !== "sending",
       snapshot: false,
+      readRenewed: false,
+      awaitingWindow: false,
       listeners: new Set(),
       cleanup() {},
       operation: undefined!,
@@ -355,21 +445,21 @@ export class RequestTracker {
     params: unknown,
     options: RequestOptions = {},
   ): Operation<unknown> {
+    const intent = options.intent ?? this.intent();
+    const prior = this.#pending.get(intent.key);
     const ref: RequestRef = {
-      ...(options.intent ??
-        {
-          clientID: this.clientID,
-          key: randomID(),
-          window: this.#window?.id ?? "",
-        }),
+      clientID: intent.clientID,
+      key: intent.key,
+      // A submitted operation retains its receipt authority across reconnects.
+      // New work receives a window only when it is actually dispatched.
+      window: prior?.state.ref.window ??
+        (method.startsWith("bootstrap.") ? "bootstrap" : ""),
       id: randomID(),
       ...(options.intent?.origin ?? options.origin
         ? { origin: options.intent?.origin ?? options.origin }
         : {}),
     };
-    if (!ref.window && this.#window) ref.window = this.#window.id;
     const canonical = canonicalRequest(params);
-    const prior = this.#pending.get(ref.key);
     if (
       prior && prior.state.ref.clientID === ref.clientID &&
       prior.state.ref.window === ref.window && prior.state.method === method &&
@@ -423,6 +513,31 @@ export class RequestTracker {
     this.#publish(item);
     return item.operation;
   }
+  #renewRead(item: Pending, window: RequestWindow): void {
+    const previous = item.state.ref;
+    this.#pending.delete(previous.key);
+    item.state = {
+      ...item.state,
+      ref: { ...previous, id: randomID(), key: randomID(), window: window.id },
+      seq: 0,
+      phase: "sending",
+      connection: "connected",
+      progress: undefined,
+      error: undefined,
+    };
+    item.snapshot = false;
+    item.submitted = false;
+    item.readRenewed = true;
+    item.awaitingWindow = false;
+    this.#pending.set(item.state.ref.key, item);
+    this.#send({
+      t: "request",
+      ref: item.state.ref,
+      method: item.state.method,
+      params: item.params,
+    });
+    this.#publish(item);
+  }
   connect(
     window: RequestWindow,
     resumebatch: number,
@@ -432,6 +547,8 @@ export class RequestTracker {
     if (!Number.isSafeInteger(resumebatch) || resumebatch < 1) {
       throw new TypeError("Invalid resume batch");
     }
+    // Welcome establishes server-clock authority. Local wall time cannot expire
+    // it; an authoritative expiry rejection retires the connection instead.
     this.#window = window;
     this.#batch = resumebatch;
     this.#connected = true;
@@ -441,8 +558,23 @@ export class RequestTracker {
       this.#controls.delete(key);
       this.#send(queued.control);
     }
-    for (const item of this.#pending.values()) {
-      if (item.state.ref.window === "") {
+    const renewed = new Set<Pending>();
+    for (const item of [...this.#pending.values()]) {
+      if (
+        active(item.state) && item.principal === principal &&
+        this.options.kind?.(item.state.method) === "read" &&
+        item.params !== undefined && !item.readRenewed &&
+        item.submitted && item.state.ref.window !== window.id
+      ) {
+        this.#renewRead(item, window);
+        renewed.add(item);
+        continue;
+      }
+      if (
+        (item.state.ref.window === "" ||
+          !item.submitted && active(item.state)) &&
+        (item.principal === principal || item.principal === undefined)
+      ) {
         item.principal = principal;
         item.state = {
           ...item.state,
@@ -457,7 +589,7 @@ export class RequestTracker {
       }
     }
     const pending = [...this.#pending.values()].filter((item) =>
-      active(item.state) && item.principal === principal
+      active(item.state) && item.principal === principal && !renewed.has(item)
     );
     for (const item of pending) {
       item.state = {
@@ -479,6 +611,8 @@ export class RequestTracker {
   }
   disconnect(authentication = false): void {
     this.#connected = false;
+    // New captures belong to the next welcome, not the retired connection.
+    this.#window = undefined;
     for (const item of this.#pending.values()) {
       if (active(item.state)) {
         item.state = {
@@ -504,6 +638,9 @@ export class RequestTracker {
       ...error,
       facts: {
         ...item.state.facts,
+        ...(error.code === "request.expired"
+          ? REQUEST_WINDOW_EXPIRED_FACTS
+          : {}),
         ...error.facts,
         ...(item.state.ref.origin ? { origin: item.state.ref.origin } : {}),
         target: this.#target({
@@ -525,6 +662,25 @@ export class RequestTracker {
       };
     } else if (event.t === "request.rejected") {
       if (item.settled) return;
+      if (
+        event.error.code === "request.expired" &&
+        this.options.kind?.(item.state.method) === "read" &&
+        item.params !== undefined && !item.readRenewed
+      ) {
+        if (
+          this.#window && this.#window.id !== item.state.ref.window
+        ) {
+          this.#renewRead(item, this.#window);
+          return;
+        }
+        if (this.options.renewWindow && !item.awaitingWindow) {
+          item.awaitingWindow = true;
+          item.state = { ...item.state, phase: "reconciling" };
+          this.#publish(item);
+          this.options.renewWindow();
+          return;
+        }
+      }
       if (event.error.code === "request.receipt-reset") {
         item.state = {
           ...item.state,
@@ -620,6 +776,16 @@ export class RequestTracker {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
+  dismissFeedback(state: Readonly<OperationState>): void {
+    const item = this.#pending.get(state.ref.key);
+    if (
+      state.phase !== "failed" || !state.error ||
+      item?.state.error !== state.error ||
+      item.state.phase !== "failed" || item.state.feedbackDismissed
+    ) return;
+    item.state = { ...item.state, feedbackDismissed: true };
+    this.#publish(item);
+  }
   forgetFailures(owner: string, method: string): void {
     for (const [key, item] of this.#pending) {
       if (
@@ -628,11 +794,17 @@ export class RequestTracker {
       ) this.#pending.delete(key);
     }
   }
-  intent(): IntentIdentity {
+  /** Match streamed delivery against dispatched authority, never a captured seed. */
+  matches(intent: ClientIntent, ref: IntentIdentity): boolean {
+    const current = this.#pending.get(intent.key)?.state.ref;
+    return !!current && ref.key === intent.key &&
+      ref.clientID === intent.clientID && ref.clientID === current.clientID &&
+      ref.window === current.window;
+  }
+  intent(): ClientIntent {
     return {
       clientID: this.clientID,
       key: randomID(),
-      window: this.#window?.id ?? "",
     };
   }
   connectionFor(key: string, connection: OperationState["connection"]): void {
@@ -650,6 +822,14 @@ export class RequestTracker {
       }
     }
   }
+  clientOutdated(): void {
+    this.#connected = false;
+    for (const item of this.#pending.values()) {
+      if (active(item.state)) {
+        this.connectionFor(item.state.ref.key, "client-outdated");
+      }
+    }
+  }
   stop(): void {
     this.disconnect();
     this.#stopped = true;
@@ -659,12 +839,16 @@ export class RequestTracker {
 
 /** Child keys are allocated once and remain bound to their captured group. */
 export class IntentGroup {
-  #steps = new Map<string, IntentIdentity>();
-  constructor(readonly identity: IntentIdentity) {}
-  step(name: string): IntentIdentity {
+  #steps = new Map<string, ClientIntent>();
+  constructor(readonly identity: ClientIntent) {}
+  step(name: string): ClientIntent {
     let step = this.#steps.get(name);
     if (!step) {
-      step = { ...this.identity, key: randomID() };
+      step = {
+        clientID: this.identity.clientID,
+        key: randomID(),
+        ...(this.identity.origin ? { origin: this.identity.origin } : {}),
+      };
       this.#steps.set(name, step);
     }
     return step;
@@ -677,7 +861,7 @@ export class IntentGroup {
 /** Reserve a composed intent before any preparation or deferred UI publication. */
 export class IntentGroups {
   #pending = new Map<string, Promise<unknown>>();
-  constructor(readonly identity: () => IntentIdentity) {}
+  constructor(readonly identity: () => ClientIntent) {}
   run<T>(key: string, action: (group: IntentGroup) => Promise<T>): Promise<T> {
     const prior = this.#pending.get(key);
     if (prior) return prior as Promise<T>;
@@ -718,56 +902,6 @@ export interface FormIntent<T, R> {
   submit(value: T, run: (captured: T) => Promise<R>): Promise<R>;
 }
 
-export interface SubmissionIntent<T> {
-  readonly state: FormIntentState<T>;
-  subscribe(listener: () => void): () => void;
-  submit(
-    prepare: () => Promise<T | undefined>,
-    run: (captured: T) => Promise<void>,
-  ): Promise<void>;
-}
-/** Input preparation can finish while an admitted effect is still settling.
- * A subsequent input command gets its own preparation lifetime; another send
- * cannot replace or repeat the captured effect. */
-export function createSubmissionIntent<T>(options: {
-  capture(value: T): T;
-  presenter: FailurePresenter;
-  diagnostic?(id: string, cause: unknown): void;
-}): SubmissionIntent<T> {
-  const input = createFormIntent<void, { result: Promise<void> } | undefined>({
-    ...options,
-    capture: () => undefined,
-  });
-  const effect = createFormIntent<T, void>(options);
-  return {
-    get state() {
-      return {
-        ...effect.state,
-        pending: input.state.pending || effect.state.pending,
-        feedback: input.state.feedback ?? effect.state.feedback,
-      };
-    },
-    subscribe(listener) {
-      const first = input.subscribe(listener),
-        second = effect.subscribe(listener);
-      return () => {
-        first();
-        second();
-      };
-    },
-    submit(prepare, run) {
-      // Preparation may outlive the current send. An activation made while
-      // Sending can run an input command, but cannot acquire send eligibility
-      // merely because that captured effect settles during preparation.
-      const blocked = effect.state.pending;
-      return input.submit(undefined, async () => {
-        const value = await prepare();
-        if (value === undefined || blocked || effect.state.pending) return;
-        return { result: effect.submit(value, run) };
-      }).then((admitted) => admitted?.result);
-    },
-  };
-}
 /** Form capture and duplicate admission are independent of native fields or view lifetime. */
 export function createFormIntent<T, R>(options: {
   capture(value: T): T;

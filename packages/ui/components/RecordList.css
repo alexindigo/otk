@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-record-list {
+  --message-gap: 0px;
+  --tool-line-gap: 0px;
+  display: flex;
+  flex-direction: column;
+}

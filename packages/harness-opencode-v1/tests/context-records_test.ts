@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertObjectMatch,
+  assertThrows,
+} from "@std/assert";
 import { isRealPrompt, sourceAt } from "@otk/protocol";
 import { deriveMessage, derivePart, mapMessage, mapPart } from "../map.ts";
 import { reachable } from "./source-support.ts";
@@ -60,6 +65,23 @@ Deno.test("V1 content establishes prompt identity; synthetic-only and empty head
   for (const type of ["file", "agent"]) {
     assert(isRealPrompt(mapMessage(info, [{ ...text(true), type }])));
   }
+});
+Deno.test("V1 helper results supply neutral interval nouns and retain their child action", () => {
+  const part = mapPart({
+    ...text(true),
+    text:
+      '<task id="child" state="completed">\n<task_result>\nDone\n</task_result>\n</task>',
+  });
+  assert(part.kind === "external");
+  assertEquals(part.activity?.summary, {
+    kind: "subagent",
+    noun: "helper finished",
+    plural: "helpers finished",
+  });
+  assertEquals(part.activity?.child, {
+    sessionID: "opcv1-child",
+    label: "Open task",
+  });
 });
 Deno.test("V1 maps every native bookkeeping, delegation, retry and unknown identity visibly with source", () => {
   for (
@@ -149,6 +171,27 @@ Deno.test("V1 summary and interruption remain source-linked context boundaries",
       part.kind === "external" && part.activity?.title === "Interrupted"
     ),
   );
+});
+
+Deno.test("V1 compaction marker and summary declare the same boundary key", () => {
+  const marker = mapPart({ ...text(false), type: "compaction" });
+  const summaryInfo: Info = {
+    ...info,
+    id: "summary",
+    role: "assistant",
+    parentID: info.id,
+    agent: "compaction",
+    summary: true,
+  };
+  const summary = mapMessage(summaryInfo).parts[0];
+  const unlinked = mapMessage({ ...summaryInfo, parentID: undefined }).parts[0];
+  assert(marker.kind === "external" && summary.kind === "external");
+  assert(unlinked.kind === "external");
+  assertObjectMatch({ ...marker.activity }, { boundary: { key: info.id } });
+  assertObjectMatch({ ...summary.activity }, { boundary: { key: info.id } });
+  assertObjectMatch({ ...unlinked.activity }, {
+    boundary: { key: summaryInfo.id },
+  });
 });
 
 Deno.test("V1 request outcomes summarize native or inventory request facts, never internal identities", () => {

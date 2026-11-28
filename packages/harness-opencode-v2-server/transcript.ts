@@ -10,6 +10,7 @@ import {
   MAX_MESSAGE_CURSOR_LENGTH,
   MESSAGE_PAGE_SIZE,
   OperationFailure,
+  outcomeTime,
   sessionErrorMessage,
   sourceAt,
 } from "@otk/protocol";
@@ -19,6 +20,8 @@ import type {
   Message,
   MessagePage,
   MessagePolicy,
+  RevertCommit,
+  RevertCommitCapability,
   TranscriptInvalidation,
 } from "@otk/protocol";
 import { errorTag, type V2Client, V2MissingSession } from "./client.ts";
@@ -48,6 +51,7 @@ import {
   text,
 } from "./map.ts";
 import { mapTool } from "./tool-interpretation.ts";
+import { HelperEdges } from "./helper-edges.ts";
 import { requestFailureRecord } from "./request-failure.ts";
 import {
   nativeSource,
@@ -57,11 +61,13 @@ import {
 } from "./native-source.ts";
 import {
   positionOrder,
+  requestKey,
   type RequestPosition,
   type RequestRetention,
   V2RequestRetention,
 } from "./request-retention.ts";
 import {
+  type NativeHead,
   type PrefetchInput,
   type PrefetchPage,
   type TranscriptFacts,
@@ -80,6 +86,8 @@ interface Baseline {
   controller: AbortController;
   prompt?: LatestPrompt;
   contexts: Map<string, MessageContext>;
+  /** Monotone API presentation frontier; events never scan acquired history. */
+  order?: number;
   source?: string;
   presentation?: import("@otk/protocol").ContentSession;
   notices?: import("@otk/protocol").PublicFailure[];
@@ -108,6 +116,20 @@ interface LiveShell {
   location: { directory: string };
   controller: AbortController;
   task: Promise<void>;
+}
+interface HistoryCheck {
+  pending?: boolean;
+  anchor?: string;
+  /** Scan progress; only coveredSeq can suppress delayed body events. */
+  head?: NativeHead;
+  coveredSeq?: number;
+  checkpoint?: NativeHead;
+  controller: AbortController;
+  task?: Promise<void>;
+  timer?: ReturnType<typeof setTimeout>;
+  dirty: boolean;
+  targets: Set<string>;
+  deferred: Set<string>;
 }
 /** API snapshots and staged events describe the same boundary, including file mode. */
 function boundaryKey(revert: unknown): string {
@@ -244,6 +266,21 @@ export class Transcript {
   #anchors = new Map<string, string[]>();
   #client?: V2Client;
   #shells = new Map<string, LiveShell>();
+  #shellLookups = new Map<
+    string,
+    { session: string; event: V2Event; controller: AbortController }
+  >();
+  #retireShellLookup(key: string): void {
+    const work = this.#shellLookups.get(key);
+    this.#shellLookups.delete(key);
+    work?.controller.abort();
+  }
+  #releaseShellLookups(id?: string): void {
+    for (const [key, work] of this.#shellLookups) {
+      if (id !== undefined && work.session !== id) continue;
+      this.#retireShellLookup(key);
+    }
+  }
   #projected = new Map<
     string,
     { shells: Map<string, string> }
@@ -255,9 +292,16 @@ export class Transcript {
   >();
   #finished = new Map<string, Map<string, { start?: number; at?: number }>>();
   #boundaries = new Map<string, string>();
+  #revertCommits = new Map<string, RevertCommit>();
+  readonly revertCommit: RevertCommitCapability = {
+    latest: (id) => this.#revertCommits.get(id),
+  };
   /** Kinds of observed queued inbox items, by session and inbox ID. */
   #queued = new Map<string, Map<string, string>>();
   #tasks = new Set<Promise<unknown>>();
+  #checking = false;
+  /** Scalar coverage only. Canonical bodies remain in native history. */
+  #history = new Map<string, HistoryCheck>();
   #backfills = new Map<string, AbortController>();
   #cancelBackfills(id?: string): void {
     for (const [session, controller] of this.#backfills) {
@@ -292,8 +336,278 @@ export class Transcript {
   }
   start(): void {
     if (this.#lifetime.signal.aborted) this.#lifetime = new AbortController();
+    this.#checking = true;
+    for (const [id, work] of this.#history) this.#armHistory(id, work);
+  }
+  #releaseHistory(id?: string): void {
+    for (const [key, work] of this.#history) {
+      if (id !== undefined && key !== id) continue;
+      this.#history.delete(key);
+      clearTimeout(work.timer);
+      work.controller.abort();
+    }
+  }
+  #armHistory(id: string, work: HistoryCheck): void {
+    if (
+      !this.#checking || work.timer !== undefined || work.task ||
+      work.pending ||
+      this.#history.get(id) !== work || !this.#subscriptions.has(id)
+    ) return;
+    work.timer = setTimeout(() => {
+      work.timer = undefined;
+      void this.check(id).catch(this.options.diagnostic);
+    }, this.options.policy.retryms);
+  }
+  #seedHistory(id: string, anchor?: string): void {
+    if (!this.#subscriptions.has(id)) return;
+    // Only a new native tail page moves the acquisition frontier. Live upserts
+    // cannot certify the missing interval before them.
+    let work = this.#history.get(id);
+    if (!work) {
+      work = {
+        anchor,
+        controller: new AbortController(),
+        dirty: false,
+        targets: new Set(),
+        deferred: new Set(),
+      };
+      this.#history.set(id, work);
+    }
+    if (work.pending) {
+      work.pending = false;
+      work.anchor = anchor;
+    }
+    this.#armHistory(id, work);
+  }
+  #repairHistory(id: string, target?: string): void {
+    const work = this.#history.get(id);
+    if (!work) {
+      this.#publish(id, { op: "stream.reconcile" });
+      return;
+    }
+    work.dirty = true;
+    if (target) work.targets.add(target);
+    if (work.pending) return;
+    else this.#publish(id, { op: "stream.reconcile" });
+    // Repairs are owned and joined, but never wait in the serial SSE handler.
+    queueMicrotask(() => {
+      void this.check(id).catch(this.options.diagnostic);
+    });
+  }
+  /** Compare native history, independently of native-event dispatch progress. */
+  check(id: string): Promise<void> {
+    const work = this.#history.get(id), baseline = this.#baselines.get(id);
+    if (!work || work.pending || !baseline || !this.#subscriptions.has(id)) {
+      return Promise.resolve();
+    }
+    if (work.task) return work.task;
+    clearTimeout(work.timer);
+    work.timer = undefined;
+    const signal = AbortSignal.any([
+      work.controller.signal,
+      baseline.controller.signal,
+      this.#lifetime.signal,
+    ]);
+    let retryTargets: string[] = [];
+    const task = this.#own(
+      (async () => {
+        do {
+          const forced = work.dirty, targets = [...work.targets];
+          retryTargets = targets;
+          work.dirty = false;
+          work.targets.clear();
+          const cutoff = baseline.raw.revert?.messageID;
+          let head = this.options.digest
+            ? await this.options.digest.read("opcv2.transcript.head", {
+              sessionID: id,
+              cutoff,
+            }, {
+              owner: `v2-history:${id}`,
+              priority: "user",
+              signal,
+            })
+            : null;
+          let last: NativeMessage | undefined;
+          if (!head) {
+            last = (await this.reader.page(
+              id,
+              1,
+              cutoff ? nativeCursor(cutoff) : undefined,
+              signal,
+            )).items.at(-1);
+            head = last ? { id: last.id } : null;
+          }
+          signal.throwIfAborted();
+          if (!head) {
+            if (work.anchor) this.invalidate(id);
+            return;
+          }
+          const unchanged = JSON.stringify(work.head) === JSON.stringify(head);
+          const deferred = [...work.deferred].filter((message) =>
+            !this.recovery.owns(id, message)
+          );
+          if (!forced && unchanged && !deferred.length) continue;
+          // The scan can advance past a point owned by fine recovery, but its
+          // identity must survive until a canonical body covers it.
+          const defer = (message: string) => {
+            if (!this.recovery.owns(id, message)) return false;
+            work.deferred.add(message);
+            return true;
+          };
+          const publish = async (rows: NativeMessage[]) => {
+            const facts = await this.#facts({
+              sessionID: id,
+              messages: rows.map((r) => r.id),
+              cutoff,
+            }, signal);
+            signal.throwIfAborted();
+            this.#acceptFacts(baseline, facts);
+            for (const raw of rows) {
+              // Fine replacement owns its missing source, including failed
+              // checkpoints. History discovery cannot become an implicit Retry.
+              if (defer(raw.id)) continue;
+              const context = facts.contexts[raw.id];
+              if (!context) {
+                throw new HarnessError(
+                  "capture-stale",
+                  "Native history changed during repair",
+                );
+              }
+              if (raw.type === "idle" && raw.outcome === "failed") {
+                await this.#executionFailure(
+                  id,
+                  raw.id,
+                  raw.error,
+                  millis(raw.time.created),
+                  context,
+                  baseline.raw.title,
+                  facts.source.startsWith("sql") ? context.order : undefined,
+                  signal,
+                );
+              } else {
+                const message = this.#map(raw, id, context);
+                if (message) {
+                  this.#publish(id, { op: "message.upsert", message });
+                }
+              }
+              work.deferred.delete(raw.id);
+            }
+          };
+          const points = new Set([
+            ...targets.filter((target) => baseline.contexts.has(target)),
+            ...deferred,
+          ]);
+          const anchor = work.anchor;
+          const scan = forced || !unchanged;
+          if (scan && anchor) points.add(anchor);
+          try {
+            // In-place changes may target an older, acquired native identity.
+            for (const point of points) {
+              if (defer(point)) continue;
+              const checkpoint = work.checkpoint;
+              if (checkpoint?.id === point) {
+                const current = head.id === point
+                  ? head
+                  : await this.options.digest?.read("opcv2.transcript.head", {
+                    sessionID: id,
+                    cutoff,
+                    messageID: point,
+                  }, { owner: `v2-history:${id}`, priority: "user", signal });
+                if (defer(point)) continue;
+                if (
+                  current?.id === point && current.seq === checkpoint.seq &&
+                  current.updated === checkpoint.updated
+                ) {
+                  work.deferred.delete(point);
+                  work.checkpoint = undefined;
+                  continue;
+                }
+              }
+              await publish([
+                last?.id === point
+                  ? last
+                  : await this.reader.get(id, point, signal),
+              ]);
+            }
+          } catch (error) {
+            if (errorTag(error) !== "MessageNotFoundError") throw error;
+            // Removal/revert changes the acquisition boundary too. Its canonical
+            // page must reacquire the session header, not reuse this old cutoff.
+            this.invalidate(id);
+            return;
+          }
+          if (
+            scan && (!anchor ||
+              (this.#client ?? this.options.client()).service.version !==
+                "2.2.6")
+          ) {
+            let cursor: string | undefined = cutoff
+              ? nativeCursor(cutoff)
+              : undefined;
+            do {
+              const page = await this.reader.page(
+                id,
+                SCAN_ROWS,
+                cursor,
+                signal,
+              );
+              const at = page.items.findIndex((r) => r.id === anchor);
+              await publish(at < 0 ? page.items : page.items.slice(at + 1));
+              if (at >= 0 || !page.next) break;
+              if (page.next === cursor) {
+                throw new HarnessError(
+                  "capture-stale",
+                  "Native history cursor did not advance",
+                );
+              }
+              cursor = page.next;
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            } while (true);
+          } else if (scan && anchor && anchor !== head.id) {
+            let cursor: string | undefined = nativeForwardCursor(anchor);
+            do {
+              const page = await this.reader.forward(id, cursor, signal);
+              const end = page.items.findIndex((r) => r.id === head.id);
+              // Seal only the head observed above. Later native appends belong to
+              // the next check; staged reverts never acquire their hidden suffix.
+              await publish(
+                end < 0 ? page.items : page.items.slice(0, end + 1),
+              );
+              if (end >= 0) break;
+              if (!page.next || page.next === cursor) {
+                throw new HarnessError(
+                  "capture-stale",
+                  "Native history head changed during repair",
+                );
+              }
+              cursor = page.next;
+              await new Promise<void>((resolve) => setTimeout(resolve, 0));
+            } while (true);
+          }
+          signal.throwIfAborted();
+          work.anchor = head.id;
+          work.head = head;
+          if (!work.deferred.size) work.coveredSeq = head.seq;
+          retryTargets = [];
+        } while (work.dirty);
+      })().catch((error) => {
+        if (signal.aborted) return;
+        work.dirty = true;
+        for (const target of retryTargets) work.targets.add(target);
+        // A failed observation is not a complete empty transcript. The canonical
+        // read owner surfaces failure and retries; preserve existing content.
+        this.#publish(id, { op: "stream.reconcile" });
+        throw error;
+      }).finally(() => {
+        work.task = undefined;
+        this.#armHistory(id, work);
+      }),
+    );
+    work.task = task;
+    return task;
   }
   readonly requests: RequestRetention;
+  readonly helperEdges: HelperEdges;
   #executionFailures = new Map<string, Promise<Message>>();
   constructor(
     readonly options: {
@@ -342,6 +656,7 @@ export class Transcript {
     },
   ) {
     this.requests = options.requests ?? new V2RequestRetention();
+    this.helperEdges = new HelperEdges(options.diagnostic);
     if (options.agents) {
       this.colors = new AgentColors(
         options.agents,
@@ -364,11 +679,38 @@ export class Transcript {
         prefetchbytes: options.policy.prefetchbytes,
       });
     }
+    const witnesses = new WeakMap<
+      NativeMessage,
+      { work: HistoryCheck; head: NativeHead }
+    >();
     this.recovery = new MessageRecovery({
       concurrency: options.policy.recoveryconcurrency,
       pending: options.policy.recoverypending,
       wanted: (id) => this.#subscriptions.has(id),
-      read: (id, message, signal) => this.reader.get(id, message, signal),
+      read: async (id, message, signal) => {
+        const work = this.#history.get(id);
+        let witness: NativeHead | null = null;
+        if (work && this.options.digest) {
+          try {
+            // Witness the actual record, not the head (which can already be
+            // an idle boundary). A later edit invalidates this handoff.
+            witness = await this.options.digest.read("opcv2.transcript.head", {
+              sessionID: id,
+              cutoff: this.#baselines.get(id)?.raw.revert?.messageID,
+              messageID: message,
+            }, { owner: `v2-recovery:${id}`, priority: "user", signal });
+          } catch (error) {
+            signal.throwIfAborted();
+            this.options.diagnostic(error);
+          }
+        }
+        const raw = await this.reader.get(id, message, signal);
+        signal.throwIfAborted();
+        if (work && witness?.id === message) {
+          witnesses.set(raw, { work, head: witness });
+        }
+        return raw;
+      },
       emit: async (id, raw, _parts, _generation, terminal, signal) => {
         const baseline = await this.#baseline(id, signal),
           facts = await this.#facts({
@@ -388,6 +730,10 @@ export class Transcript {
         const mapped = this.#map(raw, id, context, terminal, true);
         if (mapped) {
           this.#publish(id, { op: "message.upsert", message: mapped });
+          const witness = witnesses.get(raw);
+          if (witness && this.#history.get(id) === witness.work) {
+            witness.work.checkpoint = witness.head;
+          }
         }
       },
       state: (id, messageID, partID, generation, state) =>
@@ -508,7 +854,7 @@ export class Transcript {
       replyTo,
       ...(nativeParent ? { nativeParent } : {}),
     };
-    if (nativeParent) baseline?.contexts.set(messageID, result);
+    if (nativeParent) this.#context(baseline, messageID, result);
     return result;
   }
   #causalEvent(id: string, event: ContentOp): ContentOp {
@@ -526,6 +872,17 @@ export class Transcript {
     };
   }
   #publish(id: string, event: ContentOp): void {
+    if (!this.#subscriptions.has(id) || this.#lifetime.signal.aborted) {
+      this.replay.delivery.record({
+        sessionID: id,
+        operation: event.op,
+        state: "unsubscribed",
+        ...(event.op === "message.upsert"
+          ? { messageID: event.message.id }
+          : {}),
+      });
+      return;
+    }
     if (this.#subscriptions.has(id) && !this.#lifetime.signal.aborted) {
       event = this.#causalEvent(id, event);
       if (event.op === "message.upsert") {
@@ -586,6 +943,15 @@ export class Transcript {
       MESSAGE_PAGE_SIZE,
     ]);
   }
+  #context(
+    baseline: Baseline | undefined,
+    id: string,
+    context: MessageContext,
+  ): void {
+    if (!baseline) return;
+    baseline.contexts.set(id, context);
+    baseline.order = Math.max(baseline.order ?? 0, context.order);
+  }
   #acceptFacts(baseline: Baseline, facts: TranscriptFacts): void {
     if (baseline.source && baseline.source !== facts.source) {
       this.invalidate(ids.encode(baseline.raw.id));
@@ -615,7 +981,7 @@ export class Transcript {
       const accepted = nativeParent
         ? { ...context, replyTo: nativeParent, nativeParent }
         : context;
-      baseline.contexts.set(id, accepted);
+      this.#context(baseline, id, accepted);
       if (live && accepted.replyTo && (!live.context.replyTo || nativeParent)) {
         live.context = {
           ...live.context,
@@ -682,6 +1048,8 @@ export class Transcript {
     }
   }
   release(id?: string, retainLive = false): void {
+    this.#releaseShellLookups(id);
+    this.#releaseHistory(id);
     this.colors?.release(id);
     this.#cancelBackfills(id);
     this.changed(id);
@@ -726,6 +1094,8 @@ export class Transcript {
     if (id) this.options.digest?.release(`v2-prefetch:${id}`);
   }
   invalidate(id?: string, retain = false): void {
+    this.#releaseShellLookups(id);
+    this.#releaseHistory(id);
     this.#cancelBackfills(id);
     this.changed(id);
     this.recovery.release(id);
@@ -773,6 +1143,8 @@ export class Transcript {
     }
   }
   disconnect(): void {
+    this.#releaseShellLookups();
+    this.#releaseHistory();
     // Undelivered events are missed by contract; watermarks are per connection.
     // Unresolved observations keep their probed (or clock) position.
     this.#watermarks.clear();
@@ -898,6 +1270,17 @@ export class Transcript {
     // The retained execution outcome owns failed-idle presentation on both
     // snapshot and live paths. Do not project a second native activity record.
     if (raw.type === "idle" && raw.outcome === "failed") return;
+    if (raw.type === "compaction" && raw.status === "running") {
+      const current = this.#compactions.get(id);
+      if (current?.id === raw.id) {
+        // Compaction deltas own source just as assistant streams do. A native
+        // unfinished checkpoint cannot erase that prefix or reopen its terminal.
+        if (current.status !== "running") raw = current;
+        else if (current.summary.startsWith(raw.summary)) {
+          raw = { ...raw, summary: current.summary };
+        }
+      }
+    }
     if (raw.type === "assistant") {
       const current = this.#live.get(raw.id);
       if (
@@ -968,10 +1351,14 @@ export class Transcript {
         text(record(raw.metadata).parentID),
       );
     }
-    let mapped = mapMessage(raw, id, context);
+    let mapped = mapMessage(
+      raw,
+      id,
+      settled ? { ...context, terminal: true } : context,
+    );
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
-    mapped = this.#decorateHelpers(mapped);
+    mapped = this.#decorateHelpers(mapped, !settled);
     if (raw.type === "shell") {
       let known = this.#projected.get(id);
       if (!known) this.#projected.set(id, known = { shells: new Map() });
@@ -1037,8 +1424,128 @@ export class Transcript {
     id: string,
     before?: string,
     signal: AbortSignal = new AbortController().signal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
   ): Promise<MessagePage> {
+    if (scope) return this.#own(this.#snapshotIDs(id, scope, signal));
     return this.#own(this.#page(id, before, signal, undefined, true));
+  }
+  async #snapshotIDs(
+    id: string,
+    scope: import("@otk/protocol").MessageSnapshotScope,
+    signal: AbortSignal,
+  ): Promise<MessagePage> {
+    ids.decode(id);
+    signal.throwIfAborted();
+    const owner = await this.#baseline(id, signal);
+    signal = AbortSignal.any([
+      signal,
+      owner.controller.signal,
+      this.#lifetime.signal,
+    ]);
+    const ownedClock = () => {
+      signal.throwIfAborted();
+      const clock = this.replay.clock(id);
+      if (owner !== this.#baselines.get(id) || clock.epoch !== owner.epoch) {
+        throw new HarnessError("capture-stale", "Archive epoch changed");
+      }
+      return clock;
+    };
+    const from = ownedClock(),
+      revisions = this.replay.revisions(id, scope.messageIDs);
+    const items: Message[] = [];
+    if (!scope.validate) {
+      const retained = new Map<string, Message>();
+      const nativeIDs: string[] = [];
+      for (const messageID of scope.messageIDs) {
+        signal.throwIfAborted();
+        const entry = await this.requests.get(id, requestKey(messageID));
+        if (entry?.outcome) {
+          const order = entry.position && positionOrder(entry.position);
+          retained.set(messageID, {
+            ...entry.outcome,
+            id: messageID,
+            ...(order === undefined ? {} : { sourceOrder: order }),
+          });
+        } else nativeIDs.push(messageID);
+      }
+      signal.throwIfAborted();
+      const facts = nativeIDs.length
+        ? await this.#facts({ sessionID: id, messages: nativeIDs }, signal)
+        : undefined;
+      for (const messageID of scope.messageIDs) {
+        signal.throwIfAborted();
+        const outcome = retained.get(messageID);
+        if (outcome) {
+          items.push(outcome);
+          continue;
+        }
+        const context = facts?.contexts[messageID];
+        if (!facts || !context) {
+          throw new HarnessError(
+            "capture-stale",
+            "Message metadata changed during archive capture",
+          );
+        }
+        const raw = await this.reader.get(id, messageID, signal);
+        const mapped = raw.type === "idle" && raw.outcome === "failed"
+          ? (await this.#executionFailureValue(
+            id,
+            raw.id,
+            raw.error,
+            millis(raw.time.created),
+            context,
+            owner.raw.title,
+            facts.source.startsWith("sql") ? context.order : undefined,
+            signal,
+          )).message
+          : mapMessage(raw, id, context);
+        if (!mapped) {
+          throw new HarnessError(
+            "capture-stale",
+            "A captured record is no longer available",
+          );
+        }
+        items.push({ ...mapped, id: messageID });
+      }
+    }
+    signal.throwIfAborted();
+    const session = scope.validate
+      ? mapSession(owner.raw)
+      : owner.presentation ??= await revertSession(
+        this.options.client(),
+        owner.raw,
+        signal,
+      );
+    const clock = ownedClock();
+    const turns = [
+      ...new Set(
+        items.map((m) => m.role === "assistant" ? m.replyTo ?? m.id : m.id),
+      ),
+    ];
+    const summaries = this.options.summaries?.(id, turns) ?? {};
+    return {
+      sessionID: id,
+      session: { ...session, revertCommitted: this.revertCommit.latest(id) },
+      items,
+      from,
+      clock,
+      revisions: scope.validate
+        ? this.replay.revisions(id, scope.messageIDs)
+        : revisions,
+      version: this.replay.version(id),
+      older: null,
+      catchup: [],
+      helpers: {},
+      recovering: [],
+      turns: Object.fromEntries(
+        turns.map((
+          turnID,
+        ) => [turnID, {
+          boundary: { turnID, complete: true },
+          summary: summaries[turnID],
+        }]),
+      ),
+    };
   }
   async #page(
     id: string,
@@ -1066,6 +1573,20 @@ export class Transcript {
       );
     }
     const capture = this.replay.capture(id);
+    if (
+      !snapshot && !token && this.#subscriptions.has(id) &&
+      !this.#history.has(id)
+    ) {
+      // The first canonical page is already the repair owner until its boundary
+      // settles. Accumulate hints here instead of cancelling it with reconcile.
+      this.#history.set(id, {
+        pending: true,
+        controller: new AbortController(),
+        dirty: false,
+        targets: new Set(),
+        deferred: new Set(),
+      });
+    }
     try {
       baseline ??= await this.#baseline(id, signal);
       const owner = baseline;
@@ -1208,7 +1729,7 @@ export class Transcript {
           clockRows = await Promise.all(unanchored.pending.map(async (key) => {
             const value = await this.requests.get(
               id,
-              key.replace(/^request:/, ""),
+              requestKey(key),
             );
             if (!value?.outcome) {
               throw new HarnessError(
@@ -1354,7 +1875,10 @@ export class Transcript {
           version: this.replay.version(id),
           from: capture.from,
           clock: sealed.clock,
-          session,
+          session: {
+            ...session,
+            revertCommitted: this.revertCommit.latest(id),
+          },
           items,
           older,
           helpers: {},
@@ -1511,6 +2035,7 @@ export class Transcript {
         clock: sealed.clock,
         session: {
           ...presentation,
+          revertCommitted: this.revertCommit.latest(id),
           ...(owner.notices
             ? {
               notices: owner.notices.map((notice) => ({
@@ -1552,7 +2077,6 @@ export class Transcript {
         }
       }
       owner.prompt = result.prompt;
-      this.recovery.retry(id);
       publish?.(result);
       if (!cached && this.options.digest && page.items.length) {
         const oldest = page.items.reduce((a, b) =>
@@ -1587,6 +2111,7 @@ export class Transcript {
         turn.summary = summaries[turnID];
       }
       signal.throwIfAborted();
+      if (!snapshot && !token) this.#seedHistory(id, page.items.at(-1)?.id);
       this.#next(id, owner, page.next);
       return result;
     } finally {
@@ -1727,7 +2252,7 @@ export class Transcript {
     message: Message,
     signal: AbortSignal = this.#lifetime.signal,
   ): Promise<void> {
-    const key = message.id.replace(/^request:/, "");
+    const key = requestKey(message.id);
     const previous = await this.requests.get(message.sessionID, key);
     signal.throwIfAborted();
     await this.#observe(
@@ -1919,9 +2444,13 @@ export class Transcript {
         );
       const missingParent = known.role === "context" && !known.replyTo &&
         context?.replyTo;
-      const message = missingOrigin || missingParent
+      const message = missingOrigin || missingParent ||
+          known.role === "context" && !known.outcomeTime
         ? {
           ...known,
+          ...(known.role === "context" && !known.outcomeTime
+            ? { outcomeTime: outcomeTime({ error: known.time.created }) }
+            : {}),
           ...(missingParent ? { replyTo: missingParent } : {}),
           parts: missingOrigin
             ? known.parts.map((part) =>
@@ -2048,6 +2577,18 @@ export class Transcript {
       this.requests.cutoff(id, null);
     }
   }
+  #confirmRevert(id: string, event: V2Event): void {
+    const boundaryID = text(event.data.to), at = event.created;
+    if (!boundaryID || at === undefined) return;
+    const latest = this.revertCommit.latest(id);
+    if (
+      latest && (at < latest.at ||
+        (at === latest.at && boundaryID === latest.boundaryID))
+    ) return;
+    const fact = { boundaryID, at };
+    this.#revertCommits.set(id, fact);
+    this.#publish(id, { op: "session.revert.committed", ...fact });
+  }
   async #sequence(
     id: string,
     messageID?: string,
@@ -2070,8 +2611,7 @@ export class Transcript {
     const baseline = this.#baselines.get(id);
     // API pages order by native clocks; their live counters are page-local.
     const order = baseline?.source?.startsWith("api")
-      ? Math.max(0, ...[...baseline.contexts.values()].map((c) => c.order)) +
-        0.5
+      ? (baseline.order ?? 0) + 0.5
       : positionOrder(position);
     this.#publish(id, {
       op: "message.upsert",
@@ -2081,12 +2621,140 @@ export class Transcript {
     });
   }
   async deleted(id: string): Promise<void> {
+    this.#revertCommits.delete(id);
     this.#anchors.delete(id);
     this.#watermarks.delete(id);
+    this.helperEdges.retire(id);
     await this.requests.remove(id);
     this.release(id);
   }
+  #emitShell(
+    id: string,
+    nativeID: string,
+    event: V2Event,
+    context: MessageContext,
+    found?: Extract<NativeMessage, { type: "shell" }>,
+  ): void {
+    const shell = record(event.data.shell),
+      previous = this.#shells.get(String(shell.id));
+    this.#retireShellLookup(`${id}/${shell.id}`);
+    if (event.type.endsWith("ended")) {
+      previous?.controller.abort();
+      this.#shells.delete(String(shell.id));
+    }
+    let raw = found ?? {
+      id: nativeID,
+      type: "shell",
+      shellID: shell.id,
+      command: shell.command,
+      status: shell.status,
+      metadata: previous?.raw.metadata ??
+        (record(shell.metadata).background === true
+          ? { ...event.metadata, background: true }
+          : event.metadata),
+      time: {
+        created:
+          (previous?.raw.time.created ?? millis(record(shell.time).started)) ||
+          event.created || Date.now(),
+        ...(event.type.endsWith("ended")
+          ? { completed: event.created ?? Date.now() }
+          : {}),
+      },
+      ...(event.data.output ? { output: event.data.output } : {}),
+      exit: shell.exit,
+    } as Extract<NativeMessage, { type: "shell" }>;
+    if (
+      found && event.type.endsWith("ended") &&
+      found.time.completed === undefined
+    ) {
+      raw = {
+        ...found,
+        status: shell.status as typeof found.status,
+        time: { ...found.time, completed: event.created ?? Date.now() },
+        ...(event.data.output
+          ? { output: event.data.output as typeof found.output }
+          : {}),
+        ...(typeof shell.exit === "number" ? { exit: shell.exit } : {}),
+      };
+    }
+    const message = this.#map(raw, id, context);
+    if (message) this.#publish(id, { op: "message.upsert", message });
+    this.changed(id);
+  }
+  #findShell(id: string, shellID: string, event: V2Event): void {
+    const key = `${id}/${shellID}`, previous = this.#shellLookups.get(key);
+    if (previous) {
+      previous.event = event;
+      return;
+    }
+    const controller = new AbortController(),
+      work = { session: id, event, controller };
+    this.#shellLookups.set(key, work);
+    const signal = AbortSignal.any([
+      controller.signal,
+      this.#lifetime.signal,
+      this.reader.client().signal,
+    ]);
+    void this.#own(
+      (async () => {
+        let cursor: string | undefined;
+        do {
+          const page = await this.reader.page(
+            id,
+            SCAN_ROWS,
+            cursor,
+            signal,
+            "shell",
+          );
+          signal.throwIfAborted();
+          const raw = page.items.find((
+            m,
+          ): m is Extract<NativeMessage, { type: "shell" }> =>
+            m.type === "shell" && m.shellID === shellID
+          );
+          if (raw) {
+            const facts = await this.#facts({
+              sessionID: id,
+              messages: [raw.id],
+            }, signal);
+            signal.throwIfAborted();
+            const context = facts.contexts[raw.id];
+            if (!context) {
+              this.#repairHistory(id);
+              return;
+            }
+            this.#emitShell(id, raw.id, work.event, context, raw);
+            return;
+          }
+          cursor = page.next;
+          // A shell lookup releases every bounded page and yields between chunks.
+          if (cursor) {
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          }
+        } while (cursor);
+        this.#repairHistory(id);
+      })().catch((error) => {
+        if (!signal.aborted) {
+          this.options.diagnostic(error);
+          this.#repairHistory(id);
+        }
+      }).finally(() => {
+        if (this.#shellLookups.get(key) === work) {
+          this.#shellLookups.delete(key);
+        }
+      }),
+    );
+  }
   async event(event: V2Event): Promise<void> {
+    try {
+      await this.#event(event);
+    } catch (error) {
+      const sid = text(event.data.sessionID);
+      if (sid && sid !== "global") this.#repairHistory(ids.encode(sid));
+      throw error;
+    }
+  }
+  async #event(event: V2Event): Promise<void> {
     if (event.type === "agent.updated" || event.type === "config.updated") {
       this.colors?.reset(event.location?.directory);
     }
@@ -2094,10 +2762,52 @@ export class Transcript {
       sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
+    // Capture execution identity before the viewer/coverage fences. A helper
+    // can start or settle while no transcript body is acquired.
+    const assistant = text(d.assistantMessageID), call = text(d.id);
+    if (assistant) {
+      if (event.type === "session.tool.progress" && call) {
+        this.helperEdges.observe(id, assistant, call, d.metadata);
+      } else if (
+        (event.type === "session.tool.success" ||
+          event.type === "session.tool.failed") && call
+      ) this.helperEdges.retire(id, assistant, call);
+      else if (
+        event.type === "session.step.ended" ||
+        event.type === "session.step.failed"
+      ) this.helperEdges.retire(id, assistant);
+    }
     if (
-      event.durable && event.durable.aggregateID === sid &&
+      event.type === "session.execution.succeeded" ||
+      event.type === "session.execution.failed" ||
+      event.type === "session.execution.interrupted"
+    ) this.helperEdges.retire(id);
+    const coveredSeq = this.#history.get(id)?.coveredSeq;
+    const covered = coveredSeq !== undefined &&
+      event.durable?.aggregateID === sid && event.durable.seq <= coveredSeq &&
+      knownSessionEvent(event.type);
+    if (
+      !covered && event.durable?.aggregateID === sid &&
       Number.isSafeInteger(event.durable.seq)
     ) await this.#advance(id, event.durable.seq);
+    // Inbox cancellation retires a synthetic row, not a durable message body.
+    if (
+      event.type === "session.inbox.cancelled" && typeof d.inboxID === "string"
+    ) {
+      this.#queued.get(id)?.delete(d.inboxID);
+      this.#publish(id, { op: "message.remove", messageID: d.inboxID });
+      this.changed(id);
+      return;
+    }
+    if (covered) {
+      // A canonical native checkpoint already contains this durable fact.
+      // Delayed stream starts must not regress a repaired terminal record.
+      // A body checkpoint does not carry the native revert commit's cause.
+      if (event.type === "session.revert.committed") {
+        this.#confirmRevert(id, event);
+      }
+      return;
+    }
     if (/^(permission\.|form\.)/.test(event.type)) {
       // Already-delivered native facts are retained even without a viewer. This
       // never reads unviewed bodies or performs a population inventory scan.
@@ -2171,6 +2881,9 @@ export class Transcript {
         event.type,
         text(record(revert).messageID),
       );
+      if (event.type === "session.revert.committed") {
+        this.#confirmRevert(id, event);
+      }
       this.#boundary(
         id,
         revert,
@@ -2180,6 +2893,10 @@ export class Transcript {
     }
     if (event.type === "session.deleted") {
       await this.deleted(id);
+      return;
+    }
+    if (event.type === "session.message.content.updated") {
+      this.#repairHistory(id, text(d.messageID));
       return;
     }
     // Retain delivered future records even without a viewer; known native-only
@@ -2195,6 +2912,7 @@ export class Transcript {
         outcome,
         await this.requests.get(id, outcome.id),
       );
+      this.#repairHistory(id, text(d.messageID) ?? text(d.assistantMessageID));
       return;
     }
     const retained = typeof d.assistantMessageID === "string" &&
@@ -2222,24 +2940,13 @@ export class Transcript {
       if (existing && !admitted) return existing;
       const context = {
         order: baseline?.source?.startsWith("api")
-          ? Math.max(
-            0,
-            ...[...baseline.contexts.values()].map((c) => c.order),
-          ) + 1
+          ? (baseline.order ?? 0) + 1
           : event.durable?.seq ?? ++this.#revisions,
         replyTo: baseline?.prompt?.id,
       };
-      baseline?.contexts.set(messageID, context);
+      this.#context(baseline, messageID, context);
       return context;
     };
-    if (
-      event.type === "session.inbox.cancelled" && typeof d.inboxID === "string"
-    ) {
-      this.#queued.get(id)?.delete(d.inboxID);
-      this.#publish(id, { op: "message.remove", messageID: d.inboxID });
-      this.changed(id);
-      return;
-    }
     if (
       event.type === "session.inbox.enqueued" && typeof d.inboxID === "string"
     ) {
@@ -2257,13 +2964,16 @@ export class Transcript {
       return;
     }
     if (
-      sourceID &&
-      (event.type === "session.synthetic" ||
-        event.type === "session.instructions.updated" ||
-        event.type === "session.skill.activated")
+      event.type === "session.synthetic" ||
+      event.type === "session.instructions.updated" ||
+      event.type === "session.skill.activated"
     ) {
       const raw = eventMessage(event);
-      if (!raw) return;
+      if (raw === null) return;
+      if (raw === undefined) {
+        this.#repairHistory(id);
+        return;
+      }
       this.#publish(id, {
         op: "message.upsert",
         message: mapMessage(raw, id, contextFor(raw.id))!,
@@ -2277,62 +2987,16 @@ export class Transcript {
     ) {
       const shell = record(d.shell);
       if (typeof shell.id !== "string" || typeof shell.command !== "string") {
+        this.#repairHistory(id);
         return;
       }
-      let nativeID = this.#projected.get(id)?.shells.get(shell.id) ??
+      const nativeID = this.#projected.get(id)?.shells.get(shell.id) ??
         (event.type.endsWith("started") ? sourceID : undefined);
-      let raw: Extract<NativeMessage, { type: "shell" }> | undefined;
       if (!nativeID) {
-        let cursor: string | undefined;
-        do {
-          const page = await this.reader.page(
-            id,
-            SCAN_ROWS,
-            cursor,
-            this.#lifetime.signal,
-            "shell",
-          );
-          raw = page.items.find((
-            m,
-          ): m is Extract<NativeMessage, { type: "shell" }> =>
-            m.type === "shell" && m.shellID === shell.id
-          );
-          if (raw) {
-            nativeID = raw.id;
-            break;
-          }
-          cursor = page.next;
-        } while (cursor);
+        this.#findShell(id, shell.id, event);
+        return;
       }
-      if (!nativeID) return;
-      const previous = this.#shells.get(shell.id);
-      if (event.type.endsWith("ended")) {
-        previous?.controller.abort();
-        this.#shells.delete(shell.id);
-      }
-      raw ??= {
-        id: nativeID,
-        type: "shell",
-        shellID: shell.id,
-        command: shell.command,
-        status: shell.status,
-        metadata: previous?.raw.metadata ??
-          (record(shell.metadata).background === true
-            ? { ...event.metadata, background: true }
-            : event.metadata),
-        time: {
-          created: previous?.raw.time.created ??
-            millis(record(shell.time).started) ?? event.created ?? Date.now(),
-          ...(event.type.endsWith("ended")
-            ? { completed: event.created ?? Date.now() }
-            : {}),
-        },
-        ...(d.output ? { output: d.output } : {}),
-        exit: shell.exit,
-      } as Extract<NativeMessage, { type: "shell" }>;
-      const message = this.#map(raw, id, contextFor(nativeID));
-      if (message) this.#publish(id, { op: "message.upsert", message });
-      this.changed(id);
+      this.#emitShell(id, nativeID, event, contextFor(nativeID));
       return;
     }
     if (event.type.startsWith("session.compaction.") && sourceID) {
@@ -2359,28 +3023,33 @@ export class Transcript {
             op: "message.upsert",
             message: this.#map(raw, id, contextFor(nativeID))!,
           });
-        }
+        } else this.#repairHistory(id);
         return;
       }
+      // Mirror the native message-updater's lifecycle shapes, including absent
+      // metadata. A terminal record replaces streamed state; it cannot retain
+      // fields the native terminal schema dropped or invent an empty object.
+      const previous = known?.id === nativeID ? known : undefined;
       const raw = {
-        ...(known?.id === nativeID ? known : {}),
         id: nativeID,
         type: "compaction",
         status,
         reason: d.reason ?? "manual",
-        summary: text(d.text) ?? "",
-        ...(d.error ? { error: d.error } : {}),
-        ...(d.model ? { model: d.model } : {}),
-        ...(d.native ? { native: d.native } : {}),
+        ...(status === "failed" ? { error: d.error } : {
+          summary: status === "running" ? "" : text(d.text) ?? "",
+          ...(d.model ? { model: d.model } : {}),
+          ...(d.native ? { native: d.native } : {}),
+        }),
         ...(d.cost !== undefined ? { cost: d.cost } : {}),
         ...(d.tokens ? { tokens: d.tokens } : {}),
-        metadata: {
-          ...(known?.id === nativeID ? known.metadata : {}),
-          ...event.metadata,
-        },
-        time: known?.id === nativeID
-          ? known.time
-          : { created: event.created ?? Date.now() },
+        metadata: status === "running"
+          ? event.metadata
+          : status === "failed"
+          ? previous?.metadata ?? event.metadata
+          : event.metadata
+          ? { ...previous?.metadata, ...event.metadata }
+          : previous?.metadata,
+        time: previous?.time ?? { created: event.created ?? Date.now() },
       } as Extract<NativeMessage, { type: "compaction" }>;
       this.#compactions.set(id, structuredClone(raw));
       const message = this.#map(
@@ -2512,7 +3181,10 @@ export class Transcript {
       if (
         typeof model.id !== "string" || typeof model.providerID !== "string" ||
         typeof d.agent !== "string"
-      ) return;
+      ) {
+        this.#repairHistory(id, messageID);
+        return;
+      }
       this.#clearRetry(id, messageID);
       const raw: Extract<NativeMessage, { type: "assistant" }> = {
         id: messageID,
@@ -2541,10 +3213,7 @@ export class Transcript {
             messageID,
             existing?.context ?? baseline?.contexts.get(messageID) ?? {
               order: baseline?.source?.startsWith("api")
-                ? Math.max(
-                  0,
-                  ...[...baseline.contexts.values()].map((c) => c.order),
-                ) + 1
+                ? (baseline.order ?? 0) + 1
                 : event.durable?.seq ?? ++this.#revisions,
             },
             text(d.parentID) ??
@@ -2556,7 +3225,7 @@ export class Transcript {
           ),
           terminal: undefined,
         };
-      baseline?.contexts.set(messageID, context);
+      this.#context(baseline, messageID, context);
       this.#live.set(messageID, { session: id, raw, context });
       this.buffers.beginReply(id, messageID);
       this.#publish(id, {
@@ -2628,21 +3297,26 @@ export class Transcript {
           return;
         }
         if (event.type.endsWith(".started")) {
+          // A native page can expose the empty block before its start event is
+          // dispatched. Only an event-owned append source consumes that start;
+          // an HTTP checkpoint is replacement authority, never an append seed.
+          if (previous) return;
           if (
-            live?.raw.content.filter((p) => p.type === kind)[Number(ordinal)]
-          ) return;
-          live?.raw.content.push(
-            kind === "text" ? { type: "text", text: "" } : {
-              type: "reasoning",
-              text: "",
-              ...(d.native === undefined ? {} : {
-                native: record(d.native) as NonNullable<
-                  NativeMessage["metadata"]
-                >,
-              }),
-              time: { created: event.created ?? Date.now() },
-            },
-          );
+            !live?.raw.content.filter((p) => p.type === kind)[Number(ordinal)]
+          ) {
+            live?.raw.content.push(
+              kind === "text" ? { type: "text", text: "" } : {
+                type: "reasoning",
+                text: "",
+                ...(d.native === undefined ? {} : {
+                  native: record(d.native) as NonNullable<
+                    NativeMessage["metadata"]
+                  >,
+                }),
+                time: { created: event.created ?? Date.now() },
+              },
+            );
+          }
           this.buffers.upsert(id, messageID, shell, "");
           if (acquired) {
             this.#publish(id, {
@@ -2839,6 +3513,24 @@ export class Transcript {
       }
       return;
     }
+    // Known control-only observations have no chronological message. Any other
+    // change that did not map above must consult native history, not disappear.
+    if (
+      event.type.startsWith("session.") && !new Set([
+        "session.created",
+        "session.forked",
+        "session.renamed",
+        "session.metadata.updated",
+        "session.archived",
+        "session.unarchived",
+        "session.viewed",
+        "session.permissions",
+        "session.usage.recorded",
+        "session.usage.updated",
+        "session.execution.started",
+        "session.inbox.delivery.changed",
+      ]).has(event.type)
+    ) this.#repairHistory(id, text(d.messageID) ?? text(d.assistantMessageID));
   }
   #clearRetry(session: string, messageID?: string): void {
     for (const live of this.#live.values()) {
@@ -3063,8 +3755,10 @@ export class Transcript {
     this.changed(live.session);
   }
   async stop(): Promise<void> {
+    this.#checking = false;
     await this.colors?.stop();
     this.#lifetime.abort();
+    this.#revertCommits.clear();
     this.#watermarks.clear();
     this.#anchors.clear();
     await this.requests.close();
@@ -3106,14 +3800,14 @@ export class Transcript {
       }
     }
   }
-  #decorateHelpers(message: Message): Message {
+  #decorateHelpers(message: Message, restoreRunning: boolean): Message {
     for (const [key, link] of this.#helperLinks) {
       if (link.parent === message.sessionID && link.message === message.id) {
         this.#helperLinks.delete(key);
       }
     }
     const parts = message.parts.map((part) =>
-      this.#helperPart(message.sessionID, message.id, part)
+      this.#helperPart(message.sessionID, message.id, part, restoreRunning)
     );
     this.#pruneHelpers();
     return { ...message, parts };
@@ -3122,15 +3816,17 @@ export class Transcript {
     parent: string,
     message: string,
     part: import("@otk/protocol").Part,
+    restoreRunning = true,
   ): import("@otk/protocol").Part {
     const key = JSON.stringify([parent, message, part.id]);
     this.#helperLinks.delete(key);
-    if (
-      part.kind !== "tool" || part.call.tool !== "task" ||
-      !part.call.childSessionID
-    ) return part;
-    const child = part.call.childSessionID,
-      progress = this.#helperSummary(child);
+    if (part.kind !== "tool" || part.call.tool !== "task") return part;
+    const child = part.call.childSessionID ??
+      (restoreRunning && part.call.status === "running"
+        ? this.helperEdges.child(parent, message, part.call.callID)
+        : undefined);
+    if (!child) return part;
+    const progress = this.#helperSummary(child);
     if (this.#subscriptions.has(parent)) {
       this.#helperLinks.set(key, {
         parent,
@@ -3145,7 +3841,7 @@ export class Transcript {
       this.#helperHints.add(child);
       this.options.requestHelper(child);
     }
-    return { ...part, call: { ...part.call, progress } };
+    return { ...part, call: { ...part.call, childSessionID: child, progress } };
   }
   #helperSummary(child: string): import("@otk/protocol").HelperSummary {
     return this.#helperProgress.get(child) ?? this.options.helper?.(child) ?? {

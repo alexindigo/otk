@@ -6,6 +6,7 @@ import type { FrecencyRequestReceipts } from "./frecency.ts";
 import type { ApprovalRequestReceipts } from "./approvals.ts";
 import type { CoreRequestReceipts } from "./rpc.ts";
 import type { SessionActionsRequestReceipts } from "./capabilities/session-actions.ts";
+import type { ProjectEditRequestReceipts } from "./project-edit.ts";
 import type { TerminalRequestReceipts } from "./terminals.ts";
 import { isSessionID } from "./session-id.ts";
 /** Additive request services. Wire composition selects these at activation. */
@@ -56,12 +57,20 @@ export interface FailureFacts {
   status?: number;
   /** Specific next step from the action/cause owner; omit when none is known. */
   recovery?: string;
+  /** Producer-selected diagnostic facts, shown only inside Details. */
+  details?: string;
   outcome?: "unknown" | "unavailable" | "rejected";
   /** The input surface that caused this failure, independent of its transport. */
   origin?: RequestOrigin | "session";
   /** The producer has retained the full failure at this transcript identity. */
   record?: { messageID: string; label?: string };
 }
+/** Admission expiry is not a missing result and never authorizes replaying a mutation. */
+export const REQUEST_WINDOW_EXPIRED_FACTS = {
+  reason: "Request window expired",
+  recovery:
+    "Reconnect to OTK and refresh the session. Check whether the action already completed before trying it again.",
+} satisfies Pick<FailureFacts, "reason" | "recovery">;
 /** Capture only routing facts, never the request input or an invalid identity. */
 export function requestFailureFacts(
   action: string,
@@ -185,8 +194,9 @@ export interface RequestReceipts
     FrecencyRequestReceipts,
     ApprovalRequestReceipts,
     CoreRequestReceipts,
+    SessionActionsRequestReceipts,
     TerminalRequestReceipts,
-    SessionActionsRequestReceipts {}
+    ProjectEditRequestReceipts {}
 export type ReceiptData = {
   [K in keyof RequestReceipts]: { kind: K; value: RequestReceipts[K] };
 }[keyof RequestReceipts];

@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { expandTool, prompt, toolScript } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  prompt,
+  sessionStatus,
+  toolScript,
+} from "../../pages/transcript.ts";
 
 test(
   "messages.native-todos-readonly-questions",
@@ -23,8 +28,7 @@ test(
         elements.map((element) => (element as HTMLElement).dataset.todoStatus)
       ),
     ).toEqual(todos.map((todo) => todo.status));
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await sessionStatus(page, session.id, "idle");
     await toolScript(state, "question", {
       questions: [{
         header: "Choice",
@@ -42,6 +46,10 @@ test(
       pending = await state.native<{ id: string }[]>("/question");
       return pending.length;
     }).toBe(1);
+    // The independent question surface can cover the transcript tail. Collapse
+    // it without answering before inspecting the retained read-only record.
+    await page.getByRole("button", { name: "Hide the question", exact: true })
+      .click();
     await expandTool(page, "[data-tool=question]");
     await expect(page.locator(".otk-questions")).toContainText(
       "Awaiting answer",
@@ -52,7 +60,6 @@ test(
       answers: [["Typed"]],
     });
     await expect(page.locator(".otk-questions dd")).toHaveText("Typed");
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await sessionStatus(page, session.id, "idle");
   },
 );

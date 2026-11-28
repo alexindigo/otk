@@ -84,21 +84,15 @@ Deno.test("slash parses registered arguments and retains the command draft on re
   });
   try {
     assertEquals(feature.source!.revision!() !== before, true);
-    assertEquals(
-      await feature.beforeSubmit!(
-        draft as Parameters<NonNullable<typeof feature.beforeSubmit>>[0],
-      ),
-      true,
-    );
+    await feature.localCommand!(
+      draft as Parameters<NonNullable<typeof feature.localCommand>>[0],
+    )!();
     assertEquals(calls, ["a quoted phrase"]);
     draft = { ...draft, input: "/fixture.echo" };
     const original = draft;
-    assertEquals(
-      await feature.beforeSubmit!(
-        draft as Parameters<NonNullable<typeof feature.beforeSubmit>>[0],
-      ),
-      true,
-    );
+    await feature.localCommand!(
+      draft as Parameters<NonNullable<typeof feature.localCommand>>[0],
+    )!();
     assertEquals(draft, original);
     assertEquals(errors.length, 1);
     assertEquals(calls, ["a quoted phrase"]);

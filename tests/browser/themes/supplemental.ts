@@ -35,7 +35,8 @@ export async function supplemental(
   };
   await test.step("8/public-setup-diff-and-task-feedback", async () => {
     await scene("layout-controls");
-    await expect(page.locator("select[name=type]")).toBeVisible();
+    // D54: Select owns the picker; its form value is hidden, not a native menu.
+    await expect(page.locator("button[name=type]")).toBeVisible();
     for (const theme of themes) {
       await paint(theme);
       for (const zoom of [1, 2]) {
@@ -54,7 +55,9 @@ export async function supplemental(
               r = pane.getBoundingClientRect(),
               f = form.getBoundingClientRect();
             const fields = Array.from(
-              form.querySelectorAll("input:not(.otk-form-choice-value),select"),
+              form.querySelectorAll(
+                "input:not([type=hidden],.otk-select-value),button[name]",
+              ),
             );
             return {
               center: Math.abs((f.left + f.right - r.left - r.right) / 2),
@@ -85,14 +88,16 @@ export async function supplemental(
       await restoreViewport(page, cdp);
       await page.setViewportSize({ width: 1280, height: 1000 });
     }
-    await page.locator("select[name=type]").selectOption("none");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "None", exact: true }).click();
     await expect(page.locator("[data-auth-pane] input[name=username]"))
       .toHaveCount(0);
     for (const theme of themes) {
       await paint(theme);
       await shot(`public-setup-none-${theme.id}`);
     }
-    await page.locator("select[name=type]").selectOption("password");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "Password", exact: true }).click();
     await expect(page.locator("input[name=username]")).toBeVisible();
     for (
       const [wide, width, mode] of [[false, 800, "unified"], [
@@ -187,8 +192,12 @@ export async function supplemental(
           const probe = document.createElement("span");
           probe.style.color = "var(--otk-danger)";
           document.body.append(probe);
-          const equal =
-            getComputedStyle(el).color === getComputedStyle(probe).color;
+          const danger = getComputedStyle(probe).color;
+          probe.style.color = "var(--otk-fg)";
+          const neutral = getComputedStyle(probe).color;
+          const signal = el.querySelector(".otk-failure-signal")!;
+          const equal = getComputedStyle(el).color === neutral &&
+            getComputedStyle(signal).boxShadow.includes(danger);
           probe.remove();
           return equal;
         }),
@@ -318,7 +327,7 @@ export async function supplemental(
         await page.evaluate(() =>
           [
             ".otk-inbox-brand svg",
-            ".otk-tool-icon svg",
+            "[data-diffs] .otk-tool-line .otk-tree-node-slot > svg",
             ".otk-takeover-collapse svg",
           ].map((s) => {
             const e = document.querySelector(s)!, r = e.getBoundingClientRect();

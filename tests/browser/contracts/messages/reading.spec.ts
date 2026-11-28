@@ -2,26 +2,78 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { revealAcquired } from "../../pages/transcript.ts";
+import { cssLength } from "../../pages/css-length.ts";
+import {
+  openLatestWork,
+  revealAcquired,
+  scrollTranscript,
+  workPanel,
+} from "../../pages/transcript.ts";
 test.use({ profile: "contract-messages-reading" });
+
+test("messages.work-log-reveal-holds-through-tail-growth", {
+  tag: ["@messages", "@contracts"],
+}, async ({ isolatedState: state, page }) => {
+  await page.setViewportSize({ width: 1600, height: 980 });
+  await openSession(state, page, "tstv1-otk");
+  const work = page.locator(".otk-work-strip");
+  await expect(work).not.toHaveAttribute("aria-current", "true");
+  await expect(work).toBeInViewport();
+  const offset = () =>
+    work.evaluate((button) => {
+      const pane = button.closest(".otk-messages")!;
+      return button.getBoundingClientRect().top -
+        pane.getBoundingClientRect().top;
+    });
+  // Click the real hit point without Playwright auto-scrolling the control.
+  const box = (await work.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(work).toHaveAttribute("aria-current", "true");
+  await expect(page.locator("[data-tool=read] .otk-tool-toggle"))
+    .toBeInViewport();
+  const before = await offset();
+  const pane = page.locator(".otk-messages");
+  const oldHeight = await pane.evaluate((root) => {
+    const height = root.scrollHeight;
+    const growth = document.createElement("div");
+    growth.style.height = `${root.clientHeight + 96}px`;
+    growth.style.flexShrink = "0";
+    root.querySelector(".otk-message-flow")!.append(growth);
+    return height;
+  });
+  await expect.poll(() => pane.evaluate((root) => root.scrollHeight))
+    .toBeGreaterThanOrEqual(oldHeight + 72);
+  // Cross the flow observer's rendering boundary before inspecting the hold.
+  await pane.evaluate(() =>
+    new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve))
+    )
+  );
+  expect(Math.abs(await offset() - before)).toBeLessThan(2);
+  await expect(work).toBeInViewport();
+});
+
 test("messages.reading-column-renderers-metadata-retry-tab-title", {
   tag: ["@messages", "@contracts"],
 }, async ({ isolatedState: state, page }) => {
   await page.setViewportSize({ width: 2000, height: 1100 });
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await openSession(state, page, "tstv1-otk");
-  await expect(page.locator(".otk-message-footer")).toHaveCount(1);
+  await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+    .toHaveCount(1);
   await expect(page).toHaveTitle("Execution — otk — OTK");
-  await expect(page.locator(".otk-work-fold")).toHaveCount(1);
+  await expect(page.locator(".otk-work-strip")).toHaveCount(1);
   await expect(page.locator(".otk-user-bubble")).toBeVisible();
   await expect(page.locator("[data-role=assistant] .otk-text").first())
     .toBeVisible();
-  await page.locator(".otk-work-fold").click();
+  await openLatestWork(page);
   await expect(page.locator("[data-role=assistant] .otk-message-role"))
     .toHaveCount(0);
   const geometry = await page.evaluate(() => {
     const p = document.querySelector("[data-message=step-1] .otk-text p")!,
-      c = document.querySelector("[data-message=step-1] .otk-code")!,
+      // The shared CodeBlock frame owns the reading track; its renderer is inset.
+      c = document.querySelector("[data-message=step-1] .otk-code-block")!,
+      renderer = c.querySelector(".otk-code")!.getBoundingClientRect(),
       a = p.getBoundingClientRect(),
       z = c.getBoundingClientRect(),
       s = getComputedStyle(p);
@@ -30,6 +82,8 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       code: z.width,
       left: a.left,
       codeLeft: z.left,
+      containsRenderer: renderer.width > 0 && renderer.left >= z.left &&
+        renderer.right <= z.right,
       font: s.fontFamily,
       size: s.fontSize,
       line: s.lineHeight,
@@ -38,6 +92,7 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(geometry.prose).toBeLessThanOrEqual(736);
   expect(Math.abs(geometry.code - geometry.prose)).toBeLessThan(.5);
   expect(Math.abs(geometry.left - geometry.codeLeft)).toBeLessThan(.5);
+  expect(geometry.containsRenderer).toBe(true);
   expect(geometry.font).toContain("IBM Plex Sans");
   expect([geometry.size, geometry.line]).toEqual(["14px", "24px"]);
   await expect(page.locator("[data-tool=bash] .otk-tool-toggle"))
@@ -50,14 +105,23 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await page.locator("[data-tool=read] .otk-tool-toggle").click();
   await expect(page.locator("[data-tool=edit] .otk-tool-body")).toHaveCount(0);
   await page.locator("[data-tool=edit] .otk-tool-toggle").click();
-  await expect(page.locator("[data-tool=read] .otk-tool-output"))
+  // Opening Edit can window Read out of the DOM. Return to Read without
+  // toggling it: the output and disclosure must survive that remount.
+  const read = "[data-tool=read]";
+  await revealAcquired(page, `${read} .otk-tool-toggle`);
+  await expect(page.locator(`${read} .otk-tool-toggle`)).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.locator(`${read} .otk-tool-output`))
     .toHaveJSProperty(
       "textContent",
       "Unrecognized read result\n<literal>keep me</literal>",
     );
-  await expect(page.locator("[data-tool=read] .otk-tool-output literal"))
+  await expect(page.locator(`${read} .otk-tool-output literal`))
     .toHaveCount(0);
-  await page.locator("[data-tool=read] .otk-tool-toggle").click();
+  await page.locator(`${read} .otk-tool-toggle`).click();
+  await revealAcquired(page, "[data-tool=edit] .otk-tool-toggle");
   await expect(page.locator("[data-tool=edit] .otk-tool-toggle"))
     .toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("[data-tool=edit] .otk-diff")).toContainText(
@@ -65,31 +129,39 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   );
   await expect(page.locator("[data-tool=bash] .otk-tool-state")).not
     .toContainText("completed");
-  await expect(page.locator(".otk-reasoning > button")).toHaveText(
-    "Thought for 4.0s",
+  await expect(page.locator(".otk-reasoning-heading")).toHaveText(
+    "Thought for 4s",
   );
-  await expect(page.locator("[data-tool=edit] .otk-tool-target")).toHaveText(
+  await expect(
+    page.locator(".otk-work-run:has([data-tool=edit]) .otk-work-run-preview"),
+  ).toHaveText(
     "source.ts",
   );
+  await scrollTranscript(page, true);
   await page.locator(".otk-copy-message").click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toContain("The reply is complete.");
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain("A readable reply");
   expect(copied).not.toContain("Reasoning remains available.");
-  await page.locator(".otk-reasoning > button").click();
+  await page.locator(".otk-reasoning-heading").click();
   await expect(page.locator(".otk-reasoning-body")).toContainText(
     "Reasoning remains available.",
   );
   for (
     const value of [
-      "build",
       "test/reported-model",
-      "6.0s",
+      "6s",
       "interrupted",
       "76 tokens · $0.25",
     ]
-  ) await expect(page.locator(".otk-message-footer")).toContainText(value);
+  ) {
+    await expect(page.locator("[data-role=assistant] .otk-message-footer"))
+      .toContainText(value);
+  }
+  await expect(page.locator(".otk-reply-start .otk-entity-pill")).toHaveText([
+    "build",
+  ]);
   await page.locator(".otk-turn-usage > button").focus();
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   await expect(page.locator(".otk-usage-breakdown tfoot tr")).toBeAttached();
@@ -99,12 +171,22 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
     ),
   ).toEqual(["20", "40", "10", "4", "2"]);
   await page.keyboard.press("Escape");
-  await expect(page.locator(".otk-prompt-context > span").first()).toHaveText(
+  await expect(
+    page.locator(".otk-prompt-context:not([inert] *) > span").first(),
+  ).toHaveText(
     "Build",
   );
-  await expect(page.locator(".otk-prompt-context .otk-composer-provider"))
+  await expect(
+    page.locator(
+      ".otk-prompt-context:not([inert] *) .otk-composer-provider:not([inert] *)",
+    ),
+  )
     .toHaveText("test");
-  await expect(page.locator(".otk-prompt-context .otk-composer-model-name"))
+  await expect(
+    page.locator(
+      ".otk-prompt-context:not([inert] *) .otk-composer-model-name:not([inert] *)",
+    ),
+  )
     .toHaveText("reported-model");
   await expect(page.getByRole("button", { name: "Attach files", exact: true }))
     .toBeAttached();
@@ -128,7 +210,9 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
       ),
       border: s.borderTopWidth,
       radius: s.borderRadius,
-      font: getComputedStyle(document.querySelector(".otk-message-footer")!)
+      font: getComputedStyle(
+        document.querySelector("[data-role=assistant] .otk-message-footer")!,
+      )
         .fontFamily,
       hints: /Enter to send|Shift\+Enter for newline|1 \/ 2 \/ 3|j\/k select/
         .test(
@@ -152,41 +236,47 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   expect(layout.font).toContain("IBM Plex Sans");
   expect(layout.hints).toBe(false);
   await expect(page.locator(".otk-role-label")).toHaveCount(0);
-  expect(
-    await page.evaluate(() =>
-      getComputedStyle(
-        document.querySelector(".otk-work-fold .otk-divider-label")!,
-      ).font ===
-        getComputedStyle(document.querySelector(".otk-work-fold")!).font
-    ),
-  ).toBe(true);
-  const rule = await page.locator(".otk-work-fold .otk-divider-rule").evaluate(
-    (e) => {
-      const s = getComputedStyle(e), canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 1;
-      const c = canvas.getContext("2d")!,
-        rgb = (color: string) => {
-          c.clearRect(0, 0, 1, 1);
-          c.fillStyle =
-            getComputedStyle(document.documentElement).backgroundColor;
-          c.fillRect(0, 0, 1, 1);
-          c.fillStyle = color;
-          c.fillRect(0, 0, 1, 1);
-          return Array.from(c.getImageData(0, 0, 1, 1).data).slice(0, 3);
-        },
-        bg = rgb("transparent"),
-        distance = (a: number[]) =>
-          a.reduce((n, v, i) => n + Math.abs(v - bg[i]), 0);
-      return {
-        width: s.borderTopWidth,
-        style: s.borderTopStyle,
-        ratio: distance(rgb(s.borderTopColor)) / distance(rgb(s.color)),
-      };
-    },
-  );
-  expect([rule.width, rule.style]).toEqual(["1px", "solid"]);
-  expect(rule.ratio).toBeGreaterThan(0);
-  expect(rule.ratio).toBeLessThan(.2);
+  // D74 / wl-5: the strip owns the hit target, type and adjacent tracks.
+  await revealAcquired(page, ".otk-work-strip");
+  const strip = page.locator(".otk-work-strip");
+  const label = strip.locator(":scope > .otk-control-label");
+  for (
+    const property of ["font-size", "font-family", "font-weight", "line-height"]
+  ) {
+    await expect(label).toHaveCSS(
+      property,
+      await strip.evaluate(
+        (el, property) => getComputedStyle(el).getPropertyValue(property),
+        property,
+      ),
+    );
+  }
+  const stripGeometry = await strip.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const rects = Array.from(
+      el.children,
+      (child) => child.getBoundingClientRect(),
+    );
+    return {
+      center: rects.map((rect) =>
+        (rect.top + rect.bottom - box.top - box.bottom) / 2
+      ),
+      leading: rects[0].left - box.left,
+      trailing: box.right - rects.at(-1)!.right,
+      gaps: rects.slice(1).map((rect, index) => rect.left - rects[index].right),
+      whitespace: getComputedStyle(el.children[1]).whiteSpace,
+    };
+  });
+  for (const offset of stripGeometry.center) {
+    expect(Math.abs(offset)).toBeLessThan(.5);
+  }
+  const spacing = await cssLength(strip, "--space-2");
+  expect(stripGeometry.leading).toBe(spacing);
+  expect(stripGeometry.trailing).toBe(stripGeometry.leading);
+  for (const gap of stripGeometry.gaps) {
+    expect(Math.abs(gap - spacing)).toBeLessThan(.5);
+  }
+  expect(stripGeometry.whitespace).toBe("nowrap");
   for (const width of [1280, 1600, 2000]) {
     await page.setViewportSize({ width, height: 1100 });
     await expect.poll(() =>
@@ -213,22 +303,22 @@ test("messages.reading-column-renderers-metadata-retry-tab-title", {
   await revealAcquired(page, "[data-tool=patch] .otk-tool-toggle");
   await page.locator("[data-tool=patch] .otk-tool-toggle").click();
   await expect(page.locator("[data-tool=patch] .otk-tool-body")).toBeVisible();
-  await expect(page.locator("[data-tool=patch] .otk-tool-target")).toHaveText(
+  await expect(
+    page.locator(".otk-work-run:has([data-tool=patch]) .otk-work-run-preview"),
+  ).toHaveText(
     "new-name.ts",
   );
   await expect(page.locator("[data-tool=patch] .otk-diff > header"))
     .toContainText("old-name.ts");
   await expect(page.locator("[data-tool=patch] .otk-diff > header")).not
     .toContainText("new-name.ts");
-  await revealAcquired(page, ".otk-work-fold");
-  await page.locator(".otk-work-fold").click();
-  await expect(page.locator(".otk-work-body")).toHaveCount(0);
-  await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-    "aria-expanded",
-    "false",
+  await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+  await expect(workPanel(page)).toHaveCount(0);
+  await expect(page.locator(".otk-work-strip")).not.toHaveAttribute(
+    "aria-current",
+    "true",
   );
-  await page.locator(".otk-work-fold").click();
-  await expect(page.locator(".otk-work-body")).toBeVisible();
+  await openLatestWork(page);
   await expect(page.locator("[data-tool=edit] .otk-diff")).toBeVisible();
   await expect(page.locator("[data-tool=edit] .otk-diff > header")).toHaveCount(
     0,

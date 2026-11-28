@@ -7,6 +7,7 @@ import {
   createServerResources,
   createSessionActions,
   emptyContent,
+  lamp,
   SidecarConnection,
   type SidecarsState,
 } from "@otk/client";
@@ -76,7 +77,6 @@ Deno.test("session ports capture target once while capability and resource gette
     state: {
       selection: target,
       content: emptyContent(),
-      siblings: [],
       loading: false,
       paging: false,
       exhausted: false,
@@ -100,10 +100,40 @@ Deno.test("session ports capture target once while capability and resource gette
     session,
     guard: { mark: (owner, value) => dirty.push([owner, value]) },
     prefs: () => DEFAULT_PREFS,
+    tabs: () => {
+      const project = { sidecarId: "local", directory: "/original" };
+      const tabs = resources.tabs(project);
+      tabs.update(resources.tabSnapshot(project));
+      return tabs;
+    },
   });
   target.sessionID = "mutated";
   session.state.selection = { sidecarId: "remote", sessionID: "newer" };
   assertEquals(ports.sessionID(), "original");
+  assertEquals(ports.composerTarget!(), { task: undefined, session: "Title" });
+  resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "target",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      projects: [],
+      tasks: [{
+        id: "task",
+        name: "Selected task",
+        directory: "/original",
+        sessions: ["original"],
+        order: 0,
+      }],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+    },
+  });
+  assertEquals(ports.composerTarget!(), {
+    task: "Selected task",
+    session: "Title",
+  });
   assertEquals(await ports.directory(), "/original");
   await ports.rpc("session.abort", { sessionID: ports.sessionID() });
   await ports.act(() => Promise.resolve());
@@ -152,13 +182,75 @@ Deno.test("session ports capture target once while capability and resource gette
     sessionID: "original",
     questions: [],
   }];
+  connections.get("local")!.attention.receive({
+    op: "question.upsert",
+    request: session.state.content.questions[0],
+  });
   assertEquals(ports.questions().map((request) => request.id), [
     "question-form",
   ]);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
-  // Question removal and the typed pending list settle independently.
+  // Content arrays are projections; the one request owner receives retirement.
   session.state.content.questions = [];
+  connections.get("local")!.attention.receive({
+    op: "question.remove",
+    requestID: "question-form",
+    sessionID: "original",
+  });
   assertEquals(ports.questions(), []);
   assertEquals(ports.forms!().map((request) => request.id), ["typed-form"]);
+  const inbox = resources.inbox("local");
+  state.list[0].status = "connected";
+  const facts = () =>
+    ports.entityFacts!({
+      sessionID: "unleased",
+      turnID: "historical",
+      timing: { state: "known", start: 100, end: 2100, workingMs: 2000 },
+      outcomeTime: { state: "known", at: 2200, source: "completed" },
+    });
+  const historicalCard = facts();
+  for (
+    const [generation, activity] of [["first", "working"], [
+      "reconnected",
+      "none",
+    ]] as const
+  ) {
+    // This reducer consumes only the welcome edge; other welcome fields belong
+    // to the connection, not the inbox owner under test.
+    inbox.receive({ t: "welcome" } as import("@otk/protocol").ServerFrame);
+    inbox.receive({
+      t: "inbox.snapshot",
+      generation,
+      revision: 1,
+      inbox: {
+        tasks: [],
+        projects: [],
+        pathTemplates: [],
+        seen: {},
+        finishes: {},
+        entities: {
+          "session:unleased": {
+            kind: "session",
+            id: "unleased",
+            state: activity,
+            previous: "none",
+            counts: {
+              working: Number(activity === "working"),
+              blocked: 0,
+              finished: 0,
+              unseen: 0,
+            },
+          },
+        },
+      },
+    });
+    assertEquals(ports.entry("unleased"), undefined);
+    assertEquals(
+      lamp(historicalCard.session.entities!, "session:unleased"),
+      activity,
+    );
+    assertEquals(facts().reply?.working.value, 2000);
+    assertEquals(facts().reply?.completed.value, 2200);
+  }
   resources.stop();
 });

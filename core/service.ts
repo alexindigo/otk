@@ -10,15 +10,19 @@ import { AuthState } from "./auth/state.ts";
 import type { ServiceConfig } from "./config/schema.ts";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
-import type { FrameSource } from "./ws/connections.ts";
+import type { ConnectionRequests, FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
 import { bind } from "./http/server.ts";
+import { servedBuild } from "./http/served-build.ts";
 import { diagnosticsLog } from "./diagnostics-log.ts";
 import type { SectionObserver } from "./diagnostics.ts";
 import { RequestCoordinator } from "./requests/coordinator.ts";
 import { BootstrapRequests } from "./http/bootstrap.ts";
 import { clientRequestPolicy } from "./config/schema.ts";
+import { StorageFeature } from "./features/storage.ts";
+import { StorageRequests } from "./requests/storage.ts";
 import type { TerminalSockets } from "./terminals/mux.ts";
+import type { InlineImages } from "./files/inline-images.ts";
 
 export interface CoreOptions {
   cfg: ServiceConfig;
@@ -29,11 +33,14 @@ export interface CoreOptions {
   staticRoot: string;
   index?: IndexStore;
   sources?: readonly FrameSource[];
+  projectOrder?: ConnectionRequests["projectOrder"];
+  programs?: ConnectionRequests["programs"];
   diagnostics?: SectionObserver;
   diagnostic?: DiagnosticSink;
   signal?: AbortSignal;
   requested?: () => void;
   terminals?: TerminalSockets;
+  inlineImages?: InlineImages;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -64,6 +71,8 @@ function startBackend(
       index.projectAuthority(value);
     },
     projectSeeds: (values) => index.projectSeeds(values),
+    projectMetadata: (project, source) =>
+      index.projectMetadata(project, source),
     indexReset: (entries) => index.resetMetadata(entries),
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
@@ -83,10 +92,27 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   const index = options.index ?? new IndexStore();
   const requests = new RequestCoordinator({
     registry: rpc,
-    receipts: new Requests(store),
+    receipts: new StorageRequests(new Requests(store)),
     policy: cfg.requests,
     diagnostic: (id, cause) => diagnostic("warn", `request ${id}`, cause),
   });
+  const sources = [
+    ...options.sources ?? [],
+    new StorageFeature(
+      store.availability,
+      cfg.requests.livenessms,
+      () => {
+        // These facts reached the index before a store-backed observer failed.
+        // Replay its ordinary projection boundary without inventing inventory.
+        index.resetMetadata(
+          index.snapshotEntries().map(({ digest: _digest, ...metadata }) =>
+            metadata
+          ),
+        );
+      },
+      () => requests.storageRecovered(),
+    ),
+  ];
   let bootstrap: BootstrapRequests | undefined;
   let maintenance: ReturnType<typeof setInterval> | undefined;
   let connections: Connections | undefined,
@@ -104,7 +130,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         }
       };
       if (connections) await attempt(() => connections!.close());
-      else {for (const source of options.sources ?? []) {
+      else {for (const source of sources) {
           await attempt(() => source.close?.());
         }}
       await attempt(() => requests.stop());
@@ -126,10 +152,14 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   };
   options.signal?.addEventListener("abort", cancelled, { once: true });
   try {
+    const identity = {
+      build: await servedBuild(staticRoot),
+      instance: crypto.randomUUID(),
+    };
     check();
-    const auth = new AuthState(cfg);
     const listener = bind(cfg, undefined, diagnostic, options.requested);
     server = listener.server;
+    const auth = new AuthState(cfg, server.addr.port);
     const transport = connections = new Connections(
       backend,
       index,
@@ -139,16 +169,19 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       cfg.messages,
       {
         coordinator: requests,
+        server: identity,
         identity: () => cfg.auth.username.toLowerCase() || "local",
         policy: clientRequestPolicy(cfg),
         helloms: cfg.connection.helloms,
         attachments: cfg.attachments,
         requested: options.requested,
+        projectOrder: options.projectOrder,
+        programs: options.programs,
       },
-      options.sources,
+      sources,
       options.diagnostics,
     );
-    await startBackend(backend, index, transport, options.sources);
+    await startBackend(backend, index, transport, sources);
     check();
     await requests.start();
     check();
@@ -164,7 +197,13 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
     await bootstrap.start();
     check();
     maintenance = setInterval(
-      () => requests.maintenance(),
+      () => {
+        try {
+          requests.maintenance();
+        } catch (error) {
+          diagnostic("warn", "request maintenance", error);
+        }
+      },
       cfg.requests.livenessms,
     );
     await listener.handle({
@@ -174,7 +213,9 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       backend,
       connections: transport,
       staticRoot,
+      ...identity,
       terminals: options.terminals,
+      inlineImages: options.inlineImages,
     });
     check();
     return {

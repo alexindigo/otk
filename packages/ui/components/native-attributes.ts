@@ -7,11 +7,15 @@ const eventKey = (key: PropertyKey): key is string =>
 
 /** Native spreads/dynamic tags bypass compiler event policy. Own their listeners
  * at the DOM edge instead of installing source-retaining delegated event getters. */
-export function nativeAttributes<T extends object>(read: () => T) {
+export function nativeAttributes<T extends object>(
+  read: () => T,
+  omit: readonly PropertyKey[] = [],
+) {
   const [element, setElement] = createSignal<HTMLElement>();
   let release = () => {};
   const visible = (key: PropertyKey) =>
-    typeof key === "string" && key !== "ref" && !eventKey(key);
+    typeof key === "string" && key !== "ref" && !eventKey(key) &&
+    !omit.includes(key);
   const attributes = new Proxy({} as T, {
     ownKeys: () => Reflect.ownKeys(read()).filter(visible),
     has: (_, key) => visible(key) && Reflect.has(read(), key),

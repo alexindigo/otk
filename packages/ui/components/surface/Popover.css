@@ -3,6 +3,10 @@
   display: inline-flex;
   flex: none;
 }
+.otk-popover-bounds {
+  anchor-name: --otk-popover-bounds;
+  anchor-scope: --otk-popover-bounds;
+}
 .otk-popover-panel {
   position: absolute;
   position-try-fallbacks:
@@ -12,22 +16,28 @@
     --otk-popover-inline-bounds,
     --otk-popover-inline-bounds flip-block;
   position-try-order: most-height;
-  /* The native inset rectangle owns both placement and available size. Anchor
-     edges stay flush; only edges outside the viewport gutter are clamped. */
+  /* One region owns the inline bounds; other panels use the viewport gutter. */
+  --popover-bound-left: anchor(--otk-popover-bounds left, var(--popover-gutter));
+  --popover-bound-right: anchor(--otk-popover-bounds right, var(--popover-gutter));
+  --popover-bound-width: anchor-size(--otk-popover-bounds width,
+    calc(100vw - 2 * var(--popover-gutter)));
   top: var(--popover-block-start, 0);
-  right: 0;
+  right: var(--popover-bound-right);
   bottom: var(--popover-block-end, max(var(--popover-gutter), anchor(top)));
-  left: var(--popover-inline-start, max(var(--popover-gutter), anchor(left)));
+  left: var(--popover-inline-start, max(var(--popover-bound-left),
+    anchor(left)));
   align-self: end;
   justify-self: start;
-  margin: var(--popover-gutter) var(--popover-gutter) 0 0;
+  margin: var(--popover-gutter) 0 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--otk-fg);
   width: stretch;
-  min-width: min(200px, calc(100vw - 2 * var(--popover-gutter)));
-  max-width: min(28rem, calc(100vw - 2 * var(--popover-gutter)));
+  /* Try the other side when the content cannot fit here, not at a preset width. */
+  min-width: min-content;
+  min-width: calc-size(min-content, min(size, var(--popover-bound-width)));
+  max-width: min(28rem, var(--popover-bound-width));
   height: fit-content;
   /* An empty anchor side cannot admit a zero-height control surface. */
   min-height: var(--control-size);
@@ -39,36 +49,42 @@
   display: flex;
   flex-direction: column;
 }
-.otk-popover-panel > .otk-surface {
-  min-height: 0;
-  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
-}
-.otk-popover-wide {
-  --popover-inline-start: var(--popover-gutter);
+.otk-popover-panel.otk-popover-wide {
+  --popover-inline-start: var(--popover-bound-left);
   justify-self: center;
-  width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
-  max-width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
+  width: min(80rem, var(--popover-bound-width));
+  max-width: min(80rem, var(--popover-bound-width));
 }
 .otk-popover-content {
   width: fit-content;
+}
+.otk-popover-panel.otk-popover-fit {
+  width: max-content;
+  max-width: min(80rem, var(--popover-bound-width));
 }
 .otk-popover-anchor {
   position: fixed;
   pointer-events: none;
 }
-/* If neither inline side can hold the minimum width, use the bounded viewport
+/* If neither inline side can hold the content minimum, use the bounds rectangle
    while retaining the same native block-side choice. */
 @position-try --otk-popover-inline-bounds {
-  left: var(--popover-gutter);
-  right: 0;
-  margin-left: 0;
-  margin-right: var(--popover-gutter);
+  left: var(--popover-bound-left);
+  right: var(--popover-bound-right);
+  margin-inline: 0;
   justify-self: end;
 }
 .otk-popover-point {
   --popover-block-start: max(var(--popover-gutter), anchor(bottom));
   --popover-block-end: 0;
   align-self: start;
-  margin: 0 var(--popover-gutter) var(--popover-gutter) 0;
+  margin: 0 0 var(--popover-gutter);
   position-try-order: normal;
+}
+.otk-popover-panel.otk-popover-bounds-end {
+  --popover-inline-start: var(--popover-bound-left);
+  --popover-block-end: anchor(--otk-popover-bounds top,
+    max(var(--popover-gutter), anchor(top)));
+  justify-self: end;
+  position-try-fallbacks: none;
 }

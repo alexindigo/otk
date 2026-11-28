@@ -5,17 +5,27 @@ import {
   failureValue,
 } from "./failure-features.ts";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
+import {
+  entityKey,
+  entityRequiresVisibility,
+  type ProjectSelectionPhase,
+  projectSelectionTransition,
+} from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
 import type { ForkNotes } from "./fork-notes.ts";
 import { sessionKey } from "./index.ts";
-import { aggregateStatus } from "./inbox.ts";
-import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
+import {
+  createNavigation,
+  type NavigationEnvironment,
+  type NavigationHistory,
+} from "./navigation.ts";
 import {
   projectHash,
   projectRoute,
   type ProjectSelection,
 } from "./project-navigation.ts";
+import { folderName } from "./project-names.ts";
 import type { ServerResources } from "./server-resources.ts";
 import type { SessionActions } from "./session-actions.ts";
 import {
@@ -29,8 +39,63 @@ import { LOCAL_SIDECAR } from "./sidecars.ts";
 
 export interface ShellNavigationState {
   project?: ProjectSelection;
+  projectSelection?: ProjectSelectionPhase;
+  selectionNotice?: string;
   settings: boolean;
   error: FailureValue;
+  history: NavigationHistory;
+}
+
+export interface HistoryTarget {
+  enabled: boolean;
+  label: string;
+  state: "live" | "deleted" | "unavailable" | "page" | "unknown";
+}
+
+export function historyTarget(
+  history: NavigationHistory,
+  direction: "back" | "forward",
+  lookup: (
+    selection: Selection,
+  ) => { title: string; project: string; deleted?: boolean } | undefined,
+  label: (selection: ProjectSelection) => string = (p) =>
+    folderName(p.directory),
+): HistoryTarget {
+  const entry = history[direction];
+  if (!entry) {
+    return {
+      enabled: false,
+      label: `No ${
+        direction === "back" ? "earlier" : "later"
+      } session in this tab`,
+      state: "unknown",
+    };
+  }
+  const to = direction === "back" ? "Back to" : "Forward to";
+  const target = (
+    destination: string,
+    state: HistoryTarget["state"],
+  ): HistoryTarget => ({ enabled: true, label: `${to} ${destination}`, state });
+  if (entry === "unrecorded") return target("the previous page", "unknown");
+  if (!entry.hash) return target("the start page", "page");
+  const project = projectRoute(entry.hash);
+  if (project) {
+    return target(`the ${label(project)} project page`, "page");
+  }
+  const selection = route(entry.hash);
+  const live = selection && lookup(selection);
+  if (live) {
+    const name = `${live.title} in ${live.project}`;
+    return live.deleted
+      ? target(`${name} (deleted)`, "deleted")
+      : target(name, "live");
+  }
+  const name = entry.title &&
+    [entry.title, entry.project].filter(Boolean).join(" in ");
+  return target(
+    name ? `${name} (unavailable)` : "an unavailable session",
+    "unavailable",
+  );
 }
 export interface ShellView {
   selected?: Selection;
@@ -39,13 +104,19 @@ export interface ShellView {
   settings: boolean;
   connected: boolean;
   finish: number;
+  runID?: string;
 }
 export interface ShellNavigation {
   state: ShellNavigationState;
   subscribe(listener: (state: ShellNavigationState) => void): () => void;
   navigate(selection: Selection): boolean;
+  back(): boolean;
+  forward(): boolean;
+  traverse(direction: "back" | "forward"): Promise<boolean>;
   openProject(project: ProjectSelection): void;
-  openChild(id: string): void;
+  openAttention(project: ProjectSelection): void;
+  /** False when the guarded navigation refused the transition. */
+  openChild(id: string): boolean;
   projectHome(): boolean;
   preview(target: Selection): boolean;
   pin(target: Selection): Promise<boolean>;
@@ -63,7 +134,7 @@ export interface ShellNavigation {
   closeSettings(): void;
   fail(error: unknown): void;
   clearError(): void;
-  removeServer(id: string): boolean;
+  removeServer(id: string): Promise<boolean>;
   observeView(view: ShellView): void;
   start(): void;
   stop(): void;
@@ -77,7 +148,7 @@ export function createShellNavigation(o: {
   forkNotes?: ForkNotes;
   session: Pick<ClientSession, "state" | "open">;
   presence(): { focused: boolean; visible: boolean };
-  confirm(message: string): boolean;
+  confirm(message: string): boolean | Promise<boolean>;
   environment?: NavigationEnvironment;
   factory?: StateFactory;
 }): ShellNavigation {
@@ -85,9 +156,16 @@ export function createShellNavigation(o: {
   const store = (o.factory ?? createState)<ShellNavigationState>({
     settings: false,
     error: "",
+    history: { at: 0 },
   });
-  let revision = 0, viewed = "", viewedFinish = 0, projectOnly = false;
-  let projectDefault = false, projectPageOnly = false;
+  let revision = 0,
+    viewed = "",
+    viewedFinish = 0,
+    viewedRun: string | undefined;
+  const pendingProject = (): ProjectSelection | undefined => {
+    const entry = navigation.current();
+    return entry && !entry.page ? projectRoute(entry.hash) : undefined;
+  };
   const fail = (error: unknown): void => {
     if (resources.ownsFailure?.(error)) return;
     store.update((draft) => {
@@ -105,7 +183,11 @@ export function createShellNavigation(o: {
     connection: number;
     outcome: "pending" | "failed" | "complete";
   } | undefined;
-  let projectIntent: { at: number; target: ProjectSelection } | undefined;
+  let projectIntent: {
+    at: number;
+    target: ProjectSelection;
+    attention?: boolean;
+  } | undefined;
   const presentation = (
     p: ProjectSelection,
     repoID?: string,
@@ -114,21 +196,42 @@ export function createShellNavigation(o: {
     directory: resources.projectDirectory?.(p.sidecarId, p.directory, repoID) ??
       p.directory,
   });
-  const pendingLocations = new Map<string, ProjectLocation>();
+  // This browser's accepted choices remain authoritative across older preference
+  // broadcasts, RPC completion and reconnect. Persistence restores them on reload.
+  const acceptedLocations = new Map<string, {
+    location: ProjectLocation;
+    persistence: "pending" | "saved" | "failed";
+  }>();
   const locationKey = (p: ProjectSelection) =>
     JSON.stringify([p.sidecarId, presentation(p).directory]);
+  const persistedLocation = (p: ProjectSelection) =>
+    locations.toReversed().find((location) =>
+      location.sidecarId === p.sidecarId &&
+      presentation(location).directory === presentation(p).directory
+    );
   const lastLocation = (p: ProjectSelection) =>
-    pendingLocations.get(locationKey(p)) ??
-      locations.toReversed().find((location) =>
-        location.sidecarId === p.sidecarId &&
-        presentation(location).directory === presentation(p).directory
-      );
+    acceptedLocations.get(locationKey(p))?.location ?? persistedLocation(p);
   const remember = (p: ProjectSelection, sessionID?: string) => {
-    if (lastLocation(p)?.sessionID === sessionID) return;
     const key = locationKey(p), location = { ...p, sessionID };
-    pendingLocations.set(key, location);
-    void resources.rememberLocation(location).catch(fail).finally(() => {
-      if (pendingLocations.get(key) === location) pendingLocations.delete(key);
+    const previous = acceptedLocations.get(key);
+    if (
+      previous && previous.location.sessionID === sessionID &&
+      previous.persistence !== "failed"
+    ) return;
+    const record = {
+      location,
+      persistence: "pending" as "pending" | "saved" | "failed",
+    };
+    acceptedLocations.set(key, record);
+    if (persistedLocation(p)?.sessionID === sessionID) {
+      record.persistence = "saved";
+      return;
+    }
+    void resources.rememberLocation(location).then(() => {
+      record.persistence = "saved";
+    }).catch((error) => {
+      record.persistence = "failed";
+      fail(error);
     });
   };
   const releaseLocations = resources.observe({
@@ -136,6 +239,13 @@ export function createShellNavigation(o: {
       if (id === LOCAL_SIDECAR && frame.t === "prefs") {
         locations = frame.prefs.shellLayout.projectLocations ?? [];
         locationsReady = true;
+      }
+      if (id === LOCAL_SIDECAR && frame.t === "welcome") {
+        for (const record of acceptedLocations.values()) {
+          if (record.persistence === "failed") {
+            remember(record.location, record.location.sessionID);
+          }
+        }
       }
       if (frame.t === "prefs" || frame.t === "welcome") resolveProject();
     },
@@ -169,9 +279,17 @@ export function createShellNavigation(o: {
     intent: () => {
       revision++;
     },
-    apply(hash) {
-      projectOnly = false;
-      projectDefault = false;
+    apply(hash, entry) {
+      store.update((draft) => {
+        delete draft.selectionNotice;
+        draft.projectSelection = projectSelectionTransition(
+          draft.projectSelection,
+          {
+            type: projectRoute(hash) && !entry.page ? "lookup" : "route-away",
+          },
+        );
+        draft.settings = false;
+      });
       const target = route(hash),
         projectTarget = projectRoute(hash),
         previous = session.state.selection;
@@ -197,8 +315,6 @@ export function createShellNavigation(o: {
         session.open();
         project();
       } else {
-        projectOnly = !!projectTarget;
-        projectDefault = !!projectTarget && !projectPageOnly;
         clearError();
         session.open(target);
         project(
@@ -211,26 +327,54 @@ export function createShellNavigation(o: {
               }
               : undefined),
         );
+        const directory = target &&
+          resources.entry(target.sidecarId, target.sessionID)?.directory;
+        if (target && directory) {
+          remember(
+            { sidecarId: target.sidecarId, directory },
+            target.sessionID,
+          );
+        }
         if (projectTarget) {
           observeProject(
             projectTarget,
             resources.connected(projectTarget.sidecarId),
           );
-          if (projectDefault) resolveProject(projectTarget);
+          if (!entry.page) resolveProject(projectTarget);
         }
       }
       if (changes) guard.clear();
     },
-    accept(hash) {
-      const target = route(hash), previous = session.state.selection;
-      return (target?.sidecarId === previous?.sidecarId &&
-        target?.sessionID === previous?.sessionID) || guard.release();
-    },
+    accept: () => true,
   }, o.environment);
-  const navigate = (input: Selection): boolean => {
+  const releaseHistory = navigation.subscribe(() => {
+    const history = navigation.history();
+    store.update((draft) => {
+      draft.history = history;
+    });
+  });
+  const setOpened = (target: Selection, opened: boolean) =>
+    resources.sidecars.connection(target.sidecarId).rpc.call(
+      "sessions.opened",
+      {
+        sessionID: target.sessionID,
+        opened,
+      },
+    );
+  const navigate = (
+    input: Selection,
+    mode?: "push" | "replace",
+    explicit = false,
+  ): boolean => {
     const selection = actions.family(input), previous = session.state.selection;
-    if (!navigation.open(hashFor(selection))) return false;
+    if (!navigation.open(hashFor(selection), mode)) return false;
     closeSettings();
+    if (
+      explicit &&
+      !resources.entry(selection.sidecarId, selection.sessionID)?.deleted
+    ) {
+      void setOpened(selection, true).catch(fail);
+    }
     if (
       previous?.sidecarId === selection.sidecarId &&
       previous.sessionID === selection.sessionID && !session.state.loading
@@ -244,13 +388,16 @@ export function createShellNavigation(o: {
     }
     return true;
   };
-  const resolveProject = (input?: ProjectSelection): void => {
-    if (input) projectIntent = { at: revision, target: { ...input } };
+  const resolveProject = (
+    input?: ProjectSelection,
+    attention?: boolean,
+  ): void => {
+    if (input) {
+      projectIntent = { at: revision, target: { ...input }, attention };
+    }
     const value = projectIntent?.at === revision
       ? projectIntent.target
-      : projectDefault
-      ? store.state.project
-      : undefined;
+      : pendingProject();
     const target = value &&
       { sidecarId: value.sidecarId, directory: value.directory };
     if (
@@ -270,34 +417,90 @@ export function createShellNavigation(o: {
       outcome: "pending",
     };
     resolution = attempt;
-    void resources.projectSession(target, lastLocation(target)?.sessionID).then(
+    if (pendingProject()) {
+      store.update((draft) => {
+        draft.projectSelection = projectSelectionTransition(
+          draft.projectSelection,
+          { type: "lookup" },
+        );
+      });
+    }
+    const current = () => revision === attempt.at && resolution === attempt;
+    const sameConnection = () =>
+      (resources.server(target.sidecarId)?.connectionVersion ?? 0) ===
+        connection;
+    const preferred = lastLocation(target)?.sessionID;
+    const explicitAttention = projectIntent?.attention;
+    void resources.projectSession(
+      target,
+      preferred,
+      explicitAttention,
+    ).then(
       (id) => {
+        if (current() && !sameConnection()) {
+          attempt.outcome = "failed";
+          resolveProject();
+          return;
+        }
         attempt.outcome = "complete";
-        if (revision === attempt.at) {
+        if (current()) {
           clearError();
-          if (id) navigate({ sidecarId: target.sidecarId, sessionID: id });
+          if (id) {
+            const pending = pendingProject();
+            const mode = pending && projectHash(pending) === projectHash(target)
+              ? "replace"
+              : "push";
+            if (
+              navigate({ sidecarId: target.sidecarId, sessionID: id }, mode) &&
+              !explicitAttention && id !== preferred
+            ) {
+              const title = resources.entry(target.sidecarId, id)?.title ?? id;
+              store.update((draft) => {
+                draft.selectionNotice = preferred
+                  ? `The remembered session is no longer available. Selected "${title}".`
+                  : `No remembered session for this project. Selected "${title}".`;
+              });
+            }
+          } else {
+            store.update((draft) => {
+              if (pendingProject()) {
+                draft.projectSelection = projectSelectionTransition(
+                  draft.projectSelection,
+                  { type: "resolved", current: true },
+                );
+              }
+              if (preferred && !explicitAttention) {
+                draft.selectionNotice =
+                  "The remembered session is no longer available. Choose a session.";
+              }
+            });
+          }
         }
       },
     ).catch((error) => {
       attempt.outcome = "failed";
-      if (revision === attempt.at) {
+      if (current()) {
+        if (!sameConnection()) {
+          resolveProject();
+          return;
+        }
+        if (pendingProject()) {
+          store.update((draft) => {
+            draft.projectSelection = projectSelectionTransition(
+              draft.projectSelection,
+              { type: "rejected", current: true },
+            );
+          });
+        }
         fail(error);
-        // A reconnect may have arrived while this older lookup was pending.
-        resolveProject();
       }
     });
   };
   // Home/close are explicit project-page intents, not default-selection intents.
-  const projectPage = (target: ProjectSelection): boolean => {
-    projectPageOnly = true;
-    try {
-      return navigation.open(projectHash(target));
-    } finally {
-      projectPageOnly = false;
-      projectDefault = false;
-      projectIntent = undefined;
-    }
-  };
+  const projectPage = (
+    target: ProjectSelection,
+    mode?: "push" | "replace",
+  ): boolean => navigation.open(projectHash(target), mode, { page: true });
   const createIn = async (
     sidecarId: string,
     directory: string,
@@ -310,7 +513,6 @@ export function createShellNavigation(o: {
       async (group) => {
         const create = group.options("create", directory);
         const add = group.options("add", directory);
-        if (!guard.release()) return;
         const intent = ++revision;
         const taskActions = resources.taskActions({ sidecarId, directory });
         try {
@@ -348,11 +550,15 @@ export function createShellNavigation(o: {
     const entries = resources.projectEntries(p);
     const entry = entries.find((entry) => entry.id === target.sessionID);
     if (!entry) return false;
+    const deleted = () =>
+      !!(resources.entry(target.sidecarId, target.sessionID) ?? entry).deleted;
     const inbox = resources.inbox(target.sidecarId).state.inbox;
+    const states = resources.entities(target.sidecarId);
     if (
-      disposition === "kept" && aggregateStatus(entry, inbox) !== "none" &&
-      !o.confirm(
-        `Close "${entry.title}"? It will stay visible as a phantom tab while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
+      disposition === "kept" && !deleted() && !states.isStale &&
+      entityRequiresVisibility(states.get(entityKey("session", entry.id))) &&
+      !await o.confirm(
+        `Close "${entry.title}"? Its task will stay visible while it has known activity or an unseen finish. The session remains in Sessions and in the agent service.`,
       )
     ) return false;
     const ids = disposition === "kept"
@@ -362,10 +568,11 @@ export function createShellNavigation(o: {
     const shown = () =>
       session.state.selection?.sidecarId === target.sidecarId &&
       ids.includes(session.state.selection.sessionID);
-    if (
-      (shown() || disposition === "dropped") &&
-      !guard.release({ draft: disposition, keys })
-    ) return false;
+    const discard = disposition === "dropped"
+      ? await guard.release({ draft: "dropped", keys })
+      : undefined;
+    if (discard === false) return false;
+    if (intent !== revision) return false;
     const model = resources.tabs(p);
     const task = inbox.tasks.find((task) =>
       task.directory === directory && task.sessions.includes(target.sessionID)
@@ -373,19 +580,27 @@ export function createShellNavigation(o: {
     const remaining = task?.sessions.find((id) => !ids.includes(id));
     if (disposition === "dropped") {
       await actions.remove(target);
+      if (discard) discard();
       for (const key of keys) o.drafts.drop(key);
       if (shown()) guard.clear();
     } else if (task) {
       await resources.taskActions(p).remove(task, target.sessionID);
     }
+    if (disposition === "kept" && !deleted()) {
+      await setOpened(target, false);
+    }
     if (ids.includes(lastLocation(p)?.sessionID ?? "")) remember(p);
+    if (intent === revision && shown() && disposition === "kept" && deleted()) {
+      guard.keepDeleted();
+    }
     if (intent === revision && shown()) {
       // This captured release was already accepted, and its metadata mutation
       // succeeded. Consume only that owner's marks before guarded routing.
       guard.clear();
       const next = entry.parentID ?? remaining;
-      if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
-      else projectPage(p);
+      if (next) {
+        navigate({ sidecarId: target.sidecarId, sessionID: next }, "replace");
+      } else projectPage(p, "replace");
     }
     for (const id of ids) model.close(id);
     return true;
@@ -393,11 +608,21 @@ export function createShellNavigation(o: {
   return {
     state: store.state,
     subscribe: store.subscribe,
-    navigate,
+    navigate: (target) => navigate(target, undefined, true),
+    back: () => navigation.go(-1),
+    forward: () => navigation.go(1),
+    traverse: (direction) => navigation.traverse(direction === "back" ? -1 : 1),
     createIn,
     fail,
     clearError,
     closeSettings,
+    openAttention(target) {
+      // Capture a distinct explicit intent without letting a project-route
+      // default race it. The accepted session route still owns the input guard.
+      revision++;
+      closeSettings();
+      resolveProject(target, true);
+    },
     openProject(target) {
       target = presentation(target);
       if (
@@ -413,19 +638,16 @@ export function createShellNavigation(o: {
         return;
       }
       if (navigation.open(projectHash(target))) {
-        projectDefault = true;
         closeSettings();
         resolveProject(target);
       }
     },
-    openChild: (id) => {
-      navigate(actions.child(id));
-    },
+    openChild: (id) => navigate(actions.child(id), undefined, true),
     projectHome: () =>
       !!store.state.project &&
       projectPage(store.state.project),
     preview(target) {
-      if (!navigate(target)) return false;
+      if (!navigate(target, undefined, true)) return false;
       const directory = resources.entry(target.sidecarId, target.sessionID)
         ?.directory;
       if (directory) {
@@ -437,7 +659,7 @@ export function createShellNavigation(o: {
     },
     async pin(target) {
       if (!actions.eligibility(target).live) return false;
-      if (!navigate(target)) return false;
+      if (!navigate(target, undefined, true)) return false;
       const directory = resources.entry(target.sidecarId, target.sessionID)
         ?.directory;
       if (!directory) return false;
@@ -451,7 +673,6 @@ export function createShellNavigation(o: {
     remove: (target) => releaseSession(target, "dropped"),
     async fork(input, through) {
       const target = { ...input };
-      if (!guard.release({ draft: "kept" })) return;
       const intent = ++revision;
       const title = target.title ??
         resources.entry(target.sidecarId, target.sessionID)?.title ??
@@ -481,21 +702,39 @@ export function createShellNavigation(o: {
         draft.settings = true;
       });
     },
-    removeServer(id) {
+    async removeServer(id) {
+      const revisionAtInvocation = revision;
+      const selected = session.state.selection;
+      const discard = selected?.sidecarId === id
+        ? await guard.release({
+          draft: "dropped",
+          message: "Discard your unsent input before removing this server?",
+        })
+        : undefined;
+      if (discard === false || revisionAtInvocation !== revision) return false;
       if (
         (session.state.selection?.sidecarId === id ||
-          store.state.project?.sidecarId === id) && !navigation.open("")
+          store.state.project?.sidecarId === id) &&
+        !navigation.open("", "replace")
       ) {
         return false;
       }
       resources.remove(id);
+      if (discard) discard();
       return true;
     },
     observeView(value) {
+      // View effects may publish late. Only the accepted route can own memory.
+      if (
+        value.selected &&
+        (value.selected.sidecarId !== session.state.selection?.sidecarId ||
+          value.selected.sessionID !== session.state.selection?.sessionID)
+      ) return;
       if (!value.selected) {
         const target = store.state.project;
         if (
-          projectOnly && target && value.directory === target.directory &&
+          projectRoute(navigation.current()?.hash ?? "") && target &&
+          value.directory === target.directory &&
           !value.settings
         ) {
           observeProject(target, value.connected);
@@ -512,12 +751,19 @@ export function createShellNavigation(o: {
       const directory = indexed?.directory ??
         (!value.loading ? value.directory : undefined);
       if (directory && !value.settings && value.connected) {
-        project(
-          presentation(
-            { sidecarId: value.selected.sidecarId, directory },
-            indexed?.projectID,
-          ),
-        );
+        const location = { sidecarId: value.selected.sidecarId, directory };
+        const presented = presentation(location, indexed?.projectID);
+        project(presented);
+        remember(location, value.selected.sessionID);
+        if (indexed) {
+          navigation.describe(hashFor(value.selected), {
+            title: indexed.title,
+            project: resources.checkoutLabel(
+              presented.sidecarId,
+              presented.directory,
+            ),
+          });
+        }
       }
       if (
         !value.directory || value.loading ||
@@ -527,25 +773,29 @@ export function createShellNavigation(o: {
       }
       const target = value.selected,
         key = sessionKey(target.sidecarId, target.sessionID);
-      remember(
-        { sidecarId: target.sidecarId, directory: value.directory },
-        target.sessionID,
-      );
       if (viewed !== key) {
         viewed = key;
         viewedFinish = value.finish;
+        viewedRun = value.runID;
         void resources.inbox(target.sidecarId).openSession(
           target.sessionID,
           value.directory,
           value.finish,
         ).catch(fail);
-      } else if (value.finish > viewedFinish) {
+      } else if (
+        value.finish > viewedFinish || value.runID && value.runID !== viewedRun
+      ) {
         const presence = o.presence();
         if (presence.focused && presence.visible) {
           viewedFinish = value.finish;
+          viewedRun = value.runID;
           void resources.sidecars.connection(target.sidecarId).rpc.call(
             "sessions.seen",
-            { sessionID: target.sessionID, terminal: value.finish },
+            {
+              sessionID: target.sessionID,
+              terminal: value.finish,
+              ...(value.runID ? { runID: value.runID } : {}),
+            },
           ).catch(fail);
         }
       }
@@ -554,8 +804,9 @@ export function createShellNavigation(o: {
     stop() {
       revision++;
       navigation.stop();
+      releaseHistory();
       releaseLocations();
-      pendingLocations.clear();
+      acceptedLocations.clear();
     },
   };
 }

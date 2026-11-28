@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { outcomeTime } from "@otk/protocol";
 import {
   type ContextMessage,
   type FailureFacts,
@@ -15,7 +16,7 @@ export function requestFailureFacts(
 ): FailureFacts {
   const body = object(raw), data = object(body.data ?? body);
   const kind = text(body._tag) ?? text(body.name) ?? "";
-  const lines = [text(data.message)];
+  const lines = [text(raw) ?? text(data.message)];
   if (/ModelNotFound/.test(kind)) {
     lines.push(
       `Model not found: ${text(data.providerID) ?? ""}/${
@@ -56,15 +57,42 @@ export function requestFailureFacts(
     ? data.status
     : undefined;
   const httpStatus = status ?? nativeStatus;
+  const reason = publicFailureReason(
+    lines.filter(Boolean).join("\n") ||
+      (status === undefined
+        ? "Native operation failed"
+        : `Opencode request failed (${status}).`),
+    credentials,
+  );
   return {
-    reason: publicFailureReason(
-      lines.filter(Boolean).join("\n") ||
-        (status === undefined
-          ? "Native operation failed"
-          : `Opencode request failed (${status}).`),
-      credentials,
-    ),
+    reason,
     ...(httpStatus === undefined ? {} : { status: httpStatus }),
+    ...(/usage limit|quota|insufficient.*(credit|balance)|credit.*(exhaust|limit)|billing/i
+        .test(reason)
+      ? {
+        recovery:
+          "Check your provider credits or usage limits, then retry the task.",
+      }
+      : {}),
+  };
+}
+/** Only V1's task_error payload is classified as a failed helper cause. */
+export function helperFailure(
+  cause: unknown,
+  sessionID: string,
+  label: string | undefined,
+  recordID: string,
+): PublicFailure {
+  return {
+    code: "helper.failure",
+    retry: "none",
+    diagnosticID: `helper/${recordID}`,
+    facts: {
+      actionLabel: "Running helper",
+      target: { sessionID, label },
+      recovery: "Open the task and retry it.",
+      ...requestFailureFacts(cause),
+    },
   };
 }
 const object = (value: unknown): Record<string, unknown> =>
@@ -99,6 +127,9 @@ export function requestFailureRecord(
     id,
     sessionID,
     role: "context",
+    // V1 rejection/event envelopes supply no native error timestamp. The
+    // retained row's observation clock is ordering, not native outcome proof.
+    outcomeTime: outcomeTime({}),
     ...(replyTo ? { replyTo } : {}),
     time: { created },
     parts: [{

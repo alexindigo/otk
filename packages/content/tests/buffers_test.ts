@@ -2,6 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import type { AssistantMessage, ContentOp } from "@otk/protocol";
 import { markdown, StreamBuffers } from "@otk/content";
+import { ManualClock } from "../../../tests/support/manual-clock.ts";
 
 const part = {
   kind: "text" as const,
@@ -9,9 +10,9 @@ const part = {
   blocks: [],
   synthetic: false,
 };
-const sleep = () => new Promise((resolve) => setTimeout(resolve, 75));
-
-Deno.test("transport suspension retains trusted source, retires timers and rebinds append authority", async () => {
+Deno.test("transport suspension retains trusted source, retires timers and rebinds append authority", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers(), events: ContentOp[] = [];
   const emit = (_id: string, event: ContentOp) => events.push(event);
   try {
@@ -20,7 +21,7 @@ Deno.test("transport suspension retains trusted source, retires timers and rebin
     buffers.upsert("session", "message", part, "Known source");
     buffers.append(part.id, " pending", emit);
     buffers.suspend();
-    await sleep();
+    assertEquals(clock.pending, 0);
     assertEquals(events, []);
     buffers.rebind(() => "after");
     buffers.upsert("session", "message", part, "");
@@ -30,7 +31,7 @@ Deno.test("transport suspension retains trusted source, retires timers and rebin
     assertEquals(retained.stream?.epoch, "after");
     assertEquals(retained.stream?.recovering, true);
     assert(buffers.append(part.id, " appended", emit));
-    await sleep();
+    clock.runNext();
     assertEquals(
       buffers.snapshot(part.id)!.part.blocks,
       markdown("Known source pending appended"),
@@ -44,7 +45,9 @@ Deno.test("transport suspension retains trusted source, retires timers and rebin
   }
 });
 
-Deno.test("buffers own one subscribed stream and coalesce its deltas", async () => {
+Deno.test("buffers own one subscribed stream and coalesce its deltas", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers(), events: ContentOp[] = [];
   try {
     buffers.subscriptions("session", 1);
@@ -53,7 +56,7 @@ Deno.test("buffers own one subscribed stream and coalesce its deltas", async () 
     const emit = (_id: string, event: ContentOp) => events.push(event);
     assert(buffers.append(part.id, "First", emit));
     assert(buffers.append(part.id, " second", emit));
-    await sleep();
+    clock.runNext();
     assertEquals(events.length, 1);
     const event = events[0];
     assert(event.op === "part.blocks");
@@ -62,7 +65,9 @@ Deno.test("buffers own one subscribed stream and coalesce its deltas", async () 
     buffers.stop();
   }
 });
-Deno.test("unwatched snapshots and late replay include unflushed text, RAM time and current version without crossing message owners", async () => {
+Deno.test("unwatched snapshots and late replay include unflushed text, RAM time and current version without crossing message owners", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers(),
     events: ContentOp[] = [],
     before = Date.now();
@@ -70,7 +75,7 @@ Deno.test("unwatched snapshots and late replay include unflushed text, RAM time 
     buffers.upsert("session", "message", part, "first");
     const seeded = buffers.snapshot(part.id)!;
     buffers.append(part.id, " second", (_id, op) => events.push(op));
-    await sleep();
+    assertEquals(clock.pending, 0);
     assertEquals(events, []);
     const current = buffers.snapshot(part.id)!;
     assert(current.lastChunk >= before);
@@ -121,7 +126,9 @@ Deno.test("unwatched snapshots and late replay include unflushed text, RAM time 
 for (
   const removal of ["part", "message", "session", "reset", "stop"] as const
 ) {
-  Deno.test(`unwatched raw source and pending tails are released by ${removal}`, async () => {
+  Deno.test(`unwatched raw source and pending tails are released by ${removal}`, () => {
+    const clock = new ManualClock();
+    using _timers = clock.install();
     const buffers = new StreamBuffers(), events: ContentOp[] = [];
     buffers.subscriptions("session", 1);
     buffers.upsert("session", "message", part, "unfinished");
@@ -133,13 +140,15 @@ for (
     if (removal === "stop") buffers.stop();
     assertEquals(buffers.size, 0);
     assertEquals(buffers.snapshot(part.id), undefined);
-    await sleep();
+    assertEquals(clock.pending, 0);
     assertEquals(events, []);
     buffers.stop();
   });
 }
 
-Deno.test("buffers completion emits authoritative final content and cancels pending tails", async () => {
+Deno.test("buffers completion emits authoritative final content and cancels pending tails", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers(), events: ContentOp[] = [];
   buffers.subscriptions("session", 1);
   buffers.upsert("session", "message", part, "# Heading\n\n");
@@ -147,7 +156,7 @@ Deno.test("buffers completion emits authoritative final content and cancels pend
   buffers.append(part.id, "Done", emit);
   buffers.complete("message", emit);
   assertEquals(buffers.size, 0);
-  await sleep();
+  assertEquals(clock.pending, 0);
   assertEquals(events.length, 1);
   const event = events[0];
   assert(event.op === "part.upsert" && event.part.kind === "text");
@@ -155,7 +164,9 @@ Deno.test("buffers completion emits authoritative final content and cancels pend
   buffers.stop();
 });
 
-Deno.test("streaming buffers survive every unsubscribe without emitting an unwatched tail", async () => {
+Deno.test("streaming buffers survive every unsubscribe without emitting an unwatched tail", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers(), events: ContentOp[] = [];
   buffers.subscriptions("session", 2);
   buffers.upsert("session", "message", part, "start");
@@ -164,7 +175,7 @@ Deno.test("streaming buffers survive every unsubscribe without emitting an unwat
   assertEquals(buffers.size, 1);
   buffers.subscriptions("session", 0);
   assertEquals(buffers.size, 1);
-  await sleep();
+  assertEquals(clock.pending, 0);
   assertEquals(events, []);
   buffers.stop();
 });
@@ -179,7 +190,9 @@ Deno.test("buffers retain authoritative unwatched seeds but never invent an unse
   buffers.stop();
 });
 
-Deno.test("buffers release on completed part removal, reconnect reset and stop", async () => {
+Deno.test("buffers release on completed part removal, reconnect reset and stop", () => {
+  const clock = new ManualClock();
+  using _timers = clock.install();
   const buffers = new StreamBuffers(), events: ContentOp[] = [];
   buffers.subscriptions("session", 1);
   buffers.upsert("session", "message", part, "streaming");
@@ -194,6 +207,6 @@ Deno.test("buffers release on completed part removal, reconnect reset and stop",
   buffers.stop();
   assertEquals(buffers.size, 0);
   assert(!buffers.subscribed("session"));
-  await sleep();
+  assertEquals(clock.pending, 0);
   assertEquals(events, []);
 });

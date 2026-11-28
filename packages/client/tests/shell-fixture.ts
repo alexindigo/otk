@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { inboxStatus } from "./supervision-fixture.ts";
 import * as client from "@otk/client";
+import { fixtureSnapshot } from "./supervision-fixture.ts";
 import { NavigationDefault } from "../../../core/features/navigation-default.ts";
 import { SessionHierarchy } from "../../../core/index/session-hierarchy.ts";
 import { ProjectIdentity } from "../../../core/index/project-identity.ts";
@@ -131,8 +133,7 @@ export function shellFixture(
           hierarchy,
           scopes: (directory) => summaries[directory]?.scopes ?? [directory],
           entries: (directory) => index.partition(id, directory),
-          status: (sessionID) =>
-            client.inboxStatus(index.get(id, sessionID)!, inbox),
+          status: (sessionID) => inboxStatus(index.get(id, sessionID)!, inbox),
         });
         const core = {
           identities: (ids: readonly string[]) =>
@@ -200,12 +201,19 @@ export function shellFixture(
       },
     }),
   });
+  const receive = resources.receive;
+  resources.receive = (id, frame) =>
+    receive(
+      id,
+      frame.t === "inbox.snapshot"
+        ? { ...frame, inbox: fixtureSnapshot(index.partition(id), frame.inbox) }
+        : frame,
+    );
   const session: Pick<client.ClientSession, "state" | "open"> = {
     state: {
       selection: { sidecarId: "local", sessionID: ids.selected },
       info: shellInfo(ids.selected),
       content: client.emptyContent(),
-      siblings: [],
       loading: false,
       paging: false,
       exhausted: false,

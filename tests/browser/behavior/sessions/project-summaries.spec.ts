@@ -11,7 +11,7 @@ test(
   {
     tag: ["@sessions", "@attention", "@transport"],
   },
-  async ({ isolatedState: state, page }, info) => {
+  async ({ isolatedState: state, page, context }, info) => {
     const capture = await wire(page);
     const selected = await state.native<{ id: string }>("/session", "POST", {
       title: "Selected project",
@@ -74,10 +74,15 @@ test(
     await check("working", 0);
     await state.release(held.gate);
     await expect.poll(async () => (await summary())?.status).toBe("finished");
-    await viewByUrl(state, page, background.id);
-    // Stay until the view's acknowledgement lands, as a reading user would.
-    await expect.poll(async () => (await summary())?.unseenCount).toBe(0);
-    await viewByUrl(state, page, selected.id);
+    // D71 legitimately leases metadata for Back/Forward targets. Acknowledge
+    // from a separate tab so the observing tab has no claim other than routing.
+    const reader = await context.newPage();
+    try {
+      await viewByUrl(state, reader, background.id);
+      await expect.poll(async () => (await summary())?.unseenCount).toBe(0);
+    } finally {
+      await reader.close();
+    }
     await check("none", 0);
     await state.product("layout.patch", { discoveredCollapsed: true });
     await state.controller.call("queueScript", {
@@ -92,8 +97,7 @@ test(
       },
     });
     const final = await state.queue(["Background completed"], "held");
-    // Viewing the background project legitimately delivers its full entries;
-    // the routing contract below covers only the unviewed pending window.
+    // Only this tab's unviewed pending window is part of the routing contract.
     const routedFrom = capture.received.length;
     await begin("Ask for permission in the background project");
     await check("blocked", 0);

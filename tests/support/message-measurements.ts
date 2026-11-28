@@ -49,7 +49,8 @@ export async function measureMessagePaint(
              // V2 has one user text field, so source markers can share a paragraph.
              // Measure the exact marker's range, not visibility of the whole paragraph.
              let source,sourceRange;for(const e of flow.querySelectorAll('.otk-text p')){const walker=document.createTreeWalker(e,NodeFilter.SHOW_TEXT);for(let node;node=walker.nextNode();){const marker='Scale fixture 0/1524/2',at=node.textContent.indexOf(marker);if(at<0)continue;const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+marker.length);if(visible(range)){source=e;sourceRange=range;break}}if(source)break}
-            const footer=[...flow.querySelectorAll('.otk-message-footer')].find(e=>visible(e)&&e.querySelector('.otk-message-agent')?.textContent.toLowerCase()==='build'&&e.textContent.includes('fake/scripted')&&e.querySelector('.otk-turn-time')?.textContent&&!e.textContent.includes('streaming'));
+            // WP2: agent identity belongs to the reply-start entity, not the footer.
+            const footer=[...flow.querySelectorAll('.otk-message-footer')].find(e=>visible(e)&&e.textContent.includes('fake/scripted')&&e.querySelector('.otk-turn-time')?.textContent&&!e.textContent.includes('streaming'));
              if(source&&footer){requestAnimationFrame(()=>{if(!source.isConnected||!footer.isConnected||!visible(sourceRange)||!visible(footer)){requestAnimationFrame(sample);return}probe.paints.push({at:performance.now(),ms:performance.now()-probe.intent,count:Number(flow.dataset.messageCount),source:sourceRange.toString(),footer:footer.textContent,sourceBox:sourceRange.getBoundingClientRect().toJSON(),footerBox:footer.getBoundingClientRect().toJSON(),viewport:v.toJSON()})});return}
           }
         }

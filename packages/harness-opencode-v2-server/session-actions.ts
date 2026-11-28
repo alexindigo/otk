@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
 import {
+  ascendingID,
   type Capabilities,
   type ContentSession,
-  type ModelRef,
   type OperationContext,
   OperationFailure,
 } from "@otk/protocol";
@@ -17,17 +17,16 @@ import {
 import { mapSession, millis } from "./map.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { readSessionActivity } from "./recency.ts";
-import { selectionModel } from "./selection.ts";
+import { applySelection, type SelectionInput } from "./selection.ts";
 
 /** Selection checkpoints contain metadata only, never command or prompt bodies. */
 export async function selectAction(
   client: V2Client,
   raw: NativeSession,
-  input: { agent?: string; model?: ModelRef; variant?: string },
+  input: SelectionInput,
   operation?: OperationContext,
 ): Promise<void> {
-  const model = await selectionModel(client, raw, input, operation);
-  const checkpoint = async () => {
+  await applySelection(client, raw, input, operation, async (raw) => {
     await operation?.checkpoint("session-selection", {
       kind: "session-selection",
       value: {
@@ -41,57 +40,62 @@ export async function selectAction(
           : {}),
       },
     });
-  };
-  if (input.agent !== undefined && input.agent !== raw.agent) {
-    await client.effect(
-      (api) =>
-        api.session.switchAgent({ sessionID: raw.id, agent: input.agent! }),
-      operation,
-    );
-    raw = { ...raw, agent: input.agent };
-    await checkpoint();
-  }
-  if (
-    model &&
-    (model.providerID !== raw.model?.providerID ||
-      model.id !== raw.model?.id ||
-      (model.variant ?? "default") !== (raw.model?.variant ?? "default"))
-  ) {
-    await client.effect(
-      (api) => api.session.switchModel({ sessionID: raw.id, model }),
-      operation,
-    );
-    raw = { ...raw, model };
-    await checkpoint();
-  }
+  });
 }
 
-/** Bounded pages; only scalar identities and at most 50 previews survive a page. */
+const revertRecords = new WeakMap<
+  V2Client,
+  Map<string, {
+    boundaryID: string;
+    record: Promise<NonNullable<ContentSession["revert"]>>;
+  }>
+>();
+
+/** A native stage owns its identity set across replacement page baselines. */
 export async function revertSession(
   client: V2Client,
   raw: NativeSession,
   signal?: AbortSignal,
 ): Promise<ContentSession> {
   const mapped = mapSession(raw);
-  if (!raw.revert || !mapped.revert) return mapped;
+  let records = revertRecords.get(client);
+  if (!records) revertRecords.set(client, records = new Map());
+  if (!raw.revert || !mapped.revert) {
+    records.delete(raw.id);
+    return mapped;
+  }
+  const boundaryID = raw.revert.messageID;
+  const previous = records.get(raw.id);
+  if (previous?.boundaryID === boundaryID) {
+    mapped.revert = { ...await previous.record, files: mapped.revert.files };
+    return mapped;
+  }
+  const record = resolveRevert(client, mapped, boundaryID, signal);
+  records.set(raw.id, { boundaryID, record });
+  try {
+    mapped.revert = await record;
+    return mapped;
+  } catch (error) {
+    if (records.get(raw.id)?.record === record) records.delete(raw.id);
+    throw error;
+  }
+}
+async function resolveRevert(
+  client: V2Client,
+  mapped: ContentSession,
+  boundaryID: string,
+  signal?: AbortSignal,
+): Promise<NonNullable<ContentSession["revert"]>> {
   const messages = new Messages(() => client);
-  let cursor: string | undefined, count = 0, foundBoundary = false;
-  const prompts: NonNullable<ContentSession["revert"]>["prompts"] = [];
+  let cursor: string | undefined, foundBoundary = false;
+  const messageIDs: string[] = [];
   let boundary: Extract<NativeMessage, { type: "user" }> | undefined;
   do {
     const page = await messages.page(mapped.id, SCAN_ROWS, cursor, signal);
     let found = false;
     for (const message of [...page.items].reverse()) {
-      if (message.type === "user") {
-        count++;
-        prompts.unshift({
-          messageID: message.id,
-          time: millis(message.time.created),
-          preview: message.text.replace(/\s+/g, " ").trim().slice(0, 200),
-        });
-        if (prompts.length > 50) prompts.pop();
-      }
-      if (message.id === raw.revert.messageID) {
+      messageIDs.unshift(message.id);
+      if (message.id === boundaryID) {
         foundBoundary = true;
         found = true;
         if (message.type === "user") boundary = message;
@@ -108,10 +112,10 @@ export async function revertSession(
       new Error("Revert boundary changed during preview acquisition"),
     );
   }
-  mapped.revert.messageCount = count;
-  mapped.revert.prompts = prompts;
+  const revert = { boundaryID, messageIDs, files: mapped.revert!.files };
+  let prompt: import("@otk/protocol").HistoryEntry | undefined;
   if (boundary) {
-    mapped.revert.prompt = {
+    prompt = {
       input: boundary.text,
       mode: "normal",
       time: millis(boundary.time.created),
@@ -130,7 +134,7 @@ export async function revertSession(
       ],
     };
   }
-  return mapped;
+  return { ...revert, ...(prompt ? { prompt } : {}) };
 }
 
 export function sessionActions(ports: {
@@ -177,6 +181,7 @@ export function sessionActions(ports: {
       );
     }
     ports.observed(settled);
+    revertRecords.get(client)?.delete(ids.decode(id));
     return mapSession(settled);
   };
   const stage = (files: boolean) => ({
@@ -230,13 +235,20 @@ export function sessionActions(ports: {
       async shell(input, operation) {
         return await ordered(input.sessionID, operation, async () => {
           const client = ports.client(),
-            sessionID = ids.decode(input.sessionID);
+            sessionID = ids.decode(input.sessionID),
+            messageID = input.messageID ?? ascendingID("msg");
           await client.effect(
-            (api) => api.session.shell({ sessionID, command: input.command }),
+            (api) =>
+              api.session.shell({
+                sessionID,
+                id: messageID,
+                command: input.command,
+              }),
             operation,
           );
           // Native shell joins its own shell lifetime before replying. It is not
           // a session execution, so execution.wait cannot certify this effect.
+          return { messageID, state: "started" as const };
         });
       },
     },
@@ -264,10 +276,11 @@ export function sessionActions(ports: {
       },
       remove: (id, operation) =>
         ordered(id, operation, () => ports.removed(id, operation)),
-      async compact(id, model, operation) {
+      async compact(id, _model, operation) {
         return await ordered(id, operation, async () => {
+          // Native compaction keeps the applied model and variant. A model
+          // argument would be a selection change the user never made (2.62).
           const client = ports.client(), raw = await get(id, operation);
-          await selectAction(client, raw, { model }, operation);
           await client.effect(
             (api) => api.session.compact({ sessionID: raw.id }),
             operation,

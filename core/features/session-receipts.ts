@@ -3,7 +3,9 @@ import {
   type ContentSession,
   type CreatedSessionReceipt,
   isSessionID,
+  type PromptReceipt,
   type RequestReceipts,
+  type SubmissionReceipt,
 } from "@otk/protocol";
 import { mappedReceipt, metadataReceipt } from "../requests/policies.ts";
 import { object, sessionID, text } from "../ws/params.ts";
@@ -143,6 +145,74 @@ export const promptSelectionReceipt = metadataReceipt(
     return result;
   },
 );
+export const sentPromptReceipt = mappedReceipt<
+  "prompt-sent",
+  PromptReceipt | null
+>(
+  "prompt-sent",
+  (value) => {
+    const row = object(value);
+    if (row.completed !== true) throw new TypeError("Invalid prompt receipt");
+    if (row.submission === undefined) return { completed: true };
+    const submission = object(row.submission);
+    if (
+      submission.state !== "accepted" && submission.state !== "queued" &&
+      submission.state !== "started"
+    ) {
+      throw new TypeError("Invalid prompt admission state");
+    }
+    return {
+      completed: true,
+      submission: {
+        messageID: text(submission, "messageID")!,
+        state: submission.state,
+      },
+    };
+  },
+  (submission) => ({ completed: true, ...(submission ? { submission } : {}) }),
+  (receipt) => receipt.submission ?? null,
+);
+/** Old completions remain readable, but never fabricate a correlated message. */
+export function submissionReceipt(kind: "shell-settled" | "command-settled") {
+  const parseSubmission = (value: unknown): SubmissionReceipt => {
+    const row = object(value);
+    if (row.state === "unconfirmed") {
+      return { state: "unconfirmed", reason: text(row, "reason")! };
+    }
+    if (
+      row.state !== "accepted" && row.state !== "queued" &&
+      row.state !== "started"
+    ) {
+      throw new TypeError("Invalid submission receipt state");
+    }
+    return { messageID: text(row, "messageID")!, state: row.state };
+  };
+  return mappedReceipt<typeof kind, SubmissionReceipt>(
+    kind,
+    (value) => {
+      const row = object(value);
+      if (row.completed !== true) {
+        throw new TypeError("Invalid submission receipt");
+      }
+      return {
+        completed: true,
+        ...(row.submission === undefined
+          ? {}
+          : { submission: parseSubmission(row.submission) }),
+      };
+    },
+    (submission) => ({
+      completed: true,
+      submission: parseSubmission(submission),
+    }),
+    (receipt) =>
+      receipt.submission ?? {
+        state: "unconfirmed",
+        reason:
+          "The operation finished, but its message could not be confirmed.",
+      },
+  );
+}
 export const boundaryIntent = metadataReceipt(
   "session-boundary-intent",
   boundary,

@@ -11,6 +11,9 @@ import { sessionKey } from "./index.ts";
 import type { IndexChanges } from "./index.ts";
 import { createTranscript, type TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { presentFailure } from "./failure-features.ts";
+
+export type { TranscriptGapState, TranscriptState } from "./transcript.ts";
 
 export interface BodyTarget {
   sidecarId: string;
@@ -36,7 +39,25 @@ export interface TranscriptClock {
   set(run: () => void, ms: number): unknown;
   clear(timer: unknown): void;
 }
+type SavedSend =
+  & Pick<
+    import("./pending-send.ts").PendingSend,
+    "intent" | "message" | "phase" | "dispatched"
+  >
+  & {
+    failure?: import("@otk/protocol").PublicFailure;
+  };
+type SavedTranscript = { target: BodyTarget; sends: SavedSend[] };
 export interface TranscriptsOwner {
+  snapshot(): unknown;
+  restore(
+    value: unknown,
+    resume: (
+      target: BodyTarget,
+      send: import("./pending-send.ts").PendingSend,
+    ) => void,
+    hasServer: (sidecarId: string) => boolean,
+  ): number;
   setDemand(value: TranscriptDemand): void;
   interact(scope: ScopeRef): void;
   preload(
@@ -49,6 +70,7 @@ export interface TranscriptsOwner {
     target: BodyTarget,
     before?: string,
     signal?: AbortSignal,
+    scope?: import("@otk/protocol").MessageSnapshotScope,
   ): Promise<import("@otk/protocol").MessagePage>;
   receive(sidecar: string, frame: ServerFrame, accepted: boolean): void;
   removeServer(sidecar: string): void;
@@ -83,11 +105,14 @@ interface Job {
 
 /** One body per identity; scope demand, queue admission and cooling are independent of views. */
 export function createTranscripts(o: {
+  disclosures?: import("./disclosure.ts").Disclosures;
+  retireScope?(scope: string): void;
   connection(id: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
   factory?: StateFactory;
   clock?: TranscriptClock;
   changes?(server: string): IndexChanges | undefined;
+  entities?(server: string): import("./entity-state.ts").EntityStateStore;
 }): TranscriptsOwner {
   const clock = o.clock ?? systemClock;
   const resources = new Map<
@@ -96,6 +121,7 @@ export function createTranscripts(o: {
   >();
   const scopes = new Map<string, Scope>(),
     policies = new Map<string, MessagePolicy>();
+  const detached = new Map<string, SavedTranscript>();
   const queue: Job[] = [], active = new Map<string, number>();
   const queued = new Map<string, number>(),
     priorities = new Map<string, number>();
@@ -189,6 +215,9 @@ export function createTranscripts(o: {
           (run, signal) => acquire(target, run, signal),
           o.factory ?? createState,
           () => policy(target.sidecarId),
+          o.entities?.(target.sidecarId),
+          o.disclosures,
+          o.retireScope,
         ),
       };
       resources.set(key(target), value);
@@ -257,6 +286,48 @@ export function createTranscripts(o: {
     pump();
   };
   return {
+    snapshot: () => [
+      ...detached.values(),
+      ...[...resources.values()].flatMap(({ target, owner }) => {
+        const sends = owner.projection.pendingSends().map((
+          { intent, message, phase, dispatched, feedback },
+        ) => ({
+          intent,
+          message,
+          phase,
+          dispatched,
+          failure: feedback?.failure?.value,
+        }));
+        return sends.length ? [{ target, sends }] : [];
+      }),
+    ],
+    restore(value, resume, hasServer) {
+      let unavailable = 0;
+      for (const saved of value as SavedTranscript[]) {
+        const { target, sends } = saved;
+        if (!hasServer(target.sidecarId)) {
+          detached.set(key(target), saved);
+          unavailable += sends.length;
+          continue;
+        }
+        detached.delete(key(target));
+        const owner = resource(target);
+        for (const send of sends) {
+          const restored = {
+            ...send,
+            feedback: send.failure
+              ? presentFailure(send.failure, {
+                surface: "record",
+                view: target,
+              })
+              : undefined,
+          };
+          owner.send?.(restored);
+          resume(target, restored);
+        }
+      }
+      return unavailable;
+    },
     setDemand(value) {
       if (stopped) return;
       const previous = demand;
@@ -298,11 +369,19 @@ export function createTranscripts(o: {
       reconcile();
     },
     get: (target) => resources.get(key(target))?.owner,
-    snapshotPage: (target, before, signal) =>
-      resource(target).snapshotPage(before, signal),
+    snapshotPage: (target, before, signal, scope) =>
+      resource(target).snapshotPage(before, signal, scope),
     receive(server, frame, accepted) {
       if (stopped || !accepted) return;
+      const requests = o.connection(server).attention;
+      if (frame.t === "content" && isAttentionOp(frame.event)) {
+        requests.receive(frame.event);
+      }
+      if (frame.t === "forms.pending") requests.replace("form", frame.requests);
       const indexed = frame.t === "index.snapshot" || frame.t === "index.patch";
+      if (indexed) {
+        requests.retireSessions((id) => !!o.entry(server, id)?.deleted);
+      }
       const reduced = indexed ? o.changes?.(server) : undefined;
       const changes = indexed && reduced?.revision === frame.rev
         ? reduced

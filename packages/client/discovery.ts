@@ -11,7 +11,11 @@ export interface DiscoveryStep {
   key: DiscoveryStepKey;
   label: string;
   elapsedMs: number;
-  result?: { kind: "ok" | "error" | "cancelled"; text: string };
+  result?: {
+    kind: "ok" | "error" | "cancelled";
+    text: string;
+    feedback?: Feedback;
+  };
 }
 export interface DiscoveryState {
   target: string;
@@ -101,11 +105,17 @@ export function createDiscovery(options: {
       draft.steps.push({ key, label, elapsedMs: 0 });
     });
   };
-  const end = (kind: "ok" | "error" | "cancelled", text: string) => {
+  const end = (
+    kind: "ok" | "error" | "cancelled",
+    text: string,
+    feedback?: Feedback,
+  ) => {
     tick();
     store.update((draft) => {
       const step = draft.steps.at(-1);
-      if (step && !step.result) step.result = { kind, text };
+      if (step && !step.result) {
+        step.result = { kind, text, ...(feedback ? { feedback } : {}) };
+      }
     });
   };
   return {
@@ -225,7 +235,11 @@ export function createDiscovery(options: {
                   : "the browser could not connect to this address",
                 "Check that OTK is running at this address and reachable from this page, then check again",
               );
-            end(cancelled ? "cancelled" : "error", failure.feedback.text);
+            end(
+              cancelled ? "cancelled" : "error",
+              failure.feedback.text,
+              failure.feedback,
+            );
             return {
               kind: cancelled ? "cancelled" : "failed",
               feedback: failure.feedback,

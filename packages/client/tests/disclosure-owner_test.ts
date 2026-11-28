@@ -21,6 +21,8 @@ Deno.test("disclosure defaults cover every neutral category and preserve saved m
       "outgoing",
       "compaction",
       "record",
+      "stepMarkers",
+      "snapshots",
       "source",
     ] as const
   ) assertEquals(owner.defaultFor(category), false, category);
@@ -47,7 +49,7 @@ Deno.test("disclosure defaults cover every neutral category and preserve saved m
     preferences.settings("transcript").filter((row) =>
       row.key.startsWith("expand")
     ).length,
-    8,
+    9,
   );
   for (
     const row of preferences.settings("transcript").filter((row) =>
@@ -63,16 +65,16 @@ Deno.test("disclosure defaults cover every neutral category and preserve saved m
 
 Deno.test("explicit true and false win; defaults remain live only for unset choices", () => {
   const owner = createTranscriptInteraction();
-  const open = owner.disclosure("open", "one");
-  const closed = owner.disclosure("closed", "one");
-  const unset = owner.disclosure("unset", "one");
+  const open = owner.disclosure("record", "open", "one");
+  const closed = owner.disclosure("record", "closed", "one");
+  const unset = owner.disclosure("record", "unset", "one");
   open.set(true);
   closed.set(false);
-  for (const expandWork of [false, true, false]) {
-    const prefs = { expandWork };
-    assertEquals(open.expanded("work", prefs), true);
-    assertEquals(closed.expanded("work", prefs), false);
-    assertEquals(unset.expanded("work", prefs), expandWork);
+  for (const expandSystem of [false, true, false]) {
+    const prefs = { expandSystem };
+    assertEquals(open.expanded("system", prefs), true);
+    assertEquals(closed.expanded("system", prefs), false);
+    assertEquals(unset.expanded("system", prefs), expandSystem);
     assertEquals(unset.value(), undefined);
   }
 });
@@ -81,7 +83,6 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
   const owner = createTranscriptInteraction();
   const rows = preferences.settings("transcript");
   const categories = [
-    ["work", "expandWork"],
     ["toolOutput", "expandToolOutput"],
     ["fileChanges", "collapseFileChanges"],
     ["reasoning", "thinking"],
@@ -91,6 +92,8 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
     ["record", "expandRecords"],
     ["source", "expandSource"],
     ["compaction", "expandCompaction"],
+    ["stepMarkers", "expandStepMarkers"],
+    ["snapshots", "expandSnapshots"],
   ] as const;
   assertEquals(rows.map((row) => row.key), categories.map((row) => row[1]));
   for (const [category, key] of categories) {
@@ -98,6 +101,7 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
     assertEquals(row.settings!.control.kind, "toggle");
     assertEquals(
       row.label === "Always keep session compaction expanded" ||
+        row.label === "Step markers" || row.label === "Snapshots" ||
         /^Expand .+ by default$/.test(row.label),
       true,
     );
@@ -125,12 +129,12 @@ Deno.test("Settings has one positive toggle per disclosure kind and separates vi
 
 Deno.test("nested choices survive parent closing, virtual remount and preference changes", () => {
   const owner = createTranscriptInteraction();
-  const parent = owner.disclosure("reply:1/work", "one");
-  const child = owner.disclosure("reply:1/part:2/tool", "two");
+  const parent = owner.disclosure("activity", "reply:1/work", "one");
+  const child = owner.disclosure("tool", "reply:1/part:2/tool", "two");
   child.set(true);
   parent.set(false);
   parent.set(true);
-  const remount = owner.disclosure("reply:1/part:2/tool", "two");
+  const remount = owner.disclosure("tool", "reply:1/part:2/tool", "two");
   assertEquals(
     remount.expanded("toolOutput", { expandToolOutput: false }),
     true,
@@ -141,28 +145,32 @@ Deno.test("nested choices survive parent closing, virtual remount and preference
 
 Deno.test("retired generations cannot transfer choices or mutate replacements", () => {
   const owner = createTranscriptInteraction();
-  const first = owner.disclosure("part:1", owner.generation("one"));
+  const first = owner.disclosure("record", "part:1", owner.generation("one"));
   first.set(true);
   owner.retireIdentity("one");
-  const replacement = owner.disclosure("part:1", owner.generation("one"));
+  const replacement = owner.disclosure(
+    "record",
+    "part:1",
+    owner.generation("one"),
+  );
   assertEquals(replacement.value(), undefined);
   first.set(true);
   assertEquals(replacement.expanded("record"), false);
   owner.retire("part:1");
   replacement.set(true);
   assertEquals(
-    owner.disclosure("part:1", owner.generation("one")).value(),
+    owner.disclosure("record", "part:1", owner.generation("one")).value(),
     undefined,
   );
 });
 
 Deno.test("required rows override only category defaults, not explicit reader choices", () => {
   const owner = createTranscriptInteraction();
-  const group = owner.disclosure("work:failure", "one");
-  assertEquals(group.expanded("work", { expandWork: false }, true), true);
+  const group = owner.disclosure("activity", "work:failure", "one");
+  assertEquals(group.expanded("system", { expandSystem: false }, true), true);
   group.set(false);
-  assertEquals(group.expanded("work", { expandWork: true }, true), false);
-  const compaction = owner.disclosure("compaction", "one");
+  assertEquals(group.expanded("system", { expandSystem: true }, true), false);
+  const compaction = owner.disclosure("record", "compaction", "one");
   assertEquals(
     compaction.expanded("compaction", { expandCompaction: true }),
     true,

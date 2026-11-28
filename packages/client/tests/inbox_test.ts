@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import {
-  ageing,
   createInbox,
   createTabs,
   inboxProjects,
   inboxStatus,
   rollup,
-  unread,
-  visitTime,
 } from "./supervision-fixture.ts";
+import { age } from "../format.ts";
+import { unread } from "../inbox.ts";
 import { DEFAULT_PREFS, isPreference } from "@otk/protocol";
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
 function entry(id: string, status: IndexEntry["status"] = "idle"): IndexEntry {
@@ -35,7 +34,6 @@ function snapshot(): InboxSnapshot {
   return {
     projects: [{
       directory: "/p",
-      order: 0,
       added: true,
       inactive: false,
       lastVisit: 0,
@@ -90,7 +88,7 @@ Deno.test("deleted metadata cannot retain live family attention or phantom tabs"
     tabs.stop();
   }
 });
-Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle priority without treating idle startup as a finish", () => {
+Deno.test("D78: inbox rollup prioritizes unseen finishes over work without treating idle startup as a finish", () => {
   const inbox = snapshot(),
     idle = entry("idle"),
     busy = entry("busy", "busy"),
@@ -108,7 +106,7 @@ Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle prior
   assertEquals(inboxStatus(blocked, inbox), "blocked");
   assertEquals(rollup([], inbox), "none");
 });
-Deno.test("tracked and discovered projects and task tabs share attention-first aggregation independently of input order", () => {
+Deno.test("D78: tracked and discovered projects and task tabs share attention-first aggregation independently of input order", () => {
   const inbox = snapshot(),
     done = entry("done"),
     busy = entry("busy", "busy"),
@@ -144,15 +142,31 @@ Deno.test("tracked and discovered projects and task tabs share attention-first a
   assertEquals(tabs.tabs()[0].status, "working");
   tabs.stop();
 });
-Deno.test("live-session unread compares finish and seen independently of working status", () => {
+Deno.test("live-session unread borrows the entity replica independently of work and legacy marks", () => {
   const inbox = snapshot();
   const session = entry("s");
+  const park = (unseen: boolean) =>
+    inbox.entities = {
+      "session:s": {
+        kind: "session",
+        id: "s",
+        state: "working",
+        previous: "none",
+        counts: { blocked: 0, working: 1, finished: 0, unseen: Number(unseen) },
+      },
+    };
   assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 10;
+  assertEquals(unread(session, inbox), false);
+  park(true);
   assert(unread(session, inbox));
   inbox.seen.s = 10;
+  assert(unread(session, inbox));
+  park(false);
   assertEquals(unread(session, inbox), false);
   inbox.finishes.s = 11;
+  assertEquals(unread(session, inbox), false);
+  park(true);
   assert(unread(session, inbox));
   assertEquals(
     unread({ ...session, deleted: { at: 12, how: "provider" } }, inbox),
@@ -160,7 +174,9 @@ Deno.test("live-session unread compares finish and seen independently of working
   );
   assertEquals(inboxStatus(entry("s", "busy"), inbox), "working");
 });
-Deno.test("visit labels and ageing use the injected clock at exact 2h, 8h, 24h boundaries and configured thresholds", () => {
+// S4 (decision 62): names are not tinted by visit age; the neutral clock and
+// the stored ageing preference remain.
+Deno.test("visit labels use the injected clock and the stored ageing preference stays valid", () => {
   const h = 3_600_000, last = 1000;
   for (
     const [elapsed, text] of [
@@ -171,19 +187,8 @@ Deno.test("visit labels and ageing use the injected clock at exact 2h, 8h, 24h b
       [27 * h, "1d 3h"],
       [48 * h, "2d"],
     ] as const
-  ) assertEquals(visitTime(last, last + elapsed), text);
-  for (
-    const [elapsed, level] of [
-      [2 * h - 1, 0],
-      [2 * h, 1],
-      [8 * h - 1, 1],
-      [8 * h, 2],
-      [24 * h - 1, 2],
-      [24 * h, 3],
-    ]
-  ) assertEquals(ageing(last, last + elapsed), level);
-  assertEquals(ageing(last, last + 30, [10, 20, 30]), 3);
-  assertEquals(visitTime(last, 0), "now");
+  ) assertEquals(age(last, last + elapsed).text, text);
+  assertEquals(age(last, 0).text, "now");
   assertEquals(DEFAULT_PREFS.projectAgeing, [2 * h, 8 * h, 24 * h]);
   assert(isPreference("projectAgeing", [10, 20, 30]));
   for (
@@ -203,17 +208,19 @@ Deno.test("project projections keep stored order, freeze inactive visits and exp
   };
   inbox.projects.unshift({
     directory: "/q",
-    order: 1,
     added: false,
     inactive: false,
     lastVisit: 0,
   });
   const idle = entry("s");
   // Empty non-template directories retain policy metadata but no longer qualify as rows.
-  assertEquals(inboxProjects([idle], inbox, 120_000).map((p) => p.directory), [
-    "/p",
-  ]);
-  assertEquals(inboxProjects([idle], inbox, 120_000)[0].visitText, "1m");
+  const rows = inboxProjects([idle], inbox, 120_000);
+  assertEquals(rows.map((p) => p.directory), ["/p"]);
+  assertEquals(rows[0].timer?.time.text, "1m");
+  assert(
+    !("visitText" in rows[0]),
+    "Project rows only expose structured visits",
+  );
   for (
     const active of [entry("s", "busy"), {
       ...entry("s"),
@@ -273,10 +280,10 @@ Deno.test("phantom rule 1: all ungrouped working, blocked and unseen-finished se
     });
     tabs.update({ directory: "/p", entries, inbox });
     assertEquals(tabs.tabs().map((t) => t.id), [
+      "task",
+      "busy",
       "blocked",
       "finished",
-      "busy",
-      "task",
     ]);
   }
 });
@@ -299,19 +306,19 @@ Deno.test("phantom rule 2: a single preview replaces idle previews but cannot re
   });
   tabs.preview("a");
   tabs.preview("b");
-  assertEquals(tabs.tabs().map((t) => t.id), ["busy", "b", "task"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["task", "b", "busy"]);
   tabs.preview("busy");
   tabs.preview("a");
   assertEquals(tabs.tabs().filter((t) => t.preview).map((t) => t.id), ["a"]);
   assert(tabs.tabs().some((t) => t.id === "busy"));
   tabs.preview("grouped");
   assertEquals(tabs.state.selected, { kind: "task", id: "task" });
-  assertEquals(tabs.tabs().map((t) => t.id), ["busy", "task"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["task", "busy"]);
 });
 Deno.test("phantom rule 3: pin, double-click and sending promote to a title-named task through an injected port", async () => {
   for (const action of ["pin", "double-click", "send"]) {
     const inbox = snapshot(), s = entry("session title");
-    let promoted = 0, sent = 0;
+    let promoted = 0;
     const tabs = createTabs((session) => {
       const task: TaskRecord = {
         id: "solid",
@@ -327,12 +334,8 @@ Deno.test("phantom rule 3: pin, double-click and sending promote to a title-name
     const input = { directory: "/p", entries: [s], inbox };
     tabs.update(input);
     tabs.preview(s.id);
-    if (action === "send") {
-      await tabs.send(s.id, () => {
-        sent++;
-        return Promise.resolve();
-      });
-    } else await tabs.pin(s.id);
+    if (action === "send") await tabs.ensureTask(s.id);
+    else await tabs.pin(s.id);
     tabs.update(input);
     assertEquals(tabs.tabs().map((t) => [t.kind, t.title, t.sessions]), [[
       "task",
@@ -341,7 +344,6 @@ Deno.test("phantom rule 3: pin, double-click and sending promote to a title-name
     ]]);
     assertEquals(tabs.state.selected, { kind: "task", id: "solid" });
     assertEquals(promoted, 1);
-    assertEquals(sent, action === "send" ? 1 : 0);
   }
 });
 Deno.test("phantom rule 4: idle and seen stays selected until leaving; busy or unseen never disappears on leave", () => {
@@ -455,7 +457,7 @@ Deno.test("helper URLs select their owning task and removed membership preserves
   });
   tabs.update(input);
   tabs.preview("helper");
-  assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
+  assertEquals(tabs.state.selected, { kind: "task", id: "task" });
 });
 
 Deno.test("selected helpers reconcile task ownership and remembered identity when task or ancestry metadata arrives late", () => {
@@ -499,8 +501,8 @@ Deno.test("selected helpers reconcile task ownership and remembered identity whe
       order: 1,
     });
     tabs.update(input);
-    assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
-    assertEquals(tabs.sessionFor("helper-task"), "nested");
+    assertEquals(tabs.state.selected, { kind: "task", id: "root-task" });
+    assertEquals(tabs.sessionFor("helper-task"), undefined);
     inbox.tasks = [task];
     helper.parentID = undefined;
     tabs.update(input);

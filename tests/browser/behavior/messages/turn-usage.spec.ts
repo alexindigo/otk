@@ -1,15 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AssistantMessage, Message } from "@otk/protocol";
-import * as timingProtocol from "@otk/protocol";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { hoverCompletedUsage, prompt } from "../../pages/transcript.ts";
-// Node loads the public barrel as CommonJS; Deno uses its named exports.
-const protocol = timingProtocol as typeof timingProtocol & {
-  default?: typeof timingProtocol;
-};
-const { TurnTimingAccumulator } = protocol.default ?? protocol;
+
+/** The display's one duration owner (packages/client/format.ts) rounds to
+ * tenths half-up; toFixed(1) on a binary 0.x5 rounds down (150 ms -> 0.1). */
+const shownSeconds = (
+  timing: { state: string; workingMs?: number } | undefined,
+) =>
+  `${
+    Math.round((timing?.state === "known" ? timing.workingMs! : NaN) / 100) /
+    10
+  }s`;
 test.use({ profile: "messages-priced" });
 test("messages.priced-native-multistep-usage-display-persistence", {
   tag: ["@messages", "@contracts"],
@@ -88,7 +92,11 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   const rows = page.locator(".otk-usage-breakdown tbody tr");
   await expect(rows).toHaveCount(3);
-  expect(await page.locator(".otk-usage-breakdown thead th").allTextContents())
+  expect(
+    await page.locator(".otk-usage-breakdown thead").getByRole(
+      "columnheader",
+    ).allTextContents(),
+  )
     .toEqual([
       "Call",
       "Activity",
@@ -102,7 +110,14 @@ test("messages.priced-native-multistep-usage-display-persistence", {
       "Time",
     ]);
   const values = await rows.evaluateAll((rows) =>
-    rows.map((row) => Array.from(row.children, (cell) => cell.textContent!))
+    rows.map((row) =>
+      Array.from(
+        row.querySelectorAll(
+          ":scope > .otk-usage-identity > *, :scope > td:not(.otk-usage-identity)",
+        ),
+        (cell) => cell.textContent!,
+      )
+    )
   );
   expect(values.map((r) => r[0])).toEqual(["1", "2", "3"]);
   expect(values.map((r) => r[1])).toEqual([
@@ -129,13 +144,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
     }
     expect(Math.abs(Number(values[i][8].replace(/[$,]/g, "")) - m.cost!))
       .toBeLessThanOrEqual(.005);
-    expect(values[i][9]).toBe(
-      `${
-        ((detail.calls[i].timing?.state === "known"
-          ? detail.calls[i].timing.workingMs
-          : NaN) / 1000).toFixed(1)
-      }s`,
-    );
+    expect(values[i][9]).toBe(shownSeconds(detail.calls[i].timing));
   }
   const totals = await page.locator(".otk-usage-breakdown tfoot tr").evaluate(
     (row) => Array.from(row.children, (cell) => cell.textContent),
@@ -156,37 +165,19 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   for (const [i, rate] of [2, 4, 4, .5, 3].entries()) {
     expect(Math.abs(costs[i] - sums[i] * rate / 1e6)).toBeLessThanOrEqual(1e-9);
   }
-  const turnTime = `${
-    ((detail.summary.timing?.state === "known"
-      ? detail.summary.timing.workingMs
-      : NaN) / 1000).toFixed(1)
-  }s`;
+  const turnTime = shownSeconds(detail.summary.timing);
   await expect(page.locator(".otk-turn-time")).toHaveText(
     `Worked for ${turnTime}`,
   );
-  const parts = steps.flatMap((step) => step.parts);
-  const firstText = parts.findIndex((part) => part.kind === "text");
-  expect(firstText).toBeGreaterThan(0);
-  const segmentMs = TurnTimingAccumulator.segment(
-    parts.slice(0, firstText).flatMap((part) =>
-      part.kind === "tool"
-        ? [part.call.time]
-        : part.kind === "reasoning"
-        ? [part.time]
-        : []
-    ),
-  );
-  expect(segmentMs).toBeDefined();
-  await expect(page.locator(".otk-work-fold span").first()).toHaveText(
-    `Worked for ${(segmentMs! / 1000).toFixed(1)}s`,
-  );
-  // Bookkeeping after the answer has no segment clock, even with a known turn.
-  await expect(page.locator(".otk-work-fold").last()).toHaveText("Work log");
+  const strip = page.locator(".otk-work-strip");
+  await expect(strip).toContainText("Work log");
+  await expect(strip).not.toContainText(/Worked for|counting/);
   expect(
     await page.locator(".otk-turn-usage").evaluate((u) => {
       const a = u.getBoundingClientRect(),
-        r = u.previousElementSibling!.getBoundingClientRect();
-      return r.right <= a.left &&
+        r = u.closest(".otk-meta-item")!.previousElementSibling!
+          .getBoundingClientRect();
+      return r.width > 0 && r.right <= a.left &&
         Math.abs(r.y + r.height / 2 - a.y - a.height / 2) <= .5;
     }),
   ).toBe(true);
@@ -196,10 +187,10 @@ test("messages.priced-native-multistep-usage-display-persistence", {
         rows = Array.from(table.querySelectorAll("tbody tr"));
       return panel.width > 0 && panel.height > 0 && panel.left >= 0 &&
         panel.right <= innerWidth && rows.every((row) =>
-          Array.from(row.children).slice(2).every((cell, i) =>
+          Array.from(row.children).slice(1).every((cell, i) =>
             Math.abs(
               cell.getBoundingClientRect().right -
-                rows[0].children[i + 2].getBoundingClientRect().right,
+                rows[0].children[i + 1].getBoundingClientRect().right,
             ) <= .5
           )
         );
@@ -248,9 +239,16 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   ).toBe(true);
   // The popover shell opens before its complete usage snapshot installs.
   await expect.poll(() =>
-    rows.evaluateAll((rows) => rows.map((row) => row.children.length))
+    rows.evaluateAll((rows) =>
+      rows.map((row) =>
+        row.querySelectorAll(
+          ":scope > .otk-usage-identity > *, :scope > td:not(.otk-usage-identity)",
+        ).length
+      )
+    )
   ).toEqual([9, 9, 9]);
-  await expect(page.locator(".otk-message-footer")).not.toContainText("$");
+  await expect(page.locator("[data-role=assistant] .otk-message-footer")).not
+    .toContainText("$");
   await expect(page.locator(".otk-context-meter")).not.toHaveAttribute(
     "data-cost",
   );

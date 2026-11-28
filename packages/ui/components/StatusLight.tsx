@@ -1,32 +1,25 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./StatusLight.css" with { type: "text" };
-import { createEffect, createSignal, onCleanup, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup } from "solid-js";
 import {
   LIGHT_STATES,
   lightDescription,
   type LightState,
 } from "./status-light.ts";
-import {
-  type AttentionLampScope,
-  useAttentionPresentation,
-} from "../registries/attention.tsx";
-
+import StateShape from "./StateShape.tsx";
 const BLINK_DURATION_MS = 250;
 
-/** Inputs only: event identity changes blink once; initial mounting is silent. */
+/** Inputs only: a verdict change blinks once; initial mounting is silent. */
 export default function StatusLight(props: {
   state: LightState;
   small?: boolean;
   label?: string;
   dependencies?: number;
+  /** Explicit animation input for standalone consumers. Application callers
+   * use published verdict transitions and do not supply this input. */
   event?: string | number;
-  attention?: AttentionLampScope;
 }): import("solid-js").Element {
-  const presentation = useAttentionPresentation();
-  const state = () =>
-    props.attention && presentation
-      ? presentation.light(props.attention, props.state)
-      : props.state;
+  const state = () => props.state;
   const [blink, setBlink] = createSignal(false);
   const description = () =>
     props.label ?? lightDescription(state(), props.dependencies);
@@ -55,22 +48,12 @@ export default function StatusLight(props: {
     >
       <span class="otk-lamp-glow" aria-hidden="true" />
       <span class="otk-lamp-body" aria-hidden="true" />
-      <span class="otk-lamp-shape" aria-hidden="true">
-        <Show
-          when={state() === "dependencies"}
-          fallback={LIGHT_STATES[state()].shape}
-        >
-          <svg
-            class="otk-lamp-dependency-shape"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path d="M6 1 11 6 6 11 1 6ZM4 6h4" />
-          </svg>
-        </Show>
-      </span>
+      <StateShape
+        class={state() === "dependencies"
+          ? "otk-lamp-shape otk-lamp-dependency-shape"
+          : "otk-lamp-shape"}
+        kind={LIGHT_STATES[state()].shape}
+      />
     </span>
   );
 }

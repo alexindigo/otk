@@ -16,8 +16,8 @@ const message = (id: string): Message => ({
   parts: [],
 });
 const reverted = (id: string): RevertInfo => ({
-  messageID: id,
-  messageCount: id === "p1" ? 2 : 1,
+  boundaryID: id,
+  messageIDs: id === "p1" ? ["p1", "p2"] : [id],
   files: [],
   prompt: {
     input: id,
@@ -35,13 +35,12 @@ const info = (revert?: RevertInfo): ContentSession => ({
   archived: false,
   revert,
 });
-function fixture() {
+function fixture(acquireBoundary = false) {
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "a" },
     latestPrompt: { id: "p2" },
     clock: { epoch: "initial", seq: 0 },
     content: { ...emptyContent(), messages: [message("p1"), message("p2")] },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,
@@ -49,7 +48,21 @@ function fixture() {
   });
   const calls: string[] = [], drafts = createDrafts();
   const owner = createSessionRevert({
-    session,
+    session: {
+      ...session,
+      ...(acquireBoundary && {
+        transcripts: {
+          get: () => ({
+            ensure: (id: string) => {
+              session.update((state) => {
+                state.content.messages.push(message(id));
+              });
+              return Promise.resolve();
+            },
+          }),
+        },
+      }),
+    },
     drafts,
     status: { working: () => false, subscribe: () => () => {} },
     actions: {
@@ -72,7 +85,8 @@ const turn = async () => {
 Deno.test("undo remains serialized until authoritative rollback publication and then targets the newly visible prompt", async () => {
   const f = fixture();
   try {
-    const first = f.owner.undo();
+    await f.owner.undo();
+    const first = f.owner.confirm();
     await turn();
     assertEquals(f.owner.state.pending, "undo");
     assertEquals(f.session.state.content.revert, null);
@@ -93,7 +107,8 @@ Deno.test("undo remains serialized until authoritative rollback publication and 
     });
     await first;
     assertEquals(f.drafts.current("local/a").input, "p2");
-    const second = f.owner.undo();
+    await f.owner.undo();
+    const second = f.owner.confirm();
     await turn();
     assertEquals(f.calls, ["p2", "p1"]);
     f.session.update((state) => {
@@ -142,19 +157,21 @@ Deno.test("redo waits for restored messages, not just a cleared boundary or comp
 });
 
 Deno.test("undo completion follows authoritative page epoch/cutoff rather than native ID ordering or a mounted prompt", async () => {
-  const f = fixture();
+  const f = fixture(true);
   f.session.update((state) => {
     state.latestPrompt = { id: "boundary" };
     state.content.messages = [message("z-older-history")];
   });
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const operation = f.owner.undo();
+    await f.owner.undo();
+    const operation = f.owner.confirm();
     await turn();
     assertEquals(f.calls, ["boundary"]);
     f.session.update((state) => {
       state.clock = { epoch: "authoritative-rollback", seq: 0 };
       state.content.revert = reverted("boundary");
+      state.content.messages = [message("z-older-history")];
     });
     const result = await Promise.race([
       operation.then(() => "complete"),

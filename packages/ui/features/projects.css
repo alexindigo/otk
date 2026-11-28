@@ -2,29 +2,22 @@
 .otk-template-paths {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 280px;
-  padding: 16px;
+  gap: var(--space-1);
+  max-height: calc(280 * var(--otk-unit));
+  padding: var(--space-4);
 }
 .otk-template-paths > strong {
   font-size: var(--text-prose);
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
 }
 .otk-template-paths > button {
   text-align: left;
   overflow-wrap: anywhere;
 }
 .otk-project-settings {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .otk-project-settings h2 {
   font-size: var(--text-heading);
   line-height: var(--line-heading);
-}
-.otk-ageing-fields {
-  display: flex;
-  gap: 12px;
-}
-.otk-ageing-fields input {
-  width: 100%;
 }

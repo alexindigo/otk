@@ -8,7 +8,10 @@ import type { Page } from "@playwright/test";
 const viewport = ".otk-project-session-tree";
 async function scroll(page: Page, top: number | "end") {
   const pane = page.locator(viewport);
-  await pane.hover();
+  // Aim at the list surface above its row controls, between the resize
+  // handle on the leading edge and the scrollbar on the trailing edge.
+  const x = await pane.evaluate((el) => el.clientWidth / 2);
+  await pane.hover({ position: { x, y: 2 } });
   // Acquiring another page can extend the physical end. Keep requesting the
   // original target through real wheel input instead of assuming full catalog
   // geometry was present before the first gesture. Each gesture at the end
@@ -83,7 +86,7 @@ test.describe("direct route", () => {
       await expect(page.locator(".otk-session-row")).toHaveCount(1);
       await expect(
         page.locator(
-          ".otk-session-group-heading[data-session-group] .otk-control-label",
+          ".otk-session-group[data-session-group] .otk-control-label",
         ).first(),
       ).toHaveText("Initial grouped work");
       await expect(page.locator("body")).not.toContainText("Core transcript");
@@ -99,6 +102,62 @@ test.describe("direct route", () => {
 });
 test.describe("measured Sessions", () => {
   test.use({ profile: "contract-sessions-window" });
+  test("sessions.retained-editor-reconciliation-blur-is-not-submission", {
+    tag: ["@sessions", "@contracts", "@isolated"],
+  }, async ({ isolatedState: state, page }, info) => {
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "succeed",
+    });
+    const frames = await wire(page);
+    await openSession(state, page, "tstv1-otk");
+    await sessionContext(page, "[data-session=tstv1-otk]", "session.rename");
+    const editor = page.getByRole("textbox", {
+      name: "Rename session",
+      exact: true,
+    });
+    await expect(editor).toBeFocused();
+    await editor.fill("Retained reconciliation draft");
+    const before = frames.sent.length;
+    // Native removal/reinsertion is the focus boundary used by keyed DOM moves.
+    // Keep the same node and position, as the window's retention owner does.
+    await editor.evaluate((input) => {
+      const row = input.closest("[data-virtual-key]")!;
+      const parent = row.parentNode!, next = row.nextSibling;
+      row.remove();
+      parent.insertBefore(row, next);
+    });
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveValue("Retained reconciliation draft");
+    expect(
+      frames.sent.slice(before).filter(({ frame }) =>
+        frame.method === "session.rename"
+      ),
+    ).toEqual([]);
+    expect(
+      (await state.product("session.get", { sessionID: "tstv1-otk" })).title,
+    )
+      .not.toBe("Retained reconciliation draft");
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await expect(editor).toBeFocused();
+      await info.attach(`retained-editor-${theme}`, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: "image/png",
+      });
+    }
+    await page.getByRole("searchbox", { name: "Search sessions by title" })
+      .click();
+    await expect(editor).toHaveCount(0);
+    expect(
+      (await state.product("session.get", { sessionID: "tstv1-otk" })).title,
+    )
+      .toBe("Retained reconciliation draft");
+  });
   test(
     "sessions.virtual-list-bounded-dom-no-row-body-reads-unmounts-on-collapse",
     { tag: ["@sessions", "@contracts", "@isolated"] },
@@ -153,7 +212,7 @@ test.describe("measured Sessions", () => {
       ).toEqual(["302", "302"]);
       await expect(last.locator(".otk-session-cost")).toHaveText("$0.13");
       expect(await page.locator(".otk-session-row").count()).toBeLessThan(40);
-      await last.evaluate((e) => {
+      await last.locator(".otk-session-open").evaluate((e) => {
         Object.assign(globalThis, { pinnedSessionRow: e });
         (e as HTMLElement).focus();
       });
@@ -256,9 +315,12 @@ test.describe("measured Sessions", () => {
       await scroll(page, 3000);
       const editing = await anchor(page);
       await input.press("Enter");
-      // FP1's shared row track owns the alert, not the editor's internal subtree.
-      const failure = page.locator(
-        ".otk-session-row.is-editing .otk-list-row-feedback [role=alert]",
+      // 2.122: the row renders its confirmed title again after rejection.
+      const rejected = page.locator(
+        '.otk-session-row[data-session="tstv1-w-50"]',
+      );
+      const failure = rejected.locator(
+        ".otk-sidebar-row-feedback [role=alert]",
       );
       await expect(failure).toHaveCount(1);
       await expect(failure).toBeVisible();
@@ -266,23 +328,25 @@ test.describe("measured Sessions", () => {
       await expect(failure).not.toHaveAttribute("aria-hidden", "true");
       const failureID = await failure.getAttribute("id");
       expect(failureID).toBeTruthy();
-      expect((await input.getAttribute("aria-describedby"))!.split(/\s+/))
-        .toContain(failureID);
-      await expect(input).toHaveAttribute("aria-invalid", "true");
-      await expect(failure).toContainText(
-        "Renaming session failed for Window session 050",
+      await expect(input).toHaveCount(0);
+      await expect(failure.locator(".otk-failure-heading strong")).toHaveText(
+        "Renaming session failed",
       );
+      await expect(rejected)
+        .toHaveAttribute("data-session", "tstv1-w-50");
+      await expect(rejected)
+        .toHaveAttribute("title", "Window session 050");
       await expect(
         failure.getByRole("link", { name: "Window session 050", exact: true }),
       )
-        .toHaveAttribute("href", "#/local/tstv1-w-50");
+        .toHaveCount(0);
       await expect(failure).toContainText("OTK has no further details");
       await expect(failure.locator(".otk-failure-recovery")).toHaveCount(0);
-      await expect(input).toHaveValue("Retained editor");
+      await expect(rejected.locator(".otk-sidebar-title-text")).toHaveText(
+        "Window session 050",
+      );
       await expect.poll(() =>
-        page.locator(".otk-session-row.is-editing").evaluate((e) =>
-          e.getBoundingClientRect().height
-        )
+        rejected.evaluate((e) => e.getBoundingClientRect().height)
       ).toBeGreaterThan(30);
       await expect.poll(async () => {
         const a = await anchor(page);
@@ -294,11 +358,11 @@ test.describe("measured Sessions", () => {
         ),
       ).toBe(true);
       expect(
-        await page.locator(".otk-session-row.is-editing").evaluate((row) => {
+        await rejected.evaluate((row) => {
           const selectors = [
-            "input",
+            ".otk-sidebar-title-text",
             ".otk-status-light",
-            ".otk-list-row-trailing",
+            ".otk-sidebar-meta",
           ];
           const ys = selectors.map((s) => {
             const r = row.querySelector(s)!.getBoundingClientRect();
@@ -307,18 +371,15 @@ test.describe("measured Sessions", () => {
           return Math.max(...ys) - Math.min(...ys) <= 1;
         }),
       ).toBe(true);
-      // Capture only after the unchanged anchor/geometry proof. Explicitly reveal
-      // the retained editor for the review, not as a fix for feedback movement.
-      await input.scrollIntoViewIfNeeded();
+      // Capture only after the unchanged anchor and geometry proof.
+      await rejected.scrollIntoViewIfNeeded();
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await state.product("prefs.set", { key: "theme", value: theme });
         await expect(page.locator("html")).toHaveAttribute(
           "data-otk-theme",
           theme,
         );
-        // Saving a theme can blur the retained editor and start another save.
-        // Review the settled rejection, never that real retry's pending frame.
-        await expect(input).not.toHaveAttribute("aria-busy", "true");
+        await expect(input).toHaveCount(0);
         await expect(failure).toBeVisible();
         await expect(failure).toContainText("Renaming session failed");
         await info.attach(`fx17-rename-failure-${theme}`, {
@@ -328,15 +389,14 @@ test.describe("measured Sessions", () => {
       }
       await search.fill("No matching sessions while editing");
       await expect(page.locator(".otk-session-row")).toHaveCount(1);
-      await expect(input).toHaveValue("Retained editor");
-      // Filtering blurs the title input and owns a second rejected save. Join
-      // that real intent before retrying; Enter during readonly/pending is inert.
-      await expect(input).not.toHaveAttribute("aria-busy", "true");
+      await expect(failure).toBeVisible();
       await state.controller.call("scenario", {
         lease: state.lease.lease,
         action: "succeed",
       });
-      await input.click();
+      await sessionContext(page, "[data-session=tstv1-w-50]", "session.rename");
+      await expect(input).toHaveValue("Window session 050");
+      await input.fill("Retained editor");
       await input.press("Enter");
       await expect(page.locator(".otk-title-editor")).toHaveCount(0);
       await expect(page.locator(".otk-project-sessions")).toContainText(
@@ -358,16 +418,19 @@ test.describe("measured Sessions", () => {
             es.every((e) => {
               const a = e.querySelector(".otk-status-light")!
                   .getBoundingClientRect(),
-                b = e.querySelector(".otk-row-title")!.getBoundingClientRect();
+                // Style7 shared ListRow label slot (style7fix note; decision 3).
+                b = e.querySelector(".otk-sidebar-title-text")!
+                  .getBoundingClientRect();
               return Math.abs(a.y + a.height / 2 - b.y - b.height / 2) <= 1;
             })
           ),
         ).toBe(true);
         expect(
-          await page.locator(".otk-session-row .otk-row-title").evaluateAll(
-            (es) =>
-              es.every((e) => getComputedStyle(e).whiteSpace === "nowrap"),
-          ),
+          await page.locator(".otk-session-row .otk-sidebar-title-text")
+            .evaluateAll(
+              (es) =>
+                es.every((e) => getComputedStyle(e).whiteSpace === "nowrap"),
+            ),
         ).toBe(true);
         const gaps = await page.locator(".otk-panel-new-session").evaluate(
           (e) => {

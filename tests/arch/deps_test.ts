@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { dependencySpecifiers, sourceInventory } from "./analysis.ts";
+import { dependencySpecifiers, Source, sourceInventory } from "./analysis.ts";
 import { dependencyBypasses } from "./bypasses.ts";
 dependencyBypasses((source) =>
   imports(source).flatMap((specifier) =>
@@ -1023,11 +1023,14 @@ Deno.test("final application entries compose public kit modules and keep reflect
         /"(@otk\/([\w-]+))":\s*new URL\("([^"]+)"\s*,\s*import\.meta\.url\)/g,
       ),
     ];
-    assertEquals(mappings.map((match) => match[2]).sort(), [
-      "client",
-      "protocol",
-      "ui",
-    ]);
+    // The application selects the same content converter as its producer for
+    // pending prompts; the independent UI consumer still selects only the UI kit.
+    assertEquals(
+      mappings.map((match) => match[2]).sort(),
+      config === "web/vite.config.ts"
+        ? ["client", "content", "protocol", "ui"]
+        : ["client", "protocol", "ui"],
+    );
     for (const match of mappings) {
       const entry = new URL(match[3], new URL(config, root));
       const metadata = JSON.parse(await read(`packages/${match[2]}/deno.json`));
@@ -1084,7 +1087,13 @@ Deno.test("notification registry is feature/channel agnostic and notification ac
   const hub = await Deno.readTextFile(
     new URL("packages/client/notifications.ts", root),
   );
-  assertEquals(imports(hub), []);
+  assertEquals(imports(hub), ["./format.ts"]);
+  const context = new Source(hub).all.find((node) =>
+    node.type === "ImportDeclaration" && node.source.value === "./format.ts"
+  );
+  assert(
+    context?.type === "ImportDeclaration" && context.importKind === "type",
+  );
   assert(
     !/Notification\b|AudioContext|document\b|window\b|solid-js|localStorage|\"(?:toast|os|sound|badge)\"/
       .test(hub),

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TurnUsage.css" with { type: "text" };
-import { scrollRegion } from "./ScrollRegion.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
-import { timingExplanation, workingTime } from "./work-log.ts";
+import { timingExplanation, workingTimeValue } from "./work-log.ts";
+import TimeValue from "./TimeValue.tsx";
 import UsageCost from "./UsageCost.tsx";
 import { errorFeedback, type FailureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
@@ -12,8 +13,6 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 export default function UsageDetail(
   props: { usage?: Usage; error?: string | FailureValue; showCost: boolean },
 ): import("solid-js").Element {
-  const duration = (time: Usage["timing"]) =>
-    workingTime(time)?.replace("Worked for ", "") ?? "Time unknown";
   const count = (value: number | null) =>
     value === null ? "Not reported" : exactCount(value);
   return (
@@ -55,8 +54,8 @@ export default function UsageDetail(
         )}
       </Show>
       {/* The focus target outlives loading, errors and complete ledger paint. */}
-      <div
-        class={[scrollRegion(), "otk-usage-scroll"]}
+      <ScrollRegion
+        class="otk-usage-scroll"
         tabindex={0}
         role="region"
         aria-label="Model calls"
@@ -68,11 +67,24 @@ export default function UsageDetail(
             : <p>Loading usage breakdown...</p>}
         >
           {(usage) => (
-            <table class="otk-usage-breakdown">
-              <thead>
-                <tr>
-                  <th scope="col">Call</th>
-                  <th scope="col">Activity</th>
+            <table
+              class="otk-usage-breakdown"
+              role="table"
+              style={{
+                "--usage-metrics": usage().categories.length +
+                  (props.showCost ? 3 : 2),
+              }}
+            >
+              <thead role="rowgroup">
+                <tr role="row">
+                  <td
+                    colspan="2"
+                    role="presentation"
+                    class="otk-usage-identity"
+                  >
+                    <span role="columnheader">Call</span>
+                    <span role="columnheader">Activity</span>
+                  </td>
                   <th scope="col">Context</th>
                   <For
                     each={usage().categories}
@@ -86,17 +98,24 @@ export default function UsageDetail(
                   <th scope="col">Time</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup">
                 <For each={usage().calls} keyed={(call) => call.id}>
                   {(call, index) => (
-                    <tr data-call={call().id}>
-                      <th scope="row">{index() + 1}</th>
+                    <tr role="row" data-call={call().id}>
                       <td
-                        class="otk-usage-activity"
-                        aria-label={call().activity}
-                        title={call().activity}
+                        colspan="2"
+                        role="presentation"
+                        class="otk-usage-identity"
                       >
-                        <span>{call().activity}</span>
+                        <span role="rowheader">{index() + 1}</span>
+                        <span
+                          class="otk-usage-activity"
+                          role="cell"
+                          aria-label={call().activity}
+                          title={call().activity}
+                        >
+                          <span>{call().activity}</span>
+                        </span>
                       </td>
                       <td>
                         <span class="otk-usage-context">
@@ -130,15 +149,21 @@ export default function UsageDetail(
                         </td>
                       </Show>
                       <td title={timingExplanation(call().timing)}>
-                        {duration(call().timing)}
+                        <TimeValue
+                          value={workingTimeValue(
+                            call().timing,
+                            undefined,
+                            "column",
+                          )}
+                        />
                       </td>
                     </tr>
                   )}
                 </For>
               </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row" colspan="2">Total</th>
+              <tfoot role="rowgroup">
+                <tr role="row">
+                  <th scope="row" colspan="2" aria-colspan={2}>Total</th>
                   <td>{count(usage().context)}</td>
                   <For
                     each={usage().categories}
@@ -163,14 +188,20 @@ export default function UsageDetail(
                     </td>
                   </Show>
                   <td title={timingExplanation(usage().timing)}>
-                    {duration(usage().timing)}
+                    <TimeValue
+                      value={workingTimeValue(
+                        usage().timing,
+                        undefined,
+                        "column",
+                      )}
+                    />
                   </td>
                 </tr>
               </tfoot>
             </table>
           )}
         </Show>
-      </div>
+      </ScrollRegion>
       <Show when={props.usage}>
         {(usage) => (
           <div class="otk-usage-notes">

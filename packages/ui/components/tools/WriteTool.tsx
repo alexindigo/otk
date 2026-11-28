@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { WriteCall } from "@otk/protocol";
-import Code from "../Code.tsx";
+import CodeBlock from "../CodeBlock.tsx";
 import Diagnostics from "./Diagnostics.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
@@ -21,7 +21,14 @@ export function registerWriteTool(tools: ToolRegistry): void {
 export default function WriteTool(props: { call: WriteCall }) {
   return (
     <>
-      <Code text={props.call.content} lang={props.call.lang} lineNumbers />
+      <CodeBlock
+        source={{
+          kind: "file",
+          text: props.call.content,
+          lang: props.call.lang,
+          startLine: 1,
+        }}
+      />
       <Diagnostics items={props.call.diagnostics} />
     </>
   );

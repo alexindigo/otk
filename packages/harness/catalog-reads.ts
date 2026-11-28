@@ -4,6 +4,8 @@ import type {
   CatalogConfig,
   CatalogFile,
   CatalogModelItem,
+  CatalogProject,
+  CatalogRepository,
   CommandOption,
   ModelCatalog,
   PermissionRequest,
@@ -58,6 +60,18 @@ export interface ConfigReadKinds {
     input: { directory: string };
     result: CatalogConfig[];
     chunk: CatalogConfig[];
+  };
+}
+export interface ProjectReadKinds {
+  "catalog.project": {
+    input: { directory: string };
+    result: CatalogProject[];
+    chunk: CatalogProject[];
+  };
+  "catalog.repository": {
+    input: { directory: string };
+    result: CatalogRepository[];
+    chunk: CatalogRepository[];
   };
 }
 export interface QuestionReadKinds {

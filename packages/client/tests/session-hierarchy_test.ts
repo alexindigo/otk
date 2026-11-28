@@ -2,15 +2,53 @@
 // Shared hierarchy consumers retain native family identity across checkouts.
 import { assert, assertEquals } from "@std/assert";
 import * as client from "@otk/client";
+import { createTabs } from "./supervision-fixture.ts";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { shellEntry, shellFixture } from "./shell-fixture.ts";
+
+Deno.test("cross-checkout helpers do not enter the breadcrumb until selected", () => {
+  const root = shellEntry("human", "/repo");
+  const child = shellEntry("failed", "/tree", root.id);
+  const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
+  tabs.update({
+    directory: root.directory,
+    entries: [root],
+    context: [root, child],
+    inbox: {
+      projects: [],
+      tasks: [{
+        id: "task",
+        name: "Human task",
+        directory: root.directory,
+        sessions: [root.id],
+        order: 0,
+      }],
+      seen: {},
+      finishes: {},
+      pathTemplates: [],
+      supervision: {
+        failed: {
+          state: "needsYou",
+          terminal: 10,
+          unseen: true,
+          outcome: "failed",
+        },
+      },
+    },
+  });
+  tabs.preview(root.id);
+  assertEquals(tabs.taskFor(child.id), undefined);
+  assertEquals(tabs.crumbs().map((row) => [row.id, !!row.external]), [[
+    root.id,
+    false,
+  ]]);
+  tabs.stop();
+});
 
 Deno.test("tabs and crumbs borrow the same PH1-local task projection for nested scopes", () => {
   const root = shellEntry("root", "/tree");
   const child = shellEntry("child", "/tree/src", root.id);
-  const tabs = client.createTabs(() =>
-    Promise.reject(new Error("No promotion"))
-  );
+  const tabs = createTabs(() => Promise.reject(new Error("No promotion")));
   tabs.update({
     directory: "/tree",
     directories: ["/tree", "/tree/src"],
@@ -28,6 +66,15 @@ Deno.test("tabs and crumbs borrow the same PH1-local task projection for nested 
       finishes: {},
       pathTemplates: [],
       supervision: { child: { state: "working", terminal: 0 } },
+      entities: {
+        "session:child": {
+          kind: "session",
+          id: "child",
+          state: "working",
+          previous: "none",
+          counts: { working: 1, blocked: 0, finished: 0, unseen: 0 },
+        },
+      },
     },
   });
   tabs.preview(child.id);
@@ -37,7 +84,7 @@ Deno.test("tabs and crumbs borrow the same PH1-local task projection for nested 
 });
 
 for (const prefix of ["opcv1", "opcv2"]) {
-  Deno.test(`INV-D ${prefix}: preferred child wins but cold fallback chooses root`, async () => {
+  Deno.test(`INV-D ${prefix}: remembered child stays exact and only a fresh default resolves to its human root`, async () => {
     const f = shellFixture();
     const root = shellEntry(`${prefix}-root`, "/repo");
     const child = shellEntry(`${prefix}-child`, "/repo", root.id);
@@ -54,7 +101,7 @@ for (const prefix of ["opcv1", "opcv2"]) {
     }
   });
 
-  Deno.test(`INV-D ${prefix}: project click restores saved child route`, async () => {
+  Deno.test(`INV-D ${prefix}: project click restores the exact saved child route`, async () => {
     const f = shellFixture();
     const root = shellEntry(`${prefix}-root`, "/repo");
     const child = shellEntry(`${prefix}-child`, "/repo", root.id);
@@ -89,7 +136,11 @@ for (const prefix of ["opcv1", "opcv2"]) {
         location,
         history: {
           state: undefined,
-          replaceState() {},
+          replaceState(_state, _unused, url) {
+            if (url) {
+              location.hash = new URL(String(url), "http://localhost").hash;
+            }
+          },
           pushState(_state, _unused, url) {
             location.hash = String(url).slice(String(url).indexOf("#"));
           },
@@ -173,18 +224,20 @@ for (const prefix of ["opcv1", "opcv2"]) {
         const tabs = f.resources.tabs(project);
         assert(
           tabs.tabs().some((tab) =>
-            tab.kind === "phantom" && tab.sessions.includes(child.id)
+            tab.kind === "phantom" && tab.id === root.id &&
+            tabs.belongsToTab(tab.id, child.id)
           ),
           "Child is visible in Sessions but no mandatory tab exists in its own worktree project",
         );
         tabs.preview(child.id);
-        assertEquals(tabs.state.selected?.id, child.id);
+        assertEquals(tabs.state.selected?.id, root.id);
         assertEquals(tabs.crumbs()[0], {
           id: root.id,
           kind: "ancestor",
           helper: false,
           depth: 0,
           external: true,
+          status: "none",
         });
         assert(
           tabs.tabs().some((tab) => tab.id === tabs.state.selected?.id),

@@ -50,7 +50,7 @@ const theme = new ThemeEngine(
 const stopTheme = theme.start();
 const ui = createUiRegistries();
 registerTextPart(ui.parts);
-registerToolPart(ui.parts);
+registerToolPart(ui.parts, ui.tools);
 registerGenericTool(ui.tools);
 registerTaskTool(ui.tools);
 registerEditTool(ui.tools);
@@ -181,7 +181,11 @@ function Consumer() {
   const remembered = () => {
     selected();
     interactionClock();
-    return owner.get(a)?.interaction.disclosure("heap-choice", "fixture")
+    return owner.get(a)?.interaction.disclosure(
+      "record",
+      "heap-choice",
+      "fixture",
+    )
       .value() ?? false;
   };
   connection.view({
@@ -245,6 +249,7 @@ function Consumer() {
             id="heap-choice"
             onClick={() => {
               const choice = owner.get(a)!.interaction.disclosure(
+                "record",
                 "heap-choice",
                 "fixture",
               );
@@ -297,7 +302,10 @@ function Consumer() {
               prefs: () => DEFAULT_PREFS,
               dirty() {},
               act: (action) => action(),
-              submit: (action) => action(),
+              submit: async (action) => {
+                await action(undefined, () => {}, "msg_fixture");
+                return { kind: "committed", messageID: "msg_fixture" };
+              },
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             };
@@ -323,7 +331,6 @@ function Consumer() {
                   connected
                   prefs={DEFAULT_PREFS}
                   permissions={[]}
-                  siblings={[]}
                   child={false}
                   revert={null}
                   busy={false}
@@ -331,7 +338,8 @@ function Consumer() {
                   onOlder={() => current.older()}
                   onRetry={() => current.refetch()}
                   onPrompt={() => Promise.resolve()}
-                  onAbort={() => Promise.resolve()}
+                  activity={() => ({ running: false, unstarted: 0 })}
+                  onStop={() => Promise.resolve()}
                 />
               </SessionProvider>
             );

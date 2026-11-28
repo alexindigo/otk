@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  nativeProjectMetadata,
+  projectPresentation,
+} from "./project-presentation.ts";
+import { CheckoutRepositories } from "@otk/harness";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type Derived,
@@ -51,6 +56,8 @@ import { HistoryReader } from "./history.ts";
 import { Messages, type NativeSession, SCAN_ROWS } from "./messages.ts";
 import { millis, record, reported, text, tokens } from "./map.ts";
 import { toolProgress } from "./tool-interpretation.ts";
+import { DeliveryIndex, deliveryReadCodec } from "@otk/harness";
+import { scanDeliveries } from "./delivery.ts";
 import {
   type ScalarMessage,
   scalarMessage,
@@ -98,7 +105,7 @@ export interface V2DigestReadiness {
   work?(ms: number): void;
   wait?<T>(value: Promise<T>, join?: boolean): Promise<T>;
   ioWait?<T>(value: Promise<T>, join?: boolean): Promise<T>;
-  admission?(signal: AbortSignal): Promise<() => void>;
+  admission?: import("@otk/harness").DigestPort["admission"];
   listed?(rows: readonly SessionMetadata[], signal: AbortSignal): Promise<void>;
   prefetchList?(
     input: import("@otk/protocol").SessionListInput,
@@ -106,6 +113,8 @@ export interface V2DigestReadiness {
   ): void;
 }
 export const opencodeV2ReadCodecs: import("@otk/harness").ProviderReadCodecs = {
+  "supervision.deliveries": deliveryReadCodec,
+  "supervision.delivered": arrayReadCodec(),
   "supervision.terminals": arrayReadCodec(),
   ...transcriptReadCodecs,
   ...catalogReadCodecs,
@@ -192,6 +201,10 @@ export class OpencodeV2DigestSink implements DigestSink {
       () => this.#wait(new Promise<void>((resolve) => setTimeout(resolve, 0))),
     );
     this.readers = {
+      "supervision.delivered": ({ ids, targets }, signal) => {
+        signal.throwIfAborted();
+        return Promise.resolve(this.delivered(ids, targets));
+      },
       ...this.#preparedReaders({
         ...catalogReaders(() => {
           if (!this.#client) throw new Error("V2 worker is not connected");
@@ -200,6 +213,34 @@ export class OpencodeV2DigestSink implements DigestSink {
         ...history.readers(),
       }),
       ...this.#transcripts.readers,
+      "supervision.deliveries": async (input, signal) => {
+        await this.#prepare(signal);
+        this.#check(signal);
+        const native = this.#native;
+        if (!native) return { updates: [], reset: true };
+        const parent = native.db.prepare(
+          "SELECT time_updated FROM session_v2 WHERE id=?",
+        ).get(ids.decode(input.parentID));
+        if (!parent) return { updates: [], reset: true };
+        const index = new DeliveryIndex(
+          storage.sql,
+          "opcv2_delivery",
+          (run) => storage.transaction(run),
+          policy.publishrows,
+        );
+        return index.step(
+          input,
+          native.identity,
+          Number(parent.time_updated),
+          (cursor) =>
+            scanDeliveries(
+              native.db,
+              input.parentID,
+              cursor,
+              policy.publishrows,
+            ),
+        );
+      },
       "supervision.terminals": async ({ after }, signal) => {
         // One source/project proof refresh per inventory pass, at its first
         // page. Continuation pages reuse that generation's proof (registration
@@ -283,6 +324,17 @@ export class OpencodeV2DigestSink implements DigestSink {
         return result;
       },
     };
+  }
+  delivered(
+    keys: readonly string[],
+    targets?: Record<string, { parentID: string; runID: string }>,
+  ): import("@otk/harness").DeliveryScalar[] {
+    return new DeliveryIndex(
+      this.storage.sql,
+      "opcv2_delivery",
+      (run) => this.storage.transaction(run),
+      this.policy.publishrows,
+    ).facts(keys, targets);
   }
   connection(value: number): void {
     if (value < this.#connection) return;
@@ -588,9 +640,35 @@ export class OpencodeV2DigestSink implements DigestSink {
     }
     const topology = new V2ProjectTopology(inventory);
     const roots = new Set(topology.roots());
+    const repositories = await CheckoutRepositories.discover([...roots]);
     const projects: ProjectSeed[] = [];
     const append = async (rows: ProjectSeed[]) => {
       this.#check(signal, connection);
+      rows = await repositories.seeds(rows, signal);
+      this.#check(signal, connection);
+      rows = rows.map((row) => {
+        const owners = new Set(
+          row.identities?.map((identity) => identity.repoID),
+        );
+        const owner = owners.size === 1
+          ? inventory.find((project) => owners.has(project.id))
+          : undefined;
+        if (!owner) return row;
+        const { id, name, color } = projectPresentation(owner);
+        const native = nativeProjectMetadata({ ...owner });
+        return {
+          ...row,
+          presentation: { id, name, color },
+          ...(native
+            ? {
+              nativeProject: {
+                updated: native.updated,
+                topology: native.topology,
+              },
+            }
+            : {}),
+        };
+      });
       for (const row of rows) this.#projectDirectories.add(row.directory);
       projects.push(...rows);
       await publish?.(rows);
@@ -815,6 +893,14 @@ export class OpencodeV2DigestSink implements DigestSink {
     revision: number,
     metadata?: SessionMetadata,
   ): Promise<void> {
+    if (connection === this.#connection) {
+      new DeliveryIndex(
+        this.storage.sql,
+        "opcv2_delivery",
+        (run) => this.storage.transaction(run),
+        this.policy.publishrows,
+      ).retire(id);
+    }
     return this.#transcripts.deleted(connection, id, revision, metadata);
   }
   deleteIntent(
@@ -936,12 +1022,43 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
         };
       },
       "opcv2.transcript": async (input, signal) => {
-        await this.#ensure(input.sessionID, signal);
+        await this.#ensure(input.sessionID, signal, false);
         return await this.transcript.facts(input, signal);
       },
       "opcv2.request.anchor": async (input, signal) => {
         await this.#ensure(input.sessionID, signal, false);
         return this.transcript.sequence(input.sessionID, input.messageID);
+      },
+      "opcv2.transcript.head": async (input, signal) => {
+        const connection = this.#connection;
+        const { client, native } = await this.source.prepare(signal);
+        this.source.check(signal);
+        if (connection !== this.#connection) {
+          throw new Error("V2 transcript source changed");
+        }
+        const cached = this.#sessionProofs.get(input.sessionID);
+        const row = native && cached?.native === native
+          ? native.db.prepare(
+            "SELECT directory,project_id FROM session_v2 WHERE id=?",
+          ).get(ids.decode(input.sessionID))
+          : undefined;
+        if (
+          row && cached && native &&
+          row.directory === cached.raw.location.directory &&
+          row.project_id === cached.raw.projectID
+        ) {
+          // Message writes change data_version, not session/source identity.
+          // The frequent completeness witness needs only these keyed scalars.
+          this.#client = client;
+          this.#provenNative = native;
+          this.#source =
+            `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
+        } else await this.#ensure(input.sessionID, signal, false);
+        return this.transcript.head(
+          input.sessionID,
+          input.cutoff,
+          input.messageID,
+        );
       },
       "opcv2.message.prefetch": async (input, signal) => {
         await this.#ensure(input.sessionID, signal);
@@ -995,7 +1112,9 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       this.#provenNative = native;
       this.#source =
         `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
-      return cached.raw;
+      return activity
+        ? { ...cached.raw, activity: native.facts([id])[0]?.activity }
+        : cached.raw;
     }
     const raw = await client.read(
       (api) => api.session.get({ sessionID: ids.decode(id) }, { signal }),
@@ -1066,14 +1185,19 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
       }
     }
     if (this.#provenNative) {
-      const proven = { ...raw, activity: native.facts([id])[0]?.activity };
-      if (native.dataVersion() === version) {
-        if (this.#sessionProofs.size >= SCAN_ROWS) {
-          this.#sessionProofs.delete(this.#sessionProofs.keys().next().value!);
-        }
-        this.#sessionProofs.set(id, { native, version: version!, raw: proven });
+      if (this.#sessionProofs.size >= SCAN_ROWS) {
+        this.#sessionProofs.delete(this.#sessionProofs.keys().next().value!);
       }
-      return proven;
+      // Header/body reads still require the exact data-version proof above;
+      // head checks can independently revalidate the saved identity by key.
+      this.#sessionProofs.set(id, {
+        native,
+        version: native.dataVersion() === version ? version! : -1,
+        raw,
+      });
+      return activity
+        ? { ...raw, activity: native.facts([id])[0]?.activity }
+        : raw;
     }
     return activity ? await withSessionActivity(client, raw, signal) : raw;
   }
@@ -1099,20 +1223,21 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     const rows: SessionMetadata[] = [];
     for (const id of new Set(keys)) {
       const raw = await this.#ensure(id, signal), entry = metadata(raw);
-      const previous = this.storage.read(id);
-      if (!previous) {
-        this.storage.transaction(() =>
-          this.storage.write(entry, {
-            summary: { state: "digesting", revision: 0 },
-            turns: { upsert: {}, remove: [] },
-            deleted: null,
-          })
-        );
-      }
+      this.#seed(entry);
       rows.push(entry);
       await this.#yield(signal);
     }
     return rows;
+  }
+  #seed(entry: SessionMetadata): void {
+    if (this.storage.read(entry.id)) return;
+    this.storage.transaction(() =>
+      this.storage.write(entry, {
+        summary: { state: "digesting", revision: 0 },
+        turns: { upsert: {}, remove: [] },
+        deleted: null,
+      })
+    );
   }
   // Transcript work never enumerates the session population. V1 contributes the
   // keyed index/list provider; these compatibility ports leave it unacquired.
@@ -1747,43 +1872,27 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   }
   async transcriptMetadata(
     id: string,
-    _turns: readonly string[],
+    turns: readonly string[],
     signal: AbortSignal,
     cutoff?: string,
     boundary?: import("@otk/harness").DigestBoundary,
   ): Promise<TranscriptMetadata> {
-    const raw = await this.#ensure(id, signal);
-    if (boundary) {
-      if (!this.storage.read(id)) await this.hydrate([id], signal);
-      const facts = await this.transcript.facts({
-          sessionID: id,
-          messages: [boundary.messageID],
-          cutoff,
-        }, signal),
-        target = facts.contexts[boundary.messageID]?.order;
-      while (
-        this.pending(id) &&
-        (this.#scan(id)?.after_seq == null || target === undefined ||
-          this.#scan(id)!.after_seq! > target)
-      ) {
-        await this.step({
-          sessionID: id,
-          provider: this.identity,
-          updated: millis(raw.time.updated),
-          revision: 0,
-        }, {
-          rows: this.policy.batch,
-          until: performance.now() + this.policy.slicems,
-        }, signal);
-        await this.#yield(signal);
-      }
-      this.readiness.demanded?.(metadata(raw));
-    }
-    return (await this.transcript.facts({
+    const raw = await this.#ensure(id, signal, false);
+    // Native facts certify the requested page. The rebuildable usage scan's
+    // publication credits and lifetime belong to the digest scheduler, not
+    // to the read that owns the transcript cursor.
+    const { metadata: result } = await this.transcript.facts({
       sessionID: id,
-      messages: [..._turns],
+      messages: boundary ? [...turns, boundary.messageID] : [...turns],
       cutoff,
-    }, signal)).metadata;
+    }, signal);
+    signal.throwIfAborted();
+    if (boundary) {
+      const entry = metadata(raw);
+      this.#seed(entry);
+      this.readiness.demanded?.(entry);
+    }
+    return result;
   }
   async #helperStep(
     job: DigestJob,

@@ -1,12 +1,53 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
-import { join } from "@std/path";
 import { DEFAULT_PREFS, type Preferences } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { selectedNative } from "../support/native-testing.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
+
+test("layout.tree merges collapse intents and deletes expanded keys", async () => {
+  const fake = new FakeLlm(), oc = await selectedNative(fake);
+  const server = await SidecarTest.start(oc);
+  const a = new WsClient(server.url), b = new WsClient(server.url);
+  try {
+    await Promise.all([a.connect(), b.connect()]);
+    const task = { sidecarId: "local", kind: "task", id: "shared" };
+    const session = { ...task, kind: "session" };
+    const saved = async (client: WsClient) =>
+      (await client.rpc<Preferences>("prefs.get", {})).shellLayout
+        .treeCollapsed;
+    await Promise.all([
+      a.rpc("layout.tree", { ...task, collapsed: true }),
+      b.rpc("layout.tree", { ...session, collapsed: true }),
+    ]);
+    assertEquals(await saved(a), {
+      '["local","task","shared"]': true,
+      '["local","session","shared"]': true,
+    });
+    await a.rpc("layout.tree", { ...task, collapsed: false });
+    assertEquals(await saved(b), { '["local","session","shared"]': true });
+    for (
+      const invalid of [{ kind: "project" }, { id: "" }, { sidecarId: "" }, {
+        collapsed: "true",
+      }]
+    ) {
+      await assertRejects(() =>
+        a.rpc("layout.tree", { ...task, collapsed: true, ...invalid })
+      );
+    }
+    await assertRejects(() =>
+      a.rpc("layout.patch", { treeCollapsed: { invalid: false } })
+    );
+    assertEquals(await saved(a), { '["local","session","shared"]': true });
+  } finally {
+    await Promise.all([a.close(), b.close()]);
+    await server.stop();
+    await oc.stop();
+    await fake.stop();
+  }
+});
 test("prefs RPC persists across sidecar restart and broadcasts to other connections", async () => {
   const fake = new FakeLlm(), oc = await selectedNative(fake);
   const clients: WsClient[] = [], servers: SidecarTest[] = [];
@@ -18,6 +59,13 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
     await a.connect();
     await b.connect();
     assertEquals(await a.rpc("prefs.get", {}), DEFAULT_PREFS);
+    await assertRejects(() =>
+      a.rpc("prefs.set", { key: "textSize", value: "200" })
+    );
+    await a.rpc("prefs.set", { key: "textSize", value: "150" });
+    await b.wait((frame) =>
+      frame.t === "prefs" && frame.prefs.textSize === "150"
+    );
     await assertRejects(() =>
       a.rpc("prefs.set", { key: "thinking", value: "minimal" })
     );
@@ -66,6 +114,10 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
       rightCollapsed: false,
       rightWidth: 400,
       rightView: "external-view",
+      projectCollapsed: {
+        '["first","/repo"]': true,
+        '["second","/repo"]': false,
+      },
     };
     await Promise.all([
       a.rpc("layout.patch", { leftWidth: layout.leftWidth }),
@@ -73,6 +125,16 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
       a.rpc("layout.patch", { rightCollapsed: layout.rightCollapsed }),
       b.rpc("layout.patch", { rightWidth: layout.rightWidth }),
       a.rpc("layout.patch", { rightView: layout.rightView }),
+      a.rpc("layout.project", {
+        sidecarId: "first",
+        directory: "/repo",
+        collapsed: true,
+      }),
+      b.rpc("layout.project", {
+        sidecarId: "second",
+        directory: "/repo",
+        collapsed: false,
+      }),
     ]);
     for (const client of [a, b]) {
       const frame = await client.wait((frame) =>
@@ -81,7 +143,11 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
         frame.prefs.shellLayout.leftCollapsed === layout.leftCollapsed &&
         frame.prefs.shellLayout.rightCollapsed === layout.rightCollapsed &&
         frame.prefs.shellLayout.rightWidth === layout.rightWidth &&
-        frame.prefs.shellLayout.rightView === layout.rightView
+        frame.prefs.shellLayout.rightView === layout.rightView &&
+        frame.prefs.shellLayout.projectCollapsed?.['["first","/repo"]'] ===
+          true &&
+        frame.prefs.shellLayout.projectCollapsed?.['["second","/repo"]'] ===
+          false
       );
       assertEquals(frame.t === "prefs" && frame.prefs.shellLayout, layout);
       assertEquals(
@@ -101,6 +167,9 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
         { rightWidth: 481 },
         { rightView: 1 },
         { rightView: "x".repeat(129) },
+        { projectCollapsed: { bad: "true" } },
+        { projectCollapsed: [] },
+        { projectCollapsed: null },
       ]
     ) {
       await assertRejects(() => a.rpc("layout.patch", patch));
@@ -114,14 +183,14 @@ test("prefs RPC persists across sidecar restart and broadcasts to other connecti
     await b.close();
     await server.stop();
     const restarted = await SidecarTest.start(oc, {
-      server: { port: server.port },
-      state: { path: join(oc.root, `otk-${server.port}`) },
+      state: { path: server.statePath },
     });
     servers.push(restarted);
     const c = new WsClient(restarted.url);
     clients.push(c);
     await c.connect();
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).thinking, "show");
+    assertEquals((await c.rpc<Preferences>("prefs.get", {})).textSize, "150");
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).keymap, keymap);
     assertEquals(
       (await c.rpc<Preferences>("prefs.get", {})).shellLayout,

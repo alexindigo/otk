@@ -4,6 +4,7 @@ import { render } from "@solidjs/web";
 import {
   type CommandDefinition,
   CommandHub,
+  createDisclosures,
   SidecarConnection,
 } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
@@ -15,12 +16,14 @@ import {
   contextTarget,
   createUiRegistries,
   DialogHost,
+  DisclosuresProvider,
   DisplayMenu,
   Message,
   ownedCommand,
   ProjectInbox,
   registerOtkThemes,
   registerTextPart,
+  solidState,
   ThemeEngine,
   ThemeRegistry,
   TranscriptContext,
@@ -30,6 +33,7 @@ import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 const themes = new ThemeRegistry();
+const disclosures = createDisclosures({ factory: solidState });
 registerOtkThemes(themes);
 const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
 theme.start();
@@ -139,6 +143,7 @@ function ProjectProbe() {
         Disconnect project
       </button>
       <ProjectInbox
+        disclosure={disclosures}
         projects={[{
           directory: "/probe",
           sidecarId: "probe-sidecar",
@@ -149,7 +154,6 @@ function ProjectProbe() {
           lastVisit: 0,
           status: "none",
           unread: false,
-          visitText: "now",
           ageing: 0,
           sessionIDs: "",
           sessionCount: 0,
@@ -397,7 +401,9 @@ function Consumer() {
 render(() => (
   <UiProvider registries={ui}>
     <CommandProvider commands={commands}>
-      <Consumer />
+      <DisclosuresProvider owner={disclosures}>
+        <Consumer />
+      </DisclosuresProvider>
     </CommandProvider>
   </UiProvider>
 ), document.getElementById("app")!);

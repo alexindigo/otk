@@ -161,6 +161,8 @@ directory identity across chunks. The executor imports no concrete catalog-kind
 dispatch. `ReadAdmission` is the shared I/O-permission owner used by worker and
 standalone scheduling: waiting for permission does not occupy an executing turn,
 and cancellation joins the actual native exchange before permission is reused.
+V2 uses the same permission owner for the bounded bulk page lane and the point
+control lane, so a body page cannot reserve Send's native preflight permission.
 
 Directory subscriptions retain a resource without acquiring its kinds. Per-kind
 warm intent uses background priority with no optional idle gate; consumer intent
@@ -234,7 +236,9 @@ external charge to adapt row quotas.
 Ready requested turns precede idle batches and continuations even when an idle
 entry has an attention hint and the requested read has visible priority. The
 existing finishing queue still drains bounded committed publication and cleanup
-at its inherited rank; cancellation retains its cleanup precedence.
+at its inherited rank, sharing ready-admission order with requested turns at the
+same rank so continuous reads cannot starve publication. Cancellation retains
+its cleanup precedence.
 
 Explicit transient read callbacks can opt into `interruptible: true`. Urgent
 native I/O then cancels their lower-priority acquisition, joins settlement and

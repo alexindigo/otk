@@ -85,18 +85,26 @@ for (const theme of themes) {
       exact: true,
     });
     await input.fill("Retained edited name");
-    const controls = [
-      input,
-      page.getByRole("button", { name: "Session actions", exact: true }),
-    ];
+    const label = page.locator(
+      ".feedback-stability-inline [data-row-title]",
+    );
+    const controls = [page.getByRole("button", {
+      name: "Session actions",
+      exact: true,
+    })];
     const idle = await boxes(controls);
     await input.press("Enter");
-    await expect(input).toHaveAttribute("aria-busy", "true");
+    const pending = page.locator(".otk-rename-pending");
+    await expect(pending).toHaveAttribute("aria-busy", "true");
+    await expect(pending).toHaveText("Retained edited name");
+    await expect(input).toHaveCount(0);
     unchanged(idle, await boxes(controls));
+    const pendingBounds = await boxes([label]);
     await page.evaluate('styleTest.fieldFailure("")');
     await expect(page.getByRole("alert")).toContainText("END OF REASON");
     unchanged(idle, await boxes(controls));
-    await expect(input).toHaveValue("Retained edited name");
+    unchanged(pendingBounds, await boxes([label]));
+    await expect(label).toHaveText("Original task");
     await info.attach(`stable-inline-${theme}`, {
       body: await page.screenshot({ fullPage: true }),
       contentType: "image/png",
@@ -119,11 +127,6 @@ for (const theme of themes) {
         primary = page.locator("[data-primary-action]");
       await input.fill("Retained prompt draft");
       const controls = [input, primary];
-      if (surface !== "standalone") {
-        controls.push(
-          page.getByRole("button", { name: "Restore", exact: true }),
-        );
-      }
       const idle = await boxes(controls);
       if (surface !== "standalone") {
         await page.evaluate('styleTest.feedback("pending")');
@@ -137,9 +140,28 @@ for (const theme of themes) {
           ? 'styleTest.feedback("error")'
           : 'styleTest.fieldFailure("")',
       );
-      await expect(page.getByRole("alert")).toContainText("END OF REASON");
+      const alert = page.getByRole("alert");
+      await expect(alert).toHaveCount(1);
+      if (surface === "rollback") {
+        await expect(alert).toContainText("Restoring prompts failed");
+        await expect(alert).not.toContainText("END OF REASON");
+        unchanged(idle, await boxes(controls));
+        await alert.locator(".otk-record-group-toggle").click();
+      }
+      await expect(alert).toContainText("END OF REASON");
       unchanged(idle, await boxes(controls));
       await expect(input).toHaveValue("Retained prompt draft");
+      if (surface !== "standalone") {
+        await expect(
+          page.getByRole("button", {
+            name: "Restore conversation",
+            exact: true,
+          }),
+        ).toBeVisible();
+        const group = await page.locator(".otk-revert-group").boundingBox();
+        const composer = await input.boundingBox();
+        expect(group!.y + group!.height).toBeLessThanOrEqual(composer!.y);
+      }
       if (surface === "composer") {
         await info.attach(`stable-composer-${theme}`, {
           body: await page.screenshot({ fullPage: true }),

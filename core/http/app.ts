@@ -5,6 +5,7 @@ import type { Connections } from "../ws/connections.ts";
 import type { Harness } from "@otk/harness";
 import type { BootstrapRequests } from "./bootstrap.ts";
 import type { TerminalSockets } from "../terminals/mux.ts";
+import type { InlineImages } from "../files/inline-images.ts";
 declare module "@pathfinder/pathfinder" {
   interface App {
     cfg: ServiceConfig;
@@ -13,6 +14,9 @@ declare module "@pathfinder/pathfinder" {
     connections: Connections;
     backend: Harness;
     staticRoot: string;
+    build: string;
+    instance: string;
     terminals?: TerminalSockets;
+    inlineImages?: InlineImages;
   }
 }

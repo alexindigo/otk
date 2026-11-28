@@ -10,7 +10,7 @@ import type { SessionMetadata } from "@otk/protocol";
 import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
 import { isPrompt, nativeSource, recordPart, sourceRef } from "./records.ts";
-import { referenceSources } from "@otk/protocol";
+import { outcomeTime, promptTextBlocks, referenceSources } from "@otk/protocol";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import type {
   Info,
@@ -41,6 +41,7 @@ export function mapIndex(session: Session): SessionMetadata {
     projectID: session.projectID,
     directory: session.directory,
     title: session.title,
+    ...(session.agent ? { agent: session.agent } : {}),
     timeCreated: session.time.created,
     timeUpdated: session.time.updated,
     archived: session.time.archived !== undefined,
@@ -82,7 +83,12 @@ export function deriveMessage(
   partMapper: (part: RawPart) => Part = derivePart,
   evidence: readonly RawPart[] = parts,
 ): Message {
-  const mappedParts = parts.map((part) => partMapper(part));
+  const prompt = isPrompt(info, evidence);
+  const mappedParts = parts.map((part) =>
+    prompt && part.type === "text" && !part.synthetic
+      ? derivePart(part, promptTextBlocks)
+      : partMapper(part)
+  );
   const common = {
     id: info.id,
     sessionID: ids.encode(info.sessionID),
@@ -100,7 +106,7 @@ export function deriveMessage(
     ),
   };
   if (info.role === "user") {
-    if (!isPrompt(info, evidence)) {
+    if (!prompt) {
       return {
         ...common,
         role: "context",
@@ -140,6 +146,7 @@ export function deriveMessage(
         kindLabel: "compaction",
         layout: "boundary",
         category: "compaction",
+        boundary: { key: info.parentID ?? info.id },
         // The running summary is active work: it carries its own progress.
         state: {
           key: state,
@@ -202,6 +209,18 @@ export function deriveMessage(
   return {
     ...common,
     role: "assistant",
+    ...(assistantSettled(info)
+      ? {
+        outcomeTime: outcomeTime({
+          completed: info.time.completed,
+          parts: evidence.map((part) =>
+            part.type === "tool"
+              ? part.state?.time?.end ?? part.state?.time?.start
+              : part.time?.end ?? part.time?.start
+          ),
+        }),
+      }
+      : {}),
     ...(info.time.completed === undefined && assistantSettled(info)
       ? { terminal: true }
       : {}),
@@ -236,7 +255,7 @@ export function referencePart<T extends Part>(part: T, messageID: string): T {
     (path) => sourceRef({ origin: "message", id: messageID, path }),
   );
 }
-export function derivePart(part: RawPart): Part {
+export function derivePart(part: RawPart, textBlocks = markdown): Part {
   part = { ...part };
   // Non-image uploads retain their existing on-intent attachment reference,
   // not a second embedded byte copy in transcript metadata.
@@ -252,7 +271,7 @@ export function derivePart(part: RawPart): Part {
       },
     }
     : part;
-  return Object.assign(mapTypedPart(part), {
+  return Object.assign(mapTypedPart(part, textBlocks), {
     source: nativeSource(
       part.type,
       raw,
@@ -260,12 +279,15 @@ export function derivePart(part: RawPart): Part {
     ),
   });
 }
-function mapTypedPart(part: RawPart): Part {
+function mapTypedPart(part: RawPart, textBlocks: typeof markdown): Part {
   const id = part.id;
   switch (part.type) {
     case "text":
       if (part.synthetic === true) return recordPart(part);
-      return { ...mapStreamingShell(part), blocks: markdown(part.text || "") };
+      return {
+        ...mapStreamingShell(part),
+        blocks: textBlocks(part.text ?? ""),
+      };
     case "reasoning":
       return {
         ...mapStreamingShell(part),

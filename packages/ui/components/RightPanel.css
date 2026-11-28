@@ -1,24 +1,26 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-right-panel {
-  position: relative;
-  flex: none;
-  min-height: 0;
+.otk-panel-header {
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--otk-border);
-  background: var(--otk-bg-side);
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--chrome-inset) var(--corner);
 }
-.otk-right-panel[hidden] {
-  display: none;
+.otk-panel-header.is-collapsed {
+  padding-inline-start: 0;
+  justify-content: end;
 }
 .otk-panel-icons {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: var(--chrome-gap);
-  padding: 0 var(--corner-zone) 0 var(--chrome-inset);
-  min-height: var(--chrome-header-height);
-  flex: none;
+  flex: 1;
   flex-wrap: wrap;
+}
+.otk-panel-rail-body {
+  flex: 1;
+  min-height: 0;
 }
 .otk-panel-icons button {
   --selection-padding: 0;
@@ -26,20 +28,35 @@
 .otk-panel-view-icon {
   display: flex;
 }
-.otk-panel-body,
-.otk-panel-content {
+.otk-panel-body {
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.otk-panel-body {
-  padding-inline: var(--panel-inset);
   --empty-inline-inset: 0px;
 }
+.otk-panel-body > :not(.otk-panel-content) {
+  padding-inline: var(--panel-inset);
+}
+.otk-panel-content {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: grid;
+  grid-template-columns: [full-start] var(--panel-inset) [content-start]
+    minmax(0, 1fr) [content-end] var(--panel-inset) [full-end];
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.otk-panel-content > * {
+  grid-column: content;
+}
+.otk-panel-content > [data-panel-span=full] {
+  grid-column: full;
+  grid-template-columns: subgrid;
+}
 .otk-panel-content > h2 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-2);
   font-size: var(--text-ui);
   line-height: var(--line-ui);
   font-weight: 600;
@@ -60,12 +77,18 @@
   flex-direction: column;
   align-items: center;
   gap: var(--chrome-gap);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
 }
-.otk-panel-rail-icons .otk-icon-button {
+.otk-panel-rail-button {
   --control-height: var(--row-project);
   width: var(--control-height);
   height: var(--control-height);
   --selection-padding: 0;
   padding: 0;
+}
+.otk-panel-header.is-sheet {
+  padding-inline: var(--chrome-inset);
+}
+.otk-panel-header.is-sheet .otk-panel-icons {
+  flex: none;
 }

@@ -11,6 +11,20 @@ export function toggle(input: { on: boolean; class?: string }): {
   };
 }
 
+/** Current place in a path, not a choice within a collection. */
+export function location(
+  input: { current: boolean; value?: "page" | "true"; class?: string },
+): {
+  class: string;
+  "aria-current"?: "page" | "true";
+} {
+  return {
+    class: [input.class, input.current ? "is-current" : ""].filter(Boolean)
+      .join(" "),
+    "aria-current": input.current ? input.value ?? "page" : undefined,
+  };
+}
+
 /** Selection is declared once; accessibility and visual state cannot diverge.
  * A keyboard candidate may coexist with committed selections (multi-choice).
  */

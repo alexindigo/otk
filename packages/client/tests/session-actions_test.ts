@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
 import * as client from "@otk/client";
-import type { PromptPart } from "@otk/protocol";
+import { entityKey, type PromptPart } from "@otk/protocol";
 import {
   shellEntry,
   shellFixture,
@@ -9,7 +9,7 @@ import {
   shellTask,
 } from "./shell-fixture.ts";
 
-Deno.test("branch preservation follows reversible revert and precedes every shared submission and Compact", async () => {
+Deno.test("revert RPC never starts capture; preservation still precedes every shared submission and Compact", async () => {
   const f = shellFixture(), events: string[] = [];
   const actions = client.createSessionActions({
     ...f,
@@ -22,9 +22,9 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
         events.push("save-draft");
         return Promise.resolve();
       },
-      settled: () => {
+      ...{ settled: () => events.push("settle") },
+      restored: () => {
         events.push("settle");
-        return Promise.resolve();
       },
     },
   });
@@ -44,14 +44,19 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
       method === "session.revert"
         ? {
           ...shellInfo("selected"),
-          revert: { messageID: "boundary", messageCount: 1, files: [] },
+          revert: {
+            boundaryID: "boundary",
+            messageIDs: ["boundary"],
+            files: [],
+          },
         }
         : null,
     );
   });
   const target = { sidecarId: "local", sessionID: "selected" };
   await actions.revert(target, "boundary");
-  assertEquals(events.slice(0, 2), ["session.revert", "save-branch"]);
+  assertEquals(events.includes("save-branch"), false);
+  assertEquals(events[0], "session.revert");
   events.length = 0;
   const compact = actions.compact(target, { provider: "p", model: "m" });
   await compactEntered.promise;
@@ -59,17 +64,20 @@ Deno.test("branch preservation follows reversible revert and precedes every shar
   assertEquals(events.includes("settle"), false);
   compactResponse.resolve(null);
   await compact;
-  assertEquals(events.slice(0, 3), ["save-draft", "session.compact", "settle"]);
+  assertEquals(events, ["save-draft", "session.compact", "projects.visit"]);
   events.length = 0;
   await actions.submission(target)(() => {
     events.push("mode-specific-send");
-    return Promise.resolve();
+    return Promise.resolve({
+      state: "unconfirmed",
+      reason: "Fixture native receipt has no transcript.",
+    });
   });
   assertEquals(
     events.filter((e) =>
       ["save-draft", "mode-specific-send", "settle"].includes(e)
     ),
-    ["save-draft", "mode-specific-send", "settle"],
+    ["save-draft", "mode-specific-send"],
   );
   f.resources.stop();
 });
@@ -81,7 +89,7 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     branchHistory: {
       prepare: () => Promise.reject(new Error("storage-full")),
       beforeCommit: () => Promise.reject(new Error("storage-full")),
-      settled: () => Promise.resolve(),
+      restored: () => {},
     },
   });
   const target = { sidecarId: "local", sessionID: "selected" };
@@ -90,7 +98,11 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
       method === "session.revert"
         ? {
           ...shellInfo("selected"),
-          revert: { messageID: "boundary", messageCount: 1, files: [] },
+          revert: {
+            boundaryID: "boundary",
+            messageIDs: ["boundary"],
+            files: [],
+          },
         }
         : null,
     )
@@ -101,14 +113,10 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     Error,
     "storage-full",
   );
-  await assertRejects(
-    () =>
-      actions.submission(target)(() => {
-        throw new Error("native must not run");
-      }),
-    Error,
-    "storage-full",
-  );
+  const outcome = await actions.submission(target)(() => {
+    throw new Error("native must not run");
+  });
+  assertEquals(outcome.kind, "refused");
   assertEquals(
     f.calls.filter((c) =>
       ["session.compact", "session.prompt"].includes(
@@ -118,6 +126,198 @@ Deno.test("failed branch preservation prevents native send and Compact", async (
     [],
   );
   f.resources.stop();
+});
+
+Deno.test("a permanence choice waits before pending-send publication and captures its original target", async () => {
+  const f = shellFixture(),
+    target = { sidecarId: "local", sessionID: "selected" };
+  f.entries("local", [shellEntry("selected")]);
+  const entered = Promise.withResolvers<void>(),
+    choice = Promise.withResolvers<client.BranchSendPermit>();
+  f.reply((_id, method) =>
+    Promise.resolve(
+      method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+    )
+  );
+  const actions = client.createSessionActions({
+    ...f,
+    branchHistory: {
+      prepare: () => Promise.resolve(),
+      restored: () => {},
+      beforeCommit: () => Promise.resolve(),
+      beforeSend: () => {
+        entered.resolve();
+        return choice.promise;
+      },
+    },
+  });
+  const sending = actions.prompt([{
+    kind: "text",
+    text: "Captured invocation",
+  }], {});
+  await entered.promise;
+  assertEquals(actions.delivery(target).state.receipts, []);
+  assertEquals(f.calls.some((call) => call[1] === "session.prompt"), false);
+  f.session.state.selection = { sidecarId: "local", sessionID: "other" };
+  choice.resolve({ target });
+  await sending;
+  const call = f.calls.find((call) => call[1] === "session.prompt")!;
+  assertEquals((call[2] as { sessionID: string }).sessionID, "selected");
+  actions.dispose();
+  f.resources.stop();
+});
+
+Deno.test("Retry publishes an early refusal once without another native Send", async () => {
+  const f = shellFixture(),
+    target = { sidecarId: "local", sessionID: "selected" };
+  f.entries("local", [shellEntry("selected")]);
+  let attempts = 0;
+  const actions = client.createSessionActions({
+    ...f,
+    branchHistory: {
+      prepare: () => Promise.resolve(),
+      beforeCommit: () => Promise.resolve(),
+      restored: () => {},
+      beforeSend: () =>
+        ++attempts === 1 ? Promise.resolve({ target }) : Promise.reject(
+          new client.RequestFailure({
+            code: "preservation.refused",
+            diagnosticID: "retry-refusal",
+            retry: "new-intent",
+            facts: { reason: "Draft preservation unavailable" },
+          }),
+        ),
+    },
+  });
+  f.reply((_id, method) =>
+    method === "session.prompt"
+      ? Promise.reject(
+        new client.RequestFailure({
+          code: "native.refused",
+          diagnosticID: "native-refusal",
+          retry: "new-intent",
+          facts: { reason: "Native send refused", outcome: "rejected" },
+        }),
+      )
+      : Promise.resolve(
+        method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+      )
+  );
+  const sink = f.resources.sidecars.connection("local").rpc.feedback(
+    "selected",
+  );
+  let visible = 0;
+  const release = sink.subscribe(() => {
+    if (sink.current()) visible++;
+  });
+  try {
+    const outcome = await actions.prompt([{
+      kind: "text",
+      text: "Retained prompt",
+    }], {});
+    if (outcome.kind !== "failed") {
+      throw new Error("Expected a retryable native failure");
+    }
+    assert(outcome.retry);
+    outcome.retry();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assertEquals(
+      sink.current()?.failure?.reason,
+      "Draft preservation unavailable",
+    );
+    assertEquals(visible, 1);
+    assertEquals(
+      f.calls.filter((call) => call[1] === "session.prompt").length,
+      1,
+    );
+  } finally {
+    release();
+    actions.dispose();
+    f.resources.stop();
+  }
+});
+
+for (const kind of ["revert", "restore"] as const) {
+  Deno.test(`Send preservation waits for the captured ${kind} mutation`, async () => {
+    const f = shellFixture();
+    const target = { sidecarId: "local", sessionID: "selected" };
+    f.entries("local", [shellEntry("selected")]);
+    const entered = Promise.withResolvers<void>();
+    const native = Promise.withResolvers<ReturnType<typeof shellInfo>>();
+    let preserving = false;
+    f.reply((_id, method) => {
+      if (method === `session.${kind}`) {
+        entered.resolve();
+        return native.promise;
+      }
+      return Promise.resolve(
+        method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+      );
+    });
+    const actions = client.createSessionActions({
+      ...f,
+      branchHistory: {
+        prepare: () => Promise.resolve(),
+        restored: () => {},
+        beforeCommit: () => Promise.resolve(),
+        beforeSend: () => {
+          preserving = true;
+          return Promise.resolve({ target });
+        },
+      },
+    });
+    const changing = kind === "revert"
+      ? actions.revert(target, "boundary")
+      : actions.restore(target);
+    await entered.promise;
+    const sending = actions.prompt([{ kind: "text", text: "Replacement" }], {});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const beforeSettlement = preserving;
+    const receipts = [...actions.delivery(target).state.receipts];
+    native.resolve(shellInfo("selected"));
+    await changing;
+    await sending;
+    assertEquals(preserving, true);
+    actions.dispose();
+    f.resources.stop();
+    assertEquals(beforeSettlement, false);
+    assertEquals(receipts, []);
+  });
+}
+
+Deno.test("Send joins the revert owner's publication wait before checking preservation", async () => {
+  const f = shellFixture(),
+    target = { sidecarId: "local", sessionID: "selected" };
+  f.entries("local", [shellEntry("selected")]);
+  const ready = Promise.withResolvers<void>();
+  let preserving = false;
+  const actions = client.createSessionActions({
+    ...f,
+    revertReady: () => ready.promise,
+    branchHistory: {
+      prepare: () => Promise.resolve(),
+      restored: () => {},
+      beforeCommit: () => Promise.resolve(),
+      beforeSend: () => {
+        preserving = true;
+        return Promise.resolve({ target });
+      },
+    },
+  });
+  f.reply((_id, method) =>
+    Promise.resolve(
+      method === "tasks.create" ? shellTask("task", ["selected"]) : null,
+    )
+  );
+  const sending = actions.prompt([{ kind: "text", text: "Replacement" }], {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const admittedEarly = preserving;
+  ready.resolve();
+  await sending;
+  actions.dispose();
+  f.resources.stop();
+  assertEquals(admittedEarly, false);
+  assertEquals(preserving, true);
 });
 
 Deno.test("session actions resolve directory from index then matching selected info then authoritative RPC", async () => {
@@ -317,9 +517,67 @@ Deno.test("revert and restore capture target RPCs inside act without promotion",
   }
 });
 
+Deno.test("a rejected boundary change does not reject the queued successor", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  const target = { sidecarId: "remote", sessionID: "background" };
+  const entered = Promise.withResolvers<void>();
+  const first = Promise.withResolvers<never>();
+  f.reply((_server, rpc) => {
+    if (rpc === "session.revert") {
+      entered.resolve();
+      return first.promise;
+    }
+    return Promise.resolve(
+      rpc === "session.get" || rpc === "session.restore"
+        ? shellInfo("background", "/resolved")
+        : null,
+    );
+  });
+  try {
+    const rejected = assertRejects(() => actions.revert(target, "boundary"));
+    await entered.promise;
+    const queued = actions.restore(target);
+    first.reject(new Error("Native revert refused"));
+    await rejected;
+    assertEquals((await queued).id, "background");
+    assertEquals(
+      f.calls.filter(([, rpc]) => rpc === "session.restore").length,
+      1,
+    );
+  } finally {
+    f.resources.stop();
+  }
+});
+
 Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
-  f.entries("remote", [{ ...shellEntry("busy", "/busy"), status: "busy" }]);
+  f.entries("remote", [shellEntry("busy", "/busy")]);
+  const counts = { working: 1, blocked: 0, finished: 0, unseen: 0 };
+  f.resources.receive("remote", {
+    t: "inbox.snapshot",
+    generation: "run",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      ...f.resources.inbox("remote").state.inbox,
+      entities: {
+        [entityKey("session", "busy")]: {
+          id: "busy",
+          kind: "session",
+          state: "working",
+          previous: "none",
+          counts,
+          evidence: {
+            work: true,
+            nativeRun: true,
+            permissions: 0,
+            questions: 0,
+            descendants: { ...counts, working: 0 },
+          },
+        },
+      },
+    },
+  });
   await actions.remove({ sidecarId: "remote", sessionID: "busy" });
   assertEquals(f.calls, [
     ["remote", "session.abort", { sessionID: "busy" }],
@@ -329,15 +587,87 @@ Deno.test("session removal aborts a working captured target before delete and re
   f.resources.stop();
 });
 
+Deno.test("Stop interrupts a run that appears while its submission receipt is pending", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  f.entries("local", [shellEntry("selected")]);
+  const target = { sidecarId: "local", sessionID: "selected" };
+  const interrupted = Promise.withResolvers<void>();
+  const closing = Promise.withResolvers<null>();
+  f.reply((_sidecar, method) => {
+    if (method === "session.abort") interrupted.resolve();
+    return Promise.resolve(null);
+  });
+  const sending = actions.delivery(target).send(
+    (dispatch) => {
+      dispatch();
+      return closing.promise;
+    },
+    undefined,
+    "no-native-identity",
+  );
+  const stopping = actions.stop(target);
+  const counts = { working: 1, blocked: 0, finished: 0, unseen: 0 };
+  f.resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "run",
+    revision: 0,
+    summaryRevision: 0,
+    inbox: {
+      ...f.resources.inbox("local").state.inbox,
+      entities: {
+        [entityKey("session", "selected")]: {
+          id: "selected",
+          kind: "session",
+          state: "working",
+          previous: "none",
+          counts,
+          evidence: {
+            work: true,
+            nativeRun: true,
+            permissions: 0,
+            questions: 0,
+            descendants: { ...counts, working: 0 },
+          },
+        },
+      },
+    },
+  });
+  await interrupted.promise;
+  closing.resolve(null);
+  await stopping;
+  assertEquals((await sending).kind, "unconfirmed");
+  assertEquals(
+    f.calls.filter(([, method]) => method === "session.withdraw"),
+    [],
+  );
+  actions.dispose();
+  f.resources.stop();
+});
+
 Deno.test("session actions prompt captures invocation target and enters submission once with attachment ownership", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("local", [shellEntry("selected")]);
   const held = Promise.withResolvers<unknown>();
   const admitted = Promise.withResolvers<void>();
-  f.reply((_id, method) => {
+  f.reply((_id, method, params) => {
     if (method === "tasks.create") {
+      return Promise.resolve(shellTask("task", ["selected"]));
+    }
+    if (method === "history.attachments") {
       admitted.resolve();
-      return held.promise;
+      return held.promise.then(() => ({
+        items: (params as { refs: { messageID: string; partID: string }[] })
+          .refs.map((ref) => ({
+            ref,
+            part: {
+              kind: "file",
+              source: "upload",
+              name: ref.partID,
+              mime: "text/plain",
+              dataBase64: btoa(`bytes:${ref.partID}`),
+            },
+          })),
+      }));
     }
     return Promise.resolve(null);
   });
@@ -368,33 +698,15 @@ Deno.test("session actions prompt captures invocation target and enters submissi
     model: { provider: "p", model: "m" },
     variant: "high",
   });
+  const captured =
+    actions.delivery({ sidecarId: "local", sessionID: "selected" }).state
+      .receipts[0];
+  assertMatch(captured.messageID!, /^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
   await admitted.promise;
   f.session.state.selection = { sidecarId: "remote", sessionID: "newer" };
-  f.reply((_id, method, params) =>
-    method === "history.attachments"
-      ? Promise.resolve({
-        items: (params as { refs: { messageID: string; partID: string }[] })
-          .refs.map((ref) => ({
-            ref,
-            part: {
-              kind: "file",
-              source: "upload",
-              name: ref.partID,
-              mime: "text/plain",
-              dataBase64: btoa(`bytes:${ref.partID}`),
-            },
-          })),
-      })
-      : Promise.resolve(null)
-  );
-  held.resolve(shellTask("task", ["selected"]));
+  held.resolve(undefined);
   await sending;
-  assertEquals(f.calls, [
-    ["local", "tasks.create", {
-      directory: "/p",
-      name: "selected",
-      sessions: ["selected"],
-    }],
+  assertEquals(f.calls.filter((call) => call[1] !== "tasks.create"), [
     ["remote", "history.attachments", {
       refs: [{ messageID: "m", partID: "foreign" }],
     }],
@@ -403,6 +715,7 @@ Deno.test("session actions prompt captures invocation target and enters submissi
     }],
     ["local", "session.prompt", {
       sessionID: "selected",
+      messageID: captured.messageID,
       mode: "normal",
       parts: [
         {
@@ -475,7 +788,7 @@ Deno.test("session actions abort and replies use invocation-current act and neve
   f.resources.stop();
 });
 
-Deno.test("session actions preserve root-only location and full-ancestry directory-scoped inTask", () => {
+Deno.test("session actions location and membership share the scoped human task owner", () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("local", [
     shellEntry("root"),
@@ -483,25 +796,38 @@ Deno.test("session actions preserve root-only location and full-ancestry directo
     shellEntry("leaf", "/p", "middle"),
   ]);
   const metadata = f.resources.inbox("local").state.inbox;
-  metadata.tasks = [
+  let revision = 0;
+  const tasks = (tasks: typeof metadata.tasks) =>
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "task-identity",
+      revision: revision++,
+      summaryRevision: 0,
+      inbox: { ...metadata, tasks },
+    });
+  tasks([
     shellTask("middle-task", ["middle"]),
     shellTask("foreign-root", ["root"], "/other"),
-  ];
+  ]);
   const target = { sidecarId: "local", sessionID: "leaf", rootID: "root" };
   assertEquals(
     actions.location(target, "leaf"),
-    "p, foreign-root",
-    "location deliberately ignores directory and middle ancestry",
+    "p, leaf",
+    "foreign metadata and helper-only records cannot define task identity",
   );
   assertEquals(
     actions.inTask(target),
-    true,
-    "inTask finds middle ancestry in the same directory",
+    false,
+    "helper-only membership cannot create an independent task",
   );
-  metadata.tasks = [shellTask("foreign-root", ["root"], "/other")];
+  tasks([shellTask("foreign-root", ["root"], "/other")]);
   assertEquals(actions.inTask(target), false);
-  assertEquals(actions.location(target, "missing"), "foreign-root");
-  metadata.tasks = [];
+  assertEquals(actions.location(target, "missing"), "");
+  tasks([shellTask("human-root", ["root"])]);
+  assertEquals(actions.location(target, "leaf"), "p, human-root");
+  assertEquals(actions.inTask(target), true);
+  assertEquals(actions.location(target, "missing"), "human-root");
+  tasks([]);
   assertEquals(actions.location(target, "leaf"), "p, leaf");
   assertEquals(actions.family({ ...target, rootID: "middle" }), target);
   f.session.state.selection = target;

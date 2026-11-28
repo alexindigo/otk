@@ -9,6 +9,7 @@ import type {
   ConfigReadKinds,
   FileReadKinds,
   ModelReadKinds,
+  ProjectReadKinds,
   QuestionReadKinds,
   ResourceReadKinds,
   SkillReadKinds,
@@ -34,14 +35,67 @@ export interface ProviderReadKinds
     ResourceReadKinds,
     FileReadKinds,
     QuestionReadKinds,
-    ConfigReadKinds {
+    ConfigReadKinds,
+    ProjectReadKinds {
   /** Bounded native terminal metadata, independent of body/list/digest demand. */
   "supervision.terminals": {
     input: { after: string };
     result: import("@otk/protocol").SessionMetadata[];
     chunk: import("@otk/protocol").SessionMetadata[];
   };
+  "supervision.deliveries": {
+    input: { parentID: string; after?: string; refresh?: boolean };
+    result: DeliveryPage;
+    chunk: DeliveryPage;
+  };
+  /** Durable child/run facts only; never scans parent history or native I/O. */
+  "supervision.delivered": {
+    input: {
+      ids: string[];
+      targets?: Record<string, { parentID: string; runID: string }>;
+    };
+    result: DeliveryScalar[];
+    chunk: DeliveryScalar[];
+  };
 }
+export interface DeliveryPage {
+  updates: {
+    id: string;
+    delivered: import("@otk/protocol").DeliveredEvidence;
+  }[];
+  reset?: boolean;
+  /** Children whose indexed coverage was withdrawn by native revalidation. */
+  invalidated?: string[];
+  /** Opaque, source-fenced continuation; absent means this bounded pass ended. */
+  after?: string;
+}
+export interface DeliveryScalar {
+  id: string;
+  delivered: import("@otk/protocol").DeliveredEvidence;
+}
+export interface DeliveryScan {
+  cursor: string;
+  complete: boolean;
+  updates: DeliveryScalar[];
+  /** Receipt identities whose durable native bound supersedes an older join. */
+  revalidated?: readonly string[];
+}
+export const deliveryReadCodec: ProviderReadCodec<"supervision.deliveries"> = {
+  *chunks(value) {
+    yield value;
+  },
+  create() {
+    let value: DeliveryPage = { updates: [] };
+    return {
+      append(chunk) {
+        value = chunk;
+      },
+      finish() {
+        return value;
+      },
+    };
+  },
+};
 export interface ProviderReadOptions {
   optional?: boolean;
   owner: string;

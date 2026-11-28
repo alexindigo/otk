@@ -1,47 +1,61 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-surface {
+  --surface-content-inset: var(--space-2);
+  --surface-slot-inset: var(--space-1);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
   max-height: inherit;
   box-sizing: border-box;
-  padding: 8px;
+  padding-block: var(--space-2);
+  padding-inline: var(--surface-content-inset);
   background: var(--overlay-bg);
   color: var(--otk-fg);
   border: 1px solid var(--overlay-border);
   border-radius: var(--overlay-radius);
   box-shadow: var(--overlay-shadow);
 }
-.otk-surface-title,
-.otk-surface-actions {
+.otk-surface .otk-surface-title,
+.otk-surface .otk-surface-actions {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
-  padding: 4px;
+  padding-block: var(--space-1);
+  padding-inline: var(--surface-slot-inset);
 }
 /* A slot's single child is the slot's row: it fills the slot's width. */
-.otk-surface-title > :only-child,
 .otk-surface-actions > :only-child {
   flex: 1 1 auto;
   min-width: 0;
 }
 .otk-surface-title h2 {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
 }
-.otk-surface-body {
+.otk-surface .otk-surface-title {
+  flex-wrap: nowrap;
+}
+.otk-surface-title-action {
+  display: flex;
+  flex: none;
+  min-width: 0;
+}
+.otk-surface .otk-surface-body {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
   min-height: 0;
-  padding: 4px;
+  padding-block: var(--space-1);
+  padding-inline: var(--surface-slot-inset);
 }
 .otk-surface-body > * {
   min-width: 0;
@@ -54,7 +68,74 @@
 .otk-surface-menu {
   padding: var(--menu-block-inset) var(--menu-item-inset);
 }
-.otk-surface-menu > .otk-surface-body {
+.otk-surface-composer {
+  --surface-content-inset: var(--composer-content-inset, var(--space-4));
+  --surface-slot-inset: 0px;
+}
+.otk-surface-menu > .otk-surface-body,
+.otk-surface-menu > .otk-surface-scroll > .otk-surface-body {
   padding: 0;
   gap: var(--menu-block-inset);
+}
+.otk-surface.is-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.otk-surface.is-dialog {
+  max-height: none;
+}
+.otk-surface.is-popover {
+  min-height: 0;
+  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
+}
+.otk-surface.is-full-height {
+  height: 100%;
+  max-height: none;
+}
+.otk-surface[data-signal] {
+  --surface-signal: var(--danger);
+  box-shadow: inset calc(2 * var(--otk-unit)) 0 var(--surface-signal),
+    var(--overlay-shadow);
+}
+.otk-surface[data-signal=info] {
+  --surface-signal: var(--otk-fg-3);
+}
+.otk-surface.has-static-children .otk-surface-body > * {
+  flex-shrink: 0;
+}
+.otk-surface-lifted {
+  background: var(--otk-surface);
+  box-shadow: var(--overlay-shadow);
+  border-radius: var(--radius-row);
+}
+.otk-surface-panel {
+  --surface-content-inset: var(--space-2);
+  --surface-slot-inset: 0px;
+  padding: var(--surface-content-inset);
+  gap: var(--space-2);
+  background: var(--otk-bg-side);
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  color: var(--otk-fg);
+}
+.otk-surface-panel > .otk-surface-title {
+  padding: 0;
+  gap: var(--space-2);
+  min-block-size: var(--control-size);
+}
+.otk-surface-panel > .otk-surface-title h2 {
+  flex: none;
+  font: 600 var(--text-ui)/var(--line-ui) var(--font-ui);
+}
+.otk-surface-panel > .otk-surface-body,
+.otk-surface-panel > .otk-surface-scroll > .otk-surface-body {
+  padding: 0;
+  gap: 0;
+}
+.otk-surface-panel > .otk-surface-actions {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding-block: var(--space-2) 0;
+  border-top: 1px solid var(--otk-border);
 }

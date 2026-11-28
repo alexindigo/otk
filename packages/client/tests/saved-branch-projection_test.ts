@@ -44,7 +44,7 @@ function branch(summary?: Derived<UsageSummary>): SavedBranch {
     created: 1,
     bytes: 1,
     pending: false,
-    replaced: true,
+    committedAt: 11,
     session: {
       id: "s",
       title: "Saved",
@@ -85,7 +85,7 @@ Deno.test("saved projection admits no live activity or unresolved metadata and n
   assertEquals(messagePresentation(message).streaming, true);
   assertEquals(messagePresentation(message).time, {
     timing: undefined,
-    fallback: "streaming",
+    fallback: "counting...",
   });
 });
 Deno.test("saved projection retains only known captured facts, including zero and partial usage", () => {

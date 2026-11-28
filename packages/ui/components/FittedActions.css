@@ -1,0 +1,16 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-fitted-actions {
+  flex: 1;
+  min-inline-size: var(--control-size);
+  inline-size: 100%;
+}
+.otk-fitted-actions.is-inline {
+  --row-compact: var(--control-size);
+  flex: 0 1 auto;
+  inline-size: max-content;
+  max-inline-size: 100%;
+}
+/* Fitting uses the same face and weight as the actual action buttons. */
+.otk-fitted-actions :is(.otk-overflow-measure .otk-pill, .otk-overflow-item .otk-pill) {
+  font-weight: 500;
+}

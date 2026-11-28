@@ -4,7 +4,6 @@ import { join } from "@std/path";
 import { start } from "../../main.ts";
 import { cfg } from "./config.ts";
 import { FakeLlm } from "./fake-llm.ts";
-import { freePort } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
 import { SCALE } from "./session-scale.ts";
 import { createScale, scaleDiscovery } from "./scale-native.ts";
@@ -17,7 +16,7 @@ export async function requestScaleFixture() {
   await scaleDiscovery(native);
   assertEquals(native.manifest.counts, SCALE);
   const config = cfg();
-  config.server.port = freePort();
+  config.server.port = 0;
   config.auth.type = "none";
   config.state.path = join(root, "otk");
   config.harness.url = native.url;
@@ -48,7 +47,7 @@ export async function requestScaleFixture() {
     root,
     native,
     app,
-    url: `http://127.0.0.1:${config.server.port}`,
+    url: `http://127.0.0.1:${app.server.addr.port}`,
     probe,
   };
 }

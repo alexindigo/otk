@@ -42,6 +42,8 @@ export interface PromptSelection {
     unavailable: boolean;
   };
   variant: SelectionField<string>;
+  /** Whether this mode and model offer a variant picker and cycling. */
+  variantSelectable: boolean;
   /** Selected menu row / cycle position, independent of the applied value. */
   variantChoice?: string;
 }
@@ -153,6 +155,7 @@ export function effectiveSelection(
       unavailable: catalog !== undefined && model.value !== undefined && !info,
     },
     variant: effectiveVariant,
+    variantSelectable: applies.variant && !!info?.variants.length,
     variantChoice: requestedVariant.value,
   };
 }

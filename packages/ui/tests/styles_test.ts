@@ -32,7 +32,7 @@ Deno.test("component-owned CSS is imported by its owner and retains structural t
   await inspect(new URL("components/", base));
   assert(owned > 0, "No component-owned styles were inspected");
   const message = await Deno.readTextFile(
-    new URL("components/Message.css", base),
+    new URL("components/MessageFooter.css", base),
   );
   assert(
     message.includes(".otk-message-footer") &&

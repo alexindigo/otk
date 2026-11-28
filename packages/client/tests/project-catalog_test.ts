@@ -3,11 +3,10 @@ import { assertEquals } from "@std/assert";
 import { createInbox, inboxProjects } from "./supervision-fixture.ts";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 
-Deno.test("catalog merges tracked, indexed and template directories once, ordering discovery by source, activity and name", () => {
+Deno.test("catalog merges tracked, indexed and template directories once, retaining discovery order", () => {
   const inbox: InboxSnapshot = {
     projects: [{
       directory: "/tracked",
-      order: 0,
       added: true,
       inactive: false,
       lastVisit: 1,
@@ -47,22 +46,21 @@ Deno.test("catalog merges tracked, indexed and template directories once, orderi
   const rows = inboxProjects(entries, inbox, 100);
   assertEquals(rows.map((p) => [p.directory, p.source, p.status]), [
     ["/tracked", "tracked", "none"],
-    ["/indexed", "index", "finished"],
     ["/old", "index", "none"],
-    ["/alpha", "template", "none"],
+    ["/indexed", "index", "finished"],
     ["/zebra", "template", "none"],
+    ["/alpha", "template", "none"],
   ]);
-  assertEquals(rows.find((p) => p.directory === "/alpha")?.visitText, "");
+  assertEquals(rows.find((p) => p.directory === "/alpha")?.timer, undefined);
   assertEquals(rows.map((p) => [p.directory, p.group]), [
     ["/tracked", "discovered"],
-    ["/indexed", "active"],
     ["/old", "active"],
-    ["/alpha", "discovered"],
+    ["/indexed", "active"],
     ["/zebra", "discovered"],
+    ["/alpha", "discovered"],
   ]);
   inbox.projects.push({
     directory: "/indexed",
-    order: 1,
     added: true,
     inactive: false,
     lastVisit: 100,

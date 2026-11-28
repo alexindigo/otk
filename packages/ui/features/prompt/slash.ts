@@ -5,7 +5,12 @@ import type {
   PromptRegistry,
 } from "../../registries/prompt.ts";
 import { createSignal } from "solid-js";
-import { createHarnessCommands } from "@otk/client";
+import {
+  createHarnessCommands,
+  type DraftSendCapture,
+  requireCommittedSend,
+  type SendOutcome,
+} from "@otk/client";
 import {
   commandOptions,
   parseCommand,
@@ -23,29 +28,38 @@ export function submitPromptCommand(
     skill?: SkillOption;
   } = {},
   origin: import("@otk/protocol").RequestOrigin = "composer",
-) {
-  return ctx.submit(async (options) => {
-    if (!args.selection) await ctx.ready();
-    const selection = args.selection ??
-      ctx.nextSelection(ctx.change((draft) => draft)).input;
-    await ctx.rpc("session.command", {
-      sessionID: ctx.sessionID(),
-      command: command.name,
-      ...(args.skill
-        ? {
-          skill: {
-            name: args.skill.name,
-            ...(args.skill.id ? { id: args.skill.id } : {}),
-          },
-        }
-        : {}),
-      arguments: args.arguments ?? "",
-      ...selection,
-      parts: (await ctx.attachments(args.parts ?? [])).filter((
+  capture?: DraftSendCapture,
+): Promise<SendOutcome> {
+  return ctx.submit(
+    async (options, dispatch, messageID) => {
+      if (!args.selection) await ctx.ready();
+      const selection = args.selection ??
+        ctx.nextSelection(ctx.change((draft) => draft)).input;
+      const parts = (await ctx.attachments(args.parts ?? [])).filter((
         part,
-      ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file"),
-    }, options);
-  }, origin);
+      ): part is Extract<PromptPart, { kind: "file" }> => part.kind === "file");
+      dispatch();
+      return await ctx.rpc("session.command", {
+        sessionID: ctx.sessionID(),
+        messageID,
+        command: command.name,
+        ...(args.skill
+          ? {
+            skill: {
+              name: args.skill.name,
+              ...(args.skill.id ? { id: args.skill.id } : {}),
+            },
+          }
+          : {}),
+        arguments: args.arguments ?? "",
+        ...selection,
+        parts,
+      }, options);
+    },
+    origin,
+    undefined,
+    capture,
+  );
 }
 export function registerSlashPrompt(prompt: PromptRegistry): void {
   prompt.register({
@@ -59,8 +73,10 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         available: () =>
           ctx.active() && !ctx.props.suspended && ctx.props.connected &&
           ctx.supports("commands"),
-        execute: (command, args, origin) =>
-          submitPromptCommand(ctx, command, args, origin),
+        execute: (command, args, origin, capture) =>
+          submitPromptCommand(ctx, command, args, origin, capture).then(
+            requireCommittedSend,
+          ),
       });
       ctx.own(owner.dispose);
       let mounted = false;
@@ -95,8 +111,11 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
       });
       return {
         async ready() {
+          if (
+            ctx.props.value.mode !== "normal" ||
+            !parseCommand(ctx.props.value.input)
+          ) return;
           await ctx.directoryCatalog?.ready("commands");
-          await ctx.directoryCatalog?.ready("skills");
           catalog();
         },
         source: {
@@ -136,47 +155,55 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             }
           },
         },
-        async beforeSubmit(draft) {
+        localCommand(draft) {
           const parsed = draft.mode === "normal"
             ? parseCommand(draft.input)
             : undefined;
-          if (!parsed) return false;
-          let invocation;
+          if (!parsed) return;
+          let id;
           try {
-            invocation = ctx.commands.parse(parsed.command, parsed.arguments);
+            id = ctx.commands.resolveSlash(parsed.command);
           } catch (error) {
-            ctx.fail(error);
-            return true;
+            return () => {
+              ctx.fail(error);
+              return Promise.resolve();
+            };
           }
-          if (!invocation) return false;
-          if (ctx.commands.metadata(invocation.id)?.kind === "submission") {
-            return false;
-          }
-          const prepared = ctx.change((current) =>
-            current === draft
-              ? editDraft(
-                current,
-                current.input.slice(parsed.command.length + 1).replace(
-                  /^\s/,
-                  "",
-                ),
-              )
-              : current
-          );
-          try {
-            await ctx.commands.run(invocation.id, invocation.args, {
-              ...ctx.commands.context(),
-              command: "prompt.submit",
-            });
-          } catch (error) {
-            if (ctx.active()) {
-              ctx.change((current) => current === prepared ? draft : current);
+          if (!id || ctx.commands.metadata(id)?.kind === "submission") return;
+          return async () => {
+            let invocation;
+            try {
+              invocation = ctx.commands.parse(parsed.command, parsed.arguments);
+            } catch (error) {
+              ctx.fail(error);
+              return;
             }
-            ctx.fail(error);
-          }
-          return true;
+            if (!invocation) return;
+            const prepared = ctx.change((current) =>
+              current === draft
+                ? editDraft(
+                  current,
+                  current.input.slice(parsed.command.length + 1).replace(
+                    /^\s/,
+                    "",
+                  ),
+                )
+                : current
+            );
+            try {
+              await ctx.commands.run(invocation.id, invocation.args, {
+                ...ctx.commands.context(),
+                command: "prompt.submit",
+              });
+            } catch (error) {
+              if (ctx.active()) {
+                ctx.change((current) => current === prepared ? draft : current);
+              }
+              ctx.fail(error);
+            }
+          };
         },
-        async submit(draft, parts, selection) {
+        async submit(draft, parts, selection, draftSend) {
           const parsed = draft.mode === "normal"
             ? parseCommand(draft.input)
             : undefined;
@@ -195,7 +222,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             ): part is Extract<PromptPart, { kind: "file" }> =>
               part.kind === "file"
             ),
-          });
+          }, { ...ctx.commands.context(), draftSend });
           return true;
         },
       };

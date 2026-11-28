@@ -66,15 +66,22 @@ test(
       await expect(page.locator("[data-pending]")).toHaveText("0");
       await expect(page.locator(selector)).not.toBeChecked();
     }
-    await page.locator("[data-display] button").click();
+    await page.getByRole("button", { name: "Display options", exact: true })
+      .click();
     const select = page.locator(
-      ".otk-display-preferences select[name=diffStyle]",
+      ".otk-display-preferences button[name=diffStyle]",
     );
-    await select.selectOption("split");
+    await select.click();
+    await page.getByRole("option", { name: "Split", exact: true }).click();
     await expect(page.locator("[data-pending]")).toHaveText("1");
     await page.locator("[data-reject]").click();
     await expect(page.locator("[data-pending]")).toHaveText("0");
-    await expect(select).toHaveValue("auto");
+    await expect(select).toContainText("Auto");
+    await expect(
+      page.locator(
+        ".otk-display-preferences input[type=hidden][name=diffStyle]",
+      ),
+    ).toHaveValue("auto");
     await page.keyboard.press("Escape");
     await expect(
       page.locator('.otk-visual-settings input[name="consumer.appearance"]'),
@@ -129,7 +136,8 @@ test(
     await page.goto(state.url + "/?layout-controls");
     await page.locator("input[name=username]").fill("Retained user");
     await page.locator("input[name=password]").fill("Retained password");
-    await page.locator("select[name=type]").selectOption("none");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "None", exact: true }).click();
     await expect(page.locator("[data-auth-pane] input[name=username]"))
       .toHaveCount(0);
     await page.locator("[data-auth-pane] button[type=submit]").click();
@@ -139,7 +147,8 @@ test(
     await page.locator("[data-reject]").click();
     await expect(page.locator("[data-auth-pane] form[aria-busy=true]"))
       .toHaveCount(0);
-    await page.locator("select[name=type]").selectOption("password");
+    await page.locator("button[name=type]").click();
+    await page.getByRole("option", { name: "Password", exact: true }).click();
     await expect(page.locator("input[name=username]")).toHaveValue(
       "Retained user",
     );
@@ -210,13 +219,23 @@ test(
       });
       expect(g.inside && g.feedbackVisible).toBe(true);
     }
+    const crumb = page.locator('[data-crumb="tstv1-independent-4"]');
     await page.keyboard.press("Enter");
-    await expect(input).toHaveAttribute("readonly", "");
+    // Issue 2.122: the same slot switches to the submitted pending title,
+    // then restores the confirmed title with a separate failure notice.
+    await expect(input).toHaveCount(0);
+    await expect(crumb.locator(".otk-rename-pending")).toHaveText(text);
     await page.locator("[data-reject-chip]").evaluate((el) =>
       (el as HTMLElement).click()
     );
     await expect(page.getByRole("alert")).toBeVisible();
-    await expect(input).toHaveValue(text);
+    await expect(crumb.locator(".otk-rename-pending")).toHaveCount(0);
+    await expect(crumb).toHaveAccessibleName(
+      "Independent session 4 with a long title",
+    );
+    await expect(page.getByRole("alert")).toContainText(
+      "Renaming session failed",
+    );
     expect(
       await page.getByRole("alert").evaluate((el) => {
         const r = el.getBoundingClientRect();

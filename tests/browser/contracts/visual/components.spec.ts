@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { subagentRows, subagents } from "../../pages/crumbs.ts";
+import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
@@ -29,12 +31,14 @@ test(
     const restores = Number(
       await page.locator("[data-restores]").getAttribute("data-restores"),
     );
-    const strip = page.locator(".otk-rolled-back-strip"),
+    const strip = page.locator(".otk-revert-group"),
       original = await strip.elementHandle();
-    const disclosure = page.locator(".otk-rollback-disclosure");
+    const disclosure = page.locator(
+      ".otk-revert-group .otk-record-group-toggle",
+    );
     await page.evaluate("styleTest.settleNotice()");
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator(".otk-rollback-footer button")).toBeVisible();
+    await expect(page.locator(".otk-revert-restore")).toBeVisible();
     if (
       await disclosure.getAttribute("aria-expanded") !== "true"
     ) await disclosure.click();
@@ -53,13 +57,17 @@ test(
       expect(await strip.evaluate((el, old) => el === old, original)).toBe(
         true,
       );
-      await expect(page.locator(".otk-composer-notice")).toHaveCount(1);
+      await expect(page.locator(".otk-composer-notice")).toHaveCount(
+        operation === "feedback('pending')" || operation === "feedback('error')"
+          ? 1
+          : 0,
+      );
       if (operation !== "refreshNotice()") {
-        await expect(page.locator(".otk-rollback-footer button"))
+        await expect(page.locator(".otk-revert-restore"))
           .toBeAttached();
       }
     }
-    await page.locator(".otk-rollback-footer button").click();
+    await page.locator(".otk-revert-restore").click();
     await expect(page.locator("[data-restores]")).toHaveAttribute(
       "data-restores",
       String(restores + 1),
@@ -106,7 +114,11 @@ test(
       "data-owner-subscriptions",
       "1,0",
     );
-    await expect(page.getByRole("alert")).toHaveText("Original target");
+    await expect(page.getByRole("alert")).toHaveAccessibleName(
+      "Original target",
+    );
+    await expect(page.getByRole("alert").locator(".otk-failure-reason"))
+      .toHaveText("Original target");
     await page.evaluate("styleTest.mountFeedback(false)");
     await expect(subscriptions).toHaveAttribute(
       "data-owner-subscriptions",
@@ -176,7 +188,7 @@ test(
     await scene(page, state.url, "forms");
     for (const name of ["notes", "kind"]) {
       const field = page.locator(
-        name === "notes" ? 'textarea[name="notes"]' : 'select[name="kind"]',
+        name === "notes" ? 'textarea[name="notes"]' : 'button[name="kind"]',
       );
       const before = await bounds(page, ".otk-form");
       await page.locator(".otk-form button[type=submit]").click();
@@ -186,7 +198,7 @@ test(
       );
       await expect(page.getByRole("status")).toBeFocused();
       await expect(page.locator("textarea")).toHaveAttribute("readonly", "");
-      await expect(page.locator(".otk-form-choice-value")).toHaveValue("Alpha");
+      await expect(page.locator(".otk-select-value")).toHaveValue("Alpha");
       await page.evaluate(`styleTest.fieldFailure('${name}')`);
       await expect(field).toHaveAttribute("aria-invalid", "true");
       const description = await field.evaluate((el) => {
@@ -215,7 +227,7 @@ test(
     await scene(page, state.url, "requests");
     for (const width of [1280, 800]) {
       await page.setViewportSize({ width, height: 700 });
-      let baseline: unknown;
+      let baseline: number[][] | undefined;
       for (const feedback of ["clear", "pending", "error"]) {
         await page.evaluate(`styleTest.feedback('${feedback}')`);
         const g = await page.evaluate(() => {
@@ -223,23 +235,27 @@ test(
             const r = el.getBoundingClientRect();
             return [r.x, r.y, r.width, r.height];
           };
-          const pane = document.querySelector(".request-feedback-pane")!,
-            items = Array.from(pane.querySelectorAll("p,button")).map((el) =>
-              el.getBoundingClientRect()
-            );
-          const left = Math.min(...items.map((r) => r.left)),
-            right = Math.max(...items.map((r) => r.right)),
-            top = Math.min(...items.map((r) => r.top)),
-            bottom = Math.max(...items.map((r) => r.bottom));
+          const pane = document.querySelector(".request-feedback-pane")!;
+          const content = pane.querySelector(".otk-pane-state-content")!;
           const operation = document.querySelector(".otk-operation-feedback")!;
+          const row = operation.querySelector(".otk-record-row-grid")!;
+          const fold = operation.parentElement?.querySelector(
+            ".otk-failure-details button",
+          );
+          const axis = (element: Element) => {
+            const box = element.getBoundingClientRect();
+            return box.x + box.width / 2;
+          };
           return {
             boxes: [
               rect(document.querySelector(".request-feedback-form input")!),
               rect(document.querySelector("#task-feedback")!),
             ],
             pane: rect(pane),
-            content: [left, top, right - left, bottom - top],
-            centres: Array.from(operation.children).map((el) => {
+            content: rect(content),
+            centres: Array.from(
+              row.children,
+            ).map((el) => {
               const r = el.getBoundingClientRect();
               return r.y + r.height / 2;
             }),
@@ -247,6 +263,14 @@ test(
               document.querySelectorAll('[disabled],[aria-disabled="true"]')
                 .length,
             colour: getComputedStyle(operation).color,
+            fold: fold && {
+              below: fold.getBoundingClientRect().top >=
+                row.getBoundingClientRect().bottom,
+              gutter: Math.abs(
+                axis(fold.querySelector(".otk-disclosure-icon")!) -
+                  axis(row.querySelector(".otk-composer-notice-icon")!),
+              ),
+            },
           };
         });
         expect(g.disabled).toBe(0);
@@ -256,10 +280,29 @@ test(
         expect(
           Math.abs(g.pane[1] + g.pane[3] / 2 - g.content[1] - g.content[3] / 2),
         ).toBeLessThan(1);
+        // 2.114 R2/R11: Details is a second row, not a fitted third cell.
+        expect(g.centres).toHaveLength(2);
         expect(Math.max(...g.centres) - Math.min(...g.centres)).toBeLessThan(1);
+        if (feedback === "error") {
+          expect(g.fold?.below).toBe(true);
+          expect(g.fold?.gutter).toBeLessThanOrEqual(1);
+        } else expect(g.fold).toBeNull();
         if (feedback === "clear") baseline = g.boxes;
-        else expect(g.boxes).toEqual(baseline);
-        if (feedback === "error") expect(g.colour).toBe("rgb(255, 128, 128)");
+        else {
+          expect(g.boxes[0]).toEqual(baseline![0]);
+          // Structured facts grow within the feedback's normal-flow track;
+          // its origin/width and the concerned input do not shift.
+          expect(g.boxes[1].slice(0, 3)).toEqual(baseline![1].slice(0, 3));
+          expect(g.boxes[1][3]).toBeGreaterThanOrEqual(baseline![1][3]);
+        }
+        if (feedback === "error") {
+          // WP5 paints danger on the icon, not the text or a second stripe.
+          expect(g.colour).toBe("rgb(230, 234, 239)");
+          const notice = page.locator(".otk-operation-feedback");
+          await expect(notice.locator(".otk-failure-signal")).toHaveCount(0);
+          await expect(notice.locator(".otk-composer-notice-icon svg"))
+            .toHaveCSS("color", "rgb(255, 128, 128)");
+        }
       }
     }
   },
@@ -309,19 +352,24 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "lists");
-    const ids = Array.from({ length: 10 }, (_, i) => `session-${i}`);
+    const { lists } = await state.observe<{
+      lists: { entries: IndexEntry[]; inbox: InboxSnapshot };
+    }>();
+    const ids = lists.entries.map(({ id }) => id);
+    const selected = `[data-crumb="${ids[9]}"]`;
+    const editing = `[data-crumb="${ids[7]}"]`;
+    const other = `[data-crumb="${ids[1]}"]`;
     await page.evaluate(
-      `styleTest.lists(${JSON.stringify(ids)},'session-4','session-7')`,
+      `styleTest.lists(...${JSON.stringify([ids, ids[9], ids[7], lists])})`,
     );
-    await expect(page.locator('[data-crumb="session-7"] input')).toHaveValue(
+    await expect(page.locator(`${editing} input`)).toHaveValue(
       "session-7",
     );
-    const original = await page.locator('[data-crumb="session-4"]')
-      .elementHandle();
-    const otherOriginal = await page.locator('[data-crumb="session-1"]')
-      .elementHandle();
+    const original = await page.locator(selected).elementHandle();
+    const otherOriginal = await page.locator(other).elementHandle();
     await page.setViewportSize({ width: 600, height: 800 });
-    await expect(page.locator(".otk-folded-crumbs > button")).toBeVisible();
+    const inventory = subagents(page);
+    await expect(inventory).toBeVisible();
     const visible = () =>
       page.locator("[data-crumb]").evaluateAll((els) =>
         els.filter((el) => !el.closest("[hidden]")).map((el) =>
@@ -329,42 +377,52 @@ test(
         )
       );
     const shown = await visible();
-    expect(shown).toContain("session-4");
-    expect(shown).toContain("session-7");
-    expect(shown.length).toBeLessThan(ids.length);
+    expect(shown).toContain(ids[9]);
+    expect(shown).toContain(ids[7]);
+    expect(shown).toEqual(ids);
     expect(shown).toEqual(ids.filter((id) => shown.includes(id)));
     expect(
-      await page.locator('[data-crumb="session-4"]').evaluate(
+      await page.locator(selected).evaluate(
         (el, old) => el === old,
         original,
       ),
     ).toBe(true);
     expect(
-      await page.locator('[data-crumb="session-1"]').evaluate(
+      await page.locator(other).evaluate(
         (el, old) => el === old,
         otherOriginal,
       ),
     ).toBe(true);
-    const before = await bounds(page, ".otk-folded-crumbs > button");
-    await page.locator(".otk-folded-crumbs > button").click();
-    await expect(page.locator(".otk-folded-crumbs [role=menuitem]").first())
-      .toBeVisible();
+    // D67 moved the helper menu out of this row. The row's existing Session
+    // control still proves that ending an editor cannot move its press target.
+    const sessionBefore = await bounds(page, ".otk-new-session");
+    await page.locator(".otk-new-session").click();
+    await expect.poll(() => page.evaluate("styleTest.createdSessions()"))
+      .toBe(1);
     expect(
-      (await bounds(page, ".otk-folded-crumbs > button")).every((v, i) =>
-        Math.abs(v - before[i]) <= 1
+      (await bounds(page, ".otk-new-session")).every((value, index) =>
+        Math.abs(value - sessionBefore[index]) <= 1
       ),
     ).toBe(true);
-    const omitted = await page.locator(
-      ".otk-folded-crumbs [data-overflow-target]",
-    ).evaluateAll((els) =>
-      els.map((el) => el.getAttribute("data-overflow-target"))
+    const before = await inventory.boundingBox();
+    await inventory.click();
+    const rows = subagentRows(page);
+    await expect(rows.first()).toBeVisible();
+    const after = await inventory.boundingBox();
+    expect(after).toEqual(before);
+    const omitted = await rows.evaluateAll((els) =>
+      els.map((el) => el.getAttribute("data-subagent"))
     );
-    // Opening More blurs the native title editor and refits the live chips.
-    // Compare both partitions from that same post-blur snapshot.
+    // D67 keeps every ancestor; the composer inventory is independent.
     const currentShown = await visible();
-    expect(omitted).toEqual(ids.filter((id) => !(currentShown.includes(id))));
+    expect(omitted).toEqual(ids.slice(1));
     expect(
-      await page.locator("[data-overflow-target]").evaluateAll((els) =>
+      ids.filter((id) => !currentShown.includes(id)).every((id) =>
+        omitted.includes(id)
+      ),
+    ).toBe(true);
+    expect(
+      await page.locator("[data-subagent]").evaluateAll((els) =>
         els.every((el) => !el.closest("[data-overflow-key]"))
       ),
     ).toBe(true);
@@ -375,7 +433,7 @@ test(
     await page.evaluate("styleTest.lists([])");
     await expect(page.locator("[data-crumb]")).toHaveCount(0);
     await page.evaluate(
-      `styleTest.lists(${JSON.stringify(ids.slice().reverse())},'session-4')`,
+      `styleTest.lists(...${JSON.stringify([ids.slice().reverse(), ids[4]])})`,
     );
     await page.getByRole("button", { name: "Reactive list menu", exact: true })
       .click();
@@ -390,6 +448,58 @@ test(
       .toHaveCount(1);
     await page.evaluate("styleTest.menuItems(['one','two','delete'])");
     await expect(page.locator(":popover-open [role=menuitem]")).toHaveCount(3);
+  },
+);
+test(
+  "visual.trail-first-words-retain-measured-width-inside-the-shared-scroll-lane",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await scene(page, state.url, "lists");
+    await page.setViewportSize({ width: 600, height: 800 });
+    const tail = "w".repeat(100);
+    await page.evaluate(
+      `styleTest.lists(${JSON.stringify([`root ${tail}`, "leaf"])},'leaf')`,
+    );
+    const trail = page.locator(".otk-task-crumbs");
+    await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
+      "data-fit-mode",
+      "compact",
+    );
+    await expect(trail.locator("[data-crumb]")).toHaveCount(2);
+    const first = trail.locator("[data-crumb] .otk-trail-first");
+    await expect(first).toHaveText("root");
+    await expect.poll(() =>
+      first.evaluate((node) => {
+        const word = node.getBoundingClientRect(),
+          frame = node.closest(".otk-trail-title")!.getBoundingClientRect();
+        return word.width > 0 && word.left >= frame.left &&
+          word.right <= frame.right;
+      })
+    ).toBe(true);
+
+    // An indivisible first word forces paging, rather than folding ancestors.
+    const root = `root${tail}`;
+    await page.evaluate(
+      `styleTest.lists(${JSON.stringify([root, "leaf"])},'leaf')`,
+    );
+    await expect(trail.locator("[data-fit-mode]")).toHaveAttribute(
+      "data-fit-mode",
+      "scroll",
+    );
+    await expect(trail.locator("[data-crumb]")).toHaveCount(2);
+    await expect.poll(() =>
+      trail.locator(".otk-overflow-items").evaluate((lane) =>
+        lane.scrollWidth > lane.clientWidth
+      )
+    ).toBe(true);
+    await expect(trail.getByRole("scrollbar", { name: "Horizontal scroll" }))
+      .toBeAttached();
+    const ancestor = trail.getByRole("link", { name: root, exact: true });
+    await ancestor.scrollIntoViewIfNeeded();
+    await expect(ancestor).toBeInViewport();
+    const title = ancestor.locator(".otk-trail-title");
+    await expect(title).toHaveText(root);
+    await expect(title).toHaveCSS("text-overflow", "ellipsis");
   },
 );
 test(
@@ -452,9 +562,11 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "journal");
-    await page.locator(".otk-permission-patterns").evaluateAll((els) =>
-      els.forEach((el) => (el as HTMLDetailsElement).open = true)
-    );
+    for (
+      const toggle of await page.getByRole("button", {
+        name: /^Requested scope/,
+      }).all()
+    ) await toggle.click();
     const values = await page.evaluate(() =>
       ["summary", "activity"].map((id) =>
         Array.from(document.getElementById(id)!.querySelectorAll(
@@ -481,29 +593,52 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "siblings");
-    await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-      "aria-expanded",
-      "false",
+    const strip = page.getByRole("button", {
+      name: "Work log: 1 action. Check output",
+    });
+    await expect(strip).toBeVisible();
+    await expect(strip.locator("[data-run]")).toHaveCount(1);
+    const disclosure = page.locator(
+      ".otk-revert-group .otk-record-group-toggle",
     );
-    await page.locator(".otk-work-fold").click();
-    const disclosure = page.locator(".otk-rollback-disclosure");
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    await expect(page.locator(".otk-rollback-file")).toHaveCount(1);
-    const colors = await page.evaluate(() =>
-      [".otk-path", ".otk-diff-add", ".otk-diff-del"].map((s) =>
-        getComputedStyle(document.querySelector(".otk-rollback-file " + s)!)
-          .color
-      )
-    );
-    expect(colors[1]).not.toBe(colors[0]);
-    expect(colors[2]).not.toBe(colors[0]);
+    const file = page.locator(".otk-revert-records .otk-control-row").filter({
+      has: page.locator(".otk-path"),
+    });
+    for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+      await page.evaluate((theme) => {
+        (window as unknown as { styleTest: { theme(id: string): void } })
+          .styleTest.theme(theme);
+      }, theme);
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+      await expect(file).toHaveCount(1);
+      await expect(file.locator(".otk-path")).toHaveText("src/owner.ts");
+      await expect(file.locator(".otk-diff-add")).toHaveText("+3");
+      await expect(file.locator(".otk-diff-del")).toHaveText("\u22121");
+      const colors = await file.evaluate((element) =>
+        [".otk-path", ".otk-diff-add", ".otk-diff-del"].map((selector) =>
+          getComputedStyle(element.querySelector(selector)!).color
+        )
+      );
+      expect(colors[1]).not.toBe(colors[0]);
+      expect(colors[2]).not.toBe(colors[0]);
+      await page.screenshot({
+        path: test.info().outputPath(`revert-files-${theme}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
     expect(
-      await page.locator(".otk-work-fold").evaluate((el) =>
+      await page.locator(".otk-work-strip").evaluate((el) =>
         getComputedStyle(el).display
       ),
-    ).toBe("flex");
+    ).toBe("inline-grid");
     expect(
       await page.locator(".otk-view-header").evaluate((el) =>
         getComputedStyle(el).display
@@ -514,13 +649,13 @@ test(
         getComputedStyle(el).padding
       ),
     ).toBe("12px");
-    await page.locator(".otk-work-fold").click();
-    await expect(page.locator(".otk-work-body")).toHaveCount(0);
-    await page.locator(".otk-work-fold").click();
-    await expect(page.locator(".otk-work-body")).toBeVisible();
+    await expect(strip.locator("[data-run]")).toHaveAttribute(
+      "title",
+      /Check output/,
+    );
     await disclosure.click();
     await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator(".otk-rollback-file")).toHaveCount(0);
+    await expect(file).toHaveCount(0);
   },
 );
 test(
@@ -528,31 +663,27 @@ test(
   tags,
   async ({ isolatedState: state, page }) => {
     await scene(page, state.url, "chrome");
-    const padding = () =>
-      page.locator(".otk-task-strip").evaluate((el) =>
-        getComputedStyle(el).paddingRight
-      );
+    const width = async () =>
+      (await page.locator(".otk-task-list").boundingBox())!.width;
     await page.evaluate("styleTest.reserve(false);styleTest.collapse(false)");
-    const normal = await padding();
+    const normal = await width();
     await page.evaluate(
       "document.body.className='otk-app';document.body.dataset.rightCollapsed='true'",
     );
-    expect(await padding()).toBe(normal);
+    expect(await width()).toBe(normal);
     await page.evaluate("document.body.className='';styleTest.reserve(true)");
-    await expect.poll(padding).not.toBe("12px");
-    expect(await padding()).not.toBe(normal);
+    await expect(page.getByRole("button", { name: "Trailing action" }))
+      .toBeVisible();
+    await expect.poll(width).toBeLessThan(normal);
     await page.evaluate("styleTest.collapse(true)");
     await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
       "data-collapsed",
       "true",
     );
+    await expect(page.locator(".otk-server-connection .otk-server-label"))
+      .toHaveCount(0);
     expect(
-      await page.locator(".otk-server-status > span:last-child").evaluate(
-        (el) => getComputedStyle(el).display,
-      ),
-    ).toBe("none");
-    expect(
-      (await page.locator(".otk-server-status [role=img]").boundingBox())!
+      (await page.locator(".otk-server-connection [role=img]").boundingBox())!
         .width,
     ).toBeGreaterThan(0);
     await expect(

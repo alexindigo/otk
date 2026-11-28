@@ -13,7 +13,25 @@ import { Transcript } from "../transcript.ts";
 import { subagentBody } from "../tool-results.ts";
 
 const sid = "opcv2-ses_fixture";
+Deno.test("successful idle supplies neutral footer completion without hiding failures", () => {
+  for (const outcome of ["succeeded", "failed", "interrupted"] as const) {
+    const message = mapMessage(
+      { id: `idle-${outcome}`, type: "idle", outcome, time: { created: 10 } },
+      sid,
+      { order: 1 },
+    );
+    assert(message);
+    const part = message.parts[0];
+    assert(part.kind === "external");
+    assertEquals(
+      part.activity?.completion,
+      outcome === "succeeded" ? { placement: "footer" } : undefined,
+    );
+    assert(part.source);
+  }
+});
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,
@@ -59,16 +77,16 @@ const synthetic = (
 // INV-A's V2 cases, retargeted to the binding visible context carrier.
 for (
   const [state, title, tone, facts] of [
-    ["completed", "Junior finished", "normal", {
+    ["completed", "finished", "normal", {
       active: false,
       terminal: true,
     }],
-    ["error", "Junior failed", "error", { active: false, terminal: true }],
-    ["cancelled", "Junior cancelled", "normal", {
+    ["error", "failed", "error", { active: false, terminal: true }],
+    ["cancelled", "cancelled", "normal", {
       active: false,
       terminal: true,
     }],
-    ["future-state", "Junior finished", "normal", {
+    ["future-state", "finished", "normal", {
       active: null,
       terminal: null,
     }],
@@ -77,6 +95,10 @@ for (
   Deno.test(`V2 subagent ${state} preserves native state, parameters, source and rendered response`, () => {
     const part = notice(synthetic(state)), activity = part.activity!;
     assertEquals(activity.title, title);
+    assertEquals(activity.entity, {
+      label: "Junior",
+      sessionID: "opcv2-ses_child",
+    });
     assertEquals(activity.tone, tone);
     assertEquals(activity.state?.facts, facts);
     assertEquals(activity.state?.key, state);

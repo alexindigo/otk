@@ -200,9 +200,11 @@ export class Requests {
       "SELECT id,expires_at FROM request_windows WHERE id=?",
     ).get(key(id)) as { id: string; expires_at: number } | undefined;
   }
-  activeCount(principal: string): number {
+  activeCount(principal: string, durableOnly = false): number {
     const row = this.db.connection.prepare(
-      `SELECT COUNT(*) AS count FROM request_receipts WHERE principal=? AND ${active}`,
+      `SELECT COUNT(*) AS count FROM request_receipts WHERE principal=? AND ${active}${
+        durableOnly ? " AND execution IN ('local','native')" : ""
+      }`,
     ).get(key(principal)) as { count: number };
     return row.count;
   }
@@ -214,6 +216,7 @@ export class Requests {
   admit(
     input: RequestRecord,
     tx?: StoreWrite,
+    issuedWindow?: { id: string; expires_at: number },
   ): { inserted: boolean; record: RequestRecord } {
     return this.db.write(() => {
       input = {
@@ -227,6 +230,20 @@ export class Requests {
         input.dispatched_at !== null || input.receipt_json !== null ||
         input.error_code !== null
       ) throw new Error("Invalid request admission state");
+      if (
+        issuedWindow && !this.get(input) && !this.windowInfo(input.window_id)
+      ) {
+        if (key(issuedWindow.id) !== input.window_id) {
+          throw new TypeError("Wrong admission window");
+        }
+        integer(issuedWindow.expires_at);
+        if (
+          issuedWindow.expires_at <= input.accepted_at ||
+          issuedWindow.expires_at > input.retention_until
+        ) throw new Error("Request window expired or beyond retention");
+        this.db.connection.prepare("INSERT INTO request_windows VALUES(?,?,?)")
+          .run(issuedWindow.id, input.accepted_at, issuedWindow.expires_at);
+      }
       // Conditional insertion leaves no partial admission even when a caller
       // catches a rejection inside a larger explicitly joined write scope.
       const inserted = this.db.connection.prepare(
@@ -312,8 +329,10 @@ export class Requests {
     integer(limit, 1);
     return this.db.connection.prepare(
       `SELECT ${columns.join(",")} FROM request_receipts WHERE ${active}${
-        after ? " AND (principal,client_id,intent_key)>(?,?,?)" : ""
-      } ORDER BY principal,client_id,intent_key LIMIT ?`,
+        after
+          ? ` AND rowid>(SELECT rowid FROM request_receipts WHERE ${predicate})`
+          : ""
+      } ORDER BY rowid LIMIT ?`,
     ).all(...(after ? keys(after) : []), limit) as unknown as RequestRecord[];
   }
   sweep(now: number, limit: number): number {

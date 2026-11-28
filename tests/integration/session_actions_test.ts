@@ -100,10 +100,8 @@ v1Test(
         sessionID: session.id,
         messageID: first.info.id,
       });
-      assertEquals(reverted.revert?.prompts?.map((p) => p.preview), [
-        "Boundary prompt",
-        "Later prompt",
-      ]);
+      assertEquals(reverted.revert?.boundaryID, first.info.id);
+      assertEquals(reverted.revert?.messageIDs[0], first.info.id);
       assertEquals(reverted.revert?.prompt?.input, "Boundary prompt");
       assertEquals(
         await readRpcMessages(client, session.id),

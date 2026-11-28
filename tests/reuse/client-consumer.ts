@@ -28,7 +28,8 @@ export async function observeReply(
   const connection = new SidecarConnection(baseUrl, {
     status(state, error) {
       if (
-        state === "protocol mismatch" || state === "login required" ||
+        state === "client outdated" || state === "protocol mismatch" ||
+        state === "login required" ||
         state === "setup required"
       ) ready.reject(new Error(error ?? state));
     },

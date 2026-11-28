@@ -4,6 +4,7 @@ import {
   MAX_RECENT_MODELS,
   type ModelRef,
 } from "@otk/protocol";
+import { reportDiagnostic } from "./diagnostics.ts";
 
 function same(a: ModelRef, b: ModelRef): boolean {
   return a.provider === b.provider && a.model === b.model;
@@ -17,6 +18,21 @@ export function recordRecentModel(
   if (!sent) return [...recent];
   return [{ ...sent }, ...recent.filter((item) => !same(item, sent))]
     .slice(0, MAX_RECENT_MODELS);
+}
+
+/** Own successful-send bookkeeping independently of composer/catalog lifetimes. */
+export function createModelRecency(input: {
+  get(): readonly ModelRef[];
+  set(value: ModelRef[]): Promise<unknown>;
+  fail(cause: unknown): void;
+}): (message: { model?: ModelRef }) => void {
+  let writes = Promise.resolve();
+  return (message) => {
+    if (!message.model) return;
+    const model = { ...message.model };
+    writes = writes.then(() => input.set(recordRecentModel(input.get(), model)))
+      .then(() => {}, (cause) => reportDiagnostic(input.fail, cause));
+  };
 }
 
 /** New favourites go first; at capacity existing favourites are preserved. */

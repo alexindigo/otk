@@ -3,7 +3,8 @@
   padding: 0;
   border-radius: var(--radius-control);
   font-weight: 500;
-  min-width: max-content;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 .otk-composer-picker:hover {
   background: var(--otk-hover);
@@ -12,7 +13,8 @@
   --control-color: var(--otk-fg);
   display: inline-flex;
   align-items: center;
-  min-width: min-content;
+  min-width: 0;
+  max-inline-size: 100%;
   height: var(--control-size);
   padding: 0;
   color: var(--control-color, var(--otk-fg));
@@ -28,20 +30,11 @@
 }
 .otk-model-picker {
   flex: 0 1 auto;
-  min-width: min-content;
+  min-width: 0;
 }
 .otk-model-trigger {
   width: 100%;
 }
 .otk-picker-chevron {
   color: var(--otk-fg-3);
-}
-.otk-picker-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 4px var(--item-inset);
-  color: var(--otk-fg-2);
-  font-size: var(--text-meta);
 }

@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertStrictEquals } from "@std/assert";
+import {
+  assertEquals,
+  assertNotStrictEquals,
+  assertStrictEquals,
+} from "@std/assert";
 import type { AssistantMessage, Message } from "@otk/protocol";
 import { createTranscriptProjection } from "../transcript-projection.ts";
 import { createTranscript } from "../transcript.ts";
 import { SidecarConnection } from "../connection.ts";
+import { createEntityStateStore } from "../entity-state.ts";
+import type { EntityState } from "@otk/protocol";
 import {
   fixtureMessagePolicy,
   fixturePage,
@@ -22,6 +28,199 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   time: { created, completed: created + 1 },
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
 });
+
+Deno.test("reconcile keeps absent and equal rows while updating only changed bodies", () => {
+  const p = createTranscriptProjection();
+  const held = step("held", "old", 1);
+  const equal = step("equal", "stable", 2);
+  const edited = step("edited", "changed", 3);
+  p.reset([held, equal, edited]);
+  const old = p.entry(held.id);
+  const stable = p.entry(equal.id);
+  const changed = p.entry(edited.id);
+  const revision = p.state.records.revisions["reply:stable"];
+  const part = edited.parts[0];
+  const updated: Message = {
+    ...structuredClone(edited),
+    cost: 2,
+  };
+
+  p.reconcile([
+    { ...structuredClone(equal), model: { model: "test", provider: "test" } },
+    updated,
+    step("new", "new", 4),
+  ]);
+  assertEquals(p.state.messageIDs, ["held", "equal", "edited", "new"]);
+  assertStrictEquals(p.state.messagesByID.held, held);
+  assertStrictEquals(p.state.messagesByID.equal, equal);
+  assertStrictEquals(p.entry(held.id), old);
+  assertStrictEquals(p.entry(equal.id), stable);
+  assertEquals(p.state.records.revisions["reply:stable"], revision);
+  assertNotStrictEquals(p.entry(edited.id), changed);
+  assertEquals(p.state.messagesByID.edited, updated);
+  assertStrictEquals(p.state.messagesByID.edited.parts[0], part);
+
+  p.reconcile([]);
+  assertEquals(p.state.messageIDs, ["held", "equal", "edited", "new"]);
+  p.reset([]);
+  assertEquals(p.state.messageIDs, []);
+  assertEquals(p.state.replyIDs, []);
+});
+
+Deno.test("reconcile only reacquires parked bodies present in the page", () => {
+  const p = createTranscriptProjection();
+  const held = step("held", "older", 1);
+  const head = step("head", "newer", 3);
+  p.reset([held, head]);
+  p.park([held.id]);
+
+  p.reconcile([structuredClone(head)]);
+  assertEquals(p.state.messageIDs, [head.id]);
+  assertStrictEquals(p.state.messagesByID.held, held);
+  assertEquals(p.materialized(held.id), false);
+
+  p.reconcile([{ ...held, cost: 1 }]);
+  assertEquals(p.materialized(held.id), true);
+  assertEquals(p.state.messageIDs, [held.id, head.id]);
+  assertEquals((p.state.messagesByID.held as AssistantMessage).cost, 1);
+});
+
+Deno.test("reconcile body revisions are scoped to an epoch and invalidated by body writes", () => {
+  const p = createTranscriptProjection();
+  const body = step("body");
+  const witness = {
+    clock: { epoch: "first", seq: 0 },
+    revisions: { body: 0 },
+  };
+  p.reconcile([body], witness);
+
+  p.reconcile([{
+    ...body,
+    get parts(): never {
+      throw new Error("equal revision must not read the page body");
+    },
+  }], witness);
+  assertStrictEquals(p.state.messagesByID.body, body);
+
+  p.apply({ op: "message.upsert", message: { ...body, cost: 1 } });
+  assertEquals((p.state.messagesByID.body as AssistantMessage).cost, 1);
+  p.reconcile([body], witness);
+  assertEquals((p.state.messagesByID.body as AssistantMessage).cost, 0);
+  p.reconcile([{ ...body, cost: 2 }], {
+    ...witness,
+    clock: { epoch: "restarted", seq: 0 },
+  });
+  assertEquals((p.state.messagesByID.body as AssistantMessage).cost, 2);
+});
+
+Deno.test("a reply to a newer real prompt proves the earlier prompt started", () => {
+  const owner = createTranscriptProjection();
+  owner.merge([
+    {
+      id: "first",
+      sessionID: "tstv1-s",
+      role: "user",
+      time: { created: 1 },
+      parts: [],
+    },
+    {
+      id: "later",
+      sessionID: "tstv1-s",
+      role: "user",
+      time: { created: 2 },
+      parts: [],
+    },
+  ]);
+  const started = (id: string) => Reflect.get(owner, "started").call(owner, id);
+  assertEquals(started("first"), false);
+  owner.merge([step("reply", "later", 3)]);
+  assertEquals(started("first"), true);
+  assertEquals(started("later"), true);
+  assertEquals(started("missing"), false);
+});
+
+Deno.test("canonical transcript busy follows own work evidence even when the lamp stays blocked", () => {
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame() {},
+  });
+  const value: EntityState = {
+    kind: "session",
+    id: "tstv1-s",
+    state: "blocked",
+    cause: "question",
+    previous: "none",
+    counts: { working: 0, blocked: 1, finished: 0, unseen: 0 },
+    evidence: {
+      work: true,
+      nativeRun: true,
+      permissions: 0,
+      questions: 1,
+      descendants: { working: 0, blocked: 0, finished: 0, unseen: 0 },
+    },
+  };
+  const entities = createEntityStateStore({
+    read: () => ({ "session:tstv1-s": value }),
+  });
+  const owner = createTranscript(
+    { sidecarId: "server", sessionID: "tstv1-s" },
+    () => connection,
+    () => undefined,
+    (read) => read(),
+    undefined,
+    undefined,
+    entities,
+  );
+  try {
+    assertEquals(
+      owner.projection.busy(true),
+      false,
+      "positive work reached the canonical projection",
+    );
+    value.evidence!.work = false;
+    delete value.evidence!.nativeRun;
+    entities.observe(["session:tstv1-s"], "live");
+    assertEquals(
+      owner.projection.busy(false),
+      false,
+      "unchanged blocked state cannot retain old work",
+    );
+    value.evidence!.work = true;
+    value.evidence!.nativeRun = true;
+    entities.observe(["session:tstv1-s"], "live");
+    assertEquals(owner.projection.busy(true), false);
+    entities.stale(true);
+    assertEquals(
+      owner.projection.busy(false),
+      false,
+      "stale serving transport clears busy evidence",
+    );
+  } finally {
+    owner.stop();
+    entities.stop();
+    connection.stop();
+  }
+});
+Deno.test("canonical append revision ignores older pages, updates and replacement baselines", () => {
+  const projection = createTranscriptProjection();
+  projection.reset([step("middle", "prompt", 2)]);
+  assertEquals(projection.state.appendRevision, 0);
+  projection.merge([step("older", "prompt", 1)]);
+  projection.apply({
+    op: "message.upsert",
+    message: step("middle", "prompt", 2),
+  });
+  assertEquals(projection.state.appendRevision, 0);
+  projection.apply({
+    op: "message.upsert",
+    message: step("latest", "next", 3),
+  });
+  assertEquals(projection.state.appendRevision, 1);
+  projection.reset([step("middle", "prompt", 2), step("latest", "next", 3)]);
+  assertEquals(projection.state.appendRevision, 1);
+  projection.reset([step("middle", "prompt", 2), step("newest", "next", 4)]);
+  assertEquals(projection.state.appendRevision, 2);
+});
 Deno.test("first-message reorder uses its canonical clock, not the aggregate last clock", () => {
   const projection = createTranscriptProjection();
   const a = step("a", "prompt", 2), b = step("b", "prompt", 5);
@@ -32,11 +231,11 @@ Deno.test("first-message reorder uses its canonical clock, not the aggregate las
     time: { created: 3 },
     parts: [],
   };
-  projection.replace([a, control, b]);
+  projection.reset([a, control, b]);
   const moved = { ...a, time: { created: 5, completed: 6 } };
   projection.apply({ op: "message.upsert", message: moved });
   const replacement = createTranscriptProjection();
-  replacement.replace([moved, control, b]);
+  replacement.reset([moved, control, b]);
   assertEquals(projection.state.replyIDs, ["control", "reply:prompt"]);
   assertEquals(projection.state.replyIDs, replacement.state.replyIDs);
 });
@@ -64,13 +263,13 @@ Deno.test("removing a causal prompt reorders only its dependent reply before sub
     time: { created: 3 },
     parts: [],
   };
-  projection.replace([failure, control, prompt]);
+  projection.reset([failure, control, prompt]);
   projection.apply({ op: "message.remove", messageID: prompt.id });
   assertEquals(projection.state.replyIDs, ["reply:prompt", "control"]);
   const next = { ...control, id: "next", time: { created: 2.5 } };
   projection.apply({ op: "message.upsert", message: next });
   const replacement = createTranscriptProjection();
-  replacement.replace([failure, control, next]);
+  replacement.reset([failure, control, next]);
   assertEquals(projection.state.replyIDs, replacement.state.replyIDs);
 });
 Deno.test("causal replies follow their prompt even when queued source order follows the failure", () => {
@@ -109,7 +308,7 @@ Deno.test("causal replies follow their prompt even when queued source order foll
       control,
     ]]
   ) {
-    projection.replace(messages);
+    projection.reset(messages);
     assertEquals(projection.state.replyIDs, [
       "switch",
       "other-control",
@@ -124,7 +323,7 @@ Deno.test("message clock refinement preserves terminal authority and body identi
     ...step("clock"),
     time: { created: 1, completed: 10, lastOutput: 10 },
   };
-  projection.replace([message, step("unrelated", "other", 20)]);
+  projection.reset([message, step("unrelated", "other", 20)]);
   const unrelated = projection.state.messagesByID.unrelated;
   const parts = projection.state.messagesByID.clock.parts;
   projection.apply({ op: "message.clock", messageID: "clock", lastOutput: 8 });
@@ -145,7 +344,7 @@ Deno.test("transcript projection keeps logical reply identity across earlier pag
     { length: 1525 },
     (_, i) => step(`m-${i}`, `u-${i}`, i),
   );
-  projection.replace(history);
+  projection.reset(history);
   const unchanged = projection.state.repliesByID["reply:u-1"];
   const ids = projection.state.messageIDs;
   // Accessing a historical record is observable: ordinary part work must stay keyed.
@@ -199,7 +398,7 @@ Deno.test("transcript queue changes only on structural/header/status changes and
     time: { created },
     parts: [],
   });
-  p.replace([
+  p.reset([
     user("prompt", 0),
     { ...step("a"), time: { created: 1 } },
     user("queued", 2),
@@ -222,14 +421,14 @@ Deno.test("transcript queue changes only on structural/header/status changes and
   assertStrictEquals(p.state.messagesByID.a, final);
   p.busy(false);
   assertEquals([...p.state.queuedIDs], []);
-  p.clear();
+  p.reset([]);
   assertEquals(p.state.messageIDs, []);
   assertEquals(p.state.replyIDs, []);
 });
 
 Deno.test("a changed segment in a giant reply borrows historical segments without reading their message records", () => {
   const p = createTranscriptProjection();
-  p.replace(
+  p.reset(
     Array.from({ length: 102 }, (_, i) => step(`step-${i}`, "turn", i)),
   );
   let visits = 0;

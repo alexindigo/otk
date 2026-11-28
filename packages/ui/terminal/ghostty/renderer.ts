@@ -172,6 +172,7 @@ export function measureGhosttyCell(
   context: CanvasRenderingContext2D,
   fontSize: number,
   fontFamily: string,
+  lineHeight: number,
 ): GhosttyCellMetrics {
   context.font = `normal 400 ${fontSize}px ${fontFamily}`;
   const widthMeasurement = context.measureText("M");
@@ -181,7 +182,7 @@ export function measureGhosttyCell(
   const glyphHeight = ascent + descent;
   const height = Math.max(
     1,
-    Math.round(fontSize * 1.35),
+    lineHeight,
     Math.ceil(glyphHeight),
   );
   return {

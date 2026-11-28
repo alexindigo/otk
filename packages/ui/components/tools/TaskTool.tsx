@@ -1,47 +1,70 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { DelegateIcon } from "../ChromeIcons.tsx";
 import "./TaskTool.css" with { type: "text" };
-import { Show } from "solid-js";
+import { createMemo, Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
 import { derivedValue } from "@otk/protocol";
-import { duration } from "@otk/client";
+import { type ActionControl, elapsed } from "@otk/client";
+import { MetaText } from "../ChromeMeta.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
-import { ownedAction } from "../../keyboard/context.tsx";
+import { useCommandPorts } from "../../keyboard/context.tsx";
+import ActionButton from "../ActionButton.tsx";
+import { sessionOpenControl } from "../session-open.ts";
 import ToolOutput from "./ToolOutput.tsx";
 import { countLabel } from "./count.ts";
 export function registerTaskTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "task",
-    (props) => <TaskTool call={props.call} onOpen={props.onOpenChild} />,
+    (props) => <TaskTool call={props.call} onOpenChild={props.onOpenChild} />,
     (call) => ({
-      icon: "↳",
+      icon: DelegateIcon,
       verb: "Delegate",
       target: call.agent || "Unknown agent",
+      entity: call.agent
+        ? { label: call.agent, sessionID: call.childSessionID }
+        : undefined,
       summary: call.description,
       category: "delegation",
     }),
   );
 }
 export default function TaskTool(
-  props: { call: TaskCall; onOpen(id: string): void },
+  props: {
+    call: TaskCall;
+    open?: ActionControl;
+    onOpenChild?(id: string): void;
+  },
 ) {
-  const open = ownedAction("task.open", () => {
-    if (props.call.childSessionID) props.onOpen(props.call.childSessionID);
-  });
+  const { commands } = useCommandPorts();
+  const open = createMemo(() =>
+    props.open ??
+      sessionOpenControl(
+        commands,
+        props.call.childSessionID ?? "",
+        props.call.description ?? "Task",
+        props.onOpenChild,
+      )
+  );
   const progress = () => {
     const result = props.call.progress?.progress;
     const value = derivedValue(result);
     if (!value) {
       return result?.state === "pending"
-        ? "Preparing progress\u2026"
+        ? "Preparing progress..."
         : "Progress unavailable";
     }
     if (props.call.status === "running" && value.current) {
-      return `↳ ${value.current.name} ${value.current.title ?? ""}`.trim();
+      return `${value.current.name} ${value.current.title ?? ""}`.trim();
     }
     const time = value.time;
-    return `${countLabel(value.toolCount!, "tool call")}${
-      time?.end !== undefined ? ` · ${duration(time.end - time.start)}` : ""
-    }`;
+    return (
+      <MetaText
+        items={[
+          countLabel(value.toolCount!, "tool call"),
+          time?.end !== undefined && elapsed(time.end - time.start),
+        ]}
+      />
+    );
   };
   return (
     <>
@@ -53,14 +76,13 @@ export default function TaskTool(
           </div>
         }
       >
-        <button
-          type="button"
+        <ActionButton
+          action={open()}
           class="otk-task-card"
-          onClick={() => void open()}
         >
           <strong>Open task</strong>
           <span>{progress()}</span>
-        </button>
+        </ActionButton>
       </Show>
       <ToolOutput
         text={props.call.output ?? ""}

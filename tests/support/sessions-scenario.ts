@@ -131,7 +131,12 @@ export async function sessionsScenario(profile: Profile) {
         "Quiet child",
       ]]
     ) {
-      f.add({ ...base, id: `tstv1-group-${id}`, parentID: base.id, title });
+      f.add({
+        ...base,
+        id: `tstv1-group-${id}`,
+        parentID: id === "b" ? undefined : base.id,
+        title,
+      });
     }
   }
   if (profile === "contract-sessions-tabs") {
@@ -214,7 +219,12 @@ export async function sessionsScenario(profile: Profile) {
       title: "Inspect caller",
     });
     for (let i = 0; i < 9; i++) {
-      f.add({ ...base, id: `tstv1-chain-${i}`, title: `tstv1-chain-${i}` });
+      f.add({
+        ...base,
+        id: `tstv1-chain-${i}`,
+        title: `tstv1-chain-${i}`,
+        parentID: i === 0 ? base.id : `tstv1-chain-${i - 1}`,
+      });
     }
   }
   if (
@@ -248,6 +258,11 @@ export async function sessionsScenario(profile: Profile) {
         sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
         lastActivity: 1,
         authority: "current" as const,
+        presentation: {
+          id: base.projectID,
+          name: "Fixture project",
+          color: "#628cba",
+        },
         ...(profile === "contract-sessions-removed"
           ? {
             identities: [{
@@ -293,6 +308,11 @@ export async function sessionsScenario(profile: Profile) {
           sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
           lastActivity: 1,
           authority: "current" as const,
+          presentation: {
+            id: base.projectID,
+            name: "Fixture project",
+            color: "#628cba",
+          },
           identities: [{
             source: "worktree-fixture",
             repoID: base.projectID,
@@ -478,6 +498,93 @@ export async function sessionsScenario(profile: Profile) {
       title: "Helper session",
     });
   }
+  if (profile === "contract-sessions-sidebar") {
+    const seeds: import("@otk/harness").ProjectSeed[] = [];
+    for (
+      const mode of [
+        "empty",
+        "all-required",
+        "archive-only",
+        "missing-root",
+        "mixed",
+        "large",
+      ]
+    ) {
+      const canonicalRoot = join(root, "sidebar", mode);
+      const count = mode === "large" ? 40 : mode === "empty" ? 0 : 2;
+      const paths = [
+        canonicalRoot,
+        ...Array.from(
+          { length: count },
+          (_, n) => join(root, "sidebar", `${mode}-child-${n}`),
+        ),
+      ];
+      for (const [n, directory] of paths.entries()) {
+        if (mode === "missing-root" && n === 0) continue;
+        await Deno.mkdir(directory, { recursive: true });
+        const id = `tstv1-sidebar-${mode}-${n}`;
+        f.add({
+          ...base,
+          id,
+          projectID: `sidebar-${mode}`,
+          directory,
+          status: mode === "all-required" && n > 0 ? "busy" : "idle",
+          title: `${mode} session ${n}`,
+        });
+        seeds.push({
+          directory,
+          hasSessions: true,
+          sessionCount: 1,
+          lastActivity: 1,
+          authority: "current",
+          presentation: {
+            id: `sidebar-${mode}`,
+            name: `${mode} ${n}`,
+            color: "#628cba",
+          },
+          topology: {
+            repoID: `sidebar-${mode}`,
+            canonicalRoot,
+            leafDirectory: directory,
+            ...(n > 0 ? { parentDirectory: canonicalRoot } : {}),
+          },
+          identities: [{
+            source: "sidebar-fixture",
+            repoID: `sidebar-${mode}`,
+            canonicalRoot,
+            recordedRoot: directory,
+            inventory: paths.map((directory, i) => ({
+              directory,
+              kind: i > 0 ? "worktree" : "checkout",
+            })),
+          }],
+        });
+        await c.rpc("projects.visit", { directory, active: true });
+        if (mode === "mixed" && n === 2) {
+          await c.rpc("projects.inactive", { directory, inactive: true });
+        }
+      }
+    }
+    f.app.index.projectSeeds(seeds);
+    f.app.index.projectAuthority("current");
+    f.app.index.projectSeeds(
+      seeds.filter((seed) =>
+        seed.topology?.canonicalRoot.endsWith("archive-only")
+      ).map((seed) => ({
+        ...seed,
+        identities: [{
+          source: "sidebar-fixture",
+          repoID: seed.topology!.repoID,
+          canonicalRoot: seed.topology!.canonicalRoot,
+          recordedRoot: null,
+          inventory: [{
+            directory: seed.topology!.canonicalRoot,
+            kind: "checkout" as const,
+          }],
+        }],
+      })),
+    );
+  }
   await c.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await c.rpc<Record<string, Json>>("prefs.get", {});
   let lease: TestLease | undefined;
@@ -534,6 +641,323 @@ export async function sessionsScenario(profile: Profile) {
           return null;
         case "scenario": {
           const { action, sessionID: id } = frame.params;
+          if (
+            frame.params.target === "trail-delivery" && id &&
+            action === "release"
+          ) {
+            const entry = f.entries.find((entry) => entry.id === id)!;
+            f.update(id, {
+              activity: {
+                ...entry.activity,
+                delivered: {
+                  parentID: entry.parentID!,
+                  receipt: `result:${id}`,
+                  terminal: entry.activity!.terminal!,
+                },
+              },
+            });
+            return null;
+          }
+          if (frame.params.target === "header-shells") {
+            if (
+              profile !== "contract-sessions-default" ||
+              (action !== "hold" && action !== "release")
+            ) throw new Error("Unsupported sessions scenario action");
+            // Native-shaped shell inventory on the open session; release ends both shells.
+            const entry = f.entries.find((e) => e.id === base.id)!;
+            const items = action === "hold"
+              ? [
+                {
+                  id: "sh-header-build",
+                  kind: "shell" as const,
+                  label: "Shell",
+                  title: "deno task build",
+                  startedAt: Date.now() - 90_000,
+                },
+                {
+                  id: "sh-header-sleep",
+                  kind: "shell" as const,
+                  label: "Shell",
+                  title: "sleep 120",
+                  startedAt: Date.now() - 30_000,
+                },
+              ]
+              : [];
+            f.update(base.id, {
+              activity: {
+                ...entry.activity,
+                work: {
+                  fresh: true,
+                  keys: items.map((item) => item.id),
+                  items,
+                },
+              },
+            });
+            return null;
+          }
+          if (
+            profile === "contract-sessions-tab-groups" &&
+            frame.params.target === "trail-decisions"
+          ) {
+            f.update(base.id, { title: "comm#ark | main" });
+            const running = (id: string) => ({
+              work: {
+                fresh: true,
+                keys: [id],
+                items: [{
+                  id,
+                  kind: "execution" as const,
+                  label: "Execution",
+                  title: id,
+                  startedAt: Date.now() - 14 * 60_000,
+                }],
+              },
+            });
+            f.update("tstv1-group-a", {
+              title: "Explore implementation architecture endA",
+              status: "busy",
+              activity: running("explore-run"),
+            });
+            f.update("tstv1-group-b", { status: "busy" });
+            f.add({
+              ...base,
+              id: "tstv1-trail-blocked",
+              parentID: base.id,
+              title: "Review integration boundaries endB",
+              attention: { ...base.attention, questions: 1 },
+            });
+            f.update("tstv1-trail-blocked", {
+              activity: {
+                ...running("blocked-run"),
+                inputs: { fresh: true, keys: ["trail-question"] },
+              },
+            });
+            for (let n = 0; n < 60; n++) {
+              const id = `tstv1-trail-cont-${n}`;
+              f.add({
+                ...base,
+                id,
+                parentID: base.id,
+                title: n === 1
+                  ? "Finished awaiting parent receipt"
+                  : `communico backup-restore (cont. ${n})`,
+              });
+              if (n === 1) f.update(id, { activity: running("finished-run") });
+              f.update(id, {
+                activity: {
+                  terminal: n === 1 ? Date.now() : 100,
+                  outcome: "succeeded",
+                  ...(n !== 1
+                    ? {
+                      delivered: {
+                        parentID: base.id,
+                        receipt: "parent-result",
+                        terminal: 100,
+                      },
+                    }
+                    : {}),
+                },
+              });
+            }
+            f.add({
+              ...base,
+              id: "tstv1-trail-nested",
+              parentID: "tstv1-group-a",
+              title: "Nested verification branch tail",
+              status: "busy",
+              activity: running("nested-run"),
+            });
+            f.update("tstv1-trail-nested", { activity: running("nested-run") });
+            // Inspect delivery without viewing/acknowledging the helper. RPC
+            // snapshots are lease-scoped just like the browser's replica.
+            c.lease({
+              directory: base.directory,
+              selected: base.id,
+              crumbs: ["tstv1-trail-cont-0"],
+              rows: [],
+            });
+            return null;
+          }
+          if (
+            profile === "contract-sessions-tab-groups" &&
+            frame.params.target === "trail-overflow"
+          ) {
+            for (let n = 0; n < 21; n++) {
+              f.add({
+                ...base,
+                id: `tstv1-trail-active-${n}`,
+                parentID: base.id,
+                title: `Working helper ${n}`,
+                status: "busy",
+                activity: {
+                  work: {
+                    fresh: true,
+                    keys: [`active-${n}`],
+                    items: [{
+                      id: `active-${n}`,
+                      kind: "execution",
+                      label: "Execution",
+                      title: `Working helper ${n}`,
+                      startedAt: Date.now() - 14 * 60_000,
+                    }],
+                  },
+                },
+              });
+            }
+            return null;
+          }
+          if (
+            profile === "contract-sessions-hierarchy" &&
+            frame.params.target === "delivery-helpers" && action === "hold"
+          ) {
+            for (let n = 0; n < 4; n++) {
+              f.add({
+                ...base,
+                id: `tstv1-delivery-helper-${n}`,
+                parentID: n === 3 ? "tstv1-delivery-helper-2" : base.id,
+                directory: n >= 2
+                  ? join(root, "helper-checkout")
+                  : base.directory,
+                title: `Delivery helper ${n + 1}`,
+              });
+              f.update(`tstv1-delivery-helper-${n}`, {
+                status: "busy",
+                attention: { ...base.attention, questions: n < 3 ? 1 : 0 },
+              });
+            }
+            await c.rpc("tasks.create", {
+              directory: join(root, "helper-checkout"),
+              name: "Split helper task",
+              sessions: ["tstv1-delivery-helper-2"],
+            });
+            return null;
+          }
+          if (
+            frame.params.target === "helper-dispositions" ||
+            frame.params.target === "helper-review" ||
+            frame.params.target === "helper-review-unseen-failure"
+          ) {
+            if (
+              profile !== "contract-sessions-hierarchy" || action !== "hold"
+            ) {
+              throw new Error("Unsupported sessions scenario action");
+            }
+            const now = Date.now();
+            const agents = [
+              "explore",
+              "junior",
+              "general",
+              "explore",
+              undefined,
+              "general",
+              "junior-openrouter",
+            ];
+            for (let n = 0; n < 7; n++) {
+              const id = `tstv1-disp-${n}`;
+              const parentID = n === 6 ? "tstv1-disp-0" : base.id;
+              const title = n === 6
+                ? "Disposition helper 7 checking every checkout of the task for guest inventory drift before the merge queue runs"
+                : `Disposition helper ${n + 1}`;
+              const agent = agents[n];
+              f.add({
+                ...base,
+                id,
+                parentID,
+                directory: n === 1
+                  ? join(root, "helper-checkout")
+                  : base.directory,
+                title,
+                ...(agent === undefined ? {} : { agent }),
+                timeCreated: base.timeCreated + n,
+              });
+              if (n === 0 || n === 1 || n === 3) {
+                f.update(id, {
+                  status: "busy",
+                  activity: {
+                    work: {
+                      fresh: true,
+                      keys: [id],
+                      items: [{
+                        id,
+                        kind: "execution",
+                        label: "Execution",
+                        title,
+                        startedAt: now - (7 - n) * 60_000,
+                      }],
+                    },
+                  },
+                });
+              }
+              if (n === 2) {
+                f.update(id, {
+                  status: "busy",
+                  attention: { ...base.attention, questions: 1 },
+                });
+              } else if (n >= 3) {
+                const terminal = now - (7 - n) * 1000;
+                f.update(id, {
+                  status: "idle",
+                  activity: {
+                    terminal,
+                    outcome: "succeeded",
+                    ...(n === 5
+                      ? {
+                        delivered: {
+                          parentID,
+                          receipt: `result:${id}`,
+                          terminal,
+                        },
+                      }
+                      : {}),
+                  },
+                });
+              }
+            }
+            if (frame.params.target !== "helper-dispositions") {
+              const delivered = frame.params.target === "helper-review";
+              const reviewHelpers = [
+                ["tstv1-disp-7", base.id, base.directory, "failed", now + 1],
+                [
+                  "tstv1-disp-8",
+                  "tstv1-disp-6",
+                  join(root, "helper-checkout"),
+                  "succeeded",
+                  now + 2,
+                ],
+              ] as const;
+              for (
+                const [id, parentID, directory, outcome, terminal]
+                  of reviewHelpers
+              ) {
+                f.add({
+                  ...base,
+                  id,
+                  parentID,
+                  directory,
+                  title: outcome === "failed"
+                    ? "Reported helper failure"
+                    : "Finished helper in another checkout",
+                });
+                f.update(id, {
+                  status: "idle",
+                  activity: {
+                    terminal,
+                    outcome,
+                    ...(outcome === "failed" && delivered
+                      ? {
+                        delivered: {
+                          parentID,
+                          receipt: `result:${id}`,
+                          terminal,
+                        },
+                      }
+                      : {}),
+                  },
+                });
+              }
+            }
+            return null;
+          }
           if (
             frame.params.target === "tabs-pin" && id &&
             profile === "contract-sessions-phantom"

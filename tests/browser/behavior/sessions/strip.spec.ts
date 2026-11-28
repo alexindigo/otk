@@ -2,12 +2,14 @@
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import {
+  assertPagingStep,
   stripContract,
   stripGeometry,
   stripShot,
   stripThemes,
 } from "../../pages/task-strip.ts";
 import { activity } from "../../pages/sessions.ts";
+import { subagent, subagents } from "../../pages/crumbs.ts";
 
 test.use({ profile: "contract-sessions-tabs" });
 for (const count of [2, 10]) {
@@ -62,6 +64,10 @@ for (const count of [2, 10]) {
         await stripShot(page, info, `u4-2-tabs-${theme.name}`);
       }
       await activity(state, "tstv1-helper", "hold");
+      await expect(page.locator("[data-crumb=tstv1-helper]")).toHaveCount(0);
+      await subagents(page).click();
+      await expect(subagent(page, "tstv1-helper")).toBeVisible();
+      await page.goto(`${state.url}/#/local/tstv1-otk/tstv1-helper`);
       await expect(
         page.locator(
           "[data-crumb=tstv1-helper][data-helper=true] .otk-status-light",
@@ -91,3 +97,15 @@ for (const count of [2, 10]) {
     });
   });
 }
+
+test("sessions.tab-paging-rejects-an-inert-fixture-button", {
+  tag: ["@sessions", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<div class="otk-task-strip" style="--chrome-header-height:40px"><div class="otk-task-list" style="display:flex;width:110px;overflow:auto"><button data-tab="first" style="flex:0 0 100px">First</button><button data-tab="last" style="flex:0 0 100px">Last</button></div><button data-direction="next" aria-label="Next tasks">Next</button></div>`,
+  );
+  const before = await stripGeometry(page);
+  await page.getByRole("button", { name: "Next tasks" }).click();
+  const after = await stripGeometry(page);
+  expect(() => assertPagingStep(before, after, "next")).toThrow();
+});

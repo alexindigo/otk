@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertStrictEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import * as client from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { fixtureRequests } from "../../../tests/support/request-wire.ts";
@@ -14,14 +19,329 @@ import {
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
 
-Deno.test("project defaults use attention before exact remembered child on click, cold start and reload", async () => {
+for (
+  const path of [
+    "sticky restore",
+    "crumb navigation",
+    "attention jump",
+    "URL restore",
+  ]
+) {
+  Deno.test(`2.67 shell ${path} preserves the helper destination without a helper task`, async () => {
+    const f = fixture(
+      path === "URL restore" ? "#/local/tstv1-selected/tstv1-helper" : "",
+    );
+    const project = { sidecarId: "local", directory: "/p" };
+    try {
+      f.entries("local", [
+        shellEntry("tstv1-selected"),
+        shellEntry("tstv1-helper", "/p", "tstv1-selected"),
+      ]);
+      f.resources.receive("local", {
+        t: "inbox.snapshot",
+        generation: "identity",
+        revision: 0,
+        summaryRevision: 0,
+        inbox: {
+          projects: [],
+          tasks: [],
+          seen: {},
+          finishes: {},
+          pathTemplates: [],
+          supervision: { "tstv1-helper": { state: "working", terminal: 0 } },
+        },
+      });
+      if (path === "attention jump") {
+        f.resources.projectSession = () => Promise.resolve("tstv1-helper");
+        f.navigation.openAttention(project);
+      } else if (path !== "URL restore") {
+        f.navigation.navigate({
+          sidecarId: "local",
+          sessionID: "tstv1-selected",
+        });
+        f.navigation.navigate({
+          sidecarId: "local",
+          sessionID: "tstv1-helper",
+        });
+        if (path === "sticky restore") {
+          f.navigation.projectHome();
+          f.navigation.openProject(project);
+        }
+      }
+      await settled();
+      f.resources.syncTabs(
+        project,
+        f.resources.tabSnapshot(project),
+        f.session.state.selection,
+      );
+      const tabs = f.resources.tabs(project);
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-helper");
+      assertEquals(tabs.state.selected, {
+        kind: "session",
+        id: "tstv1-selected",
+      });
+      assertEquals(tabs.tabs().map((tab) => tab.id), ["tstv1-selected"]);
+      assertEquals(tabs.crumbs().map((crumb) => crumb.id), [
+        "tstv1-selected",
+        "tstv1-helper",
+      ]);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+Deno.test("accepted project memory retries failed persistence on reconnect without changing the selection", async () => {
+  const f = fixture("");
+  let writes = 0;
+  f.reply((_id, method) => {
+    if (method === "layout.location" && ++writes === 1) {
+      return Promise.reject(new Error("lost location write"));
+    }
+    return Promise.resolve(null);
+  });
+  try {
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    await settled();
+    assertEquals(writes, 1);
+    f.welcome();
+    await settled();
+    assertEquals(writes, 2);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    f.navigation.projectHome();
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    assertEquals(writes, 2);
+  } finally {
+    f.stop();
+  }
+});
+
+for (
+  const change of [
+    "attention",
+    "new session",
+    "new helper",
+    "archive",
+    "reconnect",
+    "resync",
+    "tab reorder",
+  ] as const
+) {
+  Deno.test(`sticky accepted selection survives ${change} and project return before hydration`, async () => {
+    const f = fixture("");
+    const project = { sidecarId: "local", directory: "/p" };
+    const selected = shellEntry("tstv1-other");
+    try {
+      f.entries("local", [selected, shellEntry("tstv1-selected")]);
+      f.navigation.navigate({ sidecarId: "local", sessionID: selected.id });
+      // No observeView: acceptance must persist before transcript hydration.
+      assert(f.calls.some((c) =>
+        c[1] === "layout.location" &&
+        (c[2] as { sessionID?: string }).sessionID === selected.id
+      ));
+      if (change === "archive") selected.archived = true;
+      const rows = [selected, shellEntry("tstv1-selected")];
+      if (change === "new session") {
+        rows.push({
+          ...shellEntry("tstv1-new"),
+          status: "busy",
+          timeUpdated: 99,
+        });
+      }
+      if (change === "new helper") {
+        rows.push({
+          ...shellEntry("tstv1-helper", "/p", "tstv1-selected"),
+          status: "busy",
+          timeUpdated: 99,
+        });
+      }
+      if (change === "tab reorder") rows.reverse();
+      f.entries("local", rows);
+      const urgent = change === "attention"
+        ? "tstv1-selected"
+        : change === "new session"
+        ? "tstv1-new"
+        : change === "new helper"
+        ? "tstv1-helper"
+        : undefined;
+      if (urgent) {
+        f.resources.receive("local", {
+          t: "inbox.snapshot",
+          generation: "sticky",
+          revision: 0,
+          summaryRevision: 0,
+          inbox: {
+            projects: [],
+            tasks: [],
+            seen: {},
+            finishes: {},
+            pathTemplates: [],
+            supervision: {
+              [urgent]: {
+                state: change === "attention" ? "needsYou" : "working",
+                terminal: 0,
+              },
+            },
+          },
+        });
+      }
+      if (change === "reconnect") f.welcome();
+      if (change === "resync") {
+        f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+      }
+      f.resources.syncTabs(
+        project,
+        f.resources.tabSnapshot(project),
+        f.session.state.selection,
+      );
+      assertEquals(f.session.state.selection?.sessionID, selected.id);
+      assertEquals(f.resources.tabs(project).state.sessionID, selected.id);
+      f.navigation.projectHome();
+      f.navigation.openProject(project);
+      await settled();
+      assertEquals(f.session.state.selection?.sessionID, selected.id);
+      assertEquals(f.navigation.state.selectionNotice, undefined);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+Deno.test("missing remembered sessions use a visible default and persist the accepted replacement", async () => {
+  const f = fixture("");
+  try {
+    f.resources.receive("local", {
+      t: "prefs",
+      prefs: {
+        ...DEFAULT_PREFS,
+        shellLayout: {
+          ...DEFAULT_PREFS.shellLayout,
+          projectLocations: [{
+            sidecarId: "local",
+            directory: "/p",
+            sessionID: "tstv1-missing",
+          }],
+        },
+      },
+    });
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
+    assertEquals(
+      f.navigation.state.selectionNotice,
+      'The remembered session is no longer available. Selected "tstv1-selected".',
+    );
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    assertEquals(f.navigation.state.selectionNotice, undefined);
+    f.navigation.observeView({
+      selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+      directory: "/p",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: 0,
+    });
+    f.navigation.projectHome();
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    await settled();
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("explicit session navigation reads the target task without changing memberships during refresh", async () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/p" };
+  const tasks = [
+    shellTask("parent-task", ["tstv1-selected"]),
+    shellTask("child-task", ["tstv1-child"]),
+  ];
+  const rows = [
+    shellEntry("tstv1-selected"),
+    shellEntry("tstv1-child", "/p", "tstv1-selected"),
+  ];
+  try {
+    f.entries("local", rows);
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "crumbs",
+      revision: 0,
+      summaryRevision: 0,
+      inbox: { projects: [], tasks, seen: {}, finishes: {}, pathTemplates: [] },
+    });
+    const before = structuredClone(
+      f.resources.inbox("local").state.inbox.tasks,
+    );
+    for (let n = 0; n < 4; n++) {
+      for (
+        const [sessionID, taskID] of [["tstv1-child", "parent-task"], [
+          "tstv1-selected",
+          "parent-task",
+        ]]
+      ) {
+        assert(f.navigation.navigate({ sidecarId: "local", sessionID }));
+        // The same reconciliation used by the Shell is the sole tab selection owner.
+        f.resources.syncTabs(
+          project,
+          f.resources.tabSnapshot(project),
+          f.session.state.selection,
+        );
+        const tabs = f.resources.tabs(project);
+        assertEquals(tabs.state.selected, { kind: "task", id: taskID });
+        assertEquals(tabs.state.sessionID, sessionID);
+        assert(
+          f.actions.location(f.session.state.selection!, sessionID).includes(
+            "parent-task",
+          ),
+        );
+        assertEquals(f.actions.inTask(f.session.state.selection!), true);
+        f.entries("local", rows.map((row) => ({ ...row, timeUpdated: n + 2 })));
+        assertEquals(f.resources.inbox("local").state.inbox.tasks, before);
+      }
+    }
+    await settled();
+    assertEquals(
+      f.calls.filter((call) =>
+        String(call[1]).startsWith("tasks.") && call[1] !== "tasks.list"
+      ),
+      [],
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("explicit attention clicks retain their target and supersede pending project defaults", async () => {
+  const f = fixture(), held = Promise.withResolvers<string | undefined>();
+  const intents: unknown[] = [];
+  f.resources.projectSession = (project, _preferred, attention) => {
+    intents.push([project.directory, attention]);
+    return attention ? Promise.resolve("tstv1-failed-child") : held.promise;
+  };
+  try {
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    f.navigation.openAttention({ sidecarId: "local", directory: "/p" });
+    await settled();
+    held.resolve("tstv1-selected");
+    await settled();
+    assertEquals(intents, [["/p", undefined], ["/p", true]]);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-failed-child");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("project return and cold restore preserve remembered sessions despite attention", async () => {
   for (const cold of [false, true]) {
-    const f = fixture(cold ? "#project/local/%2Fp" : undefined);
+    const f = fixture(cold ? "#project/local/%2Fp" : "");
     try {
       f.entries("local", [
         shellEntry("tstv1-selected"),
         shellEntry("tstv1-child", "/p", "tstv1-selected"),
-        shellEntry("tstv1-blocked", "/p", "tstv1-selected"),
+        shellEntry("tstv1-urgent-root"),
+        shellEntry("tstv1-blocked", "/p", "tstv1-urgent-root"),
       ]);
       f.resources.receive("local", {
         t: "inbox.snapshot",
@@ -56,7 +376,7 @@ Deno.test("project defaults use attention before exact remembered child on click
       });
       f.navigation.openProject({ sidecarId: "local", directory: "/p" });
       await settled();
-      assertEquals(f.session.state.selection?.sessionID, "tstv1-blocked");
+      assertEquals(f.session.state.selection?.sessionID, "tstv1-child");
       f.resources.receive("local", {
         t: "inbox.patch",
         generation: "attention",
@@ -129,26 +449,33 @@ function fixture(
     }),
     drafts = client.createDrafts(),
     messages: string[] = [];
-  let consent = true, listener: (() => void) | undefined, historyState: unknown;
+  let consent = true, listener: (() => void) | undefined, at = 0;
+  const stack: { state: unknown; hash: string }[] = [{ state: null, hash }];
   const location = { hash, pathname: "/app", search: "?a=1" },
     pushes: string[] = [];
+  const hashFrom = (url: unknown) =>
+    new URL(String(url), "http://localhost").hash;
   const environment: client.NavigationEnvironment = {
     location,
     history: {
       get state() {
-        return historyState;
+        return stack[at].state;
       },
-      replaceState(value) {
-        historyState = value;
+      replaceState(state, _unused, url) {
+        location.hash = url ? hashFrom(url) : location.hash;
+        stack[at] = { state, hash: location.hash };
       },
-      pushState(value, _unused, url) {
-        historyState = value;
-        const text = String(url);
-        pushes.push(text);
-        const at = text.indexOf("#");
-        location.hash = at < 0 ? "" : text.slice(at);
+      pushState(state, _unused, url) {
+        pushes.push(String(url));
+        location.hash = hashFrom(url);
+        stack.splice(++at, Infinity, { state, hash: location.hash });
       },
-      go() {},
+      go(delta = 0) {
+        if (!stack[at + delta]) return;
+        at += delta;
+        location.hash = stack[at].hash;
+        listener?.();
+      },
     },
     listen(changed) {
       listener = changed;
@@ -162,6 +489,16 @@ function fixture(
   const guard = client.createInputGuard({
     drafts,
     key: actions.key,
+    transferDeleted(park) {
+      const target = f.session.state.selection;
+      if (!target) return;
+      f.resources.sidecars.connection(target.sidecarId).attention
+        .transferDeleted(
+          target.sessionID,
+          (id) => f.resources.entry(target.sidecarId, id),
+          park,
+        );
+    },
     confirm: (m) => {
       messages.push(m);
       return consent;
@@ -204,6 +541,7 @@ function fixture(
     },
     external(next: string) {
       location.hash = next;
+      stack.splice(++at, Infinity, { state: null, hash: next });
       listener?.();
     },
     welcome(server = "local", reconnect = true) {
@@ -216,6 +554,8 @@ function fixture(
         messages: fixtureMessagePolicy,
         sidecar: {
           version: "test",
+          build: "test",
+          instance: "test",
           harness: { kind: "test", version: "1", url: "http://127.0.0.1" },
         },
       });
@@ -249,6 +589,111 @@ Deno.test("failed project default retries on welcome without a new navigation in
   } finally {
     f.stop();
   }
+});
+Deno.test("project defaults replace the pending entry even on traversal, preserving Forward", async () => {
+  const f = fixture();
+  try {
+    const project = { sidecarId: "local", directory: "/other" };
+    const { promise, resolve } = Promise.withResolvers<string>();
+    f.resources.projectSession = () => promise;
+    f.navigation.openProject(project);
+    assertEquals(f.location.hash, "#project/local/%2Fother");
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    f.navigation.showSettings();
+    assert(f.navigation.back());
+    assertEquals(f.navigation.state.settings, false);
+    resolve("tstv1-selected");
+    await settled();
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
+    assertEquals(f.navigation.state.history.at, 1);
+    assertEquals(f.pushes.length, 2);
+    assert(f.navigation.forward());
+    assertEquals(f.location.hash, "#/local/tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("explicit Home remains a project page on traversal without resolving a default", () => {
+  const f = fixture();
+  try {
+    const before = f.calls.filter((c) => c[1] === "navigation.default").length;
+    assert(f.navigation.projectHome());
+    f.navigation.preview({ sidecarId: "local", sessionID: "tstv1-other" });
+    assert(f.navigation.back());
+    assertEquals(f.session.state.selection, undefined);
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(
+      f.calls.filter((c) => c[1] === "navigation.default").length,
+      before,
+    );
+    assert(f.navigation.forward());
+    assertEquals(f.location.hash, "#/local/tstv1-other");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("history labels prefer the index and only fall back to recorded labels when unavailable", () => {
+  const hash = "#/local/tstv1-other";
+  const recorded = { hash, title: "Old title", project: "Old project" };
+  const lookup = () => ({ title: "Current title", project: "Current project" });
+  const unavailable = () => undefined;
+  assertEquals(
+    client.historyTarget({ at: 1, back: recorded }, "back", lookup),
+    {
+      enabled: true,
+      label: "Back to Current title in Current project",
+      state: "live",
+    },
+  );
+  assertEquals(
+    client.historyTarget(
+      { at: 0, forward: recorded },
+      "forward",
+      () => ({ ...lookup(), deleted: true }),
+    ),
+    {
+      enabled: true,
+      label: "Forward to Current title in Current project (deleted)",
+      state: "deleted",
+    },
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: recorded }, "back", unavailable),
+    {
+      enabled: true,
+      label: "Back to Old title in Old project (unavailable)",
+      state: "unavailable",
+    },
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: { hash } }, "back", unavailable).label,
+    "Back to an unavailable session",
+  );
+  assertEquals(
+    client.historyTarget(
+      { at: 1, back: { hash: "#project/local/%2Fp", page: true } },
+      "back",
+      unavailable,
+    ).label,
+    "Back to the p project page",
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: { hash: "" } }, "back", unavailable)
+      .label,
+    "Back to the start page",
+  );
+  assertEquals(
+    client.historyTarget({ at: 1, back: "unrecorded" }, "back", unavailable)
+      .label,
+    "Back to the previous page",
+  );
+  assertEquals(client.historyTarget({ at: 0 }, "forward", unavailable), {
+    enabled: false,
+    label: "No later session in this tab",
+    state: "unknown",
+  });
 });
 
 Deno.test("completed empty project defaults are not replayed by view observations or welcomes", async () => {
@@ -415,7 +860,7 @@ for (const superseded of [false, true]) {
   }
 }
 
-Deno.test("a resolved project intent cannot replay a declined navigation guard on later frames", async () => {
+Deno.test("a resolved project intent does not interrupt kept input or repeat on later frames", async () => {
   const f = fixture();
   let reads = 0;
   f.resources.projectSession = () => {
@@ -428,13 +873,12 @@ Deno.test("a resolved project intent cannot replay a declined navigation guard o
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
     assertEquals(reads, 1);
-    assertEquals(f.messages.length, 1);
+    assertEquals(f.messages.length, 0);
     f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
     await settled();
     assertEquals(reads, 1, "a completed lookup consumes the captured intent");
-    assertEquals(f.messages.length, 1, "declining is not an automatic retry");
-    assertEquals(f.session.state.selection?.sessionID, "tstv1-selected");
-    assertEquals(f.guard.dirty("permissions"), true);
+    assertEquals(f.messages.length, 0);
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
     f.consent(true);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
@@ -445,17 +889,22 @@ Deno.test("a resolved project intent cannot replay a declined navigation guard o
   }
 });
 
-Deno.test("removing a direct-route server detaches even while its project metadata is unknown", () => {
+Deno.test("removing a direct-route server detaches even while its project metadata is unknown", async () => {
   const f = fixture("#/remote/tstv1-loading");
   try {
     assertEquals(f.navigation.state.project, undefined);
-    assertEquals(f.navigation.removeServer("remote"), true);
+    assertEquals(await f.navigation.removeServer("remote"), true);
     assertEquals(
       f.session.state.selection,
       undefined,
       "Removed server is still selected",
     );
     assertEquals(f.location.hash, "");
+    assertEquals(
+      f.navigation.state.history.at,
+      0,
+      "server removal replaces the release route",
+    );
     assert(
       f.calls.findIndex((call) => call[0] === "open") <
         f.calls.findIndex((call) => call[0] === "remove"),
@@ -558,8 +1007,12 @@ Deno.test("a late catalog establishes the selected project while its transcript 
     );
     assertEquals(
       f.calls,
-      [],
-      "Metadata readiness cannot mark unseen content seen or request bodies",
+      [["local", "layout.location", {
+        sidecarId: "remote",
+        directory: "/late",
+        sessionID: "tstv1-loading",
+      }]],
+      "Metadata readiness persists the accepted destination, never marks content seen or requests bodies",
     );
     assertEquals(f.location.hash, "#/remote/tstv1-loading");
   } finally {
@@ -691,7 +1144,7 @@ Deno.test("project-only routes defer visits until connected and retain view-only
     f.stop();
   }
 });
-Deno.test("shell navigation confirms and clears dirty owners only on selection change", () => {
+Deno.test("shell navigation clears transient view marks, not draft custody, on selection change", () => {
   const f = fixture();
   f.guard.mark("permissions", true);
   f.consent(false);
@@ -707,15 +1160,23 @@ Deno.test("shell navigation confirms and clears dirty owners only on selection c
   assertEquals(f.guard.dirty("permissions"), true);
   assertEquals(
     f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" }),
-    false,
-  );
-  assertEquals(f.guard.dirty("permissions"), true);
-  f.consent(true);
-  assertEquals(
-    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" }),
     true,
   );
   assertEquals(f.guard.dirty("permissions"), false);
+  assertEquals(f.messages, []);
+  f.stop();
+});
+Deno.test("child navigation accepts the route without prompting for kept input", () => {
+  const f = fixture();
+  f.entries("local", [shellEntry("tstv1-selected"), shellEntry("tstv1-other")]);
+  assert(
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-selected" }),
+  );
+  f.guard.mark("permissions", true);
+  f.consent(false);
+  assertEquals(f.navigation.openChild("tstv1-other"), true);
+  assertEquals(f.location.hash, "#/local/tstv1-other");
+  assertEquals(f.messages, []);
   f.stop();
 });
 Deno.test("shell navigation normalizes roots and same-session reselection visits without another push", async () => {
@@ -773,8 +1234,8 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   );
   f.stop();
 });
-Deno.test("project memory restores helpers through guarded navigation and rejects stale project identities", async () => {
-  const f = fixture();
+Deno.test("project memory restores exact helpers through guarded navigation and rejects stale project identities", async () => {
+  const f = fixture("");
   try {
     f.entries("local", [
       shellEntry("tstv1-selected"),
@@ -806,11 +1267,8 @@ Deno.test("project memory restores helpers through guarded navigation and reject
     f.consent(false);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
     await settled();
-    assertEquals(f.location.hash, "#/local/tstv1-away");
-    f.consent(true);
-    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
-    await settled();
     assertEquals(f.location.hash, "#/local/tstv1-selected/tstv1-helper");
+    assertEquals(f.messages, []);
   } finally {
     f.stop();
   }
@@ -846,19 +1304,28 @@ Deno.test("pending location writes bridge fast switches without accepting older 
     f.stop();
   }
 });
-Deno.test("shell navigation refuses create and removal when input release is cancelled", async () => {
+Deno.test("creating preserves the previous draft; removing its server asks first", async () => {
   const f = fixture();
   f.drafts.writer(f.actions.key())({
     ...client.emptyDraft(),
     editor: { text: "keep" },
   });
   f.consent(false);
+  const key = f.actions.key();
+  f.reply((_id, method) =>
+    Promise.resolve(
+      method === "session.create" ? shellInfo("tstv1-created") : null,
+    )
+  );
   await f.navigation.createIn("local", "/p");
-  assertEquals(f.calls, []);
-  assertEquals(f.navigation.removeServer("local"), false);
-  assertEquals(f.calls, []);
+  assertEquals(f.calls.some((row) => row[1] === "session.create"), true);
+  assertEquals(f.drafts.current(key).editor, { text: "keep" });
+  assertEquals(f.messages, []);
+  f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-selected" });
+  assertEquals(await f.navigation.removeServer("local"), false);
+  assertEquals(f.drafts.current(key).editor, { text: "keep" });
   f.consent(true);
-  assertEquals(f.navigation.removeServer("local"), true);
+  assertEquals(await f.navigation.removeServer("local"), true);
   assertEquals(f.calls.at(-1), ["remove", "local"]);
   f.stop();
 });
@@ -953,11 +1420,6 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
   f.navigation.observeView(view);
   await settled();
   assertEquals(f.calls, [
-    ["local", "layout.location", {
-      sidecarId: "local",
-      directory: "/p",
-      sessionID: "tstv1-selected",
-    }],
     ["local", "projects.visit", { directory: "/p" }],
     [
       "local",
@@ -1070,8 +1532,99 @@ Deno.test("close session removes only captured membership, clears its view and r
     ]]);
     assertEquals(f.location.hash, "#/local/tstv1-other");
     assertEquals(tabs.state.sessionID, undefined);
+    assertEquals(
+      f.navigation.state.history.at,
+      0,
+      "close replaces the released entry",
+    );
     assert(f.resources.entry("local", "tstv1-selected"));
     assertEquals(f.calls.some((c) => c[1] === "session.delete"), false);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("deleting the visible last session replaces it with a deliberate project page", async () => {
+  const f = fixture();
+  try {
+    assert(
+      await f.navigation.remove({
+        sidecarId: "local",
+        sessionID: "tstv1-selected",
+      }),
+    );
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(f.navigation.state.history.at, 0);
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    assertEquals(f.navigation.state.history.back, {
+      hash: "#project/local/%2Fp",
+      page: true,
+    });
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("deleted Close parks input only after successful membership and while still selected", async () => {
+  const f = fixture();
+  const id = "tstv1-selected", key = `local/${id}`;
+  const requests = f.resources.sidecars.connection("local").attention;
+  const entry = shellEntry(id);
+  const text = "Retain exactly\n  the request input";
+  try {
+    requests.receive({
+      op: "permission.upsert",
+      request: {
+        id: "p",
+        sessionID: id,
+        kind: "read",
+        title: "Read",
+        patterns: [],
+        alwaysPatterns: [],
+        detail: { kind: "generic", summary: "Read" },
+        time: 1,
+      },
+    });
+    requests.draft("permission", "p", text);
+    f.entries("local", [
+      { ...entry, deleted: { at: 3, how: "provider" } },
+      shellEntry("tstv1-other"),
+    ]);
+    f.resources.inbox("local").state.inbox.tasks = [shellTask("task", [id])];
+    f.guard.mark("permissions", true, text);
+    f.consent(false);
+    f.reply((_sidecar, method) =>
+      method === "tasks.removeSession"
+        ? Promise.reject(new Error("membership failed"))
+        : Promise.resolve(null)
+    );
+    await assertRejects(() => f.navigation.close(), Error, "membership failed");
+    assertEquals(f.location.hash, `#/local/${id}`);
+    assertEquals(requests.draft("permission", "p"), text);
+    assertEquals(f.drafts.recoveries(key), []);
+
+    const held = Promise.withResolvers<null>();
+    f.reply((_sidecar, method) =>
+      method === "tasks.removeSession" ? held.promise : Promise.resolve(null)
+    );
+    const superseded = f.navigation.close();
+    await settled();
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    held.resolve(null);
+    assertEquals(await superseded, true);
+    assertEquals(requests.draft("permission", "p"), text);
+    assertEquals(f.drafts.recoveries(key), []);
+    assertEquals(f.location.hash, "#/local/tstv1-other");
+
+    f.navigation.navigate({ sidecarId: "local", sessionID: id });
+    assertEquals(await f.navigation.close(), true);
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(requests.draft("permission", "p"), undefined);
+    assertEquals(f.drafts.recoveries(key).map(({ draft }) => draft.input), [
+      text,
+    ]);
+    assertEquals(f.messages, []);
+    assertEquals(f.calls.some((call) => call[1] === "session.delete"), false);
   } finally {
     f.stop();
   }
@@ -1252,7 +1805,7 @@ for (const status of ["working", "blocked", "finished"] as const) {
       assertEquals(tabs.state.sessionID, "tstv1-selected");
       assert(
         f.messages.at(-1)?.includes(
-          "phantom tab while it has known activity or an unseen finish",
+          "task will stay visible while it has known activity or an unseen finish",
         ),
       );
       f.consent(true);
@@ -1285,6 +1838,15 @@ for (const status of ["working", "blocked", "finished"] as const) {
 
 Deno.test("repeated view observations preserve canonical project identity without republishing the same selection", () => {
   const f = fixture();
+  const view = {
+    selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+    directory: "/p",
+    loading: false,
+    settings: false,
+    connected: true,
+    finish: 0,
+  };
+  f.navigation.observeView(view); // The first view also labels the history entry.
   let writes = 0;
   const original = f.navigation.state.project;
   const release = f.navigation.subscribe(() => {
@@ -1293,14 +1855,7 @@ Deno.test("repeated view observations preserve canonical project identity withou
   try {
     assert(original);
     for (let i = 0; i < 10; i++) {
-      f.navigation.observeView({
-        selected: { sidecarId: "local", sessionID: "tstv1-selected" },
-        directory: "/p",
-        loading: false,
-        settings: false,
-        connected: true,
-        finish: 0,
-      });
+      f.navigation.observeView(view);
     }
     assertStrictEquals(f.navigation.state.project, original);
     assertEquals(writes, 0);
@@ -1331,15 +1886,10 @@ Deno.test("navigation observes project selection without replacing the canonical
   }
 });
 
-Deno.test("close cancellation, failed membership and a later route preserve the current view and dirty input", async () => {
+Deno.test("failed close membership and a later route preserve the current view and dirty input", async () => {
   const f = fixture();
   try {
     f.guard.mark("permissions", true);
-    f.consent(false);
-    assertEquals(await f.navigation.close(), false);
-    assertEquals(f.calls, []);
-    assertEquals(f.guard.dirty("permissions"), true);
-    f.consent(true);
     f.resources.inbox("local").state.inbox.tasks = [
       shellTask("task", ["tstv1-selected"]),
     ];
@@ -1352,6 +1902,8 @@ Deno.test("close cancellation, failed membership and a later route preserve the 
     }
     assertEquals((failure as Error).message, "membership failed");
     assertEquals(f.location.hash, "#/local/tstv1-selected");
+    assertEquals(f.guard.dirty("permissions"), true);
+    assertEquals(f.messages, []);
     const held = Promise.withResolvers<unknown>();
     f.reply(() => held.promise);
     const closing = f.navigation.close();

@@ -129,11 +129,28 @@ failures. Payloads are detached for each observer and from the mutation's
 returned value. Composite preference defaults are detached on every read.
 
 `OtkDb.transaction(run)` returns a synchronous callback's result after commit or
-rolls back and rethrows its failure. If rollback also fails, an AggregateError
-retains the original as its cause and first error. Nested transactions reject at
-BEGIN without retiring the caller's transaction. Migrations and metadata
-features share this connection primitive; feature notifications run only after
-commit.
+rolls back and rethrows its failure. SQLite can automatically roll back after
+FULL or I/O errors; cleanup first checks `isTransaction` and preserves that
+primary cause. A genuinely failed rollback retains both causes. Nested
+transactions reject at BEGIN without retiring the caller's transaction.
+Migrations and metadata features share this primitive; notifications run only
+after commit.
+
+All owned SQLite connections classify storage failures at execution, preparation
+and iterator stepping, retaining database/operation identity and the native
+cause in `StorageFailure`. `StorageAvailability` aggregates these failures in
+memory, with a shared `processStorage` default and an injectable owner for
+alternate compositions. Reads do not clear it. `probe()` commits one bounded
+random-page update per failed connection; recovery is published only after all
+affected owners prove a successful commit. Connections register and release
+their own probes. The observation-gap identity survives recovery. Core owns the
+retry lifetime and presentation; storage imports no protocol or UI policy. Owned
+files explicitly select `mmap_size=0` without changing WAL mode. Each isolate
+reports the effective mmap size and SQLite version once through the optional
+`diagnostic(message)` callback. Application and worker composition route it
+through the core diagnostics owner on stderr, never protocol stdout. This does
+not disable SQLite's native WAL-index mapping or contain a fatal native signal;
+durable installations still require process supervision.
 
 ### Composable writes and request receipts
 

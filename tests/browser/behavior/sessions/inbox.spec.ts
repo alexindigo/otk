@@ -25,12 +25,21 @@ test.describe("inbox ownership", () => {
     const project = (await state.product("inbox.get", {})).inbox.projects.find(
       (p) => p.directory === state.directory,
     )!;
-    for (const [hours, level] of [[0, 0], [2, 1], [8, 2], [24, 3]]) {
+    // S4 (decision 62): visit age never tints the name; only the neutral
+    // visit clock moves.
+    const plain = await row.locator(".otk-sidebar-title-text").evaluate((e) =>
+      getComputedStyle(e).color
+    );
+    for (
+      const [hours, text] of [[0, "now"], [2, "2h"], [8, "8h"], [24, "1d"]]
+    ) {
       await page.evaluate(
-        `inboxNow=${project.lastVisit + hours * 3600000};inboxTick()`,
+        `inboxNow=${project.lastVisit + Number(hours) * 3600000};inboxTick()`,
       );
-      await expect(row.locator(".otk-project-name")).toHaveClass(
-        new RegExp(`otk-age-${level}`),
+      await expect(row.locator("time")).toHaveText(String(text));
+      await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
+        "color",
+        plain,
       );
     }
     await state.product("prefs.set", { key: "reducedColors", value: true });
@@ -38,9 +47,9 @@ test.describe("inbox ownership", () => {
       "data-otk-reduced-colors",
       "",
     );
-    await expect(row.locator(".otk-project-name")).toHaveCSS(
-      "text-decoration-style",
-      "double",
+    await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
+      "text-decoration-line",
+      "none",
     );
     await state.product("prefs.set", { key: "reducedColors", value: false });
     await page.evaluate(
@@ -78,7 +87,8 @@ test.describe("inbox ownership", () => {
     );
     await expect(row.locator("time")).toHaveText("now");
     await row.locator(".otk-project-menu > button").click();
-    await row.locator(".otk-menu-items button").click();
+    await page.getByRole("menuitem", { name: "Mark inactive", exact: true })
+      .click();
     await page.locator(".otk-inactive-toggle").click();
     await expect(row).toBeVisible();
     const paused = await row.locator("time").textContent();
@@ -146,7 +156,16 @@ test.describe("inbox ownership", () => {
         "position",
         "relative",
       );
-      await openSession(state, page, "tstv1-otk");
+      // D74: switch projects with the conversation exposed, not via a sheet.
+      await state.product("layout.patch", { rightCollapsed: true });
+      await expect(page.locator(".otk-right-rail")).toBeVisible();
+      const project = page.locator(
+        `[data-project=${
+          JSON.stringify(entries[0].directory)
+        }] .otk-project-open`,
+      );
+      await project.click();
+      await expect(page).toHaveURL(/tstv1-otk$/);
       await page.locator("textarea[name=prompt]").fill("Keep this work");
       const target = page.locator(
         `[data-project=${
@@ -155,7 +174,8 @@ test.describe("inbox ownership", () => {
       );
       await target.click();
       await expect(page).toHaveURL(/tstv1-atmosphera$/);
-      await openSession(state, page, "tstv1-otk");
+      await project.click();
+      await expect(page).toHaveURL(/tstv1-otk$/);
       await expect(page.locator("textarea[name=prompt]")).toHaveValue(
         "Keep this work",
       );
@@ -223,7 +243,9 @@ test.describe("server merge", () => {
       await expect(page.locator(".otk-project-row")).toHaveCount(8);
       await page.locator(".otk-settings .otk-view-header button").click();
       await expect(page.locator(".otk-settings")).toHaveCount(0);
-      expect(await page.locator(".otk-project-machine").allTextContents())
+      expect(
+        await page.locator(".otk-sidebar-title-qualifier").allTextContents(),
+      )
         .toEqual([
           ...Array(4).fill("This server"),
           ...Array(4).fill("Build machine"),
@@ -242,7 +264,36 @@ test.describe("server merge", () => {
           es.map((e) => (e as HTMLElement).dataset.project)
         ),
       ).toEqual(order);
+      // After the reload this server answers last; its rows take their place.
+      const local = new URL(state.url).host;
+      let answer!: () => void;
+      const answered = new Promise<void>((resolve) => answer = resolve);
+      await page.routeWebSocket((url) => url.host === local, (socket) => {
+        const server = socket.connectToServer();
+        socket.onMessage((message) => server.send(message));
+        server.onMessage((message) => {
+          const { t } = JSON.parse(message.toString()) as { t: string };
+          if (/^(index|inbox)\./.test(t)) {
+            void answered.then(() => socket.send(message));
+          } else socket.send(message);
+        });
+        let closed = false;
+        socket.onClose(() => {
+          if (!closed) server.close();
+          closed = true;
+        });
+        server.onClose(() => {
+          if (!closed) socket.close();
+          closed = true;
+        });
+      });
       await page.reload();
+      await expect.poll(() =>
+        page.locator(".otk-project-row").evaluateAll((es) =>
+          es.map((e) => (e as HTMLElement).dataset.project)
+        )
+      ).toEqual(order.slice(4));
+      answer();
       await expect(page.locator(".otk-project-row")).toHaveCount(8);
       expect(
         await page.locator(".otk-project-row").evaluateAll((es) =>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SavedBranch } from "./branch-history.ts";
 import {
-  createTranscriptProjection,
+  projectTranscript,
   type TranscriptProjectionState,
 } from "./transcript-projection.ts";
 import {
@@ -12,21 +12,19 @@ import {
 
 /** All saved-view presentation is admitted here, never through live inference. */
 export function savedBranchProjection(
-  branch?: SavedBranch,
+  branch?: Pick<SavedBranch, "messages" | "turns">,
   showCost = true,
 ): TranscriptProjectionState & {
   presentations: Record<string, MessagePresentation>;
 } {
-  const owner = createTranscriptProjection();
-  owner.replace(branch?.messages ?? []);
-  owner.boundaries(
-    Object.values(branch?.turns ?? {}).map((turn) => turn.boundary),
-  );
+  const projection = projectTranscript(branch?.messages ?? [], {
+    boundaries: Object.values(branch?.turns ?? {}).map((turn) => turn.boundary),
+  });
   const presentations: Record<string, MessagePresentation> = Object.create(
     null,
   );
-  for (const id of owner.state.replyIDs) {
-    const message = owner.state.repliesByID[id].message;
+  for (const id of projection.replyIDs) {
+    const message = projection.repliesByID[id].message;
     const turnID = message.role === "assistant"
       ? message.replyTo ?? message.id
       : message.id;
@@ -38,5 +36,5 @@ export function savedBranchProjection(
     }
     presentations[id] = presentation;
   }
-  return { ...owner.state, presentations };
+  return { ...projection, presentations };
 }

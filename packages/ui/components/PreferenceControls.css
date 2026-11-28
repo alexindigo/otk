@@ -2,18 +2,35 @@
 .otk-preference-controls fieldset {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-block: 12px;
+  gap: var(--space-3);
+  margin-block: var(--space-3);
 }
 .otk-preference-control {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.otk-preference-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.otk-preference-segments {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.otk-preference-segments button {
+  min-height: var(--control-size);
+  font-variant-numeric: tabular-nums;
 }
 .otk-preference-select {
   flex: 1;
 }
 .otk-preference-error {
-  margin: 12px 0 0;
+  margin: var(--space-3) 0 0;
   line-height: 1.5;
 }

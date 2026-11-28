@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertStrictEquals,
-} from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import {
   createInbox,
   createSessionSubmission,
@@ -26,19 +21,28 @@ Deno.test("successful session actions and submissions retain their result when v
       },
     });
     let submitted = 0;
-    const value = { admitted: true };
+    const value = { messageID: "submitted", state: "accepted" as const };
     const submit = createSessionSubmission({
       sessionID: "s",
+      delivery: {
+        send: async (action) => {
+          await action(() => {});
+          return { kind: "committed", messageID: "submitted" };
+        },
+      },
       directory: () => Promise.resolve("/p"),
       inbox,
-      tabs: () => ({ send: (_id, action) => action() }),
+      report: console.error,
+      tabs: () => ({
+        ensureTask: () => Promise.withResolvers<never>().promise,
+      }),
     });
-    assertStrictEquals(
+    assertEquals(
       await submit(() => {
         submitted++;
         return Promise.resolve(value);
       }),
-      value,
+      { kind: "committed", messageID: "submitted" },
     );
     for (const action of ["approval", "answer", "interrupt"]) {
       assertEquals(
@@ -47,6 +51,7 @@ Deno.test("successful session actions and submissions retain their result when v
       );
     }
     assertEquals(submitted, 1);
+    await Promise.resolve();
     assertEquals(calls, Array(4).fill("projects.visit"));
     assertEquals(logged.length, 4);
     assert(logged.every((args) => args.includes(failure)));

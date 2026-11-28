@@ -10,22 +10,33 @@ import type { OpenCodeClient } from "./client.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { sessionRecency } from "./recency.ts";
 import { recordedCheckout } from "./project-topology.ts";
+import { terminalFailure } from "./request-failure.ts";
 export type NativeSession =
   & Awaited<
     ReturnType<OpenCodeClient["session"]["get"]>
   >
-  & { activity?: number; terminal?: number };
+  & {
+    activity?: number;
+    terminal?: number;
+    terminalError?: unknown;
+    runID?: string;
+    legacyAcknowledgement?: TerminalEvidence["legacyAcknowledgement"];
+  };
 export type SessionFacts = Pick<
   NativeSession,
   | "id"
   | "location"
   | "projectID"
   | "title"
+  | "agent"
   | "parentID"
   | "time"
   | "outcome"
   | "activity"
   | "terminal"
+  | "terminalError"
+  | "runID"
+  | "legacyAcknowledgement"
   | "subpath"
 >;
 export function millis(value: unknown): number {
@@ -69,16 +80,44 @@ export function terminalFacts(
   idle: unknown,
   outcome: unknown,
   shell?: number,
+  runID?: string,
+  proof?: TerminalEvidence["legacyAcknowledgement"],
 ): TerminalEvidence {
   const end = terminalEvidence(idle, outcome);
   return latestTerminal(
-    end ? { terminal: end, outcome: outcome as TerminalOutcome } : undefined,
-    shell ? { terminal: shell } : undefined,
+    end
+      ? {
+        terminal: end,
+        outcome: outcome as TerminalOutcome,
+        terminalOrigin: "historical",
+        ...(runID ? { runID } : {}),
+        ...(proof !== undefined ? { legacyAcknowledgement: proof } : {}),
+      }
+      : undefined,
+    shell ? { terminal: shell, terminalOrigin: "historical" } : undefined,
   );
 }
 /** Scalar acquisition cannot certify activity or erase live attention. */
 export function metadata(raw: SessionFacts): SessionMetadata {
   const mapped = session(raw);
+  // A top-level user shell can contribute its own completion history. A
+  // helper terminal is the model execution covered by a parent's receipt.
+  const terminal = terminalFacts(
+    raw.time.idle,
+    raw.outcome,
+    raw.parentID ? undefined : raw.terminal,
+    raw.parentID ? raw.runID : undefined,
+    raw.parentID ? raw.legacyAcknowledgement : undefined,
+  );
+  const failure =
+    terminal.outcome === "failed" && terminal.terminal === millis(raw.time.idle)
+      ? terminalFailure(
+        raw.terminalError,
+        mapped.id,
+        terminal.terminal,
+        mapped.title,
+      )
+      : undefined;
   return {
     id: mapped.id,
     directory: mapped.directory,
@@ -87,6 +126,7 @@ export function metadata(raw: SessionFacts): SessionMetadata {
       ? {}
       : { checkoutRoot: recordedCheckout(mapped.directory, raw.subpath) }),
     title: mapped.title,
+    ...(raw.agent ? { agent: raw.agent } : {}),
     parentID: mapped.parentID,
     archived: mapped.archived,
     timeCreated: mapped.time.created,
@@ -94,7 +134,8 @@ export function metadata(raw: SessionFacts): SessionMetadata {
     status: "idle",
     activityAuthority: "unknown",
     activity: {
-      ...terminalFacts(raw.time.idle, raw.outcome, raw.terminal),
+      ...terminal,
+      ...(failure ? { terminalFailure: failure } : {}),
     },
     attention: {
       permissions: 0,

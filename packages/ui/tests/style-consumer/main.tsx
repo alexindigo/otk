@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { render } from "@solidjs/web";
-import { CommandHub, SidecarConnection } from "@otk/client";
+import { CommandHub, createDisclosures, SidecarConnection } from "@otk/client";
+import { DisclosuresProvider } from "../../components/Disclosure.tsx";
+import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import { CommandProvider } from "../../keyboard/context.tsx";
 import { createUiRegistries, UiProvider } from "../../registries/context.tsx";
 import { ThemeRegistry } from "../../theme/registry.ts";
@@ -35,7 +37,13 @@ const driver = {
   reserve: (_value: boolean) => {},
   collapse: (_value: boolean) => {},
   conceal: (_value: boolean) => {},
-  lists: (_members: string[], _selected?: string, _editing?: string) => {},
+  lists: (
+    _members: string[],
+    _selected?: string,
+    _editing?: string,
+    _publication?: { entries: IndexEntry[]; inbox: InboxSnapshot },
+  ) => {},
+  createdSessions: () => 0,
   menuItems: (_keys: string[]) => {},
   feedback: (_state: "clear" | "pending" | "error") => {},
   holdMenu: (_value: boolean) => {},
@@ -63,6 +71,7 @@ const scenes = {
   siblings: () => import("./siblings.tsx"),
   chrome: () => import("./chrome.tsx"),
   lists: () => import("./lists.tsx"),
+  "record-lifetime": () => import("./record-lifetime.tsx"),
   requests: () => import("./requests.tsx"),
   forms: () => import("./forms.tsx"),
   "feedback-owners": () => import("./feedback-owners.tsx"),
@@ -70,20 +79,28 @@ const scenes = {
   "notice-lifetime": () => import("./notice-lifetime.tsx"),
   failures: () => import("./failures.tsx"),
   "settlement-conflicts": () => import("./settlement-conflicts.tsx"),
+  "request-lifetime": () => import("./request-lifetime.tsx"),
   "feedback-stability": () => import("./feedback-stability.tsx"),
   "command-failures": () => import("./command-failures.tsx"),
+  "error-surfaces": () => import("./error-surfaces.tsx"),
+  "failure-layout": () => import("./failure-layout.tsx"),
+  uiconv: () => import("./ui-conventions.tsx"),
+  "sidebar-rows": () => import("./sidebar-rows.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",
 ) as keyof typeof scenes;
 const { default: Scene } = await scenes[name]();
+const disclosures = createDisclosures({});
 render(() => (
   <CommandProvider commands={new CommandHub()}>
     <UiProvider registries={createUiRegistries()}>
-      <main class="style-scene">
-        <h1>Component style boundaries</h1>
-        <Scene />
-      </main>
+      <DisclosuresProvider owner={disclosures}>
+        <main class="style-scene">
+          <h1>Component style boundaries</h1>
+          <Scene />
+        </main>
+      </DisclosuresProvider>
     </UiProvider>
   </CommandProvider>
 ), document.getElementById("app")!);

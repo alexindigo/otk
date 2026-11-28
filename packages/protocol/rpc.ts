@@ -20,7 +20,9 @@ import type { DigestsRpcMethods } from "./capabilities/digests.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
 import type { CatalogRpcMethods } from "./catalogs.ts";
 import type { FormsRpcMethods } from "./forms.ts";
+import type { ProjectEditRpcMethods } from "./project-edit.ts";
 import type { TerminalRpcMethods } from "./terminals.ts";
+import type { LocalFileRpcMethods } from "./local-files.ts";
 import type {
   HistoryAttachment,
   HistoryAttachmentRef,
@@ -34,8 +36,10 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.create": { kind: "mutation", pending: "Creating session" },
   "session.prompt": { kind: "mutation", pending: "Sending prompt" },
   "session.shell": { kind: "mutation", pending: "Running command" },
+  "shell.terminate": { kind: "mutation", pending: "Terminating shell" },
   "session.command": { kind: "mutation", pending: "Running command" },
   "session.abort": { kind: "mutation", pending: "Stopping session" },
+  "session.withdraw": { kind: "mutation", pending: "Stopping" },
   "session.revert": { kind: "mutation", pending: "Rolling back" },
   "session.revertCode": { kind: "mutation", pending: "Reverting code changes" },
   "commands.list": { kind: "read", pending: "Loading commands" },
@@ -124,12 +128,26 @@ export type PromptPart =
   & { mention?: { start: number; end: number; text: string } };
 export interface PromptInput {
   sessionID: string;
+  /** Caller-captured native identity correlates pending and committed input. */
+  messageID?: string;
   parts: PromptPart[];
   mode: "normal" | "shell";
   agent?: string;
   model?: ModelRef;
   variant?: string;
 }
+/** Native acceptance is not transcript admission or visible presentation. */
+export interface PromptReceipt {
+  messageID: string;
+  state: "accepted" | "queued" | "started";
+}
+export interface WithdrawReceipt {
+  state: "withdrawn" | "started" | "absent" | "unconfirmed";
+}
+/** Completion without a correlatable source identity is not silent success. */
+export type SubmissionReceipt =
+  | PromptReceipt
+  | { state: "unconfirmed"; reason: string };
 export interface FileMatch {
   path: string;
   directory: boolean;
@@ -162,6 +180,7 @@ export interface PermissionReply {
 }
 export interface ShellInput {
   sessionID: string;
+  messageID?: string;
   command: string;
   agent?: string;
   model?: ModelRef;
@@ -183,6 +202,7 @@ export interface CommandOption {
 }
 export interface CommandInput {
   sessionID: string;
+  messageID?: string;
   command: string;
   /** Explicit skill selection stays distinct from a same-named server command. */
   skill?: { id?: string; name: string };
@@ -201,14 +221,16 @@ export interface RpcMethods
     UsageRpcMethods,
     SourceRpcMethods,
     SessionActionsRpcMethods,
+    ProjectEditRpcMethods,
     RestoreRpcMethods,
     DigestsRpcMethods,
     ApprovalRpcMethods,
     CatalogRpcMethods,
     TerminalRpcMethods,
+    LocalFileRpcMethods,
     FormsRpcMethods {
   "session.get": {
-    params: { sessionID: string };
+    params: { sessionID: string; purpose?: "send" };
     result: ContentSession & { load: import("./session-list.ts").LoadCoverage };
   };
   "sessions.list": {
@@ -238,11 +260,15 @@ export interface RpcMethods
     params: { directory: string; title?: string; parentID?: string };
     result: ContentSession;
   };
-  "session.prompt": { params: PromptInput; result: null };
-  "session.shell": { params: ShellInput; result: null };
+  "session.prompt": { params: PromptInput; result: PromptReceipt | null };
+  "session.shell": { params: ShellInput; result: SubmissionReceipt };
+  "shell.terminate": {
+    params: { sessionID: string; shellID: string };
+    result: null;
+  };
   "session.command": {
     params: Omit<CommandInput, "arguments"> & { arguments?: string };
-    result: null;
+    result: SubmissionReceipt;
   };
   "commands.list": { params: { sessionID: string }; result: CommandOption[] };
   "history.list": { params: Record<string, never>; result: HistoryEntry[] };
@@ -251,7 +277,7 @@ export interface RpcMethods
     result: HistoryEntry | null;
   };
   "history.messages": {
-    params: import("./transcript.ts").MessagePageInput;
+    params: import("./transcript.ts").MessageSnapshotInput;
     result: import("./transcript.ts").MessagePage;
   };
   "history.attachments": {
@@ -276,6 +302,10 @@ export interface RpcMethods
     result: null;
   };
   "session.abort": { params: { sessionID: string }; result: null };
+  "session.withdraw": {
+    params: { sessionID: string; messageID: string };
+    result: WithdrawReceipt;
+  };
   "session.revert": {
     params: { sessionID: string; messageID: string };
     result: ContentSession;
@@ -333,16 +363,18 @@ export interface CoreRequestReceipts {
     mode?: "messages" | "code" | "restore";
     after?: number;
   };
-  "prompt-sent": { completed: true };
+  "prompt-sent": { completed: true; submission?: PromptReceipt };
   "prompt-selection": {
     sessionID: string;
     agent?: string;
     model?: ModelRef;
     variant?: string;
   };
-  "shell-settled": { completed: true };
-  "command-settled": { completed: true };
+  "shell-settled": { completed: true; submission?: SubmissionReceipt };
+  "shell-terminated": { completed: true };
+  "command-settled": { completed: true; submission?: SubmissionReceipt };
   "interrupt-sent": { completed: true };
+  "prompt-withdrawal": WithdrawReceipt;
   "permission-replied": { completed: true };
   "question-replied": { completed: true };
   "question-rejected": { completed: true };

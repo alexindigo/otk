@@ -11,8 +11,8 @@ export default function VisualSettings(
       <h2>Appearance</h2>
       <PreferenceControls {...props} group="appearance" />
       <p class="otk-muted">
-        Reduced colours uses status shapes and underlines. Animations also stop
-        when your system requests reduced motion.
+        Reduced colours uses status shapes. Animations also stop when your
+        system requests reduced motion.
       </p>
     </section>
   );

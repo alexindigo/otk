@@ -17,9 +17,10 @@ import { InboxFeature } from "../../../core/features/inbox.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import type { IndexMetadata, ServerFrame, ViewLease } from "@otk/protocol";
 import { createInbox, createTabs, Rpc } from "@otk/client";
+import { entityKey, type EntityState } from "@otk/protocol";
 import type { TerminalChange } from "../../../core/terminals/tracking.ts";
 
-Deno.test("running dependencies use scoped admission and keep Inactive policy unchanged", async () => {
+Deno.test("terminal dependency facts reach the scoped entity owner without changing Inactive policy", async () => {
   const path = await Deno.makeTempDir();
   const db = new OtkDb(path, [
     projectsMigrations,
@@ -66,8 +67,9 @@ Deno.test("running dependencies use scoped admission and keep Inactive policy un
       sessions: new Map<string, number>(),
       checkouts: new Map<string, number>(),
     },
-    owners: (_directory: string) => [...source.counts.sessions.keys()],
-    listen(changed: (change: TerminalChange) => void) {
+    owners: (directory: string) =>
+      directory === "/p" ? [...source.counts.sessions.keys()] : [],
+    listen(changed: typeof listener) {
       listener = changed;
       return () => {
         listener = () => {};
@@ -75,12 +77,12 @@ Deno.test("running dependencies use scoped admission and keep Inactive policy un
     },
   };
   feature.terminalDependencies(source);
-  const leased = new Set<string>();
   const view = { epoch: 1, directory: "/p", crumbs: [], rows: [] };
+  const leased = new Set([id]);
   const projection = feature.open(() => view, "dependency-view", () => leased);
   const frames: ServerFrame[] = [];
   projection.listen((frame) => frames.push(frame));
-  const publish = (running: number) => {
+  const publish = async (running: number) => {
     source.counts = {
       sessions: new Map(running ? [[id, running]] : []),
       checkouts: new Map(running ? [["/p", running]] : []),
@@ -90,31 +92,32 @@ Deno.test("running dependencies use scoped admission and keep Inactive policy un
       changedSessions: [id],
       changedCheckouts: ["/p"],
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
   try {
     await projection.snapshot!();
-    publish(1);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await publish(2);
     assertEquals(feature.keys(view), [id]);
+    assertEquals(feature.keys({ ...view, directory: "/away" }), []);
     assertEquals(index.hierarchy.node(id)?.mandatory, true);
+    const session = feature.states.get(entityKey("session", id));
+    assertEquals([session?.state, session?.dependencies], ["none", 2]);
     assertEquals(feature.summaries.values.get("/p")?.status, "dependencies");
-    assertEquals(stores.projects.find("local", "/p")?.inactive, true);
-    leased.add(id);
-    projection.entriesChanged?.([id]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const values = frames.filter((frame) => frame.t === "inbox.patch").flatMap((
-      frame,
-    ) => frame.ops).filter((op) => op.op === "supervision").map((op) =>
-      op.value
+    assertEquals(
+      feature.states.get(entityKey("project", "/p"))?.dependencies,
+      2,
     );
     assertEquals(
-      values.some((value) =>
-        value?.dependencies?.running === 1 && value.state === "none"
+      frames.some((frame) =>
+        frame.t === "inbox.patch" &&
+        frame.ops.some((op) =>
+          op.op === "entity.upsert" && op.value.id === id &&
+          op.value.dependencies === 2
+        )
       ),
       true,
     );
-    publish(0);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await publish(0);
     assertEquals(feature.keys(view), []);
     assertEquals(index.hierarchy.node(id)?.mandatory, false);
     assertEquals(feature.summaries.values.get("/p")?.status, "none");
@@ -122,6 +125,129 @@ Deno.test("running dependencies use scoped admission and keep Inactive policy un
   } finally {
     await feature.stopDependencies();
     projection.close?.();
+    feature.close();
+    db.close();
+    await Deno.remove(path, { recursive: true });
+  }
+});
+
+Deno.test("existing inbox baseline carries body-free entity states alongside legacy projections", () => {
+  const rpc = new Rpc(() => {}), consumer = createInbox(rpc);
+  const entity: EntityState = {
+    kind: "session",
+    id: "tstv1-state",
+    state: "working",
+    previous: "none",
+    counts: { blocked: 0, working: 1, finished: 0, unseen: 1 },
+    terminal: 10,
+    terminalOrigin: "historical",
+    evidence: {
+      work: true,
+      permissions: 0,
+      questions: 0,
+      descendants: { blocked: 0, working: 0, finished: 0, unseen: 0 },
+    },
+  };
+  const key = entityKey(entity.kind, entity.id);
+  try {
+    consumer.receive({
+      t: "inbox.snapshot",
+      generation: "entities",
+      revision: 0,
+      inbox: {
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: { [entity.id]: 10 },
+        pathTemplates: [],
+        entities: { [key]: entity },
+      },
+    });
+    assertEquals(consumer.state.inbox.entities?.[key], entity);
+    assertEquals(consumer.state.inbox.finishes, { [entity.id]: 10 });
+  } finally {
+    consumer.stop();
+    rpc.close();
+  }
+});
+
+Deno.test("family metadata leases include cross-checkout failures and inputs, but not delivered successes or unrelated sessions", async () => {
+  const path = await Deno.makeTempDir();
+  const db = new OtkDb(path, [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ], { busyms: 5000 });
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore();
+  const feature = new InboxFeature(
+    stores,
+    index,
+    "local",
+    () => Promise.resolve([]),
+  );
+  const row = (
+    id: string,
+    directory: string,
+    parentID?: string,
+  ): IndexMetadata => ({
+    id,
+    directory,
+    parentID,
+    projectID: "p",
+    title: id,
+    timeCreated: 1,
+    timeUpdated: 1,
+    archived: false,
+    status: "idle",
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  });
+  try {
+    index.upsertMetadata(row("tstv1-human", "/repo"));
+    index.upsertMetadata({
+      ...row("tstv1-failed", "/tree", "tstv1-human"),
+      activity: { terminal: 10, outcome: "failed" },
+    });
+    index.upsertMetadata({
+      ...row("tstv1-question", "/tree", "tstv1-human"),
+      activity: { inputs: { keys: ["question"], fresh: true } },
+    });
+    index.upsertMetadata({
+      ...row("tstv1-delivered", "/tree", "tstv1-human"),
+      activity: {
+        terminal: 10,
+        outcome: "succeeded",
+        delivered: { parentID: "tstv1-human", receipt: "report", terminal: 10 },
+      },
+    });
+    index.upsertMetadata({
+      ...row("tstv1-unrelated", "/away"),
+      activity: { terminal: 10, outcome: "failed" },
+    });
+    assertEquals(
+      feature.keys({
+        epoch: 1,
+        directory: "/repo",
+        selected: "tstv1-human",
+        rows: [],
+        crumbs: [],
+      }).sort(),
+      ["tstv1-failed", "tstv1-question"],
+    );
+  } finally {
     feature.close();
     db.close();
     await Deno.remove(path, { recursive: true });
@@ -432,10 +558,21 @@ for (const changedID of ["tstv1-child", "tstv1-bridge"]) {
       projection.viewChanged?.();
       await tick();
       assertEquals(
+        consumer.state.inbox.tasks.map((task) => task.id),
+        [task.id],
+        "a checkout still lists its task without following the parent",
+      );
+      view.directory = "/empty";
+      view.rows = [];
+      projection.viewChanged?.();
+      await tick();
+      assertEquals(
         consumer.state.inbox.tasks,
         [],
         "changed views retire their old task projection",
       );
+      view.directory = child.directory;
+      view.rows = [child.id];
       view.tasksFollowParent = true;
       projection.viewChanged?.();
       await tick();

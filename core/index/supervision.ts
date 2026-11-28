@@ -1,15 +1,37 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexMetadata, ProjectStatus, Supervision } from "@otk/protocol";
+import {
+  type IndexMetadata,
+  sessionTransition,
+  type Supervision,
+} from "@otk/protocol";
+
+/** WP11's run-correlated parent receipt, independently of human acknowledgement. */
+function deliveredTerminal(entry: IndexMetadata, terminal: number): boolean {
+  const receipt = entry.activity?.delivered;
+  return !!receipt && receipt.parentID === entry.parentID &&
+    terminal === entry.activity?.terminal &&
+    receipt.receipt.length > 0 &&
+    Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0 &&
+    receipt.terminal === terminal &&
+    (receipt.runID || entry.activity?.runID
+      ? !!receipt.runID && receipt.runID === entry.activity?.runID
+      : true);
+}
+/** Fresh positive evidence as the interpreter counts it; absence is zero. */
+export interface SessionInputs {
+  work: boolean;
+  continuation?: boolean;
+  /** Own pending permissions left after the approval policy. */
+  permissions: number;
+  /** Own pending questions and forms. */
+  questions: number;
+}
 
 /** The sole server-side interpreter of adapter evidence and OTK acknowledgements.
  * Population/digest freshness is intentionally not an activity input. */
 export class SessionSupervision {
   #fresh = true;
   #permissions?: (id: string) => number;
-  #dependencies: (id: string) => number = () => 0;
-  dependencies(lookup: (id: string) => number): void {
-    this.#dependencies = lookup;
-  }
   freshness(fresh: boolean): void {
     this.#fresh = fresh;
   }
@@ -20,41 +42,72 @@ export class SessionSupervision {
     entry: IndexMetadata,
     acknowledged: number,
     retainedTerminal = 0,
-  ): Supervision {
+    inputs = this.inputs(entry),
+    operation?: "working" | "blocked",
+    opened = false,
+  ): Supervision & ReturnType<typeof sessionTransition> & {
+    nativeActive: boolean;
+  } {
     const evidence = entry.activity;
     const terminal = Math.max(retainedTerminal, evidence?.terminal ?? 0);
     const outcome = terminal === evidence?.terminal
       ? evidence.outcome
       : undefined;
-    if (entry.deleted) {
-      return { state: "none", terminal, ...(outcome ? { outcome } : {}) };
-    }
-    const needsInput = this.#fresh &&
-      (evidence?.inputs?.fresh && evidence.inputs.keys.length ||
-        evidence?.permissions?.fresh && evidence.permissions.keys.length &&
-          (!this.#permissions || this.#permissions(entry.id) > 0));
-    const state = needsInput
-      ? "needsYou"
-      : this.#fresh && evidence?.work?.fresh && evidence.work.keys.length
-      ? "working"
-      : terminal > acknowledged
-      ? "finishedUnseen"
-      : "none";
-    const running = this.#dependencies(entry.id);
+    const detail = terminal === evidence?.terminal
+      ? {
+        ...(evidence.terminalOrigin
+          ? { terminalOrigin: evidence.terminalOrigin }
+          : {}),
+        ...(evidence.terminalFailure
+          ? { terminalFailure: evidence.terminalFailure }
+          : {}),
+      }
+      : {};
+    // D81: the same exact receipt covers success and failure, without replacing
+    // the outcome or creating a human acknowledgement.
+    const unseen = terminal > acknowledged &&
+      !deliveredTerminal(entry, terminal);
     return {
-      state,
+      ...sessionTransition({
+        ...inputs,
+        deleted: !!entry.deleted,
+        archived: entry.archived,
+        fresh: this.#fresh && entry.activityAuthority !== "stale",
+        helper: !!entry.parentID,
+        opened,
+        operation,
+        terminal,
+        outcome,
+        unseen,
+        confirmed: evidence?.completion?.confirmed,
+      }),
+      // Durable checkout policy tracks native activity, not received OTK
+      // operations that temporarily color the same entity.
+      nativeActive: !entry.deleted &&
+        (inputs.work || inputs.permissions > 0 || inputs.questions > 0),
       terminal,
+      ...detail,
       ...(outcome ? { outcome } : {}),
-      ...(running ? { dependencies: { running } } : {}),
     };
   }
-  status(value: Supervision): ProjectStatus {
-    return value.state === "needsYou"
-      ? "blocked"
-      : value.state === "finishedUnseen"
-      ? "finished"
-      : value.state === "none" && value.dependencies?.running
-      ? "dependencies"
-      : value.state;
+  inputs(entry: IndexMetadata): SessionInputs {
+    const evidence = entry.activity;
+    if (!this.#fresh || entry.activityAuthority === "stale") {
+      return { work: false, permissions: 0, questions: 0 };
+    }
+    const permissions = evidence?.permissions?.fresh &&
+        evidence.permissions.keys.length
+      ? this.#permissions
+        ? Math.max(0, this.#permissions(entry.id))
+        : evidence.permissions.keys.length
+      : 0;
+    const continuation = !!evidence?.completion?.continuation?.length;
+    return {
+      work: continuation ||
+        !!(evidence?.work?.fresh && evidence.work.keys.length),
+      ...(continuation ? { continuation } : {}),
+      permissions,
+      questions: evidence?.inputs?.fresh ? evidence.inputs.keys.length : 0,
+    };
   }
 }

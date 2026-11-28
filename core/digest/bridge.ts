@@ -10,6 +10,7 @@ import type {
 } from "@otk/harness";
 import type { SessionMetadata, TurnUsageSnapshot } from "@otk/protocol";
 import { OperationFailure, StoppedError } from "@otk/protocol";
+import { processStorage, type StorageAvailability } from "@otk/store";
 import type { DigestNativeConfig } from "./providers.ts";
 import type {
   DigestPressure,
@@ -32,6 +33,7 @@ export interface DigestBridgeOptions {
   pressure?(value: DigestPressure): void;
   admission?(): void;
   reads?: ProviderReadCodecs;
+  storage?: StorageAvailability;
 }
 interface Pending {
   receive(value: FromWorker): void;
@@ -237,6 +239,26 @@ export class DigestBridge implements DigestPort {
           for (const listener of this.#progressListeners) listener(data.values);
         } else if (data.t === "pressure") {
           this.options.pressure?.(data);
+        } else if (data.t === "storage") {
+          const storage = this.options.storage ?? processStorage;
+          const database = `${this.options.statePath}/digest-worker`;
+          storage.remote(database, data.state);
+          const keys = [...this.#sequences.keys()];
+          if (data.state.degraded) this.options.unready?.(keys);
+          else if (data.state.gap) {
+            // A successful real commit re-admits demanded derived state and
+            // native catalog observation, never certifies the missing interval.
+            this.observe(
+              this.#connection,
+              keys.map((sessionID) => ({
+                sessionID,
+                revision: 0,
+                reason: "messages",
+              })),
+            );
+            this.#reconcile = this.#connection > 0;
+            this.#maybeReconcile();
+          }
         } else if (data.t === "error") {
           const error = new Error(data.message, {
             cause: { scope: data.scope, sessionID: data.sessionID },
@@ -277,6 +299,11 @@ export class DigestBridge implements DigestPort {
       since: Date.now(),
       connection: this.#connection,
       diagnostics: !!this.options.pressure,
+      ...((this.options.storage ?? processStorage).failure(
+          `${this.options.statePath}/digest-worker`,
+        )
+        ? { storageRecovery: true as const }
+        : {}),
     });
     this.#pending.set(id, {
       receive: (value) => {
@@ -417,12 +444,15 @@ export class DigestBridge implements DigestPort {
       signal.removeEventListener("abort", abort)
     );
   }
-  async admission(signal: AbortSignal): Promise<() => void> {
+  async admission(
+    signal: AbortSignal,
+    lane?: import("@otk/harness").NativeReadLane,
+  ): Promise<() => void> {
     await this.start();
     const worker = this.#worker, run = this.#run;
     const request = this.#id + 1;
     await this.#request(
-      { t: "native.acquire" },
+      { t: "native.acquire", lane },
       signal,
       (value) =>
         value.t === "native.granted" ? { value: undefined } : undefined,

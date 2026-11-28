@@ -67,7 +67,17 @@ test(
       new RegExp(`#/local/${root.id}/${helper.id}$`),
     );
     await page.reload();
-    await expect(page.locator(".otk-subagent-bar")).toBeVisible();
+    const trail = page.getByRole("navigation", { name: "Task sessions" });
+    await expect(trail.locator("[data-crumb]")).toHaveCount(2);
+    await expect(trail.getByRole("link", { name: root.title, exact: true }))
+      .toHaveAttribute("href", new RegExp(`${root.id}$`));
+    const current = trail.getByRole("link", {
+      name: "Helper created outside OTK",
+      exact: true,
+    });
+    await expect(current).toBeVisible();
+    await expect(current).toHaveAttribute("aria-current", "page");
+    await expect(current).toHaveAttribute("data-crumb", helper.id);
     await expect(page.locator(".otk-messages")).toContainText(
       "External helper transcript.",
     );
@@ -82,11 +92,22 @@ test(
       "Qualified session reply.",
     );
     await page.goto(`${state.url}/#/local/${native.id}`);
-    // FP1 retains the compatibility reason inside its complete failure contract.
-    const failure = page.locator(".otk-global-error");
+    // Style8 removed the duplicate banner. The sole Notifications presentation
+    // retains FP1's entire action/target/reason/accessibility contract.
+    const failure = page.getByRole("region", {
+      name: "Notifications",
+      exact: true,
+    })
+      .locator(".otk-toast .otk-failure-content").filter({
+        hasText: "Opening session link failed",
+      });
     await expect(failure).toHaveCount(1);
     await expect(failure).toHaveAttribute("role", "alert");
-    await expect(failure).toContainText("Opening session link failed for OTK");
+    await expect(failure).toHaveAccessibleName(
+      /^Opening session link failed for OTK:/,
+    );
+    await expect(failure).toContainText("Opening session link failed");
+    await expect(failure.locator(".otk-failure-target")).toHaveText("OTK");
     await expect(failure).toContainText(
       "This session link is from an older version. Open Sessions to choose a session.",
     );

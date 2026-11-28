@@ -1,0 +1,272 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertStrictEquals,
+} from "@std/assert";
+import type { Activity, Message } from "@otk/protocol";
+import {
+  createTranscriptInteraction,
+  createTranscriptProjection,
+  createWindow,
+} from "../mod.ts";
+
+function record(
+  id: number,
+  activity: Partial<Activity> = {},
+  data = "same",
+): Message {
+  return {
+    id: `r${id}`,
+    sessionID: "session",
+    role: "context",
+    time: { created: id },
+    parts: [{
+      kind: "external",
+      id: `p${id}`,
+      name: "plugin/record",
+      data,
+      activity: {
+        kindLabel: "Opaque",
+        summary: { kind: "plugin/run", noun: "run", plural: "runs" },
+        title: "Same title",
+        category: "record",
+        layout: "row",
+        tone: "normal",
+        ...activity,
+      },
+    }],
+  };
+}
+Deno.test("record projection mints multi-record spans and preserves append topology", () => {
+  const p = createTranscriptProjection();
+  p.reset([record(1), record(2)]);
+  const first = p.state.records;
+  const key = first.keys[0], child = first.groups[key].children![0].key;
+  assertNotEquals(key, "r1");
+  assertEquals(first.groups[key].members, ["r1", "r2"]);
+  for (let id = 3; id <= 15; id++) {
+    p.apply({ op: "message.upsert", message: record(id) });
+  }
+  const next = p.state.records;
+  assertEquals(next.keys, [key]);
+  assertEquals(next.groups[key].children![0].key, child);
+  assertEquals(next.groups[key].members.length, 15);
+  assert(next.groups[key].revision > first.groups[key].revision);
+  assertEquals(next.groups[key].title, "15 runs");
+  p.apply({
+    op: "message.upsert",
+    message: record(16, { direction: "outgoing" }),
+  });
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.owners.r16, key);
+  p.reset([]);
+  p.reset([record(15)]);
+  assertEquals(p.state.records.keys, [key]);
+  p.merge(Array.from({ length: 14 }, (_, n) => record(n + 1)));
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.groups[key].members.length, 15);
+  const cache = new Map<string, number>();
+  let extentRevision = 1;
+  const window = createWindow(cache, (key) => `${key}:${extentRevision}`);
+  window.update([key], () => 26);
+  window.measure(key, 100);
+  extentRevision++;
+  assertEquals(window.measured(key), false);
+  window.update([key], () => 26);
+  assertEquals(window.size(key), 26);
+  window.measure(key, 200);
+  assertEquals([...cache.keys()], [`${key}:2`]);
+});
+Deno.test("terminal transitions rejoin the existing interval", () => {
+  const p = createTranscriptProjection();
+  p.reset([
+    record(1),
+    record(2, {
+      state: {
+        key: "busy",
+        label: "Busy",
+        facts: { active: true, terminal: false },
+      },
+    }),
+  ]);
+  const keys = [...p.state.records.keys];
+  p.apply({ op: "message.upsert", message: record(2) });
+  p.apply({ op: "message.upsert", message: record(3) });
+  assertEquals(p.state.records.keys.slice(0, 2), keys);
+  assertEquals(p.state.records.owners.r2, keys[0]);
+  p.reset(p.messages());
+  assertEquals(p.state.records.keys.slice(0, 2), keys);
+});
+Deno.test("failure breaks out and full record facts prevent title-only folding", () => {
+  const p = createTranscriptProjection();
+  p.reset([
+    record(1),
+    record(2, {}, "different facts"),
+    record(3),
+    record(4),
+  ]);
+  const key = p.state.records.keys[0];
+  assertEquals(p.state.records.groups[key].children?.length, 3);
+  p.apply({ op: "message.upsert", message: record(2, { tone: "error" }) });
+  assertEquals(p.state.records.owners.r2, key);
+  assertEquals(p.state.records.owners.r1, key);
+  assertEquals(p.state.records.keys, [key]);
+  assertEquals(p.state.records.groups[key].members, ["r1", "r2", "r3", "r4"]);
+  assertEquals(p.state.records.groups[key].breakouts, ["r2"]);
+  assertEquals(p.state.records.parents.r1, [key]);
+  assertEquals(p.state.records.parents.r3[0], key);
+});
+Deno.test("record reveal opens retained ancestry through the interaction owner", () => {
+  const p = createTranscriptProjection(),
+    interaction = createTranscriptInteraction();
+  p.reset([record(1), record(2)]);
+  const ancestry = p.state.records.parents.r2;
+  interaction.reveal(ancestry);
+  for (const key of ancestry) {
+    const choice = interaction.disclosure(
+      "activity",
+      key,
+      interaction.generation(key),
+    );
+    assertEquals(choice.expanded("record"), true);
+    choice.set(false);
+    assertEquals(
+      interaction.disclosure("activity", key, interaction.generation(key))
+        .expanded(
+          "record",
+        ),
+      false,
+    );
+  }
+});
+
+Deno.test("a changed middle record splits identical folds without reordering source", () => {
+  const p = createTranscriptProjection();
+  p.reset([record(1), record(2), record(3), record(4)]);
+  const key = p.state.records.keys[0];
+  p.apply({ op: "message.upsert", message: record(2, {}, "changed facts") });
+  assertEquals(
+    p.state.records.groups[key].children?.map((row) => row.members),
+    [
+      ["r1"],
+      ["r2"],
+      ["r3", "r4"],
+    ],
+  );
+  const children = p.state.records.groups[key].children!.map((row) => row.key);
+  p.reset(p.messages());
+  p.apply({ op: "message.upsert", message: record(5) });
+  assertEquals(
+    p.state.records.groups[key].children!.map((row) => row.key),
+    children,
+  );
+  assertEquals(
+    p.state.records.groups[key].children?.flatMap((row) => row.members),
+    ["r1", "r2", "r3", "r4", "r5"],
+  );
+});
+
+Deno.test("reconcile keeps unchanged activity groups when the page changes topology", () => {
+  const p = createTranscriptProjection();
+  const older = record(1);
+  p.reset([older]);
+  const groups = p.state.records.groups;
+  const key = p.state.records.keys[0];
+  p.reconcile([structuredClone(older), {
+    id: "prompt",
+    role: "user",
+    sessionID: older.sessionID,
+    time: { created: 2 },
+    parts: [],
+  }]);
+  assertStrictEquals(p.state.records.groups, groups);
+  p.reconcile([record(3)]);
+  assertStrictEquals(p.state.records.groups[key], groups[key]);
+});
+
+Deno.test("gap keys follow the older reply's record and survive body updates", () => {
+  const p = createTranscriptProjection();
+  const older = record(2), newer = record(4);
+  const user = (id: string, created: number): Message => ({
+    id,
+    sessionID: older.sessionID,
+    role: "user",
+    time: { created },
+    parts: [],
+  });
+  const gap = { key: "gap:r2", older: older.id, newer: newer.id };
+  p.reset([record(1), older, newer, user("tail", 5)]);
+  p.gaps([gap]);
+  const records = () => p.state.records;
+  const { owners } = records();
+  const left = owners.r2, right = owners.r4;
+  assertEquals(records().keys, [left, gap.key, right, "tail"]);
+  assertEquals(records().groups[left].members, ["r1", "r2"]);
+  assertEquals(records().groups[right].members, ["r4"]);
+  assertEquals(records().groups[gap.key], undefined);
+  assertEquals(records().revisions[gap.key], 0);
+
+  p.reconcile([{
+    ...user("tail", 5),
+    parts: [{
+      id: "text",
+      kind: "text",
+      synthetic: false,
+      blocks: [],
+    }],
+  }]);
+  assertEquals(records().keys, [left, gap.key, right, "tail"]);
+  assertEquals(records().revisions[gap.key], 0);
+  p.gaps([]);
+  assertEquals(records().keys, [left, "tail"]);
+  assertEquals(records().groups[left].members, ["r1", "r2", "r4"]);
+  assertEquals(records().revisions[gap.key], undefined);
+  p.gaps([gap]);
+  p.reset([older, newer]);
+  assertEquals(records().keys, [left]);
+  assertEquals(records().groups[left].members, ["r2", "r4"]);
+});
+
+Deno.test("ordinary streamed rows publish new measurement revisions without regrouping", () => {
+  const p = createTranscriptProjection();
+  p.reset([{
+    id: "r1",
+    sessionID: "session",
+    role: "assistant",
+    parts: [],
+    time: { created: 1 },
+    agent: "build",
+    model: { provider: "test", model: "test" },
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    cost: 0,
+    interrupted: false,
+  }]);
+  const key = p.state.records.keys[0], before = p.state.records.revisions[key];
+  p.apply({
+    op: "part.upsert",
+    messageID: "r1",
+    part: {
+      kind: "text",
+      id: "p1",
+      synthetic: false,
+      blocks: [{
+        b: "paragraph",
+        inline: [{ i: "text", text: "Streamed output" }],
+      }],
+    },
+  });
+  assertEquals(p.state.records.keys, [key]);
+  assertNotEquals(p.state.records.revisions[key], before);
+});
+
+Deno.test("records without producer summary facts remain visible within the frame", () => {
+  const p = createTranscriptProjection();
+  p.reset([
+    record(1, { summary: undefined }),
+    record(2, { summary: undefined }),
+  ]);
+  assertEquals(p.state.records.keys, ["activity:r1"]);
+  assertEquals(p.state.records.groups["activity:r1"].breakouts, ["r1", "r2"]);
+});

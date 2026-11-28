@@ -13,11 +13,22 @@ export interface MessageScaleOptions {
   payload?: boolean;
   files?: boolean;
 }
-export function scaleRole(session: number, rank: number, messages = false) {
-  if (messages && session === MESSAGE_CASES.giant) {
+export function scaleRole(
+  session: number,
+  rank: number,
+  options: MessageScaleOptions,
+) {
+  // Issue 2.140 keeps user text literal. The heap scenario needs its code
+  // payload to be rendered by the assistant's actual highlighting worker.
+  if (options.payload && session === 0 && rank >= 1523) {
+    return rank === 1524 ? "assistant" : "user";
+  }
+  if (options.messages && session === MESSAGE_CASES.giant) {
     return rank ? "assistant" : "user";
   }
-  if (messages && session === MESSAGE_CASES.queued && rank >= 98) return "user";
+  if (options.messages && session === MESSAGE_CASES.queued && rank >= 98) {
+    return "user";
+  }
   return rank % 2 ? "assistant" : "user";
 }
 export function scaleSource(

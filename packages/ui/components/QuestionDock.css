@@ -11,25 +11,6 @@
   font-size: var(--text-prose);
   line-height: var(--line-prose);
 }
-.otk-question-options {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-}
-.otk-question-options > .otk-question-row {
-  text-align: left;
-  padding-block: 8px;
-  cursor: pointer;
-}
-.otk-question-own {
-  flex: 1 1 100%;
-  min-height: 0;
-  width: 100%;
-  box-sizing: border-box;
-  font: inherit;
-  color: var(--otk-fg);
-}
 .otk-question-peek {
   overflow: hidden;
   white-space: nowrap;
@@ -38,17 +19,9 @@
 .otk-question-submit {
   margin-left: auto;
 }
-.otk-question-content {
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.otk-question-options .otk-muted {
-  font-size: var(--text-meta);
-}
 .otk-question-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }

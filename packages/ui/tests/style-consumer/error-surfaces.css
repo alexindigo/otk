@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.error-review-layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr) 300px;
+  min-block-size: 850px;
+  gap: 24px;
+}
+.error-review-transcript,
+.error-review-panel {
+  min-inline-size: 0;
+}
+.error-review-transcript > header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.error-review-transcript > section {
+  margin-block: 32px;
+}
+.error-review-transcript textarea {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 80px;
+}
+.error-review-pane {
+  display: grid;
+  min-block-size: 260px;
+}
+.error-review-settings {
+  display: flex;
+  block-size: 900px;
+}
+.error-review-run {
+  max-inline-size: 736px;
+  margin-inline: auto;
+}
+.style-scene:has(.error-review-layout) {
+  max-inline-size: none;
+}

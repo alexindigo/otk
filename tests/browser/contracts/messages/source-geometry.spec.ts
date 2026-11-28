@@ -1,19 +1,98 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { viewByUrl } from "../../pages/sessions.ts";
 import {
   copySelection,
   nativeIdle,
-  openWorkLogs,
+  openWork,
   prompt,
+  revealAcquired,
   scrollTranscript,
+  scrollViewport,
   selectSourceWord,
+  sessionStatus,
   showFileChanges,
   toolScript,
   viewportSource as source,
   wheelTranscript,
+  wheelViewport,
+  workPanel,
 } from "../../pages/transcript.ts";
 import type { Page } from "@playwright/test";
+
+const completedWrite = '[data-tool="write"][data-tool-status="completed"]';
+const workList = (page: Page) => workPanel(page).locator(".otk-work-list");
+
+// A mounted fold is not source readiness. Borrow the delivered tool's identity
+// before opening its own work groups, including across virtual replacement.
+async function revealWrite(page: Page, sessionID: string) {
+  let messageID: string | undefined;
+  await expect.poll(async () => {
+    messageID = await page.evaluate((sessionID) => {
+      const messages = (globalThis as typeof globalThis & {
+        transcriptPublication: Map<string, import("@otk/protocol").Message>;
+      }).transcriptPublication;
+      return [...messages.values()].find((message) =>
+        message.sessionID === sessionID &&
+        message.parts.some((part) =>
+          part.kind === "tool" && part.call.tool === "write" &&
+          part.call.status === "completed"
+        )
+      )?.id;
+    }, sessionID);
+    return messageID;
+  }).toBeTruthy();
+  const selector = `[data-message="${messageID}"]`;
+  await revealAcquired(page, selector);
+  const panel = await openWork(page.locator(selector));
+  await expect(panel.locator(completedWrite)).toBeVisible();
+}
+
+test("messages.numbered-source-acquires-published-write-owner", {
+  tag: ["@messages", "@contracts"],
+}, async ({ page }) => {
+  await page.setContent(
+    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><article data-message="earlier"><button class="otk-work-strip" aria-current="true"><span>Work log</span></button></article></div><section id="otk-panel-content" aria-label="Work log">Earlier work</section>`,
+  );
+  await page.evaluate(() => {
+    Object.assign(globalThis, { transcriptPublication: new Map() });
+  });
+  let settled = false;
+  const acquisition = revealWrite(page, "shape-session").then(() => {
+    settled = true;
+  });
+  try {
+    // The old readiness condition can finish while the requested source is held.
+    // Join it explicitly, not a sleep or a guessed number of quiet frames.
+    await expect(workPanel(page)).toHaveText("Earlier work");
+    expect(settled, "An earlier open fold cannot certify the write").toBe(
+      false,
+    );
+  } finally {
+    await page.evaluate(() => {
+      const messages = (globalThis as typeof globalThis & {
+        transcriptPublication: Map<string, unknown>;
+      }).transcriptPublication;
+      messages.set("written", {
+        id: "written",
+        sessionID: "shape-session",
+        parts: [{
+          kind: "tool",
+          call: { tool: "write", status: "completed" },
+        }],
+      });
+      document.querySelector(".otk-messages")!.insertAdjacentHTML(
+        "beforeend",
+        `<article data-message="written"><button class="otk-work-strip" onclick="document.querySelector('.otk-work-strip[aria-current]').removeAttribute('aria-current');this.setAttribute('aria-current','true');document.getElementById('otk-panel-content').replaceChildren(this.nextElementSibling.content.cloneNode(true))"><span>Work log</span></button><template><section data-tool="write" data-tool-status="completed"><code>Written source</code></section></template></article>`,
+      );
+    });
+    await acquisition;
+  }
+  await expect(workPanel(page).locator("code")).toHaveText(
+    "Written source",
+  );
+});
 
 // Native source coordinates cover both preformatted text and styled rows. The
 // independent probe deliberately does not import product geometry machinery.
@@ -38,12 +117,12 @@ const sourceGeometry = String.raw`(code,index)=>{
 
 async function revealLine(page: Page, index: number) {
   const delta = await page.evaluate<number>(
-    `(()=>{const pane=document.querySelector('.otk-messages'),box=pane.getBoundingClientRect(),code=document.querySelector('.otk-code code'),row=(${sourceGeometry})(code,${index});return row.row-box.top-box.height/2})()`,
+    `(()=>{const pane=document.querySelector('.otk-work-list'),box=pane.getBoundingClientRect(),code=pane.querySelector('.otk-code code'),row=(${sourceGeometry})(code,${index});return row.row-box.top-box.height/2})()`,
   );
-  if (Math.abs(delta) >= 1) await wheelTranscript(page, delta);
+  if (Math.abs(delta) >= 1) await wheelViewport(workList(page), delta);
   await expect.poll(() =>
     page.evaluate(
-      `(()=>{const box=document.querySelector('.otk-messages').getBoundingClientRect(),row=(${sourceGeometry})(document.querySelector('.otk-code code'),${index});return row.row>box.top&&row.row<box.bottom})()`,
+      `(()=>{const pane=document.querySelector('.otk-work-list'),box=pane.getBoundingClientRect(),row=(${sourceGeometry})(pane.querySelector('.otk-code code'),${index});return row.row>box.top&&row.row<box.bottom})()`,
     )
   ).toBe(true);
 }
@@ -111,7 +190,15 @@ test("messages.code-projection-copy-numbered-geometry", {
     ),
   ).toEqual(prefix);
   await copySelection(page, "viewport0");
-  await page.locator(".otk-tabs-project").click();
+  // Release native text selection on inert chrome, not the new menu button.
+  await page.locator(".otk-task-strip").click({
+    position: await page.locator(".otk-task-strip").evaluate((el) => ({
+      x: el.clientWidth / 2,
+      y: 1,
+    })),
+    timeout: 10_000,
+  });
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("");
   await expect(page.locator(".otk-code-group:first-child .otk-token"))
     .toHaveCount(0);
   await expect(page.locator(".otk-code code")).toHaveJSProperty(
@@ -135,13 +222,13 @@ test("messages.code-projection-copy-numbered-geometry", {
   });
   await nativeIdle(state, write.id);
   await openSession(state, page, write.id);
-  await openWorkLogs(page);
+  await revealWrite(page, write.id);
   await expect(page.locator(".otk-code[data-numbered=true] code"))
     .toHaveJSProperty("textContent", source);
   await expect(page.locator(".otk-code-plain")).toBeAttached({
     timeout: 60_000,
   });
-  await scrollTranscript(page, true);
+  await scrollViewport(workList(page), true);
   await revealLine(page, 1999);
   await expect(page.locator(".otk-token").filter({ hasText: /^viewport1999$/ }))
     .toHaveCount(1);
@@ -189,16 +276,17 @@ test("messages.leading-clip-true-colour-gutter", {
     "data-status",
     "idle",
   );
-  await openWorkLogs(page);
+  await revealWrite(page, session.id);
+  await scrollViewport(workList(page), true);
   await expect(page.locator(".otk-token").filter({ hasText: /^viewport1999$/ }))
     .toHaveCount(1);
   const delta = await page.evaluate<number>(
-    `(()=>{const pane=document.querySelector('.otk-messages'),box=pane.getBoundingClientRect(),code=document.querySelector('.otk-code code'),row=(${sourceGeometry})(code,1983);return row.top-box.top-pane.clientTop})()`,
+    `(()=>{const pane=document.querySelector('.otk-work-list'),box=pane.getBoundingClientRect(),code=pane.querySelector('.otk-code code'),row=(${sourceGeometry})(code,1983);return row.top-box.top-pane.clientTop})()`,
   );
-  await wheelTranscript(page, delta);
+  await wheelViewport(workList(page), delta);
   await expect.poll(() =>
     page.evaluate(
-      `(()=>{const pane=document.querySelector('.otk-messages').getBoundingClientRect(),code=document.querySelector('.otk-code code'),row=(${sourceGeometry})(code,1983);return row.top>=pane.top-.5&&row.bottom<=pane.bottom+.5})()`,
+      `(()=>{const pane=document.querySelector('.otk-work-list'),box=pane.getBoundingClientRect(),code=pane.querySelector('.otk-code code'),row=(${sourceGeometry})(code,1983);return row.top>=box.top-.5&&row.bottom<=box.bottom+.5})()`,
     )
   ).toBe(true);
   await expect(page.locator(".otk-token").filter({ hasText: /^viewport1983$/ }))
@@ -258,7 +346,17 @@ test("messages.numbered-empty-blank-terminal-geometry", {
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Natural shape " + index,
     });
-    await openSession(state, page, session.id);
+    if (index === 0) {
+      await openSession(state, page, session.id);
+    } else {
+      // D74 / wl-5: leave the previous reply's Work pane by session link.
+      // This probe measures source geometry, not catalog admission of a new row.
+      await viewByUrl(state, page, session.id);
+      await expect(
+        page.getByRole("region", { name: "Transcript", exact: true }),
+      )
+        .toHaveAttribute("aria-busy", "false");
+    }
     await page.evaluate(() =>
       document.fonts.ready
     );
@@ -275,7 +373,7 @@ test("messages.numbered-empty-blank-terminal-geometry", {
       content,
     }, "Written.");
     await prompt(page, "Write shape " + index);
-    await openWorkLogs(page);
+    await revealWrite(page, session.id);
     await expect(page.locator(".otk-code[data-numbered=true] code"))
       .toHaveJSProperty("textContent", content);
     await expect.poll(() =>
@@ -285,7 +383,7 @@ test("messages.numbered-empty-blank-terminal-geometry", {
     await expect.poll(() => page.evaluate("heldShape.length>0")).toBe(true);
     await page.evaluate("measureShape();releaseShape()");
     if (targets.length) {
-      await scrollTranscript(page, true);
+      await scrollViewport(workList(page), true);
       await revealLine(page, targets.at(-1)!.index);
       await expect(
         page.locator(".otk-token").filter({
@@ -343,10 +441,15 @@ test("messages.numbered-empty-blank-terminal-geometry", {
       expect(samples.some((sample) => sample.groups > 1 && sample.tokens > 0))
         .toBe(true);
     }
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
-    await expect(page.locator(".otk-text p").filter({ hasText: /^Written\.$/ }))
-      .toHaveCount(1);
+    await sessionStatus(page, session.id, "idle");
+    // Reading in the Work panel must leave the conversation available in its
+    // independent viewport.
+    await scrollTranscript(page, false);
+    const prose = page.locator(".otk-text p").filter({
+      hasText: /^Written\.$/,
+    });
+    await expect(prose).toHaveCount(1);
+    await expect(prose).toBeInViewport();
   }
 });
 

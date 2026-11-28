@@ -36,14 +36,11 @@ export function registerSessionsPanel(
             return (
               <ProjectSessions
                 project={project}
-                ready={shell.inbox(sidecarId).state.ready &&
-                  shell.sessionRowsReady(project)}
-                loading={shell.sessionRowsLoading(project)}
-                loadingText={shell.sessionRowsStatus(project).busy
-                  ? shell.sessionRowsStatus(project).text
-                  : undefined}
+                now={shell.now()}
+                disclosure={shell.disclosures}
+                holdOrder={() => shell.holdTaskOrder?.(project) ?? (() => {})}
+                collection={(query) => shell.sessionCollection(project, query)}
                 metadata={(id) => shell.metadataEntry(sidecarId, id)}
-                rows={(query) => shell.sessionRows(project, query)}
                 onRows={(keys, query) =>
                   shell.visibleRows(project, keys, query)}
                 progress={shell.projectProgress(project)}
@@ -53,6 +50,7 @@ export function registerSessionsPanel(
                 rename={shell.rename}
                 showCost={shell.toggles.state.prefs.showCost}
                 inbox={(id) => shell.inbox(id).state.inbox}
+                entities={(id) => shell.inbox(id).entities}
                 connected={(id) =>
                   shell.servers().some((s) =>
                     s.id === id && s.status === "connected"

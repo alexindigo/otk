@@ -61,37 +61,53 @@ export async function inboxBrowserFixture(
   const evidence = (
     entry: IndexEntry,
     previous?: IndexEntry,
+    requests?: { permissions: string[]; inputs: string[] },
   ): IndexEntry["activity"] => ({
     terminal: entry.status === "idle" && previous?.activity?.work?.keys.length
       ? Date.now()
       : previous?.activity?.terminal,
+    terminalOrigin:
+      entry.status === "idle" && previous?.activity?.work?.keys.length
+        ? "live"
+        : previous?.activity?.terminalOrigin,
     work: {
       keys: entry.status === "idle" ? [] : [`fixture-run:${entry.id}`],
       fresh: true,
     },
     inputs: {
-      keys: Array.from(
+      keys: requests?.inputs ?? Array.from(
         { length: entry.attention.questions },
         (_, n) => `question:${entry.id}:${n}`,
       ),
       fresh: true,
     },
     permissions: {
-      keys: Array.from(
+      keys: requests?.permissions ?? Array.from(
         { length: entry.attention.permissions },
         (_, n) => `permission:${entry.id}:${n}`,
       ),
       fresh: true,
     },
   });
-  const update = (id: string, patch: Partial<IndexEntry>) => {
+  const update = (
+    id: string,
+    patch: Partial<IndexEntry>,
+    requests?: { permissions: string[]; inputs: string[] },
+  ) => {
     const at = entries.findIndex((e) => e.id === id), previous = entries[at];
     const entry: IndexEntry = {
       ...previous,
       ...patch,
       timeUpdated: previous.timeUpdated + 1,
     };
-    entry.activity = patch.activity ?? evidence(entry, previous);
+    if (requests) {
+      entry.attention = {
+        ...entry.attention,
+        permissions: requests.permissions.length,
+        questions: requests.inputs.length,
+      };
+    }
+    entry.activity = patch.activity ?? evidence(entry, previous, requests);
     entries[at] = entry;
     sink.indexUpsert(entry);
   };

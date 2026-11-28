@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   canonicalRequest,
+  createRequestMetadata,
   OperationFailure,
   requestFingerprint,
   requestRef,
@@ -24,6 +25,7 @@ import type {
   RpcExecutionPolicy,
 } from "./types.ts";
 import { ExecutionFailure, publicFailure } from "./failures.ts";
+import { storageProblem } from "@otk/store";
 
 export type RequestRepository = Pick<
   Requests,
@@ -52,6 +54,7 @@ interface Entry {
   work?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
   turn?: { ready: Promise<void>; release(): void };
+  target?: string;
   waiting: number;
   view?: ViewLease;
 }
@@ -73,6 +76,12 @@ const keyOf = (principal: string, ref: RequestRef): ReceiptKey => ({
 });
 const terminal = (record: RequestRecord) =>
   ["succeeded", "failed", "released"].includes(record.state);
+/** S22: what a received OTK operation means for its target's state. */
+export type OperationAttention = "working" | "blocked";
+export interface OperationTarget {
+  kind: "session" | "directory";
+  id: string;
+}
 const bytes = (value: unknown) =>
   new TextEncoder().encode(JSON.stringify(value) ?? "null").byteLength;
 
@@ -91,14 +100,87 @@ export class RequestCoordinator {
   // This orders admission only; execution/readiness remains independently scoped.
   #admissions = new Map<string, Promise<void>>();
   // Semantic effect ordering is distinct from the yielded executing turn.
-  #effects = new Map<string, Promise<void>>();
+  #nativeEffects = new Map<string, Promise<void>>();
+  #targets = new Map<string, Set<Entry>>();
   #run = crypto.randomUUID();
   #started = false;
   #stopped = false;
   #jobs = new Set<Promise<void>>();
   #resultBytes = 0;
   #maintenance?: MapIterator<Entry>;
+  #storagePending = new Set<Entry>();
+  /** Received user operations by [principal, kind, target], then by receipt. */
+  #operations = new Map<string, Map<string, OperationAttention>>();
+  #operationListeners = new Set<
+    (principal: string, target: OperationTarget) => void
+  >();
+  #metadata = createRequestMetadata();
   constructor(readonly options: CoordinatorOptions) {}
+  /** Operations this server received for a target (a session, or a project
+   * directory for operations without one): input or authentication waits
+   * block it, queued, running and reconciling work count as work. */
+  operation(
+    principal: string,
+    target: OperationTarget,
+  ): OperationAttention | undefined {
+    const values = this.#operations.get(
+      JSON.stringify([principal, target.kind, target.id]),
+    );
+    if (!values?.size) return undefined;
+    return [...values.values()].some((value) => value === "blocked")
+      ? "blocked"
+      : "working";
+  }
+  /** Targets with a received operation, for an observer's initial pass. */
+  operationTargets(principal: string): OperationTarget[] {
+    return [...this.#operations.keys()].flatMap((key) => {
+      const [owner, kind, id] = JSON.parse(key) as [
+        string,
+        OperationTarget["kind"],
+        string,
+      ];
+      return owner === principal ? [{ kind, id }] : [];
+    });
+  }
+  listenOperations(
+    listener: (principal: string, target: OperationTarget) => void,
+  ): () => void {
+    this.#operationListeners.add(listener);
+    return () => this.#operationListeners.delete(listener);
+  }
+  /** One record observer for every receipt change; bookkeeping, reads,
+   * settled and failed operations never colour a target. */
+  #observe(entry: Entry): void {
+    const record = entry.record;
+    const target: OperationTarget | undefined = record.scope_session
+      ? { kind: "session", id: record.scope_session }
+      : record.scope_directory
+      ? { kind: "directory", id: record.scope_directory }
+      : undefined;
+    if (!target) return;
+    const metadata = this.#metadata.get(record.method);
+    const value: OperationAttention | undefined =
+      metadata?.kind === "mutation" &&
+        metadata.presentation !== "bookkeeping" &&
+        !terminal(record) && record.error_code === null &&
+        this.#entries.get(identity(record)) === entry
+        ? record.state === "waiting" &&
+            record.progress_code === "input-required"
+          ? "blocked"
+          : "working"
+        : undefined;
+    const key = JSON.stringify([record.principal, target.kind, target.id]);
+    const before = this.operation(record.principal, target);
+    const values = this.#operations.get(key) ?? new Map();
+    if (value) values.set(identity(record), value);
+    else values.delete(identity(record));
+    if (values.size) this.#operations.set(key, values);
+    else this.#operations.delete(key);
+    if (before === this.operation(record.principal, target)) return;
+    for (const listener of this.#operationListeners) {
+      listener(record.principal, target);
+    }
+  }
   #now(): number {
     return (this.options.clock ?? Date.now)();
   }
@@ -179,7 +261,29 @@ export class RequestCoordinator {
         waiting: 0,
       };
       this.#entries.set(id, entry);
+      // Admission (including startup replay) is in durable receipt order.
+      // Keep this claim even when an earlier write lacks input or storage.
+      if (
+        !terminal(record) && policy.priority !== "interrupt" &&
+        policy.ordering === "target" &&
+        (policy.kind === "local" || policy.kind === "prepared-local")
+      ) {
+        const target = record.scope_resource
+          ? ["resource", record.scope_resource]
+          : record.scope_session
+          ? ["session", record.scope_session, record.method]
+          : record.scope_directory
+          ? ["directory", record.scope_directory, record.method]
+          : undefined;
+        if (target) {
+          entry.target = JSON.stringify([record.principal, target]);
+          const queue = this.#targets.get(entry.target) ?? new Set();
+          queue.add(entry);
+          this.#targets.set(entry.target, queue);
+        }
+      }
     }
+    this.#observe(entry);
     return entry;
   }
   #transition(entry: Entry, patch: Partial<RequestRecord>): void {
@@ -188,11 +292,15 @@ export class RequestCoordinator {
       entry.record.seq,
       { ...patch, updated_at: this.#now() },
     );
+    this.#observe(entry);
   }
-  #refresh(entry: Entry): boolean {
-    const current = this.options.receipts.get(entry.record);
+  #refresh(
+    entry: Entry,
+    current = this.options.receipts.get(entry.record),
+  ): boolean {
     if (!current || current.seq === entry.record.seq) return false;
     entry.record = current;
+    this.#observe(entry);
     for (const [recipient, ref] of entry.recipients) {
       this.#snapshot(entry, recipient, ref, true);
     }
@@ -400,11 +508,13 @@ export class RequestCoordinator {
     }
     const ref = requestRef(control.ref, this.options.bootstrap);
     let admission: { ready: Promise<void>; release(): void } | undefined;
+    let failureScope: { sessionID?: string; directory?: string } | undefined;
     try {
       const prepared = this.options.registry.prepare(
         control.method,
         control.params,
       );
+      failureScope = prepared.scope;
       if (!prepared.execution) {
         throw new ExecutionFailure({ code: "request.policy", retry: "none" });
       }
@@ -512,7 +622,7 @@ export class RequestCoordinator {
       recipient.send({
         t: "request.rejected",
         ref,
-        error: this.#failure(cause, control.method, undefined, ref.origin),
+        error: this.#failure(cause, control.method, failureScope, ref.origin),
       });
     } finally {
       admission?.release();
@@ -650,6 +760,7 @@ export class RequestCoordinator {
           return value;
         });
         entry.record = next!;
+        this.#observe(entry);
         return result;
       },
     };
@@ -665,7 +776,10 @@ export class RequestCoordinator {
     };
   }
   #schedule(entry: Entry, recover: boolean): void {
-    if (entry.work || this.#stopped) return;
+    if (entry.work || this.#stopped || this.#storagePending.has(entry)) return;
+    if (entry.target && !terminal(entry.record)) {
+      if (!entry.prepared || this.#targetHead(entry.target) !== entry) return;
+    }
     const scope = entry.record.scope_session;
     // Read/lease lifetimes never acquire an effect turn. A readiness wait yields
     // that turn, while native effects retain their independent I/O ordering.
@@ -676,23 +790,11 @@ export class RequestCoordinator {
         entry.policy.priority !== "interrupt"
       ? JSON.stringify([entry.record.principal, scope])
       : undefined;
-    const metadata = entry.policy.kind === "local" ||
-      entry.policy.kind === "prepared-local";
-    const target = entry.record.scope_resource
-      ? ["resource", entry.record.scope_resource]
-      : scope
-      ? ["session", scope, entry.record.method]
-      : entry.record.scope_directory
-      ? ["directory", entry.record.scope_directory, entry.record.method]
+    const order = entry.policy.kind === "native" && scope &&
+        entry.policy.priority !== "interrupt"
+      ? JSON.stringify([entry.record.principal, scope])
       : undefined;
-    const order = entry.policy.priority === "interrupt"
-      ? undefined
-      : entry.policy.kind === "native" && scope
-      ? JSON.stringify([entry.record.principal, "native", scope])
-      : metadata && entry.policy.ordering === "target" && target
-      ? JSON.stringify([entry.record.principal, "metadata", target])
-      : undefined;
-    const predecessor = order ? this.#effects.get(order) : undefined;
+    const predecessor = order ? this.#nativeEffects.get(order) : undefined;
     // Reserve ready work in admission order, but never reserve a turn while
     // waiting for another effect's semantic ordering permission.
     const admitted = predecessor ? undefined : this.#acquire(entry, queue);
@@ -718,16 +820,21 @@ export class RequestCoordinator {
         }
         const execution = this.#execution(entry, queue);
         entry.timer = setTimeout(() => {
-          if (this.#refresh(entry)) return;
-          if (!terminal(entry.record)) {
-            this.#progress(entry, {
-              phase: entry.record.dispatched_at === null
-                ? "waiting"
-                : "reconciling",
-              code: entry.record.dispatched_at === null
-                ? "backend-unavailable"
-                : "checking-outcome",
-            });
+          try {
+            if (this.#refresh(entry)) return;
+            if (!terminal(entry.record)) {
+              this.#progress(entry, {
+                phase: entry.record.dispatched_at === null
+                  ? "waiting"
+                  : "reconciling",
+                code: entry.record.dispatched_at === null
+                  ? "backend-unavailable"
+                  : "checking-outcome",
+              });
+            }
+          } catch (error) {
+            if (storageProblem(error)) this.#storagePending.add(entry);
+            else this.options.diagnostic?.(crypto.randomUUID(), error);
           }
         }, this.options.policy.livenessms);
         try {
@@ -780,6 +887,13 @@ export class RequestCoordinator {
           this.#complete(entry, result);
         } catch (cause) {
           if (this.#stopped || entry.record.state === "released") return;
+          if (storageProblem(cause)) {
+            // The durable state is authoritative. A failed commit is not a
+            // terminal result, and trying to persist that failure can fail too.
+            this.#storagePending.add(entry);
+            this.options.diagnostic?.(crypto.randomUUID(), cause);
+            return;
+          }
           // A losing CAS is ownership evidence, never a failed user action.
           if (this.#refresh(entry)) return;
           if (entry.record.state === "succeeded") {
@@ -839,11 +953,14 @@ export class RequestCoordinator {
           }
         }
       },
-    );
+    ).catch((error) => {
+      if (storageProblem(error)) this.#storagePending.add(entry);
+      else throw error;
+    });
     entry.work = work;
     this.#jobs.add(work);
     if (order) {
-      this.#effects.set(order, work);
+      this.#nativeEffects.set(order, work);
     }
     const finish = () => {
       if (cancelled) {
@@ -851,12 +968,27 @@ export class RequestCoordinator {
       }
       this.#jobs.delete(work);
       entry.work = undefined;
-      if (order && this.#effects.get(order) === work) {
-        this.#effects.delete(order);
+      if (order && this.#nativeEffects.get(order) === work) {
+        this.#nativeEffects.delete(order);
       }
+      this.#releaseTarget(entry);
       this.#retire(entry);
     };
     void work.then(finish, finish);
+  }
+  #targetHead(target: string): Entry | undefined {
+    return this.#targets.get(target)?.values().next().value;
+  }
+  #releaseTarget(entry: Entry): void {
+    const target = entry.target;
+    if (!target || !terminal(entry.record)) return;
+    const queue = this.#targets.get(target)!;
+    const wasFirst = this.#targetHead(target) === entry;
+    queue.delete(entry);
+    entry.target = undefined;
+    if (!queue.size) this.#targets.delete(target);
+    const next = wasFirst ? this.#targetHead(target) : undefined;
+    if (next) this.#schedule(next, false);
   }
   #complete(entry: Entry, result: unknown): void {
     if (!terminal(entry.record)) {
@@ -888,7 +1020,10 @@ export class RequestCoordinator {
     if (
       terminal(entry.record) && !entry.result && !entry.recipients.size &&
       !entry.work
-    ) this.#entries.delete(identity(entry.record));
+    ) {
+      this.#entries.delete(identity(entry.record));
+      this.#observe(entry);
+    }
   }
   #lifetime(entry: Entry): RequestLifetime | undefined {
     const recipient = entry.recipients.keys().next().value;
@@ -958,7 +1093,45 @@ export class RequestCoordinator {
   async idle(): Promise<void> {
     while (this.#jobs.size) await Promise.all([...this.#jobs]);
   }
+  storageRecovered(): void {
+    if (this.#stopped) return;
+    for (const entry of [...this.#storagePending]) {
+      if (entry.work) continue;
+      try {
+        const current = this.options.receipts.get(entry.record);
+        if (!current) {
+          throw new Error("Missing receipt during storage recovery");
+        }
+        this.#refresh(entry, current);
+      } catch (error) {
+        // One failed read cannot authorize execution or retire this retry.
+        // Continue to any other receipts that can be refreshed this time.
+        try {
+          this.options.diagnostic?.(crypto.randomUUID(), error);
+        } catch { /* Diagnostics do not own recovery. */ }
+        continue;
+      }
+      this.#storagePending.delete(entry);
+      this.#releaseTarget(entry);
+      if (
+        !terminal(entry.record) ||
+        entry.record.state === "succeeded" && !entry.result &&
+          entry.recipients.size
+      ) {
+        this.#schedule(
+          entry,
+          entry.record.dispatched_at !== null || terminal(entry.record),
+        );
+      }
+      this.#retire(entry);
+    }
+  }
   maintenance(): number {
+    // The recovery edge may arrive while a job is still unwinding, or a
+    // receipt read can fail without producing another availability edge.
+    if (!this.options.registry.context.store.availability.status().degraded) {
+      this.storageRecovered();
+    }
     const now = this.#now(), limit = this.options.policy.sweepbatch;
     this.#maintenance ??= this.#entries.values();
     for (let count = 0; count < limit; count++) {
@@ -987,15 +1160,22 @@ export class RequestCoordinator {
       clearTimeout(entry.timer);
       entry.recipients.clear();
       if (!terminal(entry.record) && entry.record.dispatched_at !== null) {
-        this.#transition(entry, {
-          state: "reconciling",
-          progress_code: "checking-outcome",
-        });
+        try {
+          this.#transition(entry, {
+            state: "reconciling",
+            progress_code: "checking-outcome",
+          });
+        } catch (error) {
+          if (!storageProblem(error)) throw error;
+        }
       }
       entry.controller.abort();
     }
     await this.idle();
     this.#entries.clear();
+    this.#targets.clear();
+    this.#operations.clear();
+    this.#storagePending.clear();
     this.#resultBytes = 0;
   }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { openLatestWork, workPanel } from "../../pages/transcript.ts";
 import { openSession } from "../../fixtures/wire.ts";
 
 test.use({ profile: "contract-messages-disclosures" });
@@ -8,16 +9,14 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
   tag: ["@messages", "@menus", "@contracts"],
 }, async ({ isolatedState: state, page }) => {
   await openSession(state, page, "tstv1-otk");
-  const fold = page.locator(".otk-work-fold");
-  await expect(fold).toHaveAttribute("aria-expanded", "false");
+  const strip = page.locator(".otk-work-strip");
+  await expect(strip).toBeVisible();
   await state.product("prefs.set", { key: "expandWork", value: true });
-  await expect(fold).toHaveAttribute("aria-expanded", "true");
-  await fold.click();
-  await state.product("prefs.set", { key: "expandWork", value: false });
-  await state.product("prefs.set", { key: "expandWork", value: true });
-  await expect(fold).toHaveAttribute("aria-expanded", "false");
   await page.reload();
-  await expect(fold).toHaveAttribute("aria-expanded", "true");
+  await expect(strip).toBeVisible();
+  await expect(workPanel(page)).toHaveCount(0);
+  await openLatestWork(page);
+  await expect(strip).toHaveAttribute("aria-current", "true");
   const tool = page.locator(".otk-tool-toggle");
   await expect(tool).toHaveAttribute("aria-expanded", "false");
   await state.product("prefs.set", {
@@ -43,7 +42,6 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
   );
   for (
     const key of [
-      "expandWork",
       "expandToolOutput",
       "expandSystem",
       "expandDelegation",
@@ -51,18 +49,22 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
       "expandRecords",
       "expandSource",
       "expandCompaction",
+      "expandStepMarkers",
+      "expandSnapshots",
     ] as const
   ) {
     const input = settings.locator(`input[name=${key}]`);
-    const baseline = key === "expandWork";
-    if (baseline) await expect(input).toBeChecked();
-    else await expect(input).not.toBeChecked();
+    await expect(input).not.toBeChecked();
     await input.click();
     await expect.poll(async () => (await state.product("prefs.get", {}))[key])
-      .toBe(!baseline);
+      .toBe(true);
   }
   await expect(settings.locator("input[name=expandCompaction]"))
     .toHaveAccessibleName("Always keep session compaction expanded");
+  await expect(settings.locator("input[name=expandStepMarkers]"))
+    .toHaveAccessibleName("Expand step markers by default");
+  await expect(settings.locator("input[name=expandSnapshots]"))
+    .toHaveAccessibleName("Expand snapshots by default");
   await page.reload();
   await page.locator(".otk-settings-entry").click();
   for (
@@ -73,11 +75,13 @@ test("messages.disclosure-settings-save-reload-and-explicit-choice", {
       "expandRecords",
       "expandSource",
       "expandCompaction",
+      "expandStepMarkers",
+      "expandSnapshots",
     ]
   ) {
     await expect(settings.locator(`input[name=${key}]`)).toBeChecked();
   }
-  await expect(settings.locator("input[name=expandWork]")).not.toBeChecked();
+  await expect(settings.locator("input[name=expandWork]")).toHaveCount(0);
   await expect(settings.locator("input[name=expandToolOutput]")).toBeChecked();
 });
 
@@ -95,7 +99,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     });
     await expect(settings).toBeVisible();
     await expect(settings.locator("select")).toHaveCount(0);
-    await expect(settings.getByRole("checkbox")).toHaveCount(12);
+    await expect(settings.getByRole("checkbox")).toHaveCount(13);
     await expect(
       settings.getByRole("region", { name: "Tool visibility", exact: true })
         .getByRole("checkbox"),
@@ -104,7 +108,6 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       const key of [
         "thinking",
         "collapseFileChanges",
-        "expandWork",
         "expandToolOutput",
         "expandSystem",
         "expandDelegation",
@@ -112,6 +115,8 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         "expandRecords",
         "expandSource",
         "expandCompaction",
+        "expandStepMarkers",
+        "expandSnapshots",
       ]
     ) {
       await expect(settings.locator(`input[name=${key}]`)).not.toBeChecked();
@@ -134,7 +139,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     });
     await compaction.click();
     await expect(compaction).toBeChecked();
-    await settings.locator("input[name=expandWork]").hover();
+    await settings.locator("input[name=expandToolOutput]").hover();
     await page.screenshot({
       path: info.outputPath(`${theme}-on.png`),
       fullPage: true,
@@ -244,21 +249,20 @@ test.describe("required failure rows", () => {
       await page.goto(`${state.url}/#/local/tstv1-core`);
       for (const reload of [false, true]) {
         if (reload) await page.reload();
-        await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-          "aria-expanded",
-          "true",
-        );
+        await expect(page.locator(".otk-work-strip")).toContainText("1 failed");
+        await openLatestWork(page);
         const row = page.locator("[data-tool=external]");
         await expect(row).toHaveAttribute("data-tool-status", "completed");
         await expect(row).toHaveClass(/is-error/);
         await expect(row.locator(".otk-tool-toggle")).toHaveAttribute(
           "aria-expanded",
-          "false",
+          "true",
         );
-        await expect(row.locator(".otk-tool-toggle")).toContainText(
+        await expect(row.locator(".otk-failure-main-reason")).toHaveText(
           "Nested call failed: usage limit reached",
         );
-        await expect(row.locator(".otk-tool-body")).toHaveCount(0);
+        await expect(row.locator(".otk-failure-main-reason")).toBeVisible();
+        await expect(row.locator(".otk-tool-body")).toBeVisible();
       }
     },
   );

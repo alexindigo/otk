@@ -80,6 +80,13 @@ appear through registered global surfaces with project attention. They never
 acquire a fabricated qualified session ID. Explicit settlement events retire
 pending requests even when another inventory is unavailable.
 
+Permission-not-found/already-settled tags and definite permission HTTP 404s
+retire the same pending identity as settled elsewhere. A later reply is a no-op
+only for a confirmed settlement. If no route is available and settlement is
+unproven, the reply fails without dispatch. Settlement barriers last for the
+pending owner's lifetime; stale inventories and events cannot resurrect them
+after a fixed number of newer settlements.
+
 Each successful kind/location inventory owns only its own absence facts. Failed
 inventories retain known unresolved identities and payloads for still-loaded
 directories but stale identities never drive needs-you. Failures publish safe
@@ -100,14 +107,18 @@ resyncs before readiness. Snapshot acquisition returns a fenced commit; abort
 joins acquisition and event work before closing. Execution facts survive
 decodable frames whose unrelated fields drift. The SDK event queue is unused.
 
-The byte reader owns one outstanding next-chunk read while ordered dispatch is
-backpressured, allowing real HTTP EOF/read failure to retire that generation. It
-does not drain more chunks or parse events concurrently; bootstrap event/byte
-admission is unchanged. Body cancellation joins the owned read before releasing
-its lock. Execution-failure facts and anchor reads borrow that generation's
-signal as well as transcript lifetime, so teardown cannot wait on a read whose
-cancellation was dropped. Ordinary source failures still retain their diagnostic
-and failure record; cancellation does not become a new failure.
+The parser feeds one ordered dispatcher under the existing replay operation/byte
+budgets, so backlog is counted rather than hidden in transport buffering. One
+parser frame and one next-chunk read can wait outside that queue. Native order,
+including each session's ephemeral settlements and durable watermarks, is kept.
+Body cancellation joins both the owned read and dispatcher before releasing its
+lock. Dispatch diagnostics report received/handled counts, queued bytes/events,
+oldest age, native creation-to-handling lag, active type and handler time; the
+application's existing diagnostic sink records these every ten seconds.
+Execution-failure facts and anchor reads borrow that generation's signal as well
+as transcript lifetime, so teardown cannot wait on a read whose cancellation was
+dropped. Ordinary source failures still retain their diagnostic and failure
+record; cancellation does not become a new failure.
 
 The adapter composes scalar connection/index facts with qualified catalog
 capabilities. The worker's `core/digest/providers.ts` selects native codecs,
@@ -119,6 +130,22 @@ unknown. Startup publishes grouped population facts, never an idle session/body
 catalog. Keyed hydration follows helper ancestry, independently of transcript
 subscriptions. Active executions and loaded-location pending inventories keep
 lamps live.
+
+Permission/form events update only their own pending identity and ancestor
+attention deltas, never re-read every location or active family. Pending counts
+and running shells have keyed indexes; the shared metadata index's topology
+observations keep attention and live request delivery coherent for descendants
+when another producer learns or moves an ancestor. Requests without a location
+wait in V2Pending until keyed metadata or inventory supplies it. This path does
+not depend on request-history writes succeeding. Metadata, project and
+topology-inventory refreshes coalesce by key outside event dispatch. Obsolete
+reads cannot publish over a newer request or deletion; an inventory cannot
+retire/stale requests delivered during its acquisition. Native metadata events
+use scalar session facts and observed activity clocks rather than scanning
+message bodies for recency. Missing shell identities use one demand-owned,
+cancellable lookup outside dispatch, releasing each bounded page. Refresh
+failures retire the stream generation for canonical resync, and refresh queue
+pressure accompanies the dispatch diagnostics.
 
 After requested work drains, the shared scheduler can discover scalar sessions
 in Active projects through bounded newest-first SQL keysets or native API
@@ -215,6 +242,34 @@ durable observation indexes, bounded page merge, revert and deletion lifetime.
 Their native source is loaded only through the plugin's opaque source reference.
 Native shutdown is continuity loss, never an invented idle success.
 
+Acquired transcripts independently compare a keyed native-head witness (ID,
+sequence and update time) at the existing recovery cadence. A changed witness
+repairs the checkpoint and its native forward suffix in bounded pages, through
+the same classifier; stream upserts alone never certify that interval. In-place
+content replacements reacquire their native identity. Unknown/unmapped changes
+request canonical repair, and stream handler/decoding failures reconnect and
+resync instead of logging a dropped fact. These checks borrow the credited
+worker read channel, acquire no unviewed histories and stop/join with the
+transcript subscription. Only scalar coverage is retained, never a second body
+cache.
+
+Fine recovery owns its keyed point checkpoints, including unavailable reads;
+history observation cannot silently retry or replace that ownership. An initial
+held page accumulates repair hints until its boundary settles instead of
+invalidating its own acquisition. HTTP content never consumes a later native
+append start; only an event-owned stream buffer does. The existing compaction
+owner likewise retains live summary prefixes and terminal lifecycle against
+older unfinished native checkpoints.
+
+`delivery.ts` recognizes only materialized synthetic subagent reports and
+completed foreground calls whose result metadata is completed. Background
+launches, enqueue and job removal do not qualify. Native parent/child identity,
+terminal history and invocation clocks fence correlation; a synthetic with
+multiple possible child runs stays unacknowledged. Bounded message/part keysets
+project scalars for the worker's private delivery index, including split and
+legacy-inline calls. Source/revision-fenced cursors resume after restart; cached
+replay does not scan parent history. No receipt body is retained.
+
 Recognized subagent envelopes are removed only by exact metadata-derived
 prefix/suffix matching; malformed source remains inspectable. Foreground
 delegation renders Markdown blocks, while shell output remains literal. Optional
@@ -251,6 +306,10 @@ credential filter before publication or storage, never raw response/config
 bodies. Drafts remain owned by the composer when submit rejects. Unknown
 outcomes retain their existing reconciliation semantics, without a fabricated
 retry action.
+
+Successful native idle records declare neutral footer completion placement.
+Failed and interrupted outcomes do not. The canonical client interval retains
+their source and inspection paths without decoding native outcome words.
 
 The retained failure supplies a neutral record reference, so FP1 presents its
 facts only at that record and projects other feedback as a short reference.
@@ -336,6 +395,11 @@ authority.
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
 progress share it; `sourceName` stays native. SQL requests only its declared,
 bounded scalar fields and never tool input/output bodies for helper summaries.
+Stock V2 does not persist the running tool's progress metadata. The transcript
+owner retains the exact observed parent/message/call -> child identity in its
+plugin namespace, independently of viewers. Only a matching native running task
+can borrow that edge after restart; terminal tool metadata remains native
+authority. Progress is reacquired by the existing child read, not persisted.
 
 Turn timing supplies native streamed model intervals and scalar tool clocks to
 the shared accumulator. Bounded header batches project clocks, never tool

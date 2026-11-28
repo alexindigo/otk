@@ -58,35 +58,35 @@ const owned = (tabs: ReturnType<typeof model>, ids: string[]) =>
     ]),
   );
 
-Deno.test("tab groups row 1: sibling phantoms own disjoint trails and quiet viewing stays with its ancestor", () => {
+Deno.test("tab groups row 1: sibling helpers share one human group and quiet viewing stays with its ancestor", () => {
   const rows = [entry("R"), entry("A", "R"), entry("B", "R"), entry("C", "R")];
   for (const row of rows.slice(0, 3)) row.status = "busy";
   const tabs = model();
   try {
     tabs.update({ directory: "/p", entries: rows, inbox: inbox() });
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
-      R: ["R", "C"],
-      A: ["A"],
-      B: ["B"],
+      R: ["R", "A", "B", "C"],
     });
     for (const id of ["R", "A", "B"]) {
-      tabs.select({ kind: "session", id });
-      assertEquals(tabs.state.selected, { kind: "session", id });
+      tabs.preview(id);
+      assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+      assertEquals(tabs.trail().task, "task:session/R");
       assertEquals(
         tabs.crumbs().filter((crumb) => !crumb.external).map((crumb) =>
           crumb.id
         ),
-        [id],
+        id === "R" ? ["R"] : ["R", id],
       );
       assertEquals(
         tabs.crumbs().filter((crumb) => crumb.external).map((crumb) =>
           crumb.id
         ),
-        id === "R" ? [] : ["R"],
+        [],
       );
     }
     tabs.preview("C");
     assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "C"]);
     tabs.select({ kind: "session", id: "R" });
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R"]);
@@ -95,21 +95,44 @@ Deno.test("tab groups row 1: sibling phantoms own disjoint trails and quiet view
   }
 });
 
-Deno.test("tab groups row 2: an explicit child task has an ancestor link, never a second membership", () => {
+Deno.test("tab groups row 2: legacy child tasks cannot split human membership", () => {
   const rows = [entry("X"), entry("Y", "X")],
     tasks = [task("T1", ["X"]), task("T2", ["Y"])];
   rows[1].status = "busy";
   const tabs = model();
   try {
     tabs.update({ directory: "/p", entries: rows, inbox: inbox(tasks) });
-    assertEquals(owned(tabs, ["X", "Y"]), { T1: ["X"], T2: ["Y"] });
+    assertEquals(owned(tabs, ["X", "Y"]), { T1: ["X", "Y"] });
     tabs.select({ kind: "task", id: "T1" });
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["X"]);
-    tabs.select({ kind: "task", id: "T2" });
+    tabs.preview("Y");
     assertEquals(tabs.crumbs().map((crumb) => [crumb.id, !!crumb.external]), [[
       "X",
-      true,
+      false,
     ], ["Y", false]]);
+  } finally {
+    tabs.stop();
+  }
+});
+
+Deno.test("2.67 helper-only saved groups render no task tab", () => {
+  const rows = [entry("R"), entry("H", "R")];
+  const tabs = model();
+  try {
+    tabs.update({
+      directory: "/p",
+      entries: rows,
+      inbox: inbox([task("helper-only", ["H"])]),
+    });
+    tabs.preview("H");
+    assertEquals(tabs.tabs().map((tab) => [tab.kind, tab.id]), [[
+      "phantom",
+      "R",
+    ]]);
+    assertEquals(tabs.tasks(), []);
+    assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
+    assertEquals(tabs.state.sessionID, "H");
   } finally {
     tabs.stop();
   }
@@ -126,11 +149,10 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
     tabs.preview("A");
     rows[1].title = "Updated A";
     update();
-    assertEquals(tabs.state.selected, { kind: "session", id: "A" });
+    assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
-      R: ["R"],
-      A: ["A", "C"],
-      B: ["B"],
+      R: ["R", "A", "B", "C"],
     });
     const fresh = model();
     fresh.update({ directory: "/p", entries: rows, inbox: meta });
@@ -139,19 +161,17 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
     fresh.stop();
     meta.tasks = [task("T", ["A"])];
     update();
-    assertEquals(tabs.state.selected, { kind: "task", id: "T" });
+    assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
-      T: ["A", "C"],
-      R: ["R"],
-      B: ["B"],
+      R: ["R", "A", "B", "C"],
     });
     meta.tasks = [];
     update();
-    assertEquals(tabs.state.selected, { kind: "session", id: "A" });
+    assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
     assertEquals(owned(tabs, rows.map((row) => row.id)), {
-      R: ["R"],
-      A: ["A", "C"],
-      B: ["B"],
+      R: ["R", "A", "B", "C"],
     });
     const parent = entry("P", undefined, "/other"), child = entry("L", "P");
     const foreign = [parent, child], saved = [task("foreign", ["P"], "/other")];
@@ -171,8 +191,8 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
         });
         tabs.preview("L");
         assertEquals(tabs.state.selected, {
-          kind: followParent ? "task" : "session",
-          id: followParent ? "foreign" : "L",
+          kind: "task",
+          id: "foreign",
         });
         assertEquals(
           tabs.crumbs().map((crumb) => [crumb.id, !!crumb.external]),
@@ -186,7 +206,7 @@ Deno.test("tab groups row 3: metadata, reload, promotion, close and checkout tog
   }
 });
 
-Deno.test("presentation partition covers cycles, missing parents and nested tasks exactly once with wire parity", () => {
+Deno.test("presentation partition never promotes cycles or missing parents and keeps rooted helpers exactly once with wire parity", () => {
   const rows = [
     entry("R"),
     entry("A", "R"),
@@ -207,12 +227,8 @@ Deno.test("presentation partition covers cycles, missing parents and nested task
     });
     const all = result.groups.flatMap((group) => group.members);
     assertEquals(all.length, new Set(all).size);
-    assertEquals(all.toSorted(), rows.map((row) => row.id).toSorted());
+    assertEquals(all.toSorted(), ["A", "B", "C", "R"]);
     for (const group of result.groups) {
-      assertEquals(
-        group.ancestorLinks.some((id) => group.members.includes(id)),
-        false,
-      );
       for (const id of group.members) {
         assertEquals(result.owners.get(id), group);
       }
@@ -223,8 +239,9 @@ Deno.test("presentation partition covers cycles, missing parents and nested task
     if (!wire) expected = snapshot;
     else assertEquals(snapshot, expected);
     assertEquals(result.owners.get("A")?.id, "parent");
-    assertEquals(result.owners.get("C")?.id, "child");
-    assertEquals(result.owners.get("U")?.id, "V");
+    assertEquals(result.owners.get("C")?.id, "parent");
+    assertEquals(result.owners.has("U"), false);
+    assertEquals(result.owners.has("orphan"), false);
   }
 });
 
@@ -237,13 +254,13 @@ Deno.test("current inbox membership wins over independently arriving stale wire 
     A: { state: "working", terminal: 0 },
     C: { state: "working", terminal: 0 },
   };
-  const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
+  const tabs = createTabs(() => Promise.reject(Error("No promotion")));
   const update = () =>
     tabs.update({ directory: "/p", entries: context, inbox: meta });
   try {
     update();
     tabs.preview("A");
-    meta.tasks = [task("T", ["A"])];
+    meta.tasks = [task("T", ["R"])];
     update();
     assertEquals(tabs.state.selected, { kind: "task", id: "T" });
     assertEquals(tabs.belongsToTab("T", "C"), true);
@@ -252,13 +269,14 @@ Deno.test("current inbox membership wins over independently arriving stale wire 
     context.forEach((row) => row.hierarchy = grouped.get(row.id));
     meta.tasks = [];
     update();
-    assertEquals(tabs.state.selected, { kind: "session", id: "A" });
-    assertEquals(tabs.tabs().map((tab) => tab.id).toSorted(), ["A", "C"]);
+    assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+    assertEquals(tabs.trail().task, "task:session/R");
+    assertEquals(tabs.tabs().map((tab) => tab.id).toSorted(), ["R"]);
     assertEquals(
       tabs.crumbs().filter((crumb) => crumb.kind === "member").map((crumb) =>
         crumb.id
       ),
-      ["A"],
+      ["R", "A"],
     );
   } finally {
     tabs.stop();
@@ -270,27 +288,26 @@ for (
     "working",
     "needsYou",
     "finishedUnseen",
-    "dependencies",
   ] as const
 ) {
-  Deno.test(`independent phantom ${state} owns its lamp, survives selection and retires only after departure`, () => {
+  Deno.test(`human group rolls up helper ${state}, survives selection and retires only after departure`, () => {
     const rows = [entry("R"), entry("A", "R"), entry("C", "A")];
     const meta = inbox();
     meta.supervision = {
       A: {
-        state: state === "dependencies" ? "none" : state,
+        state,
         terminal: 1,
-        ...(state === "dependencies" ? { dependencies: { running: 1 } } : {}),
       },
     };
-    const tabs = canonicalTabs(() => Promise.reject(Error("No promotion")));
+    const tabs = createTabs(() => Promise.reject(Error("No promotion")));
     const update = () =>
       tabs.update({ directory: "/p", entries: rows, inbox: meta });
     try {
       update();
       tabs.preview("A");
-      assertEquals(tabs.state.selected, { kind: "session", id: "A" });
-      const phantom = tabs.tabs().find((tab) => tab.id === "A")!;
+      assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+      assertEquals(tabs.trail().task, "task:session/R");
+      const phantom = tabs.tabs().find((tab) => tab.id === "R")!;
       assertEquals(
         phantom.status,
         state === "needsYou"
@@ -299,15 +316,15 @@ for (
           ? "finished"
           : state,
       );
-      if (state === "dependencies") assertEquals(phantom.dependencies, 1);
-      assertEquals(tabs.belongsToTab("A", "C"), true);
+      assertEquals(tabs.belongsToTab("R", "C"), true);
       assertEquals(tabs.crumbs().map((crumb) => [crumb.id, crumb.kind]), [[
         "R",
-        "ancestor",
+        "member",
       ], ["A", "member"]]);
       meta.supervision = {};
       update();
-      assertEquals(tabs.state.selected, { kind: "session", id: "A" });
+      assertEquals(tabs.state.selected, { kind: "session", id: "R" });
+      assertEquals(tabs.trail().task, "task:session/R");
       tabs.preview("R");
       assertEquals(tabs.tabs().map((tab) => tab.id), ["R"]);
       assertEquals(tabs.belongsToTab("R", "A"), true);
@@ -372,12 +389,57 @@ Deno.test("review: sparse hierarchy cannot create absent phantoms but keeps rese
   const rows = [entry("C", "P")];
   const hierarchy = new Map();
   const orphan = projectTabGroups(rows, [], { hierarchy });
-  assertEquals(orphan.owners.get("C")?.id, "C");
+  assertEquals(orphan.owners.get("C"), undefined);
   assertEquals(orphan.owners.has("P"), false);
-  assertEquals(orphan.groups.map((group) => group.members), [["C"]]);
+  assertEquals(orphan.groups, []);
   const reserved = projectTabGroups(rows, [task("T", ["P"])], { hierarchy });
   assertEquals(reserved.owners.get("C")?.id, "T");
   assertEquals(reserved.groups.map((group) => group.members), [["P", "C"]]);
+});
+
+Deno.test("explicit helper tasks cannot cut a cross-checkout subtree out of its human root's tab", () => {
+  const rows = [
+    entry("R"),
+    entry("H", "R", "/other"),
+    entry("G", "H", "/third"),
+  ];
+  const root = task("root", ["R"]);
+  const conflict = task("conflict", ["H"], "/other");
+  const saved = [conflict, root];
+  const wire = projectSessionHierarchy(rows, saved, { followParent: true });
+  const sparse = new Map(wire);
+  sparse.delete("R");
+  for (
+    const [catalog, hierarchy] of [[rows, undefined], [rows, wire], [
+      rows.slice(1),
+      sparse,
+    ]] as const
+  ) {
+    const groups = projectTabGroups(catalog, saved, {
+      directory: "/p",
+      followParent: true,
+      hierarchy,
+    });
+    assertEquals(groups.groups.map((group) => [group.id, group.members]), [
+      ["root", ["R", "H", "G"]],
+    ]);
+    assertEquals(groups.owners.get("H"), groups.owners.get("R"));
+    assertEquals(groups.owners.get("G"), groups.owners.get("R"));
+  }
+  const tabs = model();
+  try {
+    tabs.update({
+      directory: "/p",
+      entries: [rows[0]],
+      context: rows,
+      followParent: true,
+      inbox: inbox(saved),
+    });
+    tabs.select({ kind: "task", id: "root" });
+    assertEquals(tabs.belongsToTab("root", "H"), true);
+  } finally {
+    tabs.stop();
+  }
 });
 
 Deno.test("review: reserved parent inheritance survives populated hierarchy and checkout scoping", () => {
@@ -399,14 +461,13 @@ Deno.test("review: reserved parent inheritance survives populated hierarchy and 
       ]
     ) {
       const result = projectTabGroups(rows, foreign, { directory, hierarchy });
-      assertEquals(result.owners.get("C")?.id, "C");
-      assertEquals(result.owners.get("C")?.kind, "session");
+      assertEquals(result.owners.get("C"), undefined);
     }
   }
   const catalog = [entry("P", undefined, "/other"), ...rows];
   assertEquals(
     projectTabGroups(catalog, [], { hierarchy: new Map() }).owners.get("C")?.id,
-    "C",
+    undefined,
   );
   const nested = projectTabGroups(rows, [task("nested", ["P"], "/p/src")], {
     directory: "/p",
@@ -415,7 +476,7 @@ Deno.test("review: reserved parent inheritance survives populated hierarchy and 
   assertEquals(nested.owners.get("C")?.id, "nested");
 });
 
-Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mandatory evidence", () => {
+Deno.test("review: hierarchy-only mandatory membership cannot invent trail activity", () => {
   const rows = [entry("R"), entry("C", "R")], saved = [task("T", ["R"])];
   const nodes = projectSessionHierarchy(rows, saved, {
     mandatory: (id) => id === "C",
@@ -426,7 +487,7 @@ Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mand
   try {
     tabs.update({ directory: "/p", entries: context, inbox: meta });
     tabs.select({ kind: "task", id: "T" });
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "C"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R"]);
     for (
       const [entries, projection] of [[context, undefined], [
         rows,
@@ -467,14 +528,15 @@ Deno.test("review: standalone crumbs and top-line tabs share hierarchy-only mand
   }
 });
 
-Deno.test("answer 1: quiet intermediate members retire even on the open member's ancestry", () => {
+Deno.test("D67/D3: quiet selection and every known ancestor are real breadcrumbs", () => {
   const rows = [entry("R"), entry("Q", "R"), entry("C", "Q"), entry("S", "R")];
   const tabs = model();
   try {
     tabs.update({ directory: "/p", entries: rows, inbox: inbox() });
     tabs.preview("C");
     assertEquals(tabs.belongsToTab("R", "Q"), true);
-    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "C"]);
+    assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R", "Q", "C"]);
+    assertEquals(tabs.path().map((crumb) => crumb.id), ["R", "Q", "C"]);
     tabs.select({ kind: "session", id: "R" });
     assertEquals(tabs.crumbs().map((crumb) => crumb.id), ["R"]);
   } finally {

@@ -23,12 +23,14 @@ export default function PrimaryAction(props: {
       class={props.class}
       data-primary-action="true"
       aria-label={props.state.label}
-      disabled={!props.state.available}
+      aria-disabled={props.state.available ? "false" : "true"}
       aria-busy={props.state.pending ? "true" : "false"}
       aria-description={props.state.reason ?? props.description}
       title={props.state.reason ?? props.title ?? props.state.label}
-      onClick={() => {
-        if (props.type !== "submit") props.onInvoke();
+      onClick={(event) => {
+        // aria-disabled preserves focus, but does not suppress activation.
+        if (!props.state.available) event.preventDefault();
+        else if (props.type !== "submit") props.onInvoke();
       }}
     >
       {props.children ?? props.state.label}

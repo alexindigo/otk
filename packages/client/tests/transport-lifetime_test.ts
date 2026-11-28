@@ -2,14 +2,17 @@
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { SidecarConnection } from "../connection.ts";
+import type { ServerContinuity } from "../server-continuity.ts";
 import { createSidecars } from "../sidecars.ts";
 import { FeedbackFailure } from "../failures.ts";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import {
   bootstrapFetch,
+  fixtureRequestPolicy,
   fixtureRequests,
   replyRequest,
 } from "../../../tests/support/request-wire.ts";
+import { bounded } from "../../../tests/support/resources.ts";
 
 class Socket {
   readyState: number = WebSocket.CONNECTING;
@@ -29,13 +32,13 @@ class Socket {
     this.readyState = WebSocket.OPEN;
     this.onopen?.();
   }
-  welcome() {
+  welcome(requests = fixtureRequests()) {
     this.onmessage?.({
       data: JSON.stringify({
         t: "welcome",
         protocol: PROTOCOL_VERSION,
         messages: fixtureMessagePolicy,
-        requests: fixtureRequests(),
+        requests,
         sidecar: {
           version: "test",
           harness: {
@@ -49,6 +52,188 @@ class Socket {
     });
   }
 }
+Deno.test("view changes preserve the ordered inbox patch stream but fence old snapshots", async () => {
+  const socket = new Socket();
+  const frames: string[] = [];
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame(frame) {
+      frames.push(frame.t);
+    },
+  }, {
+    fetcher: bootstrapFetch(),
+    socket: () => socket as unknown as WebSocket,
+  });
+  try {
+    await connection.connect();
+    socket.open();
+    socket.welcome();
+    const previous = connection.viewEpoch;
+    connection.view({ directory: "/project", crumbs: [], rows: [] });
+    for (const t of ["index.snapshot", "inbox.snapshot", "inbox.patch"]) {
+      socket.onmessage!({
+        data: JSON.stringify({ t, epoch: previous }),
+      });
+    }
+    assertEquals(frames, ["welcome", "inbox.patch"]);
+  } finally {
+    connection.stop();
+  }
+});
+Deno.test("incompatible hello and welcome publish OTK was updated with an owner-supplied Reload", async () => {
+  for (
+    const frame of [
+      {
+        t: "error",
+        code: "protocol",
+        reason: "client-outdated",
+        protocol: 999,
+        build: "new-build",
+      },
+      { t: "error", code: "protocol" },
+      { t: "welcome", protocol: 999 },
+    ]
+  ) {
+    const socket = new Socket();
+    let continuity: ServerContinuity | undefined;
+    let latest: {
+      state: string;
+      error?: string;
+    } | undefined;
+    let reloads = 0;
+    const connection = new SidecarConnection("http://example.test", {
+      status(state, error) {
+        latest = { state, error };
+      },
+      continuity(value) {
+        continuity = value;
+      },
+      frame() {},
+    }, {
+      fetcher: bootstrapFetch(),
+      socket: () => socket as unknown as WebSocket,
+      reload: () => {
+        reloads++;
+      },
+    });
+    try {
+      await connection.connect();
+      const pending = connection.requests.start("session.prompt", {
+        sessionID: "tstv1-pending",
+        mode: "normal",
+        parts: [{ kind: "text", text: "kept" }],
+      });
+      socket.open();
+      socket.onmessage!({ data: JSON.stringify(frame) });
+      assertEquals(pending.state.connection, "client-outdated");
+      assertEquals(latest?.state, "client outdated");
+      assertEquals(latest?.error, undefined);
+      assertEquals(continuity, {
+        kind: "updated",
+        protocol: "protocol" in frame ? frame.protocol : undefined,
+        build: "build" in frame ? frame.build : undefined,
+      });
+      await connection.reload();
+      assertEquals(reloads, 1);
+      assertEquals(socket.closed, 1);
+    } finally {
+      connection.stop();
+    }
+  }
+});
+Deno.test("restart 503s at admission and request-events reconnect automatically and renew the request window", async () => {
+  const policy = { ...fixtureRequestPolicy, retrybase: 1, retrymax: 2 };
+  const sockets: Socket[] = [];
+  const statuses: { state: string; error?: string }[] = [];
+  const recovered = Promise.withResolvers<void>();
+  const bootstrap = bootstrapFetch();
+  let restarting = false, admissions = 0, unavailableAt = 0, retriedAt = 0;
+  const connection = new SidecarConnection("http://example.test", {
+    status(state, error) {
+      statuses.push({ state, error });
+      if (state === "connected" && restarting) recovered.resolve();
+    },
+    frame() {},
+  }, {
+    policy,
+    fetcher(input, init) {
+      const events = String(input).endsWith("request-events");
+      if (restarting) {
+        if (!events && ++admissions === 1) {
+          unavailableAt = performance.now();
+          return Promise.resolve(
+            new Response("Starting", {
+              status: 503,
+              headers: { "Retry-After": "1" },
+            }),
+          );
+        }
+        if (!events && admissions === 2) retriedAt = performance.now();
+        if (events && admissions === 2) {
+          return Promise.resolve(
+            new Response("proxy unavailable", { status: 503 }),
+          );
+        }
+      }
+      return bootstrap(input, init);
+    },
+    socket() {
+      const socket = new Socket();
+      sockets.push(socket);
+      if (restarting) {
+        queueMicrotask(() => {
+          socket.open();
+          socket.welcome({ ...fixtureRequests(), policy });
+        });
+      }
+      return socket as unknown as WebSocket;
+    },
+  });
+  try {
+    await connection.connect();
+    sockets[0].open();
+    sockets[0].welcome({ ...fixtureRequests(), policy });
+    const pending = connection.rpc.start("usage.get", {
+      sessionID: "s",
+      turnID: "user",
+    });
+    const oldWindow = pending.state.ref.window;
+    restarting = true;
+    sockets[0].onclose!();
+    await bounded(
+      "503 restart must reconnect without reload",
+      recovered.promise,
+      3000,
+    );
+    assertEquals(admissions, 3);
+    assert(
+      retriedAt - unavailableAt >= 990,
+      "Retry-After must be honored beyond retrymax",
+    );
+    assertEquals(statuses.some(({ error }) => error !== undefined), false);
+    assert(statuses.some(({ state }) => state === "reconnecting"));
+    assertEquals(statuses.at(-1)?.state, "connected");
+    assert(
+      pending.state.ref.window !== oldWindow,
+      "WP14 renews the pending read",
+    );
+    const fresh = connection.rpc.start("usage.get", {
+      sessionID: "fresh",
+      turnID: "user",
+    });
+    assertEquals(fresh.state.ref.window, pending.state.ref.window);
+    fresh.release();
+    replyRequest(connection.rpc, {
+      t: "request",
+      ref: pending.state.ref,
+      method: "usage.get",
+      params: {},
+    }, { sessionID: "s", turnID: "user" });
+    assertEquals((await pending.result).sessionID, "s");
+  } finally {
+    connection.stop();
+  }
+});
 Deno.test("@load @transport first-page acceptance waits for the consumer and fences selection ABA and reconnect", async () => {
   const sockets: Socket[] = [], renders: (() => void)[] = [];
   const connection = new SidecarConnection("http://example.test", {

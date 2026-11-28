@@ -38,16 +38,17 @@ export async function sessionActionsScenario(history = true) {
       ...session,
       revert: messageID
         ? {
-          messageID,
-          messageCount: 1,
+          boundaryID: messageID,
+          messageIDs: [messageID],
           files: code
             ? [{ path: "src/session.ts", additions: 2, deletions: 1 }]
             : [],
-          prompts: [{
-            messageID,
-            preview: input,
+          prompt: {
+            input,
+            mode: "normal",
+            parts: [{ kind: "text", text: input }],
             time: 1,
-          }],
+          },
         }
         : undefined,
     };
@@ -164,7 +165,7 @@ export async function sessionActionsScenario(history = true) {
         inline: [{
           i: "text",
           text:
-            "Revert to here changes the conversation. Revert code changes also rolls back the edited files. Restore remains available until the next prompt.",
+            "Revert from here changes the conversation. Revert code changes also rolls back the edited files. Restore remains available until the next prompt.",
         }],
       }],
     }],
@@ -191,12 +192,21 @@ export async function sessionActionsScenario(history = true) {
       return Promise.resolve({
         ...fixturePage(
           id,
-          options.before ? [] : messages,
+          options.scope?.validate || options.before
+            ? []
+            : options.scope
+            ? messages.filter((message) =>
+              options.scope!.messageIDs.includes(message.id)
+            )
+            : messages,
           undefined,
           session,
           replay.clock(id),
         ),
         version: replay.version(id),
+        ...(options.scope
+          ? { revisions: replay.revisions(id, options.scope.messageIDs) }
+          : {}),
       });
     };
   }

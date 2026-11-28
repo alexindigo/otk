@@ -1,53 +1,28 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
-import {
-  CommandHub,
-  createPrimaryAction,
-  promptUnavailable,
-} from "@otk/client";
+import { CommandHub, createPrimaryAction } from "@otk/client";
 
-Deno.test("primary action stays visible, reports actual blockers and admits no unavailable intent", async () => {
-  const ready = {
-    active: true,
-    suspended: false,
-    connected: true,
-    supported: true,
-    content: true,
-    chips: [],
-  };
-  const cases = [
-    [{ content: false }, "Write a message"],
-    [{ connected: false }, "Reconnect to send"],
-    [{ supported: false }, "Sending is not supported here"],
-    [{ suspended: true }, "Answer the pending request first"],
-    [{ active: false }, "Composer is no longer active"],
-    [{ chips: [{ pending: true }] }, "Waiting for attachment"],
-    [
-      { chips: [{ error: "upload rejected" }] },
-      "Remove or retry the failed attachment",
-    ],
-  ] as const;
-  let calls = 0;
-  for (const [facts, reason] of cases) {
-    const owner = createPrimaryAction({
-      label: () => "Send",
-      unavailable: () => promptUnavailable({ ...ready, ...facts }),
-      pendingReason: "Sending",
-      run: () => {
-        calls++;
-      },
-    });
-    assertEquals(owner.state, {
-      label: "Send",
-      visible: true,
-      available: false,
-      pending: false,
-      reason,
-    });
-    await owner.invoke();
-    assertEquals(calls, 0);
-  }
-  assertEquals(promptUnavailable(ready), undefined);
+Deno.test("primary actions capture their mode at invocation", async () => {
+  const gate = Promise.withResolvers<void>();
+  let mode: "send" | "stop" = "stop";
+  const calls: ("send" | "stop" | undefined)[] = [];
+  const primary = createPrimaryAction({
+    mode: () => mode,
+    label: () => mode,
+    unavailable: () => undefined,
+    pendingReason: (current) => current === "stop" ? "Stopping" : "Sending",
+    run: async (_, captured) => {
+      await gate.promise;
+      calls.push(captured);
+    },
+  });
+  const stopping = primary.invoke();
+  assertEquals(primary.state.reason, "Stopping");
+  mode = "send";
+  assertEquals(primary.state.available, true);
+  gate.resolve();
+  await stopping;
+  assertEquals(calls, ["stop"]);
 });
 
 Deno.test("primary action reserves pending synchronously across click, Enter and commands", async () => {

@@ -1,6 +1,0 @@
-/* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-tool-output {
-  white-space: pre-wrap;
-  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
-  margin: 8px 0;
-}

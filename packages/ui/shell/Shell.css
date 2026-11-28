@@ -8,16 +8,21 @@
   overflow: clip;
 }
 .otk-main {
-  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+}
+.otk-main-content {
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-.otk-global-error {
-  padding: 12px 24px;
-  margin: 0;
-  background: var(--panel);
+.otk-selection-notice {
+  display: flex;
+  min-inline-size: 0;
+  padding: var(--space-2) var(--lane-gutter);
 }
 .otk-welcome {
   display: grid;
@@ -31,30 +36,64 @@
 .otk-welcome p {
   color: var(--secondary);
 }
+.otk-project-hero-detail {
+  display: grid;
+  align-items: center;
+  min-block-size: 1lh;
+}
+.otk-project-hero-detail p {
+  margin: 0;
+}
 .otk-auth-view {
   display: flex;
   flex: 1;
   align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
 }
 .otk-corner {
-  position: absolute;
-  top: var(--corner);
-  z-index: 10;
-}
-.otk-corner-left {
-  left: var(--corner);
-}
-.otk-corner-right {
-  right: var(--corner);
+  flex: none;
 }
 .otk-shell-progress {
-  padding: 4px var(--lane-gutter);
+  padding: var(--space-1) var(--lane-gutter);
 }
 .otk-shell-progress:empty {
   display: block;
 }
 .otk-shell-progress:empty::before {
   content: "\00a0";
+}
+
+.otk-app[data-left-collapsed="true"] {
+  --toast-narrow-alignment: start;
+}
+.otk-app[data-right-collapsed="true"] {
+  --toast-narrow-alignment: end;
+}
+
+.otk-stage {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr) auto;
+}
+.otk-stage.is-sheet {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stage";
+}
+.otk-stage.is-sheet > * {
+  grid-area: stage;
+}
+.otk-stage.is-sheet > .otk-main {
+  isolation: isolate;
+  /* Keep the mounted conversation in the same lane it returns to on Back. */
+  grid-template-columns: minmax(0, 1fr) var(--rail-width);
+}
+.otk-corner-back {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  gap: var(--space-2);
 }

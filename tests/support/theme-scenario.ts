@@ -30,6 +30,7 @@ import {
 import { publishUsage, turnDetail } from "./usage-summary.ts";
 import { themeUsage } from "./theme-usage.ts";
 import { resources } from "./resources.ts";
+import { styleListScene } from "./style-list-scene.ts";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
 import type { PermissionRequest } from "@otk/protocol";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
@@ -210,6 +211,7 @@ export async function themeScenario() {
   const base = f.entries[0];
   const corpus = await themeContent(base.directory);
   let contentState: keyof typeof corpus.collections = "reading";
+  let contentVisit = 0;
   const usage = themeUsage(corpus.sessionID);
   let usageSeeded = false;
   const usageLedger = () => {
@@ -229,8 +231,8 @@ export async function themeScenario() {
       ? {
         ...session,
         revert: {
-          messageID: "prompt",
-          messageCount: 1,
+          boundaryID: "prompt",
+          messageIDs: ["prompt"],
           files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
         },
       }
@@ -305,7 +307,7 @@ export async function themeScenario() {
               (contentState.startsWith("permission") ||
                 contentState === "labels-permission")
               ? [{
-                id: "permission",
+                id: `permission-${contentVisit}`,
                 sessionID: id,
                 kind: contentState === "permission-read"
                   ? "read"
@@ -367,7 +369,7 @@ export async function themeScenario() {
               (contentState === "question" ||
                 contentState === "labels-question")
               ? [{
-                id: "question",
+                id: `question-${contentVisit}`,
                 sessionID: id,
                 questions: [
                   {
@@ -485,6 +487,7 @@ export async function themeScenario() {
   });
   const overflow: { ids: string[]; tasks: string[] } = { ids: [], tasks: [] };
   let lease: TestLease | undefined;
+  let lists: ReturnType<typeof styleListScene> | undefined;
   const info = {
     root,
     url: f.url,
@@ -526,6 +529,7 @@ export async function themeScenario() {
         case "observe":
           return {
             entries: f.entries,
+            lists: await (lists ??= styleListScene(join(root, "lists"))),
             scenes,
             native: {
               url: sidecar.url,
@@ -565,6 +569,23 @@ export async function themeScenario() {
             directory: native.oc.directory,
           });
         case "scenario": {
+          if (
+            ["hold", "release"].includes(frame.params.action) &&
+            frame.params.sessionID === "tstv1-crumb-path"
+          ) {
+            // D66 overflow fixtures supply positive work for the background chain.
+            const held = frame.params.action === "hold";
+            for (let n = 1; n < 12; n++) {
+              f.update(`tstv1-visual-${n}`, {
+                parentID: held && n > 1 ? `tstv1-visual-${n - 1}` : undefined,
+                status: held ? "busy" : "idle",
+              });
+            }
+            f.update(base.id, {
+              parentID: held ? "tstv1-visual-11" : undefined,
+            });
+            return null;
+          }
           if (frame.params.sessionID === "tstv1-native-interrupt") {
             native.fake.queueHeld({ chunks: ["continuing "] });
             await nc.rpc("session.prompt", {
@@ -604,7 +625,7 @@ export async function themeScenario() {
             } else if (frame.params.action === "fail") {
               await nc.rpc("permission.activity", { sessionID: automatic.id });
               const db = new OtkDb(
-                join(native.oc.root, `otk-${sidecar.port}`),
+                sidecar.statePath,
                 [permissionMigrations],
                 { busyms: 5000 },
               );
@@ -648,6 +669,8 @@ export async function themeScenario() {
               throw new Error("Unknown fixed theme content");
             }
             contentState = name as keyof typeof corpus.collections;
+            // A new scene presents a new request, not a retired one revived.
+            contentVisit++;
             contentCapabilities();
             response.resolve();
             response = Promise.withResolvers<void>();
@@ -666,6 +689,13 @@ export async function themeScenario() {
               turns: { upsert: {}, remove: Object.keys(previousDigest.turns) },
               deleted: null,
             });
+            // Publish the same native request keys served by the inventory;
+            // the inbox owner decides whether the takeover may present them.
+            const caps = f.app.backend.capabilities;
+            const [permissions, questions] = await Promise.all([
+              caps.permissions!.listPermissions(corpus.sessionID),
+              caps.questions!.listQuestions(corpus.sessionID),
+            ]);
             f.update(corpus.sessionID, {
               status: contentState === "streaming" || contentState === "queued"
                 ? "busy"
@@ -679,6 +709,9 @@ export async function themeScenario() {
                   next: 1793736006000,
                 }
                 : undefined,
+            }, {
+              permissions: permissions.map(({ id }) => id),
+              inputs: questions.map(({ id }) => id),
             });
             if (contentState.startsWith("usage-")) {
               if (!usageSeeded) {
@@ -754,7 +787,11 @@ export async function themeScenario() {
         }
         case "productRpc": {
           const { method, params } = frame.params;
-          if (method === "prefs.set") await nc.rpc(method, params);
+          // The sweep's common shell settings apply to both its component
+          // scene and stock-native application, just like its theme preference.
+          if (method === "prefs.set" || method === "layout.patch") {
+            await nc.rpc(method, params);
+          }
           const before = c.frames.length;
           const result = await c.rpc(method, params);
           if (method === "prefs.set") {

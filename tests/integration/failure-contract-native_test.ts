@@ -29,7 +29,12 @@ test("native missing-session rejection preserves action, target and reason at th
       cause.failure.facts?.reason,
       "The native semantic reason must survive the server boundary",
     );
-    const shown = createFailurePresenter().present(cause.failure);
+    const presenter = createFailurePresenter();
+    // The current session omits its redundant self-link; notifications retain it.
+    assertEquals(presenter.present(cause.failure).failure?.target, {
+      label: "",
+    });
+    const shown = presenter.present(cause.failure, { surface: "notification" });
     assert(shown.text.includes("Renaming session"));
     assert(shown.text.includes(cause.failure.facts.reason));
     assertEquals(shown.failure?.target.href, `#/local/${sessionID}`);

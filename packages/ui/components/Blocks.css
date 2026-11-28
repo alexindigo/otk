@@ -6,27 +6,36 @@
   font-weight: 600;
   font-size: var(--text-heading);
   line-height: var(--line-heading);
-  margin: 16px 0;
+  margin: var(--space-2) 0;
 }
 .otk-prose-paragraph {
-  margin: 12px 0;
+  margin: 0 0 var(--space-3);
+}
+.otk-prose-compact .otk-prose-paragraph {
+  margin: 0;
+  white-space: break-spaces;
+  overflow-wrap: normal;
+}
+.otk-prose-compact .otk-prose-paragraph::after {
+  /* Give a final empty source line a line box, without adding copyable text. */
+  content: "\200b";
 }
 .otk-prose-code {
   font-family: var(--font-mono);
   background: var(--otk-bg-inline-code);
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-inline-code);
 }
 .otk-prose-quote {
   border-left: 2px solid var(--muted);
-  margin: 12px 0;
-  padding-left: 12px;
+  margin: var(--space-3) 0;
+  padding-left: var(--space-3);
   color: var(--secondary);
 }
 .otk-prose-task-item {
   display: grid;
   grid-template-columns: 1lh minmax(0, 1fr);
-  column-gap: 8px;
+  column-gap: var(--space-2);
   align-items: start;
 }
 .otk-prose-task-marker {
@@ -38,20 +47,24 @@
 .otk-prose-task-item > :nth-child(2) {
   margin-block-start: 0;
 }
-.otk-prose-image {
-  max-width: 100%;
-}
 .otk-prose-rule {
   border: 0;
   border-top: 1px solid var(--muted);
 }
 .otk-table-scroll table {
   border-collapse: collapse;
+  min-inline-size: min-content;
 }
 .otk-table-scroll th,
 .otk-table-scroll td {
+  /* The auto table algorithm must size columns at natural line breaks,
+     not at the emergency breaks allowed by the surrounding reply. */
+  overflow-wrap: normal;
   border: 1px solid var(--muted);
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
+}
+.otk-table-scroll .otk-prose-code {
+  box-decoration-break: clone;
 }
 .otk-prose-block.is-compact-start > :first-child {
   margin-top: 0;
@@ -100,4 +113,20 @@
 }
 .otk-prose-unconcealed h6.otk-prose-heading::before {
   content: "###### ";
+}
+.otk-prose-list {
+  margin: 0 0 var(--space-3);
+  padding-inline-start: var(--space-6);
+}
+.otk-prose-list > li + li {
+  margin-top: var(--space-1);
+}
+.otk-prose-list > li > .otk-prose-paragraph {
+  margin: 0;
+}
+.otk-prose-list > li > .otk-prose-paragraph + .otk-prose-paragraph {
+  margin-top: var(--space-2);
+}
+.otk-prose-list .otk-prose-list {
+  margin-block: var(--space-1) 0;
 }

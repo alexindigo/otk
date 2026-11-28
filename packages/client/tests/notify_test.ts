@@ -169,6 +169,12 @@ for (const kind of ["permissions", "questions"] as const) {
           }),
         }],
       });
+      triggers.settlement("s", "a", {
+        id: 3,
+        outcome: "succeeded",
+        live: true,
+        unseen: true,
+      });
       const completed = receipts.get("s/a");
       assertEquals(completed?.kind, "done");
       assert(
@@ -209,6 +215,40 @@ Deno.test("saved transcript visibility leaves live outcomes alerting while visib
     }
   }
 });
+Deno.test("count-only consumers without a grace owner keep immediate input edges", () => {
+  for (const kind of ["permissions", "questions"] as const) {
+    const emitted: Note[] = [];
+    const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
+    triggers.receive("s", { t: "index.snapshot", rev: 0, entries: [entry()] });
+    const pending = entry("a", {
+      attention: { ...entry().attention, [kind]: 1 },
+    });
+    triggers.receive("s", {
+      t: "index.patch",
+      rev: 1,
+      ops: [{ op: "upsert", entry: pending }],
+    });
+    assertEquals(emitted.map((n) => n.kind), [
+      kind === "permissions" ? "permission" : "question",
+    ]);
+    triggers.receive("s", {
+      t: "index.patch",
+      rev: 2,
+      ops: [{ op: "upsert", entry: entry() }],
+    });
+    assertEquals(emitted.length, 1);
+    triggers.receive("s", {
+      t: "index.patch",
+      rev: 3,
+      ops: [{ op: "upsert", entry: pending }],
+    });
+    assertEquals(emitted.map((n) => n.kind), [
+      kind === "permissions" ? "permission" : "question",
+      kind === "permissions" ? "permission" : "question",
+    ]);
+    triggers.reset("s");
+  }
+});
 Deno.test("newly acquired live pending attention alerts without acquiring unrelated working sessions", () => {
   const emitted: Note[] = [];
   const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
@@ -244,6 +284,13 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
       op: "upsert",
       entry: entry("a", { activity: { terminal: 2, outcome: "succeeded" } }),
     }],
+  });
+  assertEquals(emitted, []);
+  triggers.settlement("s", "a", {
+    id: 2,
+    outcome: "succeeded",
+    live: true,
+    unseen: true,
   });
   assertEquals(emitted.map((n) => [n.id, n.kind]), [["s/a", "done"]]);
   assertEquals(
@@ -291,7 +338,74 @@ Deno.test("notification triggers baseline per connection, batched root roll-up, 
       entry: entry("a", { activity: { terminal: 2, outcome: "succeeded" } }),
     }],
   });
+  triggers.settlement("other", "a", {
+    id: 2,
+    outcome: "succeeded",
+    live: true,
+    unseen: true,
+  });
   assertEquals(emitted.at(-1)?.id, "other/a");
+});
+Deno.test("a connected inbox baseline compares input changes only for previously observed sessions", () => {
+  const emitted: Note[] = [], removed: string[] = [];
+  const triggers = new NotificationTriggers(
+    (note) => emitted.push(note),
+    (id) => removed.push(id),
+  );
+  const pending = (
+    id: string,
+    kind: "permissions" | "questions",
+    request: string,
+  ) => {
+    const session = entry(id);
+    return {
+      ...session,
+      attention: { ...session.attention, [kind]: 1 },
+      activity: kind === "questions"
+        ? { inputs: { fresh: true, keys: [request] } }
+        : { permissions: { fresh: true, keys: [request] } },
+    };
+  };
+  let rev = 0;
+  const baseline = (generation: string, ...entries: IndexEntry[]) =>
+    triggers.entriesChanged("s", {
+      generation,
+      revision: ++rev,
+      baseline: true,
+      changes: entries.map((after) => ({ id: after.id, after })),
+    });
+  const historical = pending("admitted", "questions", "old");
+  baseline("one", entry("a"), entry("b"));
+  baseline(
+    "one",
+    pending("a", "questions", "q1"),
+    pending("b", "permissions", "p1"),
+    historical,
+  );
+  assertEquals(emitted.map((note) => [note.id, note.dismissalKey]), [[
+    "s/a",
+    "question/q1",
+  ], ["s/b", "permission/p1"]]);
+  baseline(
+    "one",
+    pending("a", "questions", "q2"),
+    pending("b", "permissions", "p1"),
+    historical,
+  );
+  assertEquals(emitted.map((note) => note.dismissalKey), [
+    "question/q1",
+    "permission/p1",
+    "question/q2",
+  ]);
+  baseline("one", entry("a"), entry("b"), historical);
+  assertEquals(removed, ["s/a", "s/b"]);
+  baseline(
+    "two",
+    pending("a", "questions", "q3"),
+    pending("b", "permissions", "p2"),
+    historical,
+  );
+  assertEquals(emitted.length, 3);
 });
 Deno.test("new genuine error observations alert even with identical text; inactive revisions do not", () => {
   const emitted: Note[] = [];
@@ -335,7 +449,7 @@ Deno.test("notification policy focus/open/hidden, unavailable OS fallback, gener
     open: { sidecar: "s", session: "b" },
   };
   const policy = notificationPolicy(() => ctx);
-  assertEquals(policy(note(), () => true, true).channels, ["toast", "badge"]);
+  assertEquals(policy(note(), () => true, true).channels, ["toast"]);
   ctx.open.session = "a";
   assertEquals(policy(note(), () => true, true).channels, []);
   ctx.visible = false;
@@ -344,14 +458,12 @@ Deno.test("notification policy focus/open/hidden, unavailable OS fallback, gener
   assertEquals(policy(note(), () => true, true).channels, [
     "os",
     "sound",
-    "badge",
   ]);
   assertEquals(policy(note(), () => false, true).channels, [
     "toast",
     "sound",
-    "badge",
   ]);
-  assertEquals(policy(note(), () => true, false).channels, ["os", "badge"]);
+  assertEquals(policy(note(), () => true, false).channels, ["os"]);
   ctx.prefs["notify.toast"] = false;
   ctx.prefs["notify.badge"] = false;
   assertEquals(
@@ -380,19 +492,16 @@ Deno.test("one presentation per request: the open view's docks own their subtree
     assertEquals(policy(at("grandchild", kind), () => true, true).channels, []);
     assertEquals(policy(at("other", kind), () => true, true).channels, [
       "toast",
-      "badge",
     ]);
   }
   // A descendant's finish is its own; viewing the parent does not present it.
   assertEquals(policy(at("child", "done"), () => true, true).channels, [
     "toast",
-    "badge",
   ]);
   ctx.open.session = "child";
   // A parent's request is not in the child's docks.
   assertEquals(policy(at("root", "permission"), () => true, true).channels, [
     "toast",
-    "badge",
   ]);
   assertEquals(policy(at("child", "done"), () => true, true).channels, []);
   assertEquals(
@@ -514,7 +623,9 @@ Deno.test("root notification resolution retains other pending family attention i
       entry: entry("a", { attention: { ...entry().attention, questions: 1 } }),
     }],
   });
-  assertEquals(emitted.map((n) => n.kind), ["permission", "question"]);
+  // A question arriving alongside a permission takes the immediate input note;
+  // resolving that permission cannot clear the still-pending question badge.
+  assertEquals(emitted.map((n) => n.kind), ["question"]);
   assertEquals(removed, []);
   triggers.receive("s", {
     t: "index.patch",

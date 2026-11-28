@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, Show } from "solid-js";
-import ComposerNotice, {
-  ComposerNoticeRow,
-} from "../../components/ComposerNotice.tsx";
+import ComposerNotice from "../../components/ComposerNotice.tsx";
 import OperationFeedback from "../../components/OperationFeedback.tsx";
 import FieldFeedback from "../../components/FieldFeedback.tsx";
 import PaneState from "../../components/PaneState.tsx";
@@ -69,19 +67,6 @@ export default function Requests() {
               ? { kind: "error", text: "Could not send this prompt. Try again" }
               : { kind: "pending", text: "Sending prompt" }}
           />
-          <ComposerNoticeRow
-            icon={<span aria-hidden="true">↶</span>}
-            trailing={
-              <button
-                type="button"
-                onClick={() => setMode("pending")}
-              >
-                Restore
-              </button>
-            }
-          >
-            2 prompts rolled back
-          </ComposerNoticeRow>
         </ComposerNotice>
       </section>
       <section

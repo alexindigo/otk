@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect, createSignal, type Element, For } from "solid-js";
+import { createEffect, createSignal, type Element, For, Show } from "solid-js";
 import { render } from "@solidjs/web";
-import { CommandHub, SidecarConnection } from "@otk/client";
+import {
+  CommandHub,
+  createDisclosures,
+  createDrafts,
+  createSessionSubmission,
+  emptyDraft,
+  NotificationHub,
+  SidecarConnection,
+} from "@otk/client";
 import {
   booleanPreference,
   type CapabilityName,
@@ -10,31 +18,39 @@ import {
   type ExternalCall,
 } from "@otk/protocol";
 import {
+  ActionButton,
   browserThemeEnvironment,
   Code,
   CommandProvider,
   ComposerTakeovers,
   createUiRegistries,
   DialogHost,
+  DisclosuresProvider,
   DisplayMenu,
   Docks,
-  emptyDraft,
   LIGHT_STATES,
   type LightState,
   Message,
+  ownedCommand,
   paintVisualPreferences,
   Prompt,
   registerGenericTool,
   registerOtkThemes,
+  registerTaskTool,
+  registerToastChannel,
   registerToolPart,
   registerUnknownPart,
+  ScrollRegion,
   selection,
   SelectionContent,
   type SessionPorts,
   SessionProvider,
+  SessionView,
+  solidState,
   StatusLight,
   ThemeEngine,
   ThemeRegistry,
+  Toasts,
   ToolLine,
   ToolOutput,
   type ToolProps,
@@ -46,6 +62,7 @@ import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 import SharedControls, {
+  deliverFixturePrompt,
   ErrorBoundaries,
   Indicators,
   InteractionFailures,
@@ -75,9 +92,14 @@ declare module "@otk/protocol" {
 
 const themes = new ThemeRegistry();
 registerOtkThemes(themes);
-const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
+const params = new URL(location.href).searchParams;
+const theme = new ThemeEngine(
+  themes,
+  browserThemeEnvironment(),
+  params.get("theme") ?? "otk-dark",
+);
 theme.start();
-const server = new URL(location.href).searchParams.get("server");
+const server = params.get("server");
 if (server) {
   const connection = new SidecarConnection(server, {
     status() {},
@@ -107,6 +129,239 @@ function ExternalTool(props: ToolProps): Element {
     </div>
   );
 }
+/** Every outcome an action control can end in, through the shared owner. */
+function ActionOutcomes(props: { commands: CommandHub }): Element {
+  const register = (
+    id: string,
+    availability: () =>
+      | { available: true }
+      | { available: false; reason: string; hidden?: true },
+    run: () => unknown,
+  ) =>
+    props.commands.register({
+      id,
+      title: id,
+      category: "Consumer",
+      availability,
+      run,
+    });
+  register("Open unobserved", () => ({ available: true }), () => {});
+  register("Open failing", () => ({ available: true }), () => {
+    throw new Error("fixture rejection");
+  });
+  register(
+    "Open closed",
+    () => ({ available: false, reason: "Server offline" }),
+    () => {},
+  );
+  register(
+    "Open self",
+    () => ({ available: false, reason: "Already open", hidden: true }),
+    () => {},
+  );
+  const control = (id: string) =>
+    props.commands.control(id, undefined, {
+      target: { label: id },
+      shown: () => false,
+      unshown: "The fixture view did not open.",
+      recovery: "Choose the fixture again",
+    });
+  return (
+    <section data-action-outcomes>
+      <For
+        each={[
+          "Open unobserved",
+          "Open failing",
+          "Open closed",
+          "Open self",
+          "Open late",
+        ]}
+      >
+        {(id) => (
+          <div data-action={id}>
+            <ActionButton action={control(id)}>{id}</ActionButton>
+          </div>
+        )}
+      </For>
+      <button
+        type="button"
+        onClick={() =>
+          register("Open late", () => ({ available: true }), () => {})}
+      >
+        Install action owner
+      </button>
+    </section>
+  );
+}
+function ActionToasts(): Element {
+  const [current, setCurrent] = createSignal("current");
+  const [viewing, setViewing] = createSignal(true);
+  let holdView = false;
+  const commands = new CommandHub(() => ({
+    sidecar: "local",
+    session: current(),
+    viewing: viewing(),
+  }));
+  for (const id of ["session.open", "session.preview"]) {
+    commands.register({
+      id,
+      title: "Open session",
+      category: "Test",
+      arguments: { type: "object" },
+      availability: (context, target?: { sessionID: string }) =>
+        id === "session.preview" && context.viewing !== false &&
+          target?.sessionID === current()
+          ? { available: false, reason: "Already open", hidden: true }
+          : { available: true },
+      run: (_context, target: { sessionID: string }) => {
+        if (target.sessionID === "refused") return false;
+        setCurrent(target.sessionID);
+        if (!holdView) setViewing(true);
+      },
+    });
+  }
+  const hub = new NotificationHub(
+    () => ({ channels: ["toast"] }),
+    (id, args) => commands.run(id, args),
+    () => {},
+  );
+  const toast = registerToastChannel(hub);
+  for (const id of ["current", "refused", "other"]) {
+    hub.publish({
+      id,
+      kind: "error",
+      title: `Target ${id}`,
+      dismissOnView: false,
+      actions: [{
+        label: "Open session",
+        command: "session.open",
+        args: { sidecarId: "local", sessionID: id },
+      }],
+    });
+  }
+  return (
+    <CommandProvider commands={commands}>
+      <Show when={viewing()} fallback={<p data-toast-settings>Settings</p>}>
+        <output data-toast-view>{current()}</output>
+      </Show>
+      <button
+        type="button"
+        onClick={() => {
+          holdView = true;
+          setViewing(false);
+        }}
+      >
+        Hide session view
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          holdView = false;
+        }}
+      >
+        Allow session view
+      </button>
+      <Toasts
+        model={toast.model}
+        onMore={() => {}}
+        detail={params.has("tall")
+          ? (note) => (
+            <div>
+              <For each={Array.from({ length: 14 }, (_, i) => i + 1)}>
+                {(line) => <p>{`Detail ${line} for ${note.id}`}</p>}
+              </For>
+            </div>
+          )
+          : undefined}
+      />
+    </CommandProvider>
+  );
+}
+function ChildNavigation(): Element {
+  const ui = createUiRegistries();
+  registerTaskTool(ui.tools);
+  registerUnknownPart(ui.parts);
+  const [opened, setOpened] = createSignal<string[]>([]);
+  const open = (id: string) => setOpened((items) => [...items, id]);
+  const ports: SessionPorts = {
+    supports: () => false,
+    rpc: () => Promise.reject(new Error("No RPC expected")),
+    sessionID: () => "root",
+    directory: () => Promise.resolve("/project"),
+    entry: () => undefined,
+    permissions: () => [],
+    questions: () => [],
+    prefs: () => DEFAULT_PREFS,
+    dirty() {},
+    act: (action) => action(),
+    submit: () => Promise.reject(new Error("No submission expected")),
+    history: () => Promise.resolve([]),
+    attachments: (parts) => Promise.resolve(parts),
+  };
+  return (
+    <UiProvider registries={ui}>
+      <output data-child-opens>{opened().join(", ")}</output>
+      <ToolLine
+        call={{
+          tool: "task",
+          callID: "task",
+          status: "completed",
+          time: { start: 1, end: 2 },
+          agent: "Task helper",
+          description: "Task child",
+          childSessionID: "task-child",
+        }}
+        prefs={DEFAULT_PREFS}
+        genericOutput
+        waiting={false}
+        onOpenChild={open}
+      />
+      <SessionProvider ports={ports}>
+        <SessionView
+          label="Consumer session"
+          prefs={{ ...DEFAULT_PREFS, expandRecords: true }}
+          messages={[1, 2].map((n) => ({
+            id: `record-${n}`,
+            sessionID: "root",
+            role: "context" as const,
+            time: { created: n },
+            parts: [{
+              kind: "external" as const,
+              id: `part-${n}`,
+              name: "record",
+              activity: {
+                kindLabel: "Record",
+                layout: "row" as const,
+                category: "record" as const,
+                title: "Child activity",
+                summary: { kind: "child", noun: "helper", plural: "helpers" },
+                tone: "normal" as const,
+                child: { label: "Activity helper", sessionID: "record-child" },
+              },
+            }],
+          }))}
+          onOpenChild={open}
+          draft={emptyDraft()}
+          onDraft={emptyDraft}
+          onPrompt={() => Promise.resolve()}
+          onStop={() => Promise.resolve()}
+          onOlder={() => Promise.resolve()}
+          onRetry={() => Promise.resolve()}
+          connected
+          exhausted
+          loading={false}
+          paging={false}
+          busy={false}
+          child={false}
+          activity={() => ({ unstarted: 0, running: false })}
+          permissions={[]}
+          revert={null}
+        />
+      </SessionProvider>
+    </UiProvider>
+  );
+}
+
 function Consumer(): Element {
   const commands = new CommandHub();
   const preferenceRegistry = createPreferences();
@@ -123,13 +378,17 @@ function Consumer(): Element {
   const ui = createUiRegistries(), isolated = createUiRegistries();
   registerGenericTool(ui.tools);
   registerGenericTool(isolated.tools);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   registerUnknownPart(ui.parts);
   ui.tools.register(
     "external-probe",
     ExternalTool,
     (call) => ({
-      icon: "◇",
+      icon: () => (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m12 3 9 9-9 9-9-9Z" fill="none" stroke="currentColor" />
+        </svg>
+      ),
       verb: "Inspect",
       target: "external target",
       summary: call.summary,
@@ -181,40 +440,64 @@ function Consumer(): Element {
   });
   ui.prompt.register({
     id: "external-transform",
-    create: (ctx) => ({
-      actions: () => (
-        <button
-          type="button"
-          data-inject
-          onClick={() =>
-            ctx.change((draft) => ({
-              ...draft,
-              input: "Injected draft",
-              agent: "external-agent",
-            }))}
-        >
-          Inject draft
-        </button>
-      ),
-      async submit(_draft, parts, selection) {
-        await ctx.props.onSubmit(
-          [...parts, {
-            kind: "text",
-            text: "external transform",
-          }],
-          "normal",
-          selection,
-        );
-        return true;
-      },
-    }),
+    create: (ctx) => {
+      const command = "consumer.inject-draft";
+      ownedCommand(ctx, {
+        id: command,
+        title: "Inject draft",
+        category: "Prompt",
+        run: () => {
+          ctx.change((draft) => ({
+            ...draft,
+            input: "Injected draft",
+            agent: "external-agent",
+          }));
+        },
+      });
+      return {
+        action: () => ({
+          key: "inject",
+          label: () => "Inject draft",
+          icon: () => (
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M5 12h14M12 5v14" stroke="currentColor" />
+            </svg>
+          ),
+          control: ctx.commands.control(command, undefined, {
+            target: { label: "Draft" },
+            shown: () => true,
+            unshown: "The draft was not injected.",
+            recovery: "Try injecting the draft again",
+          }),
+        }),
+        async submit(_draft, parts, selection, capture) {
+          await ctx.props.onSubmit(
+            [...parts, {
+              kind: "text",
+              text: "external transform",
+            }],
+            "normal",
+            selection,
+            capture,
+          );
+          return true;
+        },
+      };
+    },
   });
   const [summary, setSummary] = createSignal("Initial result"),
     [opened, setOpened] = createSignal(""),
-    [draft, setDraft] = createSignal(emptyDraft()),
     [submitted, setSubmitted] = createSignal(""),
     [capabilities, setCapabilities] = createSignal<CapabilityName[]>([]),
     [dockClicks, setDockClicks] = createSignal(0);
+  const drafts = createDrafts(solidState);
+  const submit = createSessionSubmission({
+    sessionID: "session",
+    directory: () => Promise.resolve(""),
+    inbox: { visit: () => Promise.resolve() },
+    tabs: () => ({ ensureTask: () => Promise.withResolvers<never>().promise }),
+    delivery: { send: deliverFixturePrompt },
+  });
   const call = (): ExternalCall => ({
     tool: "external",
     callID: "probe",
@@ -225,6 +508,8 @@ function Consumer(): Element {
     output: "Reusable output",
     childSessionID: "child-probe",
   });
+  // These are independent consumers presenting the same native call ID.
+  const isolatedDisclosures = createDisclosures({});
   return (
     <CommandProvider commands={commands}>
       <UiProvider registries={ui}>
@@ -256,6 +541,7 @@ function Consumer(): Element {
         </section>
         <section id="registered" style={{ padding: "1rem" }}>
           <h1>Independent UI registration</h1>
+          <ActionOutcomes commands={commands} />
           <button
             type="button"
             data-light
@@ -379,23 +665,30 @@ function Consumer(): Element {
               prefs,
               dirty: () => {},
               act: (action) => action(),
-              submit: (action) => action(),
+              submit,
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             }}
           >
             <Prompt
-              value={draft()}
-              onChange={(change) => {
-                setDraft(change);
-                return draft();
-              }}
+              value={drafts.get("session")}
+              onChange={drafts.writer("session")}
+              captureSend={(draft) => drafts.captureSend("session", draft)}
               connected
-              onSubmit={(parts) => {
-                setSubmitted(JSON.stringify(parts));
-                return Promise.resolve();
+              onSubmit={async (parts, _mode, _selection, capture) => {
+                await submit(
+                  (_options, dispatch, messageID) => {
+                    dispatch();
+                    setSubmitted(JSON.stringify(parts));
+                    return Promise.resolve({ messageID, state: "accepted" });
+                  },
+                  "composer",
+                  undefined,
+                  capture,
+                );
               }}
-              onAbort={async () => {}}
+              activity={() => ({ running: false, unstarted: 0 })}
+              onStop={async () => {}}
             />
             <ComposerTakeovers />
           </SessionProvider>
@@ -451,44 +744,98 @@ function Consumer(): Element {
         </section>
       </UiProvider>
       <UiProvider registries={isolated}>
-        <section id="isolated" style={{ padding: "1rem" }}>
-          <h2>Separate consumer fallback</h2>
-          <ToolLine
-            call={call()}
-            prefs={DEFAULT_PREFS}
-            paneWidth={800}
-            genericOutput
-            waiting={false}
-            onOpenChild={setOpened}
-          />
-        </section>
+        <DisclosuresProvider owner={isolatedDisclosures}>
+          <section id="isolated" style={{ padding: "1rem" }}>
+            <h2>Separate consumer fallback</h2>
+            <ToolLine
+              call={call()}
+              prefs={DEFAULT_PREFS}
+              paneWidth={800}
+              genericOutput
+              waiting={false}
+              onOpenChild={setOpened}
+            />
+          </section>
+        </DisclosuresProvider>
       </UiProvider>
     </CommandProvider>
   );
 }
+function ScrollbarProbe(): Element {
+  const [hidden, setHidden] = createSignal(false);
+  let mounts = 0;
+  function Content() {
+    mounts++;
+    return (
+      <div
+        data-scroll-content
+        data-mounts={mounts}
+        style={{ height: "1000px", width: "600px" }}
+      >
+        Scrollable source
+      </div>
+    );
+  }
+  return (
+    <>
+      <button type="button" onClick={() => setHidden(!hidden())}>
+        Toggle region
+      </button>
+      <div
+        style={{
+          height: "200px",
+          width: "300px",
+          display: "grid",
+          "grid-template-rows": "minmax(0, 1fr)",
+        }}
+      >
+        <ScrollRegion
+          role="region"
+          aria-label="Scroll probe"
+          tabindex={0}
+          hidden={hidden()}
+        >
+          <Content />
+        </ScrollRegion>
+      </div>
+    </>
+  );
+}
+const Scene = new URL(location.href).searchParams.has("action-toasts")
+  ? ActionToasts
+  : new URL(location.href).searchParams.has("scrollbars")
+  ? ScrollbarProbe
+  : new URL(location.href).searchParams.has("source-ownership")
+  ? SourceOwnership
+  : new URL(location.href).searchParams.has("child-navigation")
+  ? ChildNavigation
+  : new URL(location.href).searchParams.has("picker-lifetime")
+  ? PickerLifetime
+  : new URL(location.href).searchParams.has("lazy-preview")
+  ? LazyPreview
+  : new URL(location.href).searchParams.has("layout-tabs")
+  ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("layout-controls")
+  ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("indicators")
+  ? () => <Indicators onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("interaction-failures")
+  ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("secondary-failures")
+  ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("error-boundaries")
+  ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("shared-controls")
+  ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("metadata-policy")
+  ? MetadataPolicy
+  : Consumer;
+const disclosures = createDisclosures({});
 render(
-  new URL(location.href).searchParams.has("source-ownership")
-    ? SourceOwnership
-    : new URL(location.href).searchParams.has("picker-lifetime")
-    ? PickerLifetime
-    : new URL(location.href).searchParams.has("lazy-preview")
-    ? LazyPreview
-    : new URL(location.href).searchParams.has("layout-tabs")
-    ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("layout-controls")
-    ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("indicators")
-    ? () => <Indicators onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("interaction-failures")
-    ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("secondary-failures")
-    ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("error-boundaries")
-    ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("shared-controls")
-    ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("metadata-policy")
-    ? MetadataPolicy
-    : Consumer,
+  () => (
+    <DisclosuresProvider owner={disclosures}>
+      <Scene />
+    </DisclosuresProvider>
+  ),
   document.getElementById("app")!,
 );

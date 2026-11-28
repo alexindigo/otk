@@ -22,6 +22,7 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
     assertEquals(seen.tokens().map((row) => row.time), [0]);
     assertEquals(finishes.tokens(), {});
     finishes.observe("s", 100);
+    seen.setOpened("alice", "s", true);
     seen.acknowledge("alice", "s", 100);
     finishes.observe("s", 200);
     // Delayed viewing of the old terminal cannot acknowledge the new one.
@@ -41,13 +42,31 @@ test("terminal acknowledgements are per-user, monotone, transactional and indepe
       })
     );
     assertEquals(seen.tokens().length, 1);
+    seen.acknowledge("alice", "s", 200, undefined, "run-a");
+    assertEquals(seen.runTerminal("alice", "s", "run-a"), 200);
+    assertEquals(seen.runTerminal("alice", "s", "run-b"), 0);
+    assertEquals(seen.runTerminal("bob", "s", "run-a"), 0);
     assertThrows(() => seen.acknowledge("alice", "s", -1));
     db.close();
     db = new OtkDb(path, [seenMigrations, finishesMigrations], {
       busyms: 5000,
     });
     assertEquals(new Finishes(db).tokens(), { s: 200 });
-    assertEquals(new Seen(db).tokens().map((row) => row.time), [100]);
+    const restored = new Seen(db);
+    assertEquals(restored.runTerminal("alice", "s", "run-a"), 200);
+    assertEquals(restored.runTerminal("alice", "s", "run-b"), 0);
+    assertEquals(restored.tokens(), [{
+      user: "alice",
+      session: "s",
+      time: 100,
+      opened: true,
+    }]);
+    restored.setOpened("alice", "s", false);
+    assertEquals(restored.tokens(), [{
+      user: "alice",
+      session: "s",
+      time: 100,
+    }]);
   } finally {
     db.close();
   }
