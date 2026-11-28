@@ -3,7 +3,13 @@ import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { expandTool, prompt, runNativeTool } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  prompt,
+  runNativeTool,
+  sessionStatus,
+  workPanel,
+} from "../../pages/transcript.ts";
 import { independentPage } from "../../pages/visual.ts";
 test.use({ profile: "isolated" });
 const tags = { tag: ["@visual", "@isolated"] };
@@ -178,7 +184,6 @@ test(
       oldString: "oldPaint",
       newString: "newPaint",
     });
-    await expandTool(page, "[data-tool=edit]");
     await state.queue([
       "Theme consumer text.\n\n```ts\n// Theme comment\nconst orange: number = 7;\nfunction run(name: string) { return name + orange; }\n```\n",
     ]);
@@ -186,12 +191,19 @@ test(
     await expect(
       page.locator(".otk-code .otk-token").filter({ hasText: "Theme comment" }),
     ).toBeAttached();
-    await expect(page.locator(".otk-tool-add")).toBeAttached();
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await sessionStatus(page, session.id, "idle");
+    // D74: a later prose-only reply does not own the edit's Work artwork.
+    const editReply = page.locator('.otk-messages [data-role="assistant"]')
+      .filter({ has: page.getByText("Finished edit.", { exact: true }) });
+    const showEdit = async () => {
+      await expandTool(page, "[data-tool=edit]", editReply);
+      await expect(workPanel(page).locator(".otk-work-add")).toBeVisible();
+    };
+    await showEdit();
+    const replyTokens = page.locator(".otk-messages .otk-code .otk-token");
     const paint = () =>
       page.evaluate(
-        `(()=>{const root=document.documentElement,css=getComputedStyle(root);return {id:root.dataset.otkTheme,bg:css.getPropertyValue('--otk-bg'),scheme:css.colorScheme,meta:document.querySelector('meta[name="theme-color"]').content,text:getComputedStyle(document.querySelector('.otk-text')).color,code:[...document.querySelectorAll('.otk-code .otk-token')].map(el=>({text:el.textContent,color:getComputedStyle(el).color,style:el.getAttribute('style')})),add:getComputedStyle(document.querySelector('.otk-tool-add')).color,del:getComputedStyle(document.querySelector('.otk-tool-del')).color,wordmark:getComputedStyle(document.querySelector('.otk-inbox-brand strong')).color,work:themeWorkerEvidence};})()`,
+        `(()=>{const root=document.documentElement,css=getComputedStyle(root),work=document.querySelector('#otk-panel-content[aria-label="Work log"]');return {id:root.dataset.otkTheme,bg:css.getPropertyValue('--otk-bg'),scheme:css.colorScheme,meta:document.querySelector('meta[name="theme-color"]').content,text:getComputedStyle(document.querySelector('.otk-messages .otk-text')).color,code:[...document.querySelectorAll('.otk-messages .otk-code .otk-token')].map(el=>({text:el.textContent,color:getComputedStyle(el).color,style:el.getAttribute('style')})),add:getComputedStyle(work.querySelector('.otk-work-add')).color,del:getComputedStyle(work.querySelector('.otk-work-del')).color,wordmark:getComputedStyle(document.querySelector('.otk-inbox-brand strong')).color,work:themeWorkerEvidence};})()`,
       ) as Promise<Record<string, unknown>>;
     await page.locator("textarea[name=prompt]").fill("Preserve this draft");
     const dark = await paint();
@@ -199,7 +211,7 @@ test(
     expect(dark.scheme).toBe("dark");
     expect(dark.meta).toBe(dark.bg);
     expect(dark.wordmark).toBe("rgb(230, 234, 239)");
-    const tokens = await page.locator(".otk-code .otk-token").elementHandles(),
+    const tokens = await replyTokens.elementHandles(),
       writes =
         traffic.sent.filter(({ frame }) => frame.method === "prefs.set").length;
     await openTheme(page);
@@ -215,7 +227,7 @@ test(
     expect(light.work).toEqual(dark.work);
     for (let i = 0; i < tokens.length; i++) {
       expect(
-        await page.locator(".otk-code .otk-token").nth(i).evaluate(
+        await replyTokens.nth(i).evaluate(
           (el, old) => el === old,
           tokens[i],
         ),
@@ -254,9 +266,9 @@ test(
     for (const p of [page, other]) await painted(p, "otk-light", "#f4eee3");
     await page.reload();
     await painted(page, "otk-light", "#f4eee3");
-    await expect(page.locator(".otk-code .otk-token").first()).toBeAttached();
+    await expect(replyTokens.first()).toBeAttached();
     // Decision 18: reload restores collapsed defaults; reopen as a user would.
-    await expandTool(page, "[data-tool=edit]");
+    await showEdit();
     expect((await paint()).code).toEqual(light.code);
     await openTheme(page);
     await choose(page, "system");
