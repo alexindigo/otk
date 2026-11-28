@@ -43,7 +43,11 @@ test("sessions.project-order-no-reorder-on-load", {
     });
     native.onMessage((message) => {
       const frame = JSON.parse(String(message));
-      if (["welcome", "harness"].includes(frame.t)) client.send(message);
+      // The real membership frame is part of the initial sidebar baseline.
+      // Only the order and row frames are staged by this test.
+      if (["welcome", "harness", "programs"].includes(frame.t)) {
+        client.send(message);
+      }
       if (frame.t === "prefs") {
         client.send(JSON.stringify({
           ...frame,

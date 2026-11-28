@@ -77,6 +77,13 @@ Deno.test("request activity keeps the phantom visible, leaves projects to receiv
     projects: [{ id: "one", directories: ["/one"] }],
   });
   resources.receive("local", {
+    t: "programs",
+    revision: 1,
+    auto: false,
+    programs: [],
+    members: {},
+  });
+  resources.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
     revision: 0,
@@ -192,6 +199,13 @@ Deno.test("a project-owned creation before any task or session ID exists leaves 
     t: "projects.order",
     revision: 1,
     projects: [{ id: "empty", directories: ["/empty"] }],
+  });
+  resources.receive("local", {
+    t: "programs",
+    revision: 1,
+    auto: false,
+    programs: [],
+    members: {},
   });
   resources.receive("local", {
     t: "inbox.snapshot",

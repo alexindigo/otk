@@ -59,6 +59,7 @@ import {
 import { createSessionLists } from "./session-lists.ts";
 import { type CollectionState, collectionState } from "./collection-state.ts";
 import { createProjectOrder, orderProjectRows } from "./project-order.ts";
+import { createPrograms, type ProjectProgram } from "./programs.ts";
 import { createFileFacts, type FileFacts } from "./file-facts.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import type { NoteSession, NotificationLocation } from "./notifications.ts";
@@ -72,6 +73,7 @@ type ServerProjectRow = ProjectProjectionRow & {
   sidecarId: string;
   label: string;
   otkProjectID?: string;
+  program?: ProjectProgram;
 };
 export interface ServerResources {
   forms(id: string): readonly import("@otk/protocol").FormRequest[];
@@ -110,6 +112,14 @@ export interface ServerResources {
   tabs(project: ProjectSelection): ClientTabs;
   holdTaskOrder(project: ProjectSelection): () => void;
   moveProject(sidecarId: string, move: ProjectMove): Promise<void>;
+  programs(
+    id: string,
+  ): Readonly<
+    Pick<
+      ReturnType<typeof createPrograms>,
+      "ready" | "auto" | "programs" | "settled"
+    >
+  >;
   taskActions(project: ProjectSelection): TaskActions;
   entry(sidecarId: string, sessionID: string): IndexEntry | undefined;
   server(id: string): SidecarState | undefined;
@@ -206,6 +216,12 @@ export function createServerResources(o: {
     let order = orders.get(id);
     if (!order) orders.set(id, order = createProjectOrder(factory));
     return order;
+  }
+  const programReplicas = new Map<string, ReturnType<typeof createPrograms>>();
+  function programs(id: string) {
+    let replica = programReplicas.get(id);
+    if (!replica) programReplicas.set(id, replica = createPrograms(factory));
+    return replica;
   }
   const lifetimeClock = factory({ revision: 0 });
   const requestSubscriptions = new Map<string, () => void>();
@@ -839,6 +855,9 @@ export function createServerResources(o: {
   };
   const receive = (id: string, frame: ServerFrame): boolean => {
     if (stopped) return false;
+    if (frame.t === "programs" || frame.t === "welcome") {
+      programs(id).receive(frame);
+    }
     if (frame.t === "projects.order" || frame.t === "welcome") {
       projectOrder(id).receive(frame);
     }
@@ -1065,6 +1084,7 @@ export function createServerResources(o: {
       );
       await projectOrder(id).settled(result.revision);
     },
+    programs,
     entry,
     server,
     connected,
@@ -1127,7 +1147,8 @@ export function createServerResources(o: {
     sessionRows: (p, query) => sessionCollection(p, query).rows,
     projectsReady: () =>
       sidecars.state.list.every((s) =>
-        projectOrder(s.id).ready && inbox(s.id).state.ready
+        projectOrder(s.id).ready && programs(s.id).ready &&
+        inbox(s.id).state.ready
       ),
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     checkoutLabel: (id, directory) => projectOwner(id).label(directory),
@@ -1163,11 +1184,15 @@ export function createServerResources(o: {
       // The configured server list is durable before any server answers.
       const rows = sidecars.state.list.flatMap((s, serverOrder) => {
         const order = projectOrder(s.id);
-        if (!order.ready) return [];
+        const replica = programs(s.id);
+        if (!order.ready || !replica.ready) return [];
         const owner = projectOwner(s.id);
         return owner.directories().map((directory) => {
           const row = owner.row(directory, now)!;
           const slot = order.slot(directory);
+          const program = slot?.ordinal === 0
+            ? replica.member(slot.id)
+            : undefined;
           if (!slot) {
             let reported = missingOrder.get(s.id);
             if (!reported) missingOrder.set(s.id, reported = new Set());
@@ -1184,13 +1209,14 @@ export function createServerResources(o: {
           let labelled = labelledRows.get(row);
           if (
             !labelled || labelled.label !== s.label ||
-            labelled.otkProjectID !== slot?.id
+            labelled.otkProjectID !== slot?.id || labelled.program !== program
           ) {
             labelled = {
               ...row,
               sidecarId: s.id,
               label: s.label,
               otkProjectID: slot?.id,
+              program,
             };
             labelledRows.set(row, labelled);
           }
@@ -1230,6 +1256,8 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      programReplicas.get(id)?.stop();
+      programReplicas.delete(id);
       orders.get(id)?.stop();
       orders.delete(id);
       missingOrder.delete(id);
@@ -1305,6 +1333,8 @@ export function createServerResources(o: {
       });
     },
     stop() {
+      for (const replica of programReplicas.values()) replica.stop();
+      programReplicas.clear();
       for (const order of orders.values()) order.stop();
       orders.clear();
       for (const release of requestSubscriptions.values()) release();
