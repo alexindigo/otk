@@ -223,11 +223,16 @@ test(
         const css = getComputedStyle(button);
         const spread = Number(css.boxShadow.match(/(-?[\d.]+)px$/)?.[1] ?? 0);
         const content = button.querySelector(".otk-live-count-compact")!;
-        const lamp = content.querySelector(".otk-status-light")!
-          .getBoundingClientRect();
-        const label = Array.from(content.querySelectorAll(".otk-control-label"))
-          .at(-1)!
-          .getBoundingClientRect();
+        // 2.151: the icon is now the leading artwork, before every lamp and
+        // count. Measure the complete contents against the painted surface.
+        const items = Array.from(
+          content.querySelectorAll(
+            ":scope > svg, .otk-status-light, .otk-control-label",
+          ),
+          (item) => item.getBoundingClientRect(),
+        );
+        const start = Math.min(...items.map((item) => item.left));
+        const end = Math.max(...items.map((item) => item.right));
         const probe = document.createElement("span");
         probe.style.inlineSize = "var(--pill-work-inset, var(--space-2))";
         probe.style.blockSize = "var(--pill-block-inset, var(--space-1))";
@@ -239,11 +244,14 @@ test(
         return {
           token,
           blockToken,
-          left: lamp.left - border.left + spread,
-          right: border.right - label.right + spread,
-          top: Math.min(lamp.top, label.top) - border.top + spread,
-          bottom: border.bottom - Math.max(lamp.bottom, label.bottom) + spread,
-          end: label.right,
+          left: start - border.left + spread,
+          right: border.right - end + spread,
+          top: Math.min(...items.map((item) => item.top)) - border.top + spread,
+          bottom: border.bottom - Math.max(...items.map((item) =>
+            item.bottom
+          )) +
+            spread,
+          end,
         };
       });
     const check = async (mode: string) => {
