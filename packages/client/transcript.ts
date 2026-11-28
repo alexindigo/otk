@@ -1814,6 +1814,7 @@ export function createTranscript(
             invalidate();
             return;
           }
+          const pageIDs = new Set(page.items.map(({ id }) => id));
           let loaded = { ...emptyContent(), messages: page.items };
           const tombstones = new Set<string>();
           const retained = firstRetained(), pageFirst = page.items[0];
@@ -1828,12 +1829,13 @@ export function createTranscript(
             }
             loaded = reduce(loaded, event);
           }
-          // Do not roll back current rows whose live clock is ahead of this
-          // older page. Stale and parked rows still need their page bodies.
+          // Catchup can carry off-page headers without their bodies. The live
+          // stream owns current off-page rows even when the page clock is ahead.
+          // On-page bodies still must not roll back current rows.
           const messages = loaded.messages.filter((message) =>
             !projection.materialized(message.id) ||
             !acquired.current(message.id) ||
-            page.clock.seq >= clock!.seq
+            (pageIDs.has(message.id) && page.clock.seq >= clock!.seq)
           );
           const { deleted } = acquired.extend(
             head.key,
