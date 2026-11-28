@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { basename } from "node:path";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -9,6 +10,10 @@ test.use({ profile: "isolated" });
 test("attention.native-failure-toast-identifies-the-background-session", {
   tag: ["@attention", "@transport", "@isolated"],
 }, async ({ isolatedState: state, page }, info) => {
+  // 2.154: the same link now shares a fitted row with project and task facts.
+  // Give the generated checkout name room; the narrow contract is covered by
+  // notification-location.spec.ts.
+  await page.setViewportSize({ width: 1920, height: 900 });
   await state.product("prefs.set", { key: "notify.os", value: false });
   await state.product("prefs.set", { key: "notify.sound", value: false });
   const failed = await state.native<{ id: string }>("/session", "POST", {
@@ -40,12 +45,14 @@ test("attention.native-failure-toast-identifies-the-background-session", {
   await expect(toast).toHaveCount(1);
   await expect(toast).toContainText("Running session failed");
   await expect(toast).toContainText("missing-failure-fixture-agent");
-  await expect(
-    toast.getByRole("link", {
-      name: "Background failure fixture",
-      exact: true,
-    }),
-  ).toHaveAttribute("href", `#/local/${failed.id}`);
+  await expect(toast.locator(".otk-toast-project-name")).toHaveText(
+    basename(state.directory),
+  );
+  const target = toast.locator(".otk-toast-task").getByRole("link", {
+    name: "Background failure fixture",
+    exact: true,
+  });
+  await expect(target).toHaveAttribute("href", `#/local/${failed.id}`);
   // Running-session notifications supply their own inspection step; the native
   // reason and that owner-authored step remain separate facts.
   await expect(toast.locator(".otk-failure-recovery")).toHaveText(
@@ -101,7 +108,8 @@ test("attention.native-failure-toast-identifies-the-background-session", {
   }
   // A real visit acknowledges the terminal the browser actually received.
   if (info.project.name === "oc-2.2.6") {
-    await openSession(state, page, failed.id);
+    await target.click();
+    await expect(page).toHaveURL(new RegExp(`${failed.id}$`));
     await openSession(state, page, other.id);
     await expect(project).toHaveAttribute("data-state", "none");
     await expect(session).toHaveAttribute("data-state", "none");

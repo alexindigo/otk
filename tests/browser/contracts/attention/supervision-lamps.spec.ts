@@ -72,10 +72,12 @@ test(
     await expect(
       row.getByRole("img", { name: "No known activity", exact: true }),
     ).toBeVisible();
-    const lamps = await page.locator(".otk-project-marker").evaluateAll((
-      markers,
+    const lamps = await page.locator(".otk-project-row").evaluateAll((
+      rows,
     ) =>
-      markers.map((marker) => marker.querySelectorAll('[role="img"]').length)
+      rows.map((row) =>
+        row.querySelectorAll('.otk-sidebar-lamp-action [role="img"]').length
+      )
     );
     expect(lamps.length).toBeGreaterThan(0);
     expect(lamps.every((count) => count === 1)).toBe(true);
