@@ -271,8 +271,7 @@ Deno.test("reply copy carries only producer-declared content; row records join t
     replyParts.map((part) => present(part).text).filter(Boolean),
     ["Reply text"],
   );
-  // Inside a reply a row record is work in the reply's own flow; a boundary
-  // still stands in the transcript.
+  // D74: reply work leaves the frames; a boundary still stands in the transcript.
   const reply = createMessageLayout().update(
     "reply",
     "assistant",
@@ -280,10 +279,15 @@ Deno.test("reply copy carries only producer-declared content; row records join t
     "",
     (part) => parts.presentation(part, DEFAULT_PREFS),
   );
-  assertEquals(reply.frames.map((frame) => frame.transcript), [false, true]);
+  assertEquals(reply.frames.map((frame) => frame.transcript), [
+    false,
+    true,
+  ]);
   assertEquals(
-    reply.frames[0].groups.map((group) => group.work),
-    [true, false, true],
+    reply.frames.flatMap((frame) =>
+      frame.groups.flatMap((group) => group.parts.map((part) => part.id))
+    ),
+    ["text", "interrupted"],
   );
   assertEquals(reply.copyable, true);
   // Outside replies, records keep their transcript frame and no work log.
@@ -350,7 +354,7 @@ Deno.test("active record progress skips queued users but respects actual turn an
   };
   const queued: Message = { ...prompt, id: "queued", time: { created: 3 } };
   const owner = createTranscriptProjection();
-  owner.replace([prompt, record, queued]);
+  owner.reset([prompt, record, queued]);
   owner.busy(true);
   assertEquals([...owner.state.queuedIDs], ["queued"]);
   assertEquals(activeProgressRecord(owner.state), "record");
@@ -371,7 +375,7 @@ Deno.test("active record progress skips queued users but respects actual turn an
   });
   assertEquals([...owner.state.queuedIDs], []);
   assertEquals(activeProgressRecord(owner.state), undefined);
-  owner.replace([prompt, record, queued]);
+  owner.reset([prompt, record, queued]);
   assertEquals(activeProgressRecord(owner.state), "record");
   const assistant: Message = {
     id: "assistant",

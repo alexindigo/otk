@@ -4,19 +4,11 @@ import {
   type ProjectStatus,
   ROLLUP_PRIORITY,
   rollupStatus,
-  URGENCY_PRIORITY,
   urgentStatus,
 } from "../inbox.ts";
 
-Deno.test("lamp display and user-attention urgency differ only for working versus finished", () => {
-  assertEquals(ROLLUP_PRIORITY, [
-    "blocked",
-    "working",
-    "finished",
-    "dependencies",
-    "none",
-  ]);
-  assertEquals(URGENCY_PRIORITY, [
+Deno.test("D78: aggregate lamps give red precedence over yellow, then green and grey", () => {
+  assertEquals<readonly ProjectStatus[]>(ROLLUP_PRIORITY, [
     "blocked",
     "finished",
     "working",
@@ -32,11 +24,17 @@ Deno.test("lamp display and user-attention urgency differ only for working versu
       );
       assertEquals(
         urgentStatus(a, b),
-        URGENCY_PRIORITY.find((state) => states.includes(state)),
+        ROLLUP_PRIORITY.find((state) => states.includes(state)),
       );
     }
   }
-  assertEquals(rollupStatus("finished", "working"), "working");
+  assertEquals(rollupStatus("working", "finished"), "finished");
+  for (const state of ROLLUP_PRIORITY) {
+    assertEquals(rollupStatus(state, "blocked"), "blocked");
+    assertEquals(rollupStatus("blocked", state), "blocked");
+  }
+  assertEquals(rollupStatus("working"), "working");
+  assertEquals(rollupStatus(), "none");
   assertEquals(urgentStatus("finished", "working"), "finished");
   assertEquals(rollupStatus(undefined), "none");
   assertEquals(urgentStatus(undefined), "none");

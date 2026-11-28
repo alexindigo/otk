@@ -34,6 +34,7 @@ Deno.test("V2 unanchored failure is one retained record after existing native hi
 
 const native = "ses_positions", sid = ids.encode(native);
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 10000,
   prefetchbytes: 100000,
   coolms: 1000,

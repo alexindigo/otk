@@ -278,6 +278,7 @@ export function deliveryContract(
         "child_id",
         "parent_id",
         "receipt",
+        "run_id",
         "terminal",
       ]);
       assertEquals(JSON.stringify(rows).includes("Result body"), false);

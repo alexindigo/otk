@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, throughDuration } from "../../fixtures/wire.ts";
-import { subagents } from "../../pages/crumbs.ts";
+import { subagentRows, subagents } from "../../pages/crumbs.ts";
 import type { Page } from "@playwright/test";
 import type { TestState } from "../../fixtures/test-state.ts";
 import type { Commands } from "../../../support/fixture-control.ts";
@@ -49,8 +49,8 @@ async function geometry(page: Page, responsiveHeader = false) {
         footer: rect(
           pane.querySelector("[data-role=assistant] .otk-message-footer"),
         ),
-        work: rect(pane.querySelector(".otk-work-fold")),
-        execution: rect(pane.querySelector(".otk-tool-line")),
+        work: rect(pane.querySelector(".otk-work-strip")),
+        execution: rect(pane.querySelector(".otk-work-strip-track")),
         thumb: rect(
           pane.parentElement!.querySelector(
             ".otk-scroll-track-y > .otk-scroll-thumb",
@@ -114,7 +114,6 @@ test(
   },
   async ({ isolatedState: state, page }, info) => {
     const { session } = await state.observe<{ session: string }>();
-    await state.product("prefs.set", { key: "expandWork", value: true });
     await state.product("permission.auto", {
       sessionID: session,
       enabled: true,
@@ -122,7 +121,7 @@ test(
     await openSession(state, page, session);
     await page.evaluate(() => document.fonts.ready);
     await expect(page.locator(".otk-response-progress")).toBeVisible();
-    await expect(page.locator(".otk-work-fold")).toBeVisible();
+    await expect(page.locator(".otk-work-strip")).toBeVisible();
     await throughDuration(300, async () => {});
     const before = await geometry(page), stop = await frameProbe(page);
     expect(before.footer).not.toBeNull();
@@ -170,7 +169,7 @@ test(
     const before = await geometry(page, true),
       stop = await frameProbe(page, true, true);
     const inventory = subagents(page);
-    const helpers = page.locator(".otk-subagents [data-subagent]");
+    const helpers = subagentRows(page);
     const allocation = async () => {
       const result = await page.locator(".otk-messages").evaluate((pane) => {
         const b = pane.getBoundingClientRect();
@@ -197,8 +196,9 @@ test(
       await expect(page.locator('.otk-task-crumbs [data-helper="true"]'))
         .toHaveCount(0);
       if (count) {
-        await expect(inventory).toHaveText(
-          `${count} subagent${count === 1 ? "" : "s"}`,
+        // D66/D67: the composer inventory now reports the disposition.
+        await expect(inventory).toHaveAccessibleName(
+          `Subagents: ${count} running`,
         );
         await inventory.click();
         await expect(helpers).toHaveCount(count);
@@ -356,7 +356,8 @@ test(
     await span.locator("button").first().click();
     await scenario(state, "fail");
     await page.locator(".otk-composer-notice").getByRole("button", {
-      name: "See response",
+      name: "Show error",
+      exact: true,
     }).click();
     await expect(page.locator('.otk-message[data-message="record-10"]'))
       .toBeFocused();

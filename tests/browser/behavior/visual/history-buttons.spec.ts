@@ -122,7 +122,7 @@ for (const [theme, id] of Object.entries(themes)) {
       await expect(page).toHaveURL(first);
       // Enter keyboard modality and move from the preceding corner toggle to the only
       // enabled history button, so this captures a real :focus-visible ring.
-      await page.locator(".otk-corner-right").focus();
+      await page.locator(".otk-corner-left").focus();
       await page.keyboard.press("Tab");
       await expect(forward).toBeFocused();
       await expect(forward.and(history.locator("button:focus-visible")))

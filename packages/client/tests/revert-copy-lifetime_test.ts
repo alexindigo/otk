@@ -24,7 +24,6 @@ Deno.test("the revert retires saved-copy actions when its archive is deleted", (
       ...emptyContent(),
       revert: { boundaryID: "p", messageIDs: [], files: [] },
     },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

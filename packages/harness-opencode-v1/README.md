@@ -61,14 +61,11 @@ Point and live-page metadata overlay current SessionErrors after native/revert
 info acquisition. Unchanged native baselines do not freeze error observations,
 and error changes do not invalidate bodies, prefetch or Source resources.
 
-`FailureAttempts` owns launch admission by attempt identity. HTTP success or
-failure and the first native report settle admission immediately; cancellation,
-new prompts, deletion and disposal retire it. Settled native-report identities
-only deduplicate an already observed reason/cause or exact event replay; they
-are never a pending session-wide match for an unrelated late error. Each HTTP
-continuation retains its own captured attempt key, so an older settlement cannot
-consume a newer attempt. Native prompt identity and retained chronological
-records remain separate from this ephemeral correlation lifecycle.
+`FailureAttempts` owns native report replay and reason/cause deduplication
+within the observed turn. New admissions, cancellation, new prompts, deletion
+and disposal retire that turn's deduplication state. An HTTP continuation owns
+its launch record by its captured request token. A V1 session error names the
+session, not that request, so it never uses the launch record or its origin.
 
 Prompt, shell and command admission share one causal-association reset,
 retaining only the creation watermark. Only newly observed native prompt facts

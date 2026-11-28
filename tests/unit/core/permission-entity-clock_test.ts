@@ -3,18 +3,10 @@ import { assertEquals } from "@std/assert";
 import { entityKey, type IndexMetadata } from "@otk/protocol";
 import { EntityStates } from "../../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
+import { ManualClock } from "../../support/manual-clock.ts";
 
 Deno.test("server permission deadlines publish one verdict to the session, task and project", () => {
-  let now = 0;
-  const pending = new Map<() => void, number>();
-  const advance = (time: number) => {
-    now = time;
-    for (const [run, at] of pending) {
-      if (at > now) continue;
-      pending.delete(run);
-      run();
-    }
-  };
+  const clock = new ManualClock();
   const root: IndexMetadata = {
     id: "root",
     directory: "/p",
@@ -39,16 +31,7 @@ Deno.test("server permission deadlines publish one verdict to the session, task 
       descendants: (id) => new Set(id === root.id ? [id, "helper"] : [id]),
     },
     () => {},
-    {
-      now: () => now,
-      set: (run, delay) => {
-        pending.set(run, now + delay);
-        return run;
-      },
-      clear: (timer) => {
-        pending.delete(timer as () => void);
-      },
-    },
+    clock,
   );
   const put = (...keys: string[]) =>
     states.session({
@@ -71,24 +54,24 @@ Deno.test("server permission deadlines publish one verdict to the session, task 
   assertEquals(task()?.helpers?.counts, {
     running: 1,
     needsYou: 0,
-    notReturned: 0,
+    finished: 0,
   });
-  advance(400);
+  clock.advanceTo(400);
   put("new");
-  advance(500);
+  clock.advanceTo(500);
   assertEquals(session()?.state, "working");
-  advance(899);
+  clock.advanceTo(899);
   assertEquals(project()?.state, "working");
-  advance(900);
+  clock.advanceTo(900);
   assertEquals(session()?.state, "blocked");
   assertEquals(task()?.state, "blocked");
   assertEquals(task()?.helpers?.counts, {
     running: 0,
     needsYou: 1,
-    notReturned: 0,
+    finished: 0,
   });
   assertEquals(project()?.state, "blocked");
   put();
   assertEquals(project()?.state, "working");
-  assertEquals(pending.size, 0);
+  assertEquals(clock.pending, 0);
 });

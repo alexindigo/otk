@@ -56,12 +56,13 @@ test(
     await page.goto(state.url + "/?source");
     await expect(page.locator('[data-message-command="reply.copy"]'))
       .toBeAttached();
-    await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-      "aria-expanded",
-      "false",
+    await expect(page.locator(".otk-work-strip")).toHaveAttribute(
+      "type",
+      "button",
     );
-    await expect(page.locator(".otk-work-fold")).toHaveText("Work log");
-    await expect(page.locator(".otk-work-body")).toHaveCount(0);
+    await expect(page.locator(".otk-work-strip")).toContainText("Work log");
+    await expect(page.locator('#otk-panel-content[aria-label="Work log"]'))
+      .toHaveCount(0);
     await page.evaluate("sourceProbe.reset()");
     const start = performance.now();
     await page.evaluate("sourceProbe.run()");
@@ -79,7 +80,11 @@ test(
     expect(before.reads).toBe(0);
     expect(before.stringifiedBytes).toBe(0);
     expect(before.bodies).toBe(0);
-    await expect(page.locator(".otk-work-body,[data-source-body]")).toHaveCount(
+    await expect(
+      page.locator(
+        '#otk-panel-content[aria-label="Work log"],[data-source-body]',
+      ),
+    ).toHaveCount(
       0,
     );
     await context.grantPermissions(["clipboard-read", "clipboard-write"], {

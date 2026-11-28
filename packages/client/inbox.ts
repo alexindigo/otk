@@ -6,6 +6,8 @@ import {
 } from "./entity-state.ts";
 import { entityKey } from "@otk/protocol";
 import type {
+  AcknowledgedSessions,
+  AcknowledgeScope,
   InboxBaseline,
   InboxOp,
   InboxSnapshot,
@@ -23,13 +25,57 @@ import type {
 import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
-import { projectName } from "./project-navigation.ts";
-import { age, type TimeText } from "./format.ts";
+import { checkoutLabel } from "./project-names.ts";
+import { sidebarTimer, type SidebarTiming } from "./sidebar-timer.ts";
 import {
   type ProjectPlacement,
   projectPlacement,
 } from "./project-placement.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
+
+/** Wait for the consumer's authoritative replica, not merely the write receipt. */
+export function awaitAcknowledged(
+  store: EntityStateStore,
+  { sessions, closed }: AcknowledgedSessions,
+  signal: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      if (signal.aborted || store.isStale) {
+        cleanup();
+        reject(
+          new Error(
+            "The lamps did not update. Reload to see the current state.",
+          ),
+        );
+      } else if (
+        (closed ?? []).every((id) =>
+          !store.get(entityKey("session", id))?.opened
+        ) &&
+        sessions.every(({ sessionID, terminal, runID }) => {
+          const value = store.get(entityKey("session", sessionID));
+          // A receipt spans the whole subtree, not the socket's leased rows.
+          // An unleased entity has no local lamp to wait for.
+          return !value || (value.terminal ?? 0) > terminal ||
+            (!!runID && !!value.runID && value.runID !== runID) ||
+            (value.counts.unseen === 0 &&
+              value.evidence?.helper !== "finished");
+        })
+      ) {
+        cleanup();
+        resolve();
+      }
+    };
+    const release = store.observeChanges(finish);
+    const cleanup = () => {
+      release();
+      signal.removeEventListener("abort", finish);
+    };
+    signal.addEventListener("abort", finish, { once: true });
+    finish();
+  });
+}
+
 export type InboxStatus = ProjectStatus;
 export interface OperationAttention {
   operationStatus?: InboxStatus;
@@ -61,7 +107,7 @@ export interface InboxProject extends ProjectRecord, Partial<ProjectPlacement> {
   status: InboxStatus;
   unread: boolean;
   unseenCount?: number | null;
-  visit?: TimeText;
+  timer?: SidebarTiming;
   /** Unused: names are not tinted by visit age (S4). Optional only so
    * standalone fixtures that still name it keep type-checking. */
   ageing?: number;
@@ -115,7 +161,7 @@ export function projectHierarchy<
   const walk = (
     node: ReturnType<typeof projectTree<T>>[number],
     depth = 0,
-    parent?: T,
+    parentLabel?: string,
   ) => {
     const row = node.project;
     const worktree = !!row.topology &&
@@ -123,21 +169,21 @@ export function projectHierarchy<
     const presentation = {
       level: worktree ? "worktree" as const : "project" as const,
       artwork: worktree ? "none" as const : "avatar" as const,
-      displayName: (!worktree && row.summary?.presentation?.name) ||
-        projectName(row.directory),
+      displayName: checkoutLabel(row.directory, {
+        presentation: row.summary?.presentation,
+        topology: row.topology,
+      }),
     };
     const lifted = row.inactive &&
       node.children.some((child) =>
         ["active", "archived"].includes(projectGroup(child.project))
       );
-    const parentLabel = parent
-      ? projectName(parent.directory)
-      : row.parentLabel;
+    const label = parentLabel ?? row.parentLabel;
     const key = JSON.stringify([
       presentation,
       lifted,
-      parent ? depth : row.depth,
-      parentLabel,
+      parentLabel ? depth : row.depth,
+      label,
     ]);
     let cached = hierarchyRows.get(row);
     if (!cached || cached.key !== key) {
@@ -150,10 +196,8 @@ export function projectHierarchy<
             inactive: false,
             inactivePolicy: true,
           }
-          : parent &&
-              (row.depth !== depth ||
-                row.parentLabel !== projectName(parent.directory))
-          ? { ...row, depth, parentLabel: projectName(parent.directory) }
+          : parentLabel && (row.depth !== depth || row.parentLabel !== label)
+          ? { ...row, depth, parentLabel: label }
           : row),
         ...presentation,
       };
@@ -161,7 +205,9 @@ export function projectHierarchy<
       hierarchyRows.set(row, cached);
     }
     result.push(cached.row as HierarchyRow<T>);
-    for (const child of node.children) walk(child, depth + 1, row);
+    for (const child of node.children) {
+      walk(child, depth + 1, presentation.displayName);
+    }
   };
   for (const root of projectTree(rows)) walk(root);
   return result;
@@ -211,14 +257,13 @@ export function inboxProjects(
       project.directory,
       entries.filter((entry) => entry.directory === project.directory),
     )
-  ).sort((a, b) => a.order - b.order).map(
+  ).map(
     (project) => {
       const sessions = entries.filter((entry) =>
         entry.directory === project.directory
       );
       const status = statusFor(project.directory);
       const inactive = project.inactive && status === "none";
-      const clock = inactive ? project.inactiveAt ?? project.lastVisit : now;
       return {
         ...project,
         source: "tracked" as const,
@@ -230,7 +275,12 @@ export function inboxProjects(
         inactive,
         status,
         unread: (stateFor(project.directory)?.counts.unseen ?? 0) > 0,
-        visit: age(project.lastVisit, clock, inactive ? "inactive" : "now"),
+        timer: sidebarTimer(
+          status,
+          stateFor(project.directory)?.runStartedAt,
+          now,
+          project,
+        ),
       };
     },
   );
@@ -258,11 +308,15 @@ export function inboxProjects(
       directory,
       source: "index",
       group: "active",
-      order: 0,
       added: false,
       inactive: false,
       lastVisit: 0,
       status: statusFor(directory),
+      timer: sidebarTimer(
+        statusFor(directory),
+        stateFor(directory)?.runStartedAt,
+        now,
+      ),
       unread: (stateFor(directory)?.counts.unseen ?? 0) > 0,
     };
   });
@@ -273,7 +327,6 @@ export function inboxProjects(
       directory,
       source: "template",
       group: "discovered",
-      order: 0,
       added: false,
       inactive: false,
       lastVisit: 0,
@@ -284,21 +337,23 @@ export function inboxProjects(
     [...tracked, ...discovered, ...templates].map((row) => {
       const summary = inbox.summaries?.[row.directory];
       const archived = summary?.archived === true;
+      const entity = stateFor(row.directory);
       const placement = projectPlacement({
         lifecycle: summary,
         status: row.status,
-        dependencies: stateFor(row.directory)?.dependencies,
+        dependencies: entity?.dependencies,
+        liveWork: entity?.liveWork,
         inactive: row.inactive,
         hasSessions: row.group !== "discovered",
       });
       return {
         ...row,
         ...placement,
-        dependencies: stateFor(row.directory)?.dependencies,
+        dependencies: entity?.dependencies,
         group: placement.section === "live"
           ? "active" as const
           : placement.section,
-        unseenCount: stateFor(row.directory)?.counts.unseen ?? null,
+        unseenCount: entity?.counts.unseen ?? null,
         archived,
         topology: summary?.topology,
         availability: summary?.availability,
@@ -320,6 +375,7 @@ export interface InboxState {
   inbox: InboxSnapshot;
 }
 export interface InboxChanges {
+  settlements?: readonly import("@otk/protocol").SettlementChange[];
   baseline: boolean;
   /** Changed single-state keys; no client re-aggregation. */
   entities?: readonly string[];
@@ -333,6 +389,9 @@ export interface InboxChanges {
 export interface InboxModel {
   stop(): void;
   state: InboxState;
+  /** Last accepted task answer for this project in the current connection. */
+  projectTasks(directory: string): TaskRecord[] | undefined;
+  invalidateProjectTasks(): void;
   /** Presentation view of the entity replica: receipt times and transitions. */
   readonly entities: EntityStateStore;
   subscribe(listener: (state: InboxState) => void): () => void;
@@ -345,6 +404,11 @@ export interface InboxModel {
     directory: string,
     terminal?: number,
   ): Promise<void>;
+  acknowledge(
+    scope: AcknowledgeScope,
+    options?: RequestOptions,
+  ): Promise<AcknowledgedSessions>;
+  clearAttention(scope: AcknowledgeScope, signal?: AbortSignal): Promise<void>;
   visit(directory: string, options?: RequestOptions): Promise<unknown>;
   act<T>(
     directory: string,
@@ -361,6 +425,7 @@ export function createInbox(
   currentEpoch?: () => number,
   /** The connection's reactive state, for stale entity presentation (D6). */
   connected?: () => boolean,
+  currentProject?: () => string | undefined,
 ): InboxModel {
   // Accepted metadata is invocation-current, like ClientIndex. Framework state
   // publishes a dependency clock; deferred binding cannot govern reduced facts.
@@ -375,11 +440,22 @@ export function createInbox(
     },
   };
   const clock = factory({ revision: 0 });
+  const projectTasks = new Map<string, TaskRecord[]>();
+  let taskProject: string | undefined;
+  const advance = () => clock.update((draft) => draft.revision++);
+  const invalidateProjectTasks = () => {
+    taskProject = undefined;
+    if (!projectTasks.size) return;
+    projectTasks.clear();
+    advance();
+  };
   const entityStates = createEntityStateStore({
     read: () => current.inbox.entities,
     factory,
     connected,
   });
+  const acknowledge = (scope: AcknowledgeScope, options?: RequestOptions) =>
+    rpc.call("sessions.acknowledge", scope, options);
   const state: InboxState = {
     get ready() {
       void clock.state.revision;
@@ -392,6 +468,7 @@ export function createInbox(
   };
   let generation: string | undefined, revision = -1, epoch = 0, alive = true;
   let summaryRevision = 0;
+  let settlementRevision = 0;
   let observedSummary: { generation: string; revision: number } | undefined;
   let recoveryController: AbortController | undefined;
   let recovering: Promise<void> | undefined;
@@ -407,6 +484,7 @@ export function createInbox(
       value.generation === generation && (value.revision < revision ||
         (value.summaryRevision ?? 0) < summaryRevision)
     ) return;
+    if (generation !== value.generation) settlementRevision = 0;
     generation = value.generation;
     revision = value.revision;
     summaryRevision = value.summaryRevision ?? 0;
@@ -423,10 +501,12 @@ export function createInbox(
         ? { entities: { ...value.inbox.entities } }
         : {}),
     };
+    if (value.epoch !== undefined && value.epoch === currentEpoch?.()) {
+      taskProject = currentProject?.();
+      if (taskProject) projectTasks.set(taskProject, current.inbox.tasks);
+    }
     current.ready = true;
-    clock.update((draft) => {
-      draft.revision++;
-    });
+    advance();
     entityStates.observe("all", "historical");
     publish({
       baseline: true,
@@ -496,9 +576,7 @@ export function createInbox(
         );
         if (at < 0) draft.projects.push(op.project);
         else draft.projects[at] = op.project;
-        draft.projects.sort((a, b) =>
-          a.order - b.order || a.directory.localeCompare(b.directory)
-        );
+        draft.projects.sort((a, b) => a.directory.localeCompare(b.directory));
         break;
       }
       case "project.remove":
@@ -539,6 +617,11 @@ export function createInbox(
     }
   };
   return {
+    projectTasks(directory) {
+      void clock.state.revision;
+      return projectTasks.get(directory);
+    },
+    invalidateProjectTasks,
     stop() {
       alive = false;
       listeners.clear();
@@ -569,11 +652,15 @@ export function createInbox(
       if (!alive) return;
       if (frame.t === "welcome") {
         epoch++;
+        current.ready = false;
+        invalidateProjectTasks();
+        advance();
         recoveryController?.abort();
         recoveryController = undefined;
         generation = undefined;
         revision = -1;
         summaryRevision = 0;
+        settlementRevision = 0;
         recovering = undefined;
         observed = undefined;
         observedSummary = undefined;
@@ -586,6 +673,20 @@ export function createInbox(
           observed = undefined;
           recoveryController?.abort();
         }
+      } else if (frame.t === "inbox.settlement") {
+        if (
+          frame.generation !== generation ||
+          frame.revision <= settlementRevision
+        ) return;
+        settlementRevision = frame.revision;
+        publish({
+          baseline: false,
+          settlements: frame.values,
+          projects: [],
+          sessions: [],
+          tasks: false,
+          discovery: false,
+        });
       } else if (frame.t === "inbox.summaries") {
         if (
           frame.generation === generation && frame.revision <= summaryRevision
@@ -636,9 +737,15 @@ export function createInbox(
         }
         revision = frame.revision;
         for (const op of frame.ops) apply(current.inbox, op);
-        clock.update((draft) => {
-          draft.revision++;
-        });
+        if (
+          taskProject && taskProject === currentProject?.() &&
+          frame.ops.some((op) =>
+            op.op === "task.upsert" || op.op === "task.remove"
+          )
+        ) {
+          projectTasks.set(taskProject, current.inbox.tasks);
+        }
+        advance();
         const projects = new Set<string>(),
           sessions = new Set<string>(),
           entities = new Set<string>();
@@ -707,8 +814,25 @@ export function createInbox(
         current.inbox.entities?.[entityKey("session", sessionID)]?.terminal ??
           0,
     ): Promise<void> {
+      const value = entityStates.get(entityKey("session", sessionID));
+      const runID = value?.terminal === terminal ? value.runID : undefined;
       await rpc.call("projects.visit", { directory });
-      await rpc.call("sessions.seen", { sessionID, terminal });
+      await rpc.call("sessions.seen", {
+        sessionID,
+        terminal,
+        ...(runID ? { runID } : {}),
+      });
+    },
+    acknowledge,
+    async clearAttention(scope: AcknowledgeScope, signal?: AbortSignal) {
+      const acknowledged = await acknowledge(scope, {
+        signal,
+      });
+      await awaitAcknowledged(
+        entityStates,
+        acknowledged,
+        signal ?? AbortSignal.timeout(75_000),
+      );
     },
     visit(directory: string, options?: RequestOptions) {
       return rpc.call("projects.visit", { directory, active: true }, options);

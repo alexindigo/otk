@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   For,
   onCleanup,
-  onSettled,
   Show,
 } from "solid-js";
 import {
   type ActionControl,
+  ActivityPresence,
   type EntityStateStore,
   helperClock,
   helperCountParts,
@@ -17,6 +18,7 @@ import {
   helperDisposition,
   lamp,
   type LiveWorkOwner,
+  taskHelpersState,
   unknownTime,
 } from "@otk/client";
 import {
@@ -27,16 +29,19 @@ import {
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
+import { solidState } from "../state/binding.ts";
 import ActionButton from "./ActionButton.tsx";
+import TerminateButton, { bindWorkTermination } from "./TerminateButton.tsx";
 import StatusLight from "./StatusLight.tsx";
 import LiveCount, { LIVE_COUNT_TRIGGER } from "./LiveCount.tsx";
-import { StopIcon } from "./ChromeIcons.tsx";
+import { CheckAllIcon, RobotIcon } from "./ChromeIcons.tsx";
 import SelectionContent from "./SelectionContent.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem, MetaRow } from "./ChromeMeta.tsx";
 import EntityPill from "./EntityPill.tsx";
 import TimeValue from "./TimeValue.tsx";
 import TimeText from "./TimeText.tsx";
 import Menu from "./surface/Menu.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
 import "./Subagents.css" with { type: "text" };
@@ -44,6 +49,7 @@ import "./Subagents.css" with { type: "text" };
 /** D67: the composer's single view of the entity owner's D66 helper inventory. */
 export default function Subagents(
   props: {
+    task?: string;
     helpers?: TaskHelpers;
     current: string;
     entities?: EntityStateStore;
@@ -51,16 +57,33 @@ export default function Subagents(
     agent(id: string): string | undefined;
     openAction(id: string): ActionControl;
     owner?: LiveWorkOwner;
+    focusHome(): void;
   },
 ) {
   const session = useOptionalSessionPorts();
   const helpers = () => props.helpers;
+  const counts = () => helpers()?.counts;
+  const state = () =>
+    props.entities
+      ? taskHelpersState(props.entities, props.task)
+      : helpers()?.ids.length
+      ? "items"
+      : "empty";
+  const presence = new ActivityPresence(solidState);
+  let menu: PopoverControl | undefined;
+  createEffect(state, (state) => {
+    if (state !== "loading") presence.publish(state === "items" ? 1 : 0);
+  });
+  createEffect(() => presence.retiring, (retiring) => {
+    if (retiring) menu?.close(props.focusHome);
+  });
   const entities = () => props.entities;
   const grouped = createMemo(() => {
     const byState: Record<HelperDisposition, string[]> = {
       running: [],
       needsYou: [],
-      notReturned: [],
+      finished: [],
+      opened: [],
     };
     const store = entities();
     if (store) {
@@ -69,202 +92,220 @@ export default function Subagents(
         if (disposition) byState[disposition].push(id);
       }
     }
-    const counts = helpers()?.counts;
-    return counts
-      ? helperCountParts(counts).map((group) => ({
-        ...group,
-        ids: byState[group.kind],
-      }))
-      : [];
+    return helperCountParts(counts()).map((group) => ({
+      ...group,
+      ids: byState[group.kind],
+    }));
   });
   const headingID = createUniqueId();
   const [now, setNow] = createSignal(Date.now());
   let timer: ReturnType<typeof setInterval> | undefined;
   const stop = () => clearInterval(timer);
   onCleanup(stop);
-  const [revision, setRevision] = createSignal(0);
-  onSettled(() =>
-    props.owner?.subscribe(() => setRevision((value) => value + 1))
+  const termination = bindWorkTermination(
+    () => props.owner,
+    "helper",
+    "subagent",
   );
-  const workID = (id: string) => `helper/${id}`;
-  const stopping = (id: string) => {
-    revision();
-    return props.owner?.stopping(workID(id));
-  };
   const ports = useCommandPorts();
-  const stopCommand = `subagents.stop@${createUniqueId()}`;
+  const clearCommand = `subagents.clearFinished@${createUniqueId()}`;
+  const task = () => props.task ? entities()?.get(props.task)?.id : undefined;
+  const canClear = () =>
+    !!task() && !!session?.clearFinished &&
+    ((counts()?.finished ?? 0) > 0 || (counts()?.opened ?? 0) > 0);
   ownedCommand(ports, {
-    id: stopCommand,
-    title: "Stop subagent",
+    id: clearCommand,
+    title: "Clear finished subagents",
     category: "Session",
     scope: "control",
-    arguments: { type: "string" },
-    availability: (_context, id: string) =>
-      props.owner?.canStop(workID(id)) ? { available: true } : {
+    availability: () =>
+      canClear() ? { available: true } : {
         available: false,
-        reason: "Subagent cannot be stopped",
         hidden: true,
+        reason: "No finished subagents",
       },
-    run: (_context, id: string) => props.owner?.stop(workID(id)),
+    run: () => session?.clearFinished?.(task()!),
   });
-  const stopAction = (id: string) =>
-    ports.commands.control(stopCommand, id, {
-      target: { label: props.title(id) },
-      // The stop request has settled; the lamp still follows native work evidence.
-      shown: () => true,
-      unshown: "The stop request did not complete.",
-      recovery:
-        "Check the subagent and try stopping it again if it is still running",
-    });
-  let menu: PopoverControl | undefined;
+  const clear = ports.commands.control(clearCommand, undefined, {
+    target: { label: "Finished subagents" },
+    // The port resolves only when the published change is observed.
+    shown: () => true,
+    unshown: "The finished subagents are still listed.",
+    recovery: "Try again; if it keeps failing, reload OTK",
+  });
+  const clearTitle = (bind: (button: HTMLElement) => void) => (
+    <ActionButton
+      ref={bind}
+      class="otk-subagents-clear"
+      action={clear}
+      pendingLabel="Clearing..."
+    >
+      <CheckAllIcon />
+      <span class="otk-control-label">Clear finished</span>
+    </ActionButton>
+  );
   return (
-    <Show when={helpers()?.ids.length ? helpers() : undefined}>
-      {(publication) => (
-        <Menu
-          class="otk-subagents"
-          place="bounds-end"
-          triggerClass={`${LIVE_COUNT_TRIGGER} otk-subagents-trigger`}
-          label="Subagents"
-          title="Subagents"
-          triggerLabel={`Subagents: ${
-            helperCountsLabel(publication().counts, "spoken")
-          }`}
-          size="fit"
-          control={(control) => menu = control}
-          dismissOnAction={false}
-          onOpen={() => {
-            stop();
-            setNow(Date.now());
-            timer = setInterval(() => setNow(Date.now()), 1000);
-          }}
-          onClose={stop}
-          trigger={
+    <Show when={presence.mounted}>
+      <Menu
+        class="otk-subagents"
+        place="bounds-end"
+        triggerClass={`${LIVE_COUNT_TRIGGER} otk-subagents-trigger`}
+        label="Subagents"
+        title="Subagents"
+        titleAction={canClear() ? clearTitle : undefined}
+        triggerLabel={state() === "loading"
+          ? "Loading subagents"
+          : `Subagents: ${helperCountsLabel(counts())}`}
+        size="fit"
+        control={(control) => menu = control}
+        dismissOnAction={false}
+        onOpen={() => {
+          presence.opened();
+          stop();
+          setNow(Date.now());
+          timer = setInterval(() => setNow(Date.now()), 1000);
+        }}
+        onClose={() => {
+          stop();
+          presence.closed();
+        }}
+        trigger={
+          <Show
+            when={state() !== "loading"}
+            fallback={<ProgressStatus text="Loading subagents..." />}
+          >
             <LiveCount
-              entities={entities()}
-              lampKey={publication().ids.map((id) => entityKey("session", id))}
-              label={helperCountsLabel(publication().counts)}
-              compact={grouped().map((group) => ({
-                id: group.kind,
-                count: group.count,
-                lampKey: group.ids.map((id) => entityKey("session", id)),
+              icon={RobotIcon}
+              parts={helperCountParts(counts()).map((part) => ({
+                id: part.kind,
+                count: part.count,
+                lamp: helpers()?.lamps?.groups[part.kind],
               }))}
             />
-          }
-        >
-          <div class="otk-subagent-list" role="presentation">
-            <For each={grouped()} keyed={(group) => group.kind}>
-              {(group) => (
-                <div
-                  class="otk-subagent-group"
-                  role="group"
-                  aria-labelledby={`${headingID}-${group().kind}`}
-                >
-                  <div class="otk-subagent-heading">
-                    <ChromeMeta id={`${headingID}-${group().kind}`}>
-                      {group().title} {group().count}
-                    </ChromeMeta>
-                  </div>
-                  <For each={group().ids}>
-                    {(id) => {
-                      const key = entityKey("session", id);
-                      const evidence = () => {
-                        const store = entities();
-                        return store && !store.isStale
-                          ? store.get(key)
-                          : undefined;
-                      };
-                      const clock = createMemo(() =>
-                        helperClock(evidence(), now())
-                      );
-                      return (
-                        <div class="otk-subagent-row" data-subagent={id}>
-                          <div class="otk-subagent-navigation">
-                            <ActionButton
-                              action={props.openAction(id)}
-                              selection={selection({
-                                class: "otk-subagent-name",
-                                kind: "current",
-                                selected: props.current === id,
-                              })}
-                              attributes={{
-                                "data-otk-selection": "vertical",
-                              }}
-                              onShown={() => menu?.close()}
-                            >
-                              <SelectionContent>
-                                <StatusLight
-                                  small
-                                  state={lamp(entities(), key)}
-                                />
-                                <span
-                                  class="otk-control-label"
-                                  title={props.title(id)}
-                                >
-                                  {props.title(id)}
-                                </span>
-                              </SelectionContent>
-                            </ActionButton>
-                          </div>
-                          <div class="otk-subagent-agent">
-                            <Show when={props.agent(id)}>
-                              {(agent) => (
-                                <EntityPill
-                                  label={agent()}
-                                  facts={scopedEntityFacts(session, {
-                                    sessionID: id,
-                                  })}
-                                />
-                              )}
-                            </Show>
-                          </div>
-                          <ChromeMeta
-                            class="otk-subagent-time"
-                            aria-label={group().kind === "needsYou"
-                              ? "Waiting for you"
-                              : undefined}
-                          >
-                            <Show
-                              when={clock()}
-                              fallback={
-                                <TimeValue
-                                  value={unknownTime(
-                                    "The native execution start and finish times are not available.",
-                                  )}
-                                />
-                              }
-                            >
-                              {(value) => (
-                                <TimeText
-                                  time={value().time}
-                                  suffix={value().ago ? "ago" : undefined}
-                                />
-                              )}
-                            </Show>
-                          </ChromeMeta>
-                          <div class="otk-subagent-stop">
-                            <Show when={group().kind === "running"}>
-                              <ActionButton
-                                class="otk-icon-button otk-subagent-stop-button"
-                                action={stopAction(id)}
-                                label={`Stop ${props.title(id)}`}
-                                title={`Stop ${props.title(id)}`}
-                                pendingLabel="Stopping..."
-                                busy={stopping(id)}
-                              >
-                                <StopIcon />
-                              </ActionButton>
-                            </Show>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  </For>
+          </Show>
+        }
+      >
+        <div class="otk-subagent-list" role="presentation">
+          <Show when={state() === "loading"}>
+            <ProgressStatus text="Loading subagents..." />
+          </Show>
+          <For each={grouped()} keyed={(group) => group.kind}>
+            {(group) => (
+              <div
+                class="otk-subagent-group"
+                role="group"
+                aria-labelledby={`${headingID}-${group().kind}`}
+              >
+                <div class="otk-subagent-heading">
+                  <ChromeMeta id={`${headingID}-${group().kind}`}>
+                    <StatusLight
+                      small
+                      state={lamp(helpers()?.lamps?.groups[group().kind])}
+                    />
+                    {group().title} {group().count}
+                  </ChromeMeta>
                 </div>
-              )}
-            </For>
-          </div>
-        </Menu>
-      )}
+                <For each={group().ids}>
+                  {(id) => {
+                    const key = entityKey("session", id);
+                    const evidence = () => {
+                      const store = entities();
+                      return store && !store.isStale
+                        ? store.get(key)
+                        : undefined;
+                    };
+                    const clock = createMemo(() =>
+                      helperClock(evidence(), now())
+                    );
+                    return (
+                      <div class="otk-subagent-row" data-subagent={id}>
+                        <div class="otk-subagent-navigation">
+                          <ActionButton
+                            action={props.openAction(id)}
+                            selection={selection({
+                              class: "otk-subagent-name",
+                              kind: "current",
+                              selected: props.current === id,
+                            })}
+                            attributes={{
+                              "data-otk-selection": "vertical",
+                            }}
+                            onShown={() => menu?.close()}
+                          >
+                            <SelectionContent>
+                              <StatusLight
+                                small
+                                state={lamp(entities(), key)}
+                              />
+                              <span
+                                class="otk-control-label"
+                                title={props.title(id)}
+                              >
+                                {props.title(id)}
+                              </span>
+                            </SelectionContent>
+                          </ActionButton>
+                        </div>
+                        <div class="otk-subagent-meta">
+                          <MetaRow whole intrinsic class="otk-subagent-facts">
+                            <MetaItem rank={2} class="otk-subagent-agent">
+                              <Show when={props.agent(id)}>
+                                {(agent) => (
+                                  <EntityPill
+                                    label={agent()}
+                                    facts={scopedEntityFacts(session, {
+                                      sessionID: id,
+                                    })}
+                                  />
+                                )}
+                              </Show>
+                            </MetaItem>
+                            <MetaItem rank={1}>
+                              <ChromeMeta
+                                class="otk-subagent-time"
+                                aria-label={group().kind === "needsYou"
+                                  ? "Waiting for you"
+                                  : undefined}
+                              >
+                                <Show
+                                  when={clock()}
+                                  fallback={
+                                    <TimeValue
+                                      value={unknownTime(
+                                        "The native execution start and finish times are not available.",
+                                      )}
+                                    />
+                                  }
+                                >
+                                  {(value) => (
+                                    <TimeText
+                                      time={value().time}
+                                      suffix={value().ago ? "ago" : undefined}
+                                    />
+                                  )}
+                                </Show>
+                              </ChromeMeta>
+                            </MetaItem>
+                          </MetaRow>
+                        </div>
+                        <div class="otk-subagent-terminate">
+                          <Show when={group().kind === "running"}>
+                            <TerminateButton
+                              action={termination.action(id, props.title(id))}
+                              name={props.title(id)}
+                              busy={termination.busy(id)}
+                            />
+                          </Show>
+                        </div>
+                      </div>
+                    );
+                  }}
+                </For>
+              </div>
+            )}
+          </For>
+        </div>
+      </Menu>
     </Show>
   );
 }

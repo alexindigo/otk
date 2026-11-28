@@ -1,57 +1,133 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-toasts {
   position: fixed;
-  right: var(--overlay-gutter);
-  bottom: var(--overlay-gutter);
+  inset: var(--overlay-gutter);
+  margin-inline-start: auto;
   z-index: var(--layer-toast);
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   align-items: stretch;
   gap: var(--space-2);
-  width: min(25rem, calc(100vw - 2 * var(--overlay-gutter)));
+  /* The widest row sizes the stack; every card stretches to that edge. */
+  inline-size: max-content;
+  max-inline-size: stretch;
   pointer-events: none;
 }
-.otk-toast-header {
+.otk-toast-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--control-size);
   align-items: start;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
 }
-.otk-toast-message {
-  row-gap: var(--space-1);
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  padding: 0;
-  line-height: 1.5;
+.otk-toast.has-lead .otk-toast-row {
+  grid-template-columns: var(--control-size) minmax(0, 1fr) var(--control-size);
+}
+.otk-toast-lead {
+  display: grid;
+  place-items: center;
+  block-size: var(--control-size);
+}
+.otk-toast-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(var(--control-size), auto);
+  align-items: center;
+  column-gap: var(--space-1);
+  min-inline-size: 0;
+}
+.otk-toast-line > :not(.otk-toast-title, .otk-toast-target) {
+  grid-column: 1 / -1;
 }
 .otk-toast-title {
   font-weight: 500;
 }
-.otk-toast-body {
+.otk-toast-target {
+  --focus-ring-offset: 0px;
+  justify-self: start;
+  padding: var(--space-1);
+  font-weight: 400;
   color: var(--otk-fg-faint);
 }
-.otk-toast-actions {
+.otk-toast-target:is(button, a):hover {
+  background: none;
+  color: var(--otk-fg);
+  text-decoration: underline;
+}
+.otk-toast-more {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+}
+.otk-toast.has-lead .otk-toast-more {
+  grid-column-start: 2;
+}
+.otk-toast-foot,
+.otk-toast-foot-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.otk-toast-actions button {
+.otk-toast-foot-actions {
+  min-inline-size: 0;
+  margin-inline-start: auto;
+}
+.otk-toast-action {
   font-size: var(--text-meta);
 }
-.otk-toast-dismiss {
-  margin-inline-start: auto;
+.otk-toast-row > .otk-toast-failure {
+  grid-column: 1 / 3;
+  --failure-heading-size: var(--control-size);
+  --failure-heading-align: center;
+}
+.otk-toast-failure-action {
+  text-align: end;
+  min-inline-size: 0;
+}
+.otk-toasts-pager {
+  /* The paging control borrows the cards' width; it never widens the cards. */
+  contain: inline-size;
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
 }
 .otk-toasts-more {
   pointer-events: auto;
-  align-self: flex-end;
   background: var(--overlay-bg);
+  min-inline-size: 0;
 }
-.otk-toasts {
-  max-height: calc(100dvh - 2 * var(--overlay-gutter));
+.otk-toasts.is-layer {
+  position: static;
+  /* Stretch over the stage; the flex column packs cards against its end. */
+  justify-self: end;
+  margin: var(--overlay-gutter);
+  max-block-size: stretch;
 }
-.otk-toasts-more {
-  flex: none;
+/* Borrow inline space when narrow, but keep the owning row's block bounds. */
+@container transcript-stage (inline-size < 28rem) {
+  .otk-toasts.is-layer {
+    justify-self: var(--toast-narrow-alignment, center);
+    max-inline-size: 50vi;
+  }
+}
+.otk-toast-location {
+  --meta-row-gap: var(--space-2);
+  grid-column: 1 / -1;
+  flex: auto;
+  font: inherit;
+  color: inherit;
+  /* The open control's focus paint stays inside its padded box. */
+  min-block-size: var(--control-size);
+}
+.otk-toast-project {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 500;
+}
+.otk-toast-project-name {
+  display: var(--meta-label-full, inline);
+}
+.otk-toast-location .otk-toast-target {
+  display: inline-block;
+  color: inherit;
 }

@@ -18,6 +18,7 @@ import {
   upgradedManifest,
   userSnapshot,
 } from "../support/beta1-state.ts";
+import { withoutLegacyPositions } from "./project-order-upgrade.ts";
 import { DatabaseSync } from "node:sqlite";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
@@ -169,7 +170,9 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       // Native discovery may add current-user projects during ordinary startup;
       // every historical row must still match the independent upgrade manifest.
       for (
-        const [table, rows] of Object.entries(upgradedManifest(original.before))
+        const [table, rows] of Object.entries(
+          withoutLegacyPositions(upgradedManifest(original.before)),
+        )
       ) {
         for (const row of rows) {
           assert(
@@ -192,35 +195,40 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       (value) =>
         value?.state === "ready" && derivedValue(value.total)?.cost === null,
     );
+    const watch = (directory: string, files?: true) => {
+      let ref: RequestRef | undefined;
+      return {
+        result: first.client.rpc<DirectoryCatalog>("catalogs.watch", {
+          directory,
+          ...(files ? { files } : {}),
+        }).then((value) => {
+          const result = first.client.frames.find((frame) =>
+            frame.t === "request.result" && frame.outcome.ok &&
+            frame.outcome.result === value
+          );
+          assert(result?.t === "request.result");
+          ref = result.ref;
+          return value;
+        }),
+        release() {
+          if (ref) first.client.send({ t: "request.release", refs: [ref] });
+        },
+      };
+    };
     const catalog = createDirectoryCatalogs({
       codecs: createCatalogCodecs(),
       demand: (directory, kinds, intent) =>
         first.client.rpc("catalogs.demand", { directory, kinds, intent }).then(
           () => {},
         ),
-      watch: (directory) => {
-        let ref: RequestRef | undefined;
-        return {
-          result: first.client.rpc<DirectoryCatalog>("catalogs.watch", {
-            directory,
-          }).then((value) => {
-            const result = first.client.frames.find((frame) =>
-              frame.t === "request.result" && frame.outcome.ok &&
-              frame.outcome.result === value
-            );
-            assert(result?.t === "request.result");
-            ref = result.ref;
-            return value;
-          }),
-          release() {
-            if (ref) first.client.send({ t: "request.release", refs: [ref] });
-          },
-        };
-      },
+      watch,
+      retainFiles: (directory) => watch(directory, true),
       refresh: (directory) =>
         first.client.rpc("catalogs.refresh", { directory }).then(() => {}),
     });
     const lease = catalog.acquire(native.directory);
+    // Issue 2.158: observing workspace changes requires a separate borrower.
+    const releaseFiles = lease.retainFiles!();
     let seen = 0;
     const pump = () => {
       for (const frame of first.client.frames.slice(seen)) {
@@ -253,6 +261,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
           ) === true,
       );
     } finally {
+      releaseFiles();
       lease.release();
       catalog.stop();
     }

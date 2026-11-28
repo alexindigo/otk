@@ -123,8 +123,8 @@ function fixture(
     reads,
     prompts,
     drafts,
-    restore: () => {
-      restored = true;
+    restore: (value = true) => {
+      restored = value;
     },
     quota: (value: boolean) => {
       quota = value;
@@ -206,6 +206,41 @@ Deno.test("archive acquisition without an identity record is refused before read
   // @ts-expect-error The type contract requires the staged ID record.
   await assertRejects(() => f.owner.prepare(target, "p"));
   assertEquals(f.reads, []);
+});
+
+Deno.test("restaging the same IDs replaces an in-flight Restore capture without losing its draft", async () => {
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let holdRestore = false;
+  const f = fixture({
+    quota: true,
+    waitForBody() {
+      if (!holdRestore) return;
+      holdRestore = false;
+      entered.resolve();
+      return release.promise;
+    },
+  });
+  await assertRejects(() => f.owner.prepare(target, "p", session.revert!));
+  f.restore();
+  f.quota(false);
+  f.drafts.writer("local/session")({
+    ...f.drafts.current("local/session"),
+    input: "draft at Restore",
+  });
+  holdRestore = true;
+  f.owner.restored(target);
+  await entered.promise;
+  f.restore(false);
+  const staged = f.owner.prepare(target, "p", session.revert!);
+  release.resolve();
+  await staged;
+  assertEquals(f.reads, ["p", "r", "p", "r", "p", "r"]);
+  assertEquals(f.owner.state.branches.length, 1);
+  const [copy] = f.owner.state.branches;
+  assertEquals(copy.pending, true);
+  assertEquals(copy.messages.map((m) => m.id), ["p", "r"]);
+  assert(copy.drafts.some(({ value }) => value.input === "draft at Restore"));
 });
 
 Deno.test("capture owns a plain immutable record when the view supplies a framework proxy", async () => {

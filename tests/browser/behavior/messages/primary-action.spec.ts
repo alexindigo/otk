@@ -3,6 +3,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { completeUpload, holdUploads, upload } from "../../pages/composer.ts";
+import { send as composerPrimary } from "../../pages/primary-action.ts";
 
 for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
   test(`composer.primary-action-visible-${theme}`, {
@@ -20,6 +21,47 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     const send = page.getByRole("button", { name: "Send", exact: true });
     const input = page.locator("textarea[name=prompt]");
     const capture = async (state: string) => {
+      const proof = process.env.OTK_COMPOSER_REFUSAL_SCREENSHOTS;
+      if (proof && state.startsWith("refusal-")) {
+        const frame = page.locator(".otk-composer-refusal");
+        await expect(frame).toBeVisible();
+        const primary = composerPrimary(page);
+        await primary.focus();
+        await expect(primary).toBeFocused();
+        const box = (await primary.boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        const spacing = await frame.evaluate((node) => {
+          const surface = node.getBoundingClientRect();
+          const label = node.querySelector(".otk-control-label")!
+            .getBoundingClientRect();
+          const css = getComputedStyle(node);
+          return {
+            gaps: [
+              label.left - surface.left,
+              surface.right - label.right,
+              label.top - surface.top,
+              surface.bottom - label.bottom,
+            ],
+            padding: [
+              css.paddingLeft,
+              css.paddingRight,
+              css.paddingTop,
+              css.paddingBottom,
+            ].map(parseFloat),
+          };
+        });
+        for (const [i, gap] of spacing.gaps.entries()) {
+          expect(gap).toBeGreaterThanOrEqual(spacing.padding[i] - 0.5);
+        }
+        expect(Math.abs(spacing.gaps[0] - spacing.gaps[1])).toBeLessThanOrEqual(
+          1,
+        );
+        await page.screenshot({
+          path: `${proof}/composer-${state}-${theme}.png`,
+          fullPage: true,
+        });
+        await page.mouse.move(1, 1);
+      }
       if (process.env.OTK_SND1_SCREENSHOTS) {
         await page.screenshot({
           path:
@@ -28,7 +70,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         });
       }
     };
-    const blocked = async (reason: string) => {
+    const blocked = async (reason: string, screenshot?: string) => {
       await expect(send).toBeVisible();
       await expect(send).toBeDisabled();
       await expect(send).toHaveAttribute("title", reason);
@@ -39,15 +81,15 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       const draft = await input.inputValue();
       await input.press("Enter");
       await send.evaluate((button) => (button as HTMLButtonElement).click());
-      if (reason !== "Reconnect to send") {
-        await expect(input).toHaveValue(draft);
-      }
+      await expect(page.locator(".otk-composer-refusal")).toHaveText(reason);
+      if (screenshot) await capture(`refusal-${screenshot}`);
+      await expect(input).toHaveValue(draft);
       expect(
         frames.sent.filter(({ frame }) => frame.method === "session.prompt"),
       ).toHaveLength(before);
     };
     await expect(input).toHaveValue("");
-    await blocked("Write a message");
+    await blocked("Write a message", "empty");
     await send.focus();
     await expect(send).toBeFocused();
     const original = await send.elementHandle();
@@ -71,7 +113,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       bytes:
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII=",
     }]);
-    await blocked("Waiting for attachment");
+    await blocked("Waiting for attachment", "reading-attachment");
     await completeUpload(page, 0);
     await expect(send).toBeEnabled(); // Image-only is sendable.
     await page.getByRole("button", { name: "Remove [Image 1]", exact: true })
@@ -85,7 +127,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       mime: "image/png",
       bytes: "YQ==",
     }]);
-    await blocked("Remove or retry the failed attachment");
+    await blocked("Remove or retry the failed attachment", "failed-attachment");
     await page.getByRole("button", { name: "Remove [Image 1]", exact: true })
       .click();
 
@@ -118,7 +160,14 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     // Preparation precedes the wire; extra RPCs are measured after the original.
     await expect.poll(() => prompts().length).toBe(1);
     await input.press("Enter");
+    await expect(page.locator(".otk-composer-refusal")).toHaveText(
+      "Type a message to send",
+    );
+    await capture("refusal-enter-cannot-stop");
     expect(prompts()).toHaveLength(1);
+    await input.fill("Second message retained while sending");
+    await blocked("Previous message still sending", "previous-send");
+    await input.fill("");
     frames.release();
     await expect(stop).toBeEnabled();
     // Enter while sending is consumed; the sent draft clears.
@@ -141,13 +190,13 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
     // Prevent reconnection while closing the actual product socket.
     await page.context().setOffline(true);
     frames.close();
-    await blocked("Reconnect to send");
+    await blocked("Reconnecting - message kept", "reconnecting");
     await capture("offline");
     await page.context().setOffline(false);
     await expect(send).toBeEnabled();
-    // Without a connection Enter keeps its native newline, as before.
+    // A refused Enter keeps the exact draft and never inserts a newline.
     await expect(input).toHaveValue(
-      "Keep this draft during the running turn\n",
+      "Keep this draft during the running turn",
     );
     await page.getByRole("button", { name: "Collapse projects", exact: true })
       .click();

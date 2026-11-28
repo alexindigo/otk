@@ -20,8 +20,6 @@ import {
 } from "../highlight/lines.ts";
 import type { HighlightToken } from "../highlight/types.ts";
 import CodeGroup from "./CodeGroup.tsx";
-import { contextTarget } from "./context-target.ts";
-import { useContentIdentity } from "../features/transcript-context.tsx";
 interface SourcePiece {
   key: number;
   start: number;
@@ -141,11 +139,11 @@ export default function Code(
     streaming?: boolean;
     lineNumbers?: boolean;
     startLine?: number;
+    mark?: { start: number; end?: number };
     /** Reveal source fence markers without an ancestor styling this renderer. */
     revealFence?: boolean;
   },
 ): import("solid-js").Element {
-  const identity = useContentIdentity();
   const block = highlightBlock(
     untrack(() => (props.lang || "text").toLowerCase()),
     untrack(() => props.text),
@@ -440,13 +438,48 @@ export default function Code(
     ) result.push({ key: -start - 1, start, end: current.source.length });
     return result;
   });
+  const numbers = createMemo(() =>
+    props.text.split(/\r\n|\n|\r/).map((_, i) => i + (props.startLine ?? 1))
+  );
+  const renderNumbers = () => {
+    const rows = numbers(), mark = props.mark;
+    if (!mark || !rows.includes(mark.start)) return rows.join("\n");
+    const first = mark.start - rows[0];
+    const last = Math.min(rows.length, (mark.end ?? mark.start) - rows[0] + 1);
+    return (
+      <>
+        {first ? `${rows.slice(0, first).join("\n")}\n` : ""}
+        <For each={rows.slice(first, last)}>
+          {(line) => (
+            <>
+              <span
+                class="otk-code-number is-marked"
+                ref={(element) => {
+                  if (line === mark.start) {
+                    requestAnimationFrame(() => {
+                      if (element.isConnected) {
+                        element.scrollIntoView({
+                          block: "nearest",
+                          inline: "nearest",
+                        });
+                      }
+                    });
+                  }
+                }}
+              >
+                {line}
+              </span>
+              {line < rows.at(-1)! ? "\n" : ""}
+            </>
+          )}
+        </For>
+        {rows.slice(last).join("\n")}
+      </>
+    );
+  };
   return (
     <div
       class="otk-code"
-      ref={contextTarget(() => ({
-        kind: "code",
-        data: { ...identity, text: props.text },
-      }))}
       data-language={props.lang || "text"}
       data-numbered={props.lineNumbers ? "true" : "false"}
       data-reveal-fence={props.revealFence ? "true" : undefined}
@@ -459,9 +492,7 @@ export default function Code(
             class="otk-code-numbers"
             aria-hidden="true"
           >
-            {props.text.split(/\r\n|\n|\r/).map((_, i) =>
-              i + (props.startLine ?? 1)
-            ).join("\n")}
+            {renderNumbers()}
           </ScrollRegion>
         </Show>
         <ScrollRegion as="pre" axis="x" class="otk-code-content">

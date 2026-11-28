@@ -75,7 +75,7 @@ test("projects.native-settings-update-chip-sidebar-and-menu-geometry", {
   });
   await expect(chip).toContainText("WP9 Native Project");
   await expect(
-    page.locator(`[data-project="${state.directory}"] .otk-project-name`),
+    page.locator(`[data-project="${state.directory}"] .otk-sidebar-title-text`),
   ).toHaveText("WP9 Native Project");
   const icon = Buffer.from(
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#3250df"/></svg>',

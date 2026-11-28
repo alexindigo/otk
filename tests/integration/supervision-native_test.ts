@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type { InboxBaseline } from "@otk/protocol";
+import { entityKey, type InboxBaseline } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { nativeKind } from "../support/native.ts";
 import { OpencodeV2Test } from "../support/opencode-v2.ts";
@@ -56,20 +56,31 @@ Deno.test("supervision imports pre-OTK native finishes without body demand or na
     await client.connect();
     const inbox = async () =>
       (await client.rpc<InboxBaseline>("inbox.get", {})).inbox;
+    const targetKey = entityKey("session", target.id);
+    const shellKey = entityKey("session", shell.id);
     await waitFor(
       inbox,
       (value) => value.summaries?.[native.directory]?.status === "finished",
     );
-    client.lease({ directory: native.directory, crumbs: [], rows: [] });
+    // D62/65: row demand publishes the server's entity verdict without a
+    // transcript lease (neither of these sessions is selected).
+    client.lease({
+      directory: native.directory,
+      crumbs: [],
+      rows: [target.id, shell.id],
+    });
     const finished = await waitFor(
       inbox,
       (value) =>
-        value.supervision?.[target.id]?.state === "finishedUnseen" &&
-        value.supervision?.[shell.id]?.state === "finishedUnseen",
+        value.entities?.[targetKey]?.state === "finished" &&
+        value.entities?.[shellKey]?.state === "finished",
     );
-    const terminal = finished.supervision![target.id].terminal;
-    assert(terminal > 0);
-    assertEquals(finished.supervision![target.id].outcome, "succeeded");
+    const targetState = finished.entities![targetKey];
+    const terminal = targetState.terminal;
+    assert(terminal && terminal > 0);
+    assertEquals(targetState.outcome, "succeeded");
+    assertEquals(targetState.counts.unseen, 1);
+    assertEquals(finished.entities![shellKey].counts.unseen, 1);
     assertEquals(finished.summaries?.[native.directory]?.status, "finished");
     if (native instanceof OpencodeV2Test) {
       const raw = await native.api.session.get({ sessionID: target.nativeID });
@@ -84,13 +95,12 @@ Deno.test("supervision imports pre-OTK native finishes without body demand or na
       // Round-trip through OTK after the native mutation. Native viewed is not an
       // OTK acknowledgement, before or after this server's first startup.
       const after = await inbox();
-      assertEquals(after.supervision?.[target.id], {
-        state: "finishedUnseen",
-        unseen: true,
-        terminal,
-        outcome: "succeeded",
-        terminalOrigin: "historical",
-      });
+      const entity = after.entities?.[targetKey];
+      assertEquals(entity?.state, "finished");
+      assertEquals(entity?.counts.unseen, 1);
+      assertEquals(entity?.terminal, terminal);
+      assertEquals(entity?.outcome, "succeeded");
+      assertEquals(entity?.terminalOrigin, "historical");
     }
   }));
 
@@ -125,8 +135,21 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
       return sessions.filter((session) => session.id !== parent.id);
     }, (rows) => rows.length > 0);
     const child = children[0];
-    // A parent receiving a failed result does not acknowledge it for the human.
-    // Inspect mandatory failure attention without acquiring a transcript.
+    // D81: V2 materializes a background failure receipt; the V1 foreground
+    // tool failure does not emit a completed or synthetic result envelope.
+    if (native instanceof OpencodeV2Test) {
+      await waitFor(
+        () => native.api.message.list({ sessionID: parent.nativeID }),
+        ({ data }) =>
+          data.some((row) =>
+            row.type === "synthetic" &&
+            row.metadata?.source === "subagent" &&
+            row.metadata.childID === child.nativeID &&
+            row.metadata.state === "error"
+          ),
+      );
+    }
+    const childState = v2 ? "none" : "blocked";
     client.lease({
       directory: native.directory,
       crumbs: [],
@@ -135,21 +158,24 @@ Deno.test("supervision failed subagents and parent executions are terminal nativ
     const value = await waitFor(
       async () => (await client.rpc<InboxBaseline>("inbox.get", {})).inbox,
       (inbox) =>
-        inbox.supervision?.[parent.id]?.state === "needsYou" &&
-        inbox.supervision?.[child.id]?.state === "needsYou",
+        inbox.entities?.[entityKey("session", parent.id)]?.state ===
+          "blocked" &&
+        inbox.entities?.[entityKey("session", child.id)]?.state ===
+          childState &&
+        inbox.entities?.[entityKey("session", child.id)]?.outcome === "failed",
     );
     for (const id of [parent.id, child.id]) {
-      assert(value.supervision![id].terminal > 0);
-      // 2.72: an unseen failed parent needs acknowledgement too. C1's failed
-      // helper contract is unchanged; neither terminal represents live work.
-      assertEquals(value.supervision![id].state, "needsYou");
-      assertEquals(value.entities?.[`session:${id}`]?.state, "blocked");
+      const entity = value.entities![entityKey("session", id)];
+      assert(entity.terminal && entity.terminal > 0);
+      const covered = id === child.id && v2;
+      assertEquals(entity.state, covered ? "none" : "blocked");
       assertEquals(
-        value.entities?.[`session:${id}`]?.cause,
-        id === child.id ? "failedHelper" : "failure",
+        entity.cause,
+        covered ? undefined : id === child.id ? "failedHelper" : "failure",
       );
-      assertEquals(value.supervision![id].unseen, true);
-      assertEquals(value.supervision![id].outcome, "failed");
+      assertEquals(entity.counts.working, 0);
+      assertEquals(entity.counts.unseen, covered ? 0 : 1);
+      assertEquals(entity.outcome, "failed");
     }
     assertEquals(value.summaries?.[native.directory]?.status, "blocked");
   }));
@@ -209,31 +235,36 @@ Deno.test({
       });
       await client.connect();
       const states = async () =>
-        (await client.rpc<InboxBaseline>("inbox.get", {})).inbox.supervision ??
+        (await client.rpc<InboxBaseline>("inbox.get", {})).inbox.entities ??
           {};
+      const [executionKey, shellKey, inputKey] = [
+        execution.id,
+        shellOwner.id,
+        input.id,
+      ].map((id) => entityKey("session", id));
       await waitFor(
         states,
         (rows) =>
-          rows[execution.id]?.state === "working" &&
-          rows[shellOwner.id]?.state === "working" &&
-          rows[input.id]?.state === "needsYou",
+          rows[executionKey]?.state === "working" &&
+          rows[shellKey]?.state === "working" &&
+          rows[inputKey]?.state === "blocked",
       );
       native.proxy.freeze();
       native.proxy.disconnect();
       await waitFor(
         states,
         (rows) =>
-          [execution.id, shellOwner.id, input.id].every((id) =>
-            rows[id]?.state === "none"
+          [executionKey, shellKey, inputKey].every((key) =>
+            rows[key]?.state === "none"
           ),
       );
       native.proxy.thaw();
       await waitFor(
         states,
         (rows) =>
-          rows[execution.id]?.state === "working" &&
-          rows[shellOwner.id]?.state === "working" &&
-          rows[input.id]?.state === "needsYou",
+          rows[executionKey]?.state === "working" &&
+          rows[shellKey]?.state === "working" &&
+          rows[inputKey]?.state === "blocked",
       );
     }),
 });

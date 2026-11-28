@@ -55,19 +55,20 @@ markers and never borrow session/helper clocks. Session-now presentation borrows
 the serving entity replica handle, including when a metadata entry is not
 leased. The same retained historical fact uses current state and permission
 grace instead of copying a status from its record. Every EntityPill producer
-uses that binding. `liveWork(session)` reads the owner's helper and shell
-inventory; helper labels may borrow acquired digest metadata, never its
-attention. Transcript paging is not an input. `createLiveWork` owns capability
-checks and joined stop admission across presentation lifetimes; elapsed labels
-describe running time, not working time.
+uses that binding. `sessionShells` reads the owner's fresh session shell roster,
+count and lamp. `liveWork` supplies current helper stop candidates; transcript
+paging is not an input. `createLiveWork` owns capability checks and joined stop
+admission across presentation lifetimes; elapsed labels describe running time,
+not working time.
 
 The helper inventory follows native ancestry and fresh positive work keys,
 independently of task/checkout boundaries and attention priority. Blocked
 helpers remain in the count with their own attention lamps. Cross-project
 routing keeps work facts for these demanded descendants while unrelated pending
 identities remain request-only. Helper title/work changes refresh only family
-ancestors even when the lamp counts do not change. The task entity supplies the
-work-chip lamp; each popover item uses its own session entity.
+ancestors even when the lamp counts do not change. The task's helper roster
+supplies the helper pill and subgroup lamps, separate from the task verdict.
+Each helper popover item uses its own session entity.
 
 `EntityStateStore.observeChanges` observes accepted evidence and staleness
 independently of `subscribe`'s notification transitions. Canonical transcripts
@@ -124,13 +125,17 @@ selected warm baseline uses the same callback. No view component owns background
 admission.
 
 ServerResources owns project/selection/crumb demand and visible Sessions keys.
-SidecarConnection retains that view across reconnects, sends it with hello and
-fences older scoped frames. Project changes incrementally acquire their entries
-and evict retired entries without deleting native or user metadata. Sessions
-borrows the project's structural catalog, keeps hierarchy/task grouping in its
-shared client owner and reports its VirtualList range; rows acquire scalar
-digests while only selection receives turn summaries. Standalone connections
-call `view({selected, crumbs: [], rows: []})` before connecting. Other projects
+SidecarConnection retains that view across reconnects and fences older scoped
+frames. Hello borrows the current lease; at welcome, the connection reconciles
+any newer intent before replaying subscription and request demand. A fresh index
+baseline and the peer's `view.ready` for the latest epoch precede the recovered
+status. First-page acceptance waits for that lease's acknowledgement before
+settling. Project changes incrementally acquire their entries and evict retired
+entries without deleting native or user metadata. Sessions borrows the project's
+structural catalog, keeps hierarchy/task grouping in its shared client owner and
+reports its VirtualList range; rows acquire scalar digests while only selection
+receives turn summaries. Standalone connections call
+`view({selected, crumbs: [], rows: []})` before connecting. Other projects
 remain visible through P3 summaries. Prompt recall uses only the currently
 viewed server/project.
 
@@ -140,8 +145,7 @@ search and older pages near the projected end, retains last-good rows while
 loading, and acquires necessary ancestor context by key. Same-project
 visible-row lease changes keep readiness and keyed row DOM, including focus and
 retained scroll anchors. Query replacement and reconnect fence retired request
-identities, epochs and revisions. Child navigation follows the same bounded list
-cursor.
+identities, epochs and revisions.
 
 List advancement borrows the current hierarchy/task/stable-order projection from
 ServerResources, including after request settlement. Native activity-page order
@@ -244,12 +248,13 @@ there is no recall-specific failure timer.
 
 ## Request event consumers
 
-`createPrimaryAction` owns the composer's persistent primary affordance, live
-availability/reason, synchronous pending admission and invocation. Its inputs
-borrow current draft, connection and request state; it retains no second draft
-or RPC lifetime. `promptUnavailable` projects ordinary Send's draft facts. Every
-invocation rechecks the same contract, including after asynchronous preparation,
-while the existing submission intent retains captured send settlement.
+`createComposerAction` owns composer activation. Its `composerAction` projection
+combines draft, transport, capability, takeover and session activity facts for
+the button, Enter and explicit interrupt. One reservation spans preparation and
+Send; after preparation the owner rechecks the same projection. Explicit local
+commands do not acquire a native Send reservation. Refusals leave the draft
+untouched and publish the live reason; custody begins only at dispatch.
+`createPrimaryAction` is the generic primary owner for request docks.
 
 `createFormIntent({capture, presenter, diagnostic?})` owns a form's captured
 values, synchronous pending reservation, joined submission promise and safe
@@ -259,22 +264,6 @@ the captured values and a later explicit submit gets a new key. Presentation
 subscriptions can detach without cancelling the captured work. `failureFeedback`
 handles typed request failures, silent releases and locally diagnosed exceptions
 through one presenter, without rendering arbitrary exception text.
-
-`createSubmissionIntent` separates input preparation from captured send
-settlement. Repeated preparation joins synchronously and repeated sends cannot
-replace an in-flight payload. A later input command can still prepare and run
-while a send or its follow-up bookkeeping remains pending; command handling is
-not mistaken for a duplicate send. Send eligibility is captured at activation:
-preparation that starts during Sending cannot admit a prompt, shell or native
-command effect after the earlier send settles. A later explicit activation can
-send the retained draft. Both lifetimes stay framework-free, with native input
-and focus owned by the UI adapter.
-
-Submission readiness rechecks use the intent owner's `require()` boundary.
-Readiness loss and captured-send admission refusal publish classified feedback
-with action, target, reason and recovery instead of resolving as an unsent
-success. An explicitly handled input command remains distinct from refused
-dispatch.
 
 The protocol's `RequestMetadataRegistry` is an empty, injectable description
 registry. `createRequestMetadata()` selects the shipped feature-owned kind and
@@ -568,12 +557,12 @@ consumers, while the existing full-entry ports remain available for digest
 consumers.
 
 Session pages publish essential session/message data independently of optional
-attention and sibling reads. Optional failures retain last-good data and expose
-diagnostics. Live attention changes replay over their own resource snapshot. The
-selected owner consumes the coordinated `MessagePage` directly; it makes no
-parallel `session.get`. Continuation stays opaque, and exhaustion comes only
-from `older: null`, including exact-multiple and short pages. `latestPrompt()`
-and `state.latestPrompt` supply composer/Undo metadata outside the loaded ten
+attention reads. Optional failures retain last-good data and expose diagnostics.
+Live attention changes replay over their own resource snapshot. The selected
+owner consumes the coordinated `MessagePage` directly; it makes no parallel
+`session.get`. Continuation stays opaque, and exhaustion comes only from
+`older: null`, including exact-multiple and short pages. `latestPrompt()` and
+`state.latestPrompt` supply composer/Undo metadata outside the loaded ten
 messages. `state.clock` identifies accepted page authority. Pending live replay
 is bounded by the connection's injected/welcomed policy. Duplicates are ignored;
 gaps, epoch changes and overflow invalidate the baseline and coalesce a retry.
@@ -1038,20 +1027,22 @@ Breadcrumbs use the one-line shrinking contract, with independent More controls
 for omitted identities. Task strips render the client-owned stable saved order
 directly in a horizontal scroll lane, without overflow fitting or wrapping.
 
-`createInputGuard({drafts, key, confirm})` owns dirty-input marks and
-confirmation policy. Release reads the invocation-current draft through
-`Drafts.current(key)` (non-creating and independent of framework publication)
-and clears only an accepted editor, preserving the prompt and choices;
-navigation clears attention marks only when the session identity changes.
-`permit` checks a single input owner without consuming its dirty state.
-`release({draft: "kept" | "dropped", keys?})` states whether released stored
-drafts survive. Ordinary navigation defaults to kept. Dropping unsent content
-asks first, including background/family drafts named by keys; consent does not
-consume those drafts before the mutation succeeds. Deleted native lifetimes keep
-unsent attention input in the same guard until normal guarded release; the
-metadata-only details surface can display it without a native send control.
-`Drafts.drop(key)` removes committed deletions and retires captured writers, so
-late uploads/sends cannot resurrect their deleted draft lifetime.
+`createInputGuard({drafts, key, confirm})` owns loss checks, not draft custody.
+Ordinary routing keeps keyed prompt/editor drafts and request-owned drafts;
+navigation clears only view marks when the session identity changes. `permit`
+checks one input owner without consuming it. A destructive release reads
+invocation-current input through `Drafts.current(key)` without creating drafts.
+`release({draft: "dropped", keys?})` asks only if it would lose input and
+returns a captured discard callback to run after successful deletion, not on
+consent or later navigation. It checks recoveries only for the keys that would
+be dropped. Native deletion retains request-owned input for the metadata-only
+details view. Closing that view calls `keepDeleted()` after membership succeeds
+and while the route is still current (2.159). Exact request values from proven
+deletions transfer to the selected key's existing `Drafts` recovery entries
+before request custody is released. Recover exchanges any nonempty current draft
+and X discards only the offered value (2.145); no send is created. `Drafts.drop`
+removes committed deletions and retires captured writers, so late uploads/sends
+cannot resurrect their deleted draft lifetime.
 
 `createShellNavigation({resources, actions, guard, drafts, session, presence,
 environment?, factory?})`
@@ -1362,14 +1353,13 @@ template-only, and Inactive requires explicit user policy unless mandatory
 activity lifts it. `source` retains provenance separately. Scalar seeds own
 population counts, so hydrating an existing session cannot increment them. Every
 project row has a light. The protocol's `ROLLUP_PRIORITY` / `rollupStatus` own
-aggregate lamp display: needs you, working, finished but unseen, none.
-Navigation instead uses `URGENCY_PRIORITY` / `urgentStatus`: needs you, finished
-but unseen, working, none. Never use display order to choose the most urgent
-session, or urgency to paint a rollup. Project and task lights consume
-supervision; presentation does not rank states. Finished children retain unseen
-attention until acknowledged. Task tabs use saved task order, and phantoms use
-immutable creation order. Discovery retains source inventory order when it has
-no saved position or native creation clock. Activity never orders these lists.
+aggregate lamp display (D78). Navigation borrows those ranks through
+`urgentStatus`; it still owns the session candidates and tie-breaking. Project
+and task lights consume supervision; presentation does not rank states. Finished
+children retain unseen attention until acknowledged. Task tabs use saved task
+order, and phantoms use immutable creation order. Discovery retains source
+inventory order when it has no saved position or native creation clock. Activity
+never orders these lists.
 
 `projectHierarchy` orders explicit worktree rows beneath their repo within each
 server, without merging equal repo IDs across connections. The keyed project
@@ -1386,11 +1376,10 @@ affected repo membership.
 
 Server-proven archived worktrees carry `archived` separately from manual
 `inactive`. `projectPlacement` owns section and removal annotation together for
-both snapshot and keyed projections. Only working or blocked attention keeps an
-archived leaf live. Finished-unseen leaves belong to Archived;
-`archiveAttention` borrows the shared rollup order and sums their unseen counts
-for the always-visible disclosure. Manual activity-policy changes cannot
-unarchive a checkout.
+both snapshot and keyed projections. Live work and blockers keep an archived
+leaf live, even when an unseen finish wins its lamp. The Archived disclosure
+reads the server's archive entity for the lamp and unseen count. Manual
+activity-policy changes cannot unarchive a checkout.
 
 `projectTree` supplies the branch representation shared by `projectHierarchy`
 and the sidebar. Server, repository and canonical-root identity prove each edge;
@@ -1401,8 +1390,8 @@ their own checkout basename and never receive project avatars, including when
 their root is absent. Native repository names remain project-only.
 `projectBranchPresentation` hides all descendants and the archive when
 collapsed, regardless of attention, from one topology/disclosure snapshot.
-`createProjectDisclosure` retains immediate local choices by kind, server and
-directory. Per-key saves are ordered, old outcomes cannot overwrite newer
+`createTreeDisclosure` retains immediate local choices by kind, server and
+stable ID. Per-key saves are ordered, old outcomes cannot overwrite newer
 intent, and the affected branch retains a refusal and explicit retry. Archive
 and Inactive borrow the same owner without adding persistence; Discovered and
 project choices retain their existing preference stores. A matching
@@ -1765,20 +1754,23 @@ rows, tabs, badges, toasts and takeovers consume this same projection. The pure
 Owners register a `NotificationChannel` through `registerChannel`, returning an
 identity-bound release. A data-only `Note` has an ID, kind, optional
 sidecar/root reference and command-ID actions. Native input notes also carry a
-request-scoped dismissal key. The hub retains dismissed request identities
-across presentation replacement and connection resets; a new request ID can
-notify again. The shipped policy suppresses dismissed presentation and sound
-while the badge and canonical blocked attention remain. `publish` replaces the
-ID; `replace(previous,
-input)` enriches only the current identity without
-replaying sound. Delivery ports scope `current`, `dismiss`, `invoke` and
-`unavailable` to the exact note and channel registration. `currentNote` and
-`invokeDefault` retain a live logical note's default action across
-focus-triggered presentation retraction, including a native click queued after
-focus. Viewing, replacement and channel release invalidate that port. Stale
-timers, clicks and async lookups cannot consume a newer note. Invocation never
-assumes that a resolved command actually selected the session. Consumers call
-`viewed` after real guarded selection and focus.
+request-scoped dismissal key. The application supplies `notificationLocation` to
+project session deliveries through the current project, task membership and
+title owners. The hub snapshots the same location for both toast and OS
+channels; server and application notices without a session stay unscoped. The
+hub retains dismissed request identities across presentation replacement and
+connection resets; a new request ID can notify again. The shipped policy
+suppresses dismissed presentation and sound while the badge and canonical
+blocked attention remain. `publish` replaces the ID; `replace(previous,
+input)`
+enriches only the current identity without replaying sound. Delivery ports scope
+`current`, `dismiss`, `invoke` and `unavailable` to the exact note and channel
+registration. `currentNote` and `invokeDefault` retain a live logical note's
+default action across focus-triggered presentation retraction, including a
+native click queued after focus. Viewing, replacement and channel release
+invalidate that port. Stale timers, clicks and async lookups cannot consume a
+newer note. Invocation never assumes that a resolved command actually selected
+the session. Consumers call `viewed` after real guarded selection and focus.
 
 `NotificationTriggers.entriesChanged(server,changes)` consumes accepted shared
 projected deltas. It retains only per-root comparison facts and current note

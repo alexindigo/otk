@@ -16,6 +16,7 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
           ctx.directoryCatalog?.state.catalog?.revision,
           ctx.frecencyCatalog?.revision,
         ],
+        retain: () => ctx.directoryCatalog?.retainFiles?.(),
         options: (token) => {
           // File discovery belongs to an actual mention, never composer mount.
           // Kind publications advance the source revision independently, so a

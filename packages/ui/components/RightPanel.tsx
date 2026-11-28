@@ -5,7 +5,7 @@ import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, type Element, For, Show } from "solid-js";
 import {
   type CapabilityName,
   type Preferences,
@@ -15,12 +15,16 @@ import { useUiRegistries } from "../registries/context.tsx";
 import { createResize } from "./resize.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 import SidebarRail from "./SidebarRail.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import { contextTarget } from "./context-target.ts";
+import type { PanelPresentation } from "../state/panel-presentation.ts";
 
 /** A feature-agnostic host. Registrations own their content and read public
  * context ports; the panel owns only layout and view selection. */
 export default function RightPanel(props: {
   layout: Preferences["shellLayout"];
+  presentation?: PanelPresentation;
+  collapseToggle?: Element;
   ready: boolean;
   supports(capability: CapabilityName): boolean;
   onLayout(patch: Partial<Preferences["shellLayout"]>): Promise<void>;
@@ -32,9 +36,11 @@ export default function RightPanel(props: {
   );
   const [error, setError] = createSignal<FailureValue>("");
   const bounds = SHELL_WIDTHS.right;
+  const collapsed = () => props.layout.rightCollapsed;
+  const sheet = () => props.presentation === "sheet";
   const resize = createResize({
     width: () => props.layout.rightWidth ?? bounds.default,
-    ready: () => props.ready && !props.layout.rightCollapsed,
+    ready: () => props.ready && !collapsed() && !sheet(),
     direction: -1,
     bounds,
     save: async (rightWidth) => {
@@ -95,72 +101,83 @@ export default function RightPanel(props: {
     );
   }
   return (
-    <>
-      <Show when={props.layout.rightCollapsed}>
-        <SidebarRail
-          ref={contextTarget(() => ({
-            kind: "panel",
-            area: true,
-            data: undefined,
-          }))}
-          label="Right panel rail"
-          class="otk-right-rail"
-          side="right"
-          collapsed
-        >
-          <Views rail />
-          <Show when={error()}>
-            <FeedbackStatus feedback={errorFeedback(error())} />
-          </Show>
-        </SidebarRail>
-      </Show>
-      <aside
-        ref={contextTarget(() => ({
-          kind: "panel",
-          area: true,
-          data: undefined,
-        }))}
-        class="otk-right-panel"
-        aria-label="Right panel"
-        hidden={props.layout.rightCollapsed}
-        style={{ width: `${width()}px` }}
-      >
-        <Views rail={false} />
-        <div class="otk-panel-body">
-          <Show when={error()}>
-            <FeedbackStatus feedback={errorFeedback(error())} />
-          </Show>
-          <Show
-            when={!props.layout.rightCollapsed && active()}
-            keyed
-            fallback={<p class="otk-muted">No available views.</p>}
-          >
-            {(view) => (
-              <section
-                id="otk-panel-content"
-                class="otk-panel-content"
-                role="tabpanel"
-                aria-label={view.title}
-              >
-                <h2>{view.title}</h2>
-                <view.component />
-              </section>
-            )}
-          </Show>
-        </div>
+    <SidebarRail
+      ref={contextTarget(() => ({
+        kind: "panel",
+        area: true,
+        data: undefined,
+      }))}
+      label={collapsed() ? "Right panel rail" : "Right panel"}
+      class={collapsed() ? "otk-right-rail" : "otk-right-panel"}
+      side="right"
+      collapsed={collapsed()}
+      width={sheet() ? undefined : width()}
+      header={
         <div
-          class="otk-panel-resizer"
-          ref={native.ref}
-          role="separator"
-          aria-label="Right panel width"
-          aria-orientation="vertical"
-          tabindex={props.ready ? 0 : -1}
-          aria-valuemin={bounds.min}
-          aria-valuemax={bounds.max}
-          aria-valuenow={width()}
-          {...native.attributes}
-        />
-      </aside>
-    </>
+          class={[
+            "otk-panel-header",
+            { "is-collapsed": collapsed(), "is-sheet": sheet() },
+          ]}
+        >
+          <Show when={sheet()}>{props.collapseToggle}</Show>
+          <Show when={!collapsed()}>
+            <Views rail={false} />
+          </Show>
+          <Show when={!sheet()}>{props.collapseToggle}</Show>
+        </div>
+      }
+      body={
+        <Show
+          when={!collapsed()}
+          fallback={
+            <ScrollRegion class="otk-panel-rail-body">
+              <Views rail />
+              <Show when={error()}>
+                <FeedbackStatus feedback={errorFeedback(error())} />
+              </Show>
+            </ScrollRegion>
+          }
+        >
+          <div class="otk-panel-body">
+            <Show when={error()}>
+              <FeedbackStatus feedback={errorFeedback(error())} />
+            </Show>
+            <Show
+              when={!props.layout.rightCollapsed && active()}
+              keyed
+              fallback={<p class="otk-muted">No available views.</p>}
+            >
+              {(view) => (
+                <section
+                  id="otk-panel-content"
+                  class="otk-panel-content"
+                  role="tabpanel"
+                  aria-label={view.title}
+                >
+                  <h2>{view.title}</h2>
+                  <view.component />
+                </section>
+              )}
+            </Show>
+          </div>
+        </Show>
+      }
+      resizer={
+        <Show when={!collapsed() && !sheet()}>
+          <div
+            class="otk-panel-resizer"
+            ref={native.ref}
+            role="separator"
+            aria-label="Right panel width"
+            aria-orientation="vertical"
+            tabindex={props.ready ? 0 : -1}
+            aria-valuemin={bounds.min}
+            aria-valuemax={bounds.max}
+            aria-valuenow={width()}
+            {...native.attributes}
+          />
+        </Show>
+      }
+    />
   );
 }

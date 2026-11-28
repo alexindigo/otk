@@ -28,9 +28,9 @@ const blocks = (value: Part) =>
 Deno.test("unfinished snapshots and replacements retain last-good source until newer content or terminal authority", () => {
   const projection = createTranscriptProjection();
   const original = message("The last-good streamed text.");
-  projection.replace([original]);
+  projection.reset([original]);
   for (const text of ["", "The last-good"]) {
-    projection.replace([message(text)]);
+    projection.reset([message(text)]);
     assertEquals(
       blocks(projection.messages()[0].parts[0]),
       blocks(original.parts[0]),
@@ -65,7 +65,7 @@ Deno.test("unfinished snapshots and replacements retain last-good source until n
     blocks(projection.messages()[0].parts[0]),
     blocks(part("The last-good streamed text. A new chunk.")),
   );
-  projection.replace([{ ...message(""), parts: [] }]);
+  projection.reset([{ ...message(""), parts: [] }]);
   assertEquals(
     blocks(projection.messages()[0].parts[0]),
     blocks(part("The last-good streamed text. A new chunk.")),
@@ -75,14 +75,14 @@ Deno.test("unfinished snapshots and replacements retain last-good source until n
     messageID: original.id,
     partID: "part",
   });
-  projection.replace([message("")]);
+  projection.reset([message("")]);
   assertEquals(projection.messages()[0].parts, message("").parts);
-  projection.replace([original]);
+  projection.reset([original]);
   const terminal = { ...message("Final"), time: { created: 1, completed: 2 } };
-  projection.replace([terminal]);
+  projection.reset([terminal]);
   assertEquals(projection.messages()[0].parts, terminal.parts);
   projection.apply({ op: "message.remove", messageID: original.id });
-  projection.replace([message("")]);
+  projection.reset([message("")]);
   assertEquals(projection.messages()[0].parts, message("").parts);
 });
 
@@ -98,7 +98,7 @@ Deno.test("source coverage accepts longer native Markdown even when its rendered
       sourceLength: 6,
     })],
   };
-  projection.replace([before]);
+  projection.reset([before]);
   const after = {
     ...message("word"),
     parts: [part("word", {
@@ -109,6 +109,6 @@ Deno.test("source coverage accepts longer native Markdown even when its rendered
       sourceLength: 8,
     })],
   };
-  projection.replace([after]);
+  projection.reset([after]);
   assertEquals(projection.messages()[0].parts, after.parts);
 });

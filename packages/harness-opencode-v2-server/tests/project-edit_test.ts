@@ -4,7 +4,7 @@ import { projectEditor } from "../project-edit.ts";
 import type { V2Client } from "../client.ts";
 import { OperationFailure } from "@otk/protocol";
 
-Deno.test("WP9 V2 writes every field, rereads captured project and invalidates only confirmed effects", async () => {
+Deno.test("V2 verifies persisted PATCH fields and invalidates only confirmed effects", async () => {
   let project = {
     id: "repo",
     canonical: "/repo",
@@ -49,24 +49,24 @@ Deno.test("WP9 V2 writes every field, rereads captured project and invalidates o
     })
   ) {
     calls.length = 0;
-    const result = await editor.update(snapshot, { [field]: value });
+    const result = await (await editor.prepare(snapshot, { [field]: value }))();
     assertEquals(result.values[field as keyof typeof result.values], value);
-    assertEquals(calls, ["write:repo", "read"]);
+    assertEquals(calls, ["write:repo"]);
   }
   assertEquals(invalidated, 4);
   await assertRejects(() =>
-    editor.update({ ...snapshot, projectID: "foreign" }, { name: "No" })
+    editor.prepare({ ...snapshot, projectID: "foreign" }, { name: "No" })
   );
 });
 
-Deno.test("WP9 native write with lost readback remains uncertain and cannot invalidate as confirmed", async () => {
+Deno.test("V2 mismatching persisted PATCH result stays uncertain and is not published as confirmed", async () => {
   let written = false, changes = 0;
   const api = {
     location: { get: () => Promise.resolve({ project: { id: "fixture" } }) },
     project: {
       update: () => {
         written = true;
-        return Promise.resolve({});
+        return Promise.resolve({ id: "fixture", name: "Before" });
       },
       list: () =>
         Promise.reject(
@@ -83,11 +83,11 @@ Deno.test("WP9 native write with lost readback remains uncertain and cannot inva
     effect: (effect: (api: unknown) => Promise<unknown>) => effect(api),
   } as unknown as V2Client;
   const error = await assertRejects(
-    () =>
-      projectEditor(() => client, () => changes++).update({
+    async () =>
+      (await projectEditor(() => client, () => changes++).prepare({
         directory: "/fixture",
         projectID: "fixture",
-      }, { name: "After" }),
+      }, { name: "After" }))(),
     OperationFailure,
   );
   assertEquals(written, true);

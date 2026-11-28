@@ -1,10 +1,9 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-record-group-toggle {
-  flex: 0 1 auto;
-  min-width: 0;
-}
 .otk-record-group {
-  margin-block-end: var(--message-gap, var(--space-6));
+  --tree-height: var(--control-size);
+}
+.otk-activity-group {
+  --tree-row-gap: var(--message-gap, var(--space-6));
 }
 .otk-record-group-count,
 .otk-record-group-time {
@@ -13,24 +12,6 @@
 .otk-record-group-time {
   margin-inline-start: auto;
 }
-.otk-record-group-heading {
-  display: flex;
-  flex-direction: var(--tree-heading-flow, row);
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
 .otk-record-group.is-interval .otk-record-group-toggle {
   font: inherit;
-}
-.otk-record-completion {
-  --tree-height: var(--line-meta);
-  display: inline-grid;
-  align-items: center;
-}
-.otk-record-group-heading.wraps-actions {
-  flex-wrap: wrap;
-}
-.otk-record-group-heading.wraps-actions > .otk-record-group-toggle {
-  flex: 1 1 auto;
 }

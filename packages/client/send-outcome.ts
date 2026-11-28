@@ -17,7 +17,7 @@ export type SendOutcome =
     kind: "failed";
     certainty: "definite" | "uncertain";
     reason: string;
-    retry(): void;
+    retry?(): void;
     failure?: PublicFailure;
   }
   | {
@@ -64,7 +64,8 @@ export function requireCommittedSend(outcome: SendOutcome): void {
   );
   throw new FeedbackFailure({
     ...feedback,
-    ...(outcome.kind === "failed" && !feedback.failure?.reference
+    ...(outcome.kind === "failed" && outcome.retry &&
+        !feedback.failure?.reference
       ? { action: { label: "Retry", run: outcome.retry } }
       : {}),
   });

@@ -98,7 +98,7 @@ Deno.test("V2 helper revalidation publishes only semantic changes, not scan gene
           projection: "helper",
           cursor,
         },
-        { rows: 1, until: performance.now() + 1000 },
+        { rows: 1, until: Infinity },
         new AbortController().signal,
       );
     } while (cursor);

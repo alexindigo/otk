@@ -832,7 +832,11 @@ export async function sessionsScenario(profile: Profile) {
             });
             return null;
           }
-          if (frame.params.target === "helper-dispositions") {
+          if (
+            frame.params.target === "helper-dispositions" ||
+            frame.params.target === "helper-review" ||
+            frame.params.target === "helper-review-unseen-failure"
+          ) {
             if (
               profile !== "contract-sessions-hierarchy" || action !== "hold"
             ) {
@@ -897,6 +901,49 @@ export async function sessionsScenario(profile: Profile) {
                     terminal,
                     outcome: "succeeded",
                     ...(n === 5
+                      ? {
+                        delivered: {
+                          parentID,
+                          receipt: `result:${id}`,
+                          terminal,
+                        },
+                      }
+                      : {}),
+                  },
+                });
+              }
+            }
+            if (frame.params.target !== "helper-dispositions") {
+              const delivered = frame.params.target === "helper-review";
+              const reviewHelpers = [
+                ["tstv1-disp-7", base.id, base.directory, "failed", now + 1],
+                [
+                  "tstv1-disp-8",
+                  "tstv1-disp-6",
+                  join(root, "helper-checkout"),
+                  "succeeded",
+                  now + 2,
+                ],
+              ] as const;
+              for (
+                const [id, parentID, directory, outcome, terminal]
+                  of reviewHelpers
+              ) {
+                f.add({
+                  ...base,
+                  id,
+                  parentID,
+                  directory,
+                  title: outcome === "failed"
+                    ? "Reported helper failure"
+                    : "Finished helper in another checkout",
+                });
+                f.update(id, {
+                  status: "idle",
+                  activity: {
+                    terminal,
+                    outcome,
+                    ...(outcome === "failed" && delivered
                       ? {
                         delivered: {
                           parentID,

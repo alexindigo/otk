@@ -20,6 +20,8 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
   rename: SessionRename;
   working(target: Selection): boolean;
   helpers(target: Selection): number;
+  attention?(target: Selection): number;
+  clearAttention?(target: Selection): Promise<void>;
   remove(target: Selection): Promise<boolean>;
   current(): SessionContextTarget | undefined;
   fork(target: Selection & { title?: string }, through?: string): Promise<void>;
@@ -223,6 +225,28 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
       if (target) ports.openSavedCopies?.(target);
     },
   });
+  const clearAttention = commands.register({
+    id: "session.clearAttention",
+    title: "Clear attention",
+    category: "Session",
+    arguments: {
+      type: "object",
+      properties: {
+        sidecarId: { type: "string" },
+        sessionID: { type: "string" },
+      },
+    },
+    context: {
+      kind: "session",
+      order: 22,
+      title: (target: SessionContextTarget) =>
+        `Clear attention (${ports.attention?.(target) ?? 0})`,
+    },
+    enabled: (_ctx, target?: SessionContextTarget) =>
+      !!target && !!ports.clearAttention &&
+      (ports.attention?.(target) ?? 0) > 0,
+    run: (_ctx, target: SessionContextTarget) => ports.clearAttention?.(target),
+  });
   const remove = commands.register({
     id: "session.delete",
     title: "Delete",
@@ -249,6 +273,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     run: (_ctx, target: SessionContextTarget) => ports.remove(target),
   });
   return () => {
+    clearAttention();
     rename();
     saved();
     remove();

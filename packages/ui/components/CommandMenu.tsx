@@ -21,6 +21,7 @@ import {
   type ContextTarget,
 } from "@otk/client";
 import { useCommandPorts } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { commandRows } from "./list-presentation.ts";
@@ -142,7 +143,7 @@ export default function CommandMenu(props: {
     });
     try {
       await commands.runContext(action);
-      if (current === generation) menu.close(() => {});
+      if (current === generation) menu.close(false);
     } catch (cause) {
       if (current !== generation) return;
       if (ports.failureOwned?.(cause)) {
@@ -175,8 +176,8 @@ export default function CommandMenu(props: {
             if (capture()) control.open(anchor, reason);
             else clear();
           },
-          close: (focus) => {
-            control.close(focus);
+          close: (restore, reason) => {
+            control.close(restore, reason);
             clear();
           },
           contains: control.contains,
@@ -209,8 +210,16 @@ export default function CommandMenu(props: {
               <For each={group()} keyed={(row) => row.action.key}>
                 {(row) => {
                   const action = () => row().action;
-                  let status: { focus(): void } | undefined,
+                  let focusStatus: (() => void) | undefined,
                     button!: HTMLButtonElement;
+                  const focusAction = () => {
+                    focusControl(button, {
+                      focusVisible:
+                        ports.keyboard?.focusOwner.modality() === "pointer"
+                          ? false
+                          : undefined,
+                    });
+                  };
                   return (
                     <>
                       <Show
@@ -221,16 +230,18 @@ export default function CommandMenu(props: {
                       <ActionSlot
                         class="otk-command-menu-row"
                         pending={!!pending()}
-                        feedback={pending() === action().key
-                          ? { kind: "pending", text: "Working..." }
-                          : undefined}
-                        control={(control) => status = control}
-                        focusAction={() => button.focus()}
+                        pendingLabel="Working..."
+                        showStatus={pending() === action().key}
+                        control={({ focus }) => focusStatus = focus}
+                        focusAction={focusAction}
                       >
                         <button
                           ref={(element) => button = element}
                           type="button"
                           role="menuitem"
+                          aria-disabled={action().unavailable
+                            ? "true"
+                            : undefined}
                           data-context-command={action().id}
                           data-context-command-name={commands.metadata(
                             action().id,
@@ -249,8 +260,8 @@ export default function CommandMenu(props: {
                             armed()?.key === action().key ? "is-armed" : "",
                           ].filter(Boolean).join(" ")}
                           onClick={() =>
-                            void run(action(), () => status?.focus(), () =>
-                              button.focus())}
+                            !action().unavailable && void run(action(), () =>
+                              focusStatus?.(), focusAction)}
                         >
                           <span
                             class="otk-control-label"

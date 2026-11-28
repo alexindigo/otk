@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals } from "@std/assert";
-import { createDrafts } from "../drafts.ts";
+import { createDrafts, emptyDraft } from "../drafts.ts";
 import { createState } from "../state.ts";
 import { serialize } from "../draft-content.ts";
 import { prepareAttachments } from "../attachment-batches.ts";
+import type { SendOutcome } from "../send-outcome.ts";
 
 Deno.test("committed custody survives until withdrawn or started", () => {
   const drafts = createDrafts();
@@ -38,6 +39,151 @@ Deno.test("a late start does not retire newer input parked by Recover draft", ()
   settle({ kind: "started", messageID: "send" });
   assertEquals(drafts.current("session").input, "Original");
   assertEquals(drafts.recoveries("session")[0].draft.input, "Newer");
+});
+
+const withdrawn: SendOutcome = {
+  kind: "withdrawn",
+  messageID: "discard",
+  native: "withdrawn",
+};
+
+for (
+  const [kind, outcome] of [
+    ["withdrawn", withdrawn],
+    ["stop-unconfirmed", {
+      kind: "unconfirmed",
+      reason: "No stop result",
+      stop: true,
+    }],
+    ["uncertain", { kind: "unconfirmed", reason: "No send result" }],
+  ] as const satisfies readonly (readonly [string, SendOutcome])[]
+) {
+  Deno.test(`discard ${kind} drops only the chosen kept copy across reload`, () => {
+    const drafts = createDrafts();
+    const write = drafts.writer("session");
+    const edit = (input: string) => write((value) => ({ ...value, input }));
+    let checks = 0;
+    const settle = drafts.captureSend("session", edit("Discard this copy"))
+      .take("discard", () => checks++)!;
+    edit("Keep this parked draft");
+    settle(outcome);
+    const park = drafts.captureSend("session", drafts.current("session"))
+      .take("keep", () => {})!;
+    edit("Keep typing here");
+    park({ ...withdrawn, messageID: "keep" });
+
+    const [discard, keep] = drafts.recoveries("session");
+    discard.discard();
+    discard.run(); // A stale Recover/Check send action cannot run.
+    assertEquals(checks, 0);
+    assertEquals(drafts.recoveries("session"), [keep]);
+    assertEquals(drafts.current("session").input, "Keep typing here");
+
+    const saved = JSON.stringify(drafts.snapshot());
+    assertEquals(saved.includes("Discard this copy"), false);
+    const restored = createDrafts();
+    restored.restore(JSON.parse(saved));
+    if (kind !== "withdrawn") {
+      assertEquals(restored.pendingSends().map(({ messageID }) => messageID), [
+        "discard",
+      ]);
+      restored.resumeSend("session", "discard", () => checks++)!(withdrawn);
+    }
+    assertEquals(restored.pendingSends(), []);
+    assertEquals(restored.current("session").input, "Keep typing here");
+    assertEquals(
+      restored.recoveries("session").map(({ draft }) => draft.input),
+      ["Keep this parked draft"],
+    );
+  });
+}
+
+Deno.test("discarding after Recover draft only drops the copy still parked", () => {
+  const drafts = createDrafts();
+  const write = drafts.writer("session");
+  const first = write((draft) => ({ ...draft, input: "Restored to composer" }));
+  const settle = drafts.captureSend("session", first).take(
+    "discard",
+    () => {},
+  )!;
+  write((draft) => ({ ...draft, input: "Parked by Recover draft" }));
+  settle(withdrawn);
+  drafts.recoveries("session")[0].run();
+  assertEquals(
+    drafts.recoveries("session")[0].draft.input,
+    "Parked by Recover draft",
+  );
+  drafts.recoveries("session")[0].discard();
+  const restored = createDrafts();
+  restored.restore(JSON.parse(JSON.stringify(drafts.snapshot())));
+  assertEquals(restored.current("session").input, "Restored to composer");
+  assertEquals(restored.recoveries("session"), []);
+});
+
+Deno.test("parked deleted text restores without a send and Recover exchanges the entire current draft", () => {
+  const drafts = createDrafts(), key = "deleted";
+  drafts.parkDeleted(key);
+  assertEquals(drafts.recoveries(key), []);
+  drafts.parkDeleted(key, ["multiline\ntext\n", "other request"]);
+  const restored = createDrafts();
+  restored.restore(JSON.parse(JSON.stringify(drafts.snapshot())));
+  assertEquals(restored.pendingSends(), []);
+  const current = {
+    ...emptyDraft(),
+    input: "Keep this input too",
+    editor: { text: "  exact editor contents\n" },
+  };
+  restored.writer(key)(current);
+  const [first, second] = restored.recoveries(key);
+  assertEquals(first.cause, "deleted-close");
+  assertEquals(restored.resumeSend(key, first.id, () => {}), undefined);
+  first.run();
+  first.run();
+  first.discard();
+  assertEquals(restored.current(key).input, "multiline\ntext\n");
+  const [exchanged] = restored.recoveries(key);
+  assertEquals(exchanged.draft, current);
+  second.discard();
+  assertEquals(restored.recoveries(key), [exchanged]);
+  exchanged.run();
+  assertEquals(restored.current(key), current);
+});
+
+Deno.test("deleted Close fences stale writers and sends while retaining late attachment completion", () => {
+  const drafts = createDrafts(), key = "deleted";
+  const write = drafts.writer(key);
+  const pending = write({
+    ...emptyDraft(),
+    input: "Unsent",
+    chips: [{
+      id: "reading",
+      label: "Attachment",
+      part: { kind: "text", text: "" },
+      pending: true,
+    }],
+  });
+  const send = drafts.captureSend(key, pending);
+  drafts.parkDeleted(key);
+  write({ ...emptyDraft(), input: "Stale unmount" });
+  assertEquals(send.take("late", () => {}), undefined);
+  const [parked] = drafts.recoveries(key);
+  write((draft) => ({
+    ...draft,
+    chips: draft.chips.map((chip) => ({
+      ...chip,
+      pending: false,
+      part: { kind: "text", text: "Finished reading" },
+    })),
+  }));
+  assertEquals(drafts.current(key), emptyDraft());
+  assertEquals(parked.draft.chips[0].part, {
+    kind: "text",
+    text: "Finished reading",
+  });
+  parked.run();
+  assertEquals(drafts.current(key).input, pending.input);
+  assertEquals(drafts.recoveries(key), []);
+  assertEquals(drafts.pendingSends(), []);
 });
 
 Deno.test("draft writers retain session ownership, attachments and invocation-current identity across delayed painting", () => {

@@ -8,7 +8,7 @@ import {
 } from "../../pages/history.ts";
 import {
   expandTool,
-  openWorkLogs,
+  openWork,
   revealAcquired,
   runNativeTool,
 } from "../../pages/transcript.ts";
@@ -35,6 +35,7 @@ test("messages.project-and-outside-tool-paths-reload", {
   await openSession(state, page, session.id);
   const checks: {
     selector: string;
+    messageID: string;
     expected: string;
     result?: string;
     text?: string;
@@ -52,7 +53,7 @@ test("messages.project-and-outside-tool-paths-reload", {
           ? { pattern: "*.txt", path: directory }
           : { filePath: file },
       );
-      const selector = `[data-message="${part.messageID}"] [data-tool]`;
+      const selector = `[data-work-source="${part.messageID}"] [data-tool]`;
       await expect(page.locator(selector)).toHaveAttribute(
         "data-tool-status",
         "completed",
@@ -62,9 +63,12 @@ test("messages.project-and-outside-tool-paths-reload", {
         : kind === "read"
         ? "src/probe.txt"
         : "src";
-      await expect(page.locator(selector + " .otk-tool-target")).toHaveText(
-        expected,
-      );
+      await expect(
+        page.locator(
+          `[data-work-source="${part.messageID}"] .otk-work-run-preview > .otk-chrome-meta:first-child`,
+        ),
+      )
+        .toHaveText(expected);
       await expandTool(
         page,
         selector,
@@ -115,7 +119,13 @@ test("messages.project-and-outside-tool-paths-reload", {
         );
         expect(text).not.toContain(state.directory);
       }
-      checks.push({ selector, expected, result, text: sourceText });
+      checks.push({
+        selector,
+        messageID: part.messageID,
+        expected,
+        result,
+        text: sourceText,
+      });
     }
   }
   const bash = await runNativeTool(state, page, session.id, "bash", {
@@ -136,17 +146,21 @@ test("messages.project-and-outside-tool-paths-reload", {
   await openSession(state, page, session.id);
   await acquireOlderHistory(page, nativeCount);
   for (const check of checks) {
-    await revealAcquired(page, check.selector.split(" [data-tool]")[0]);
-    const message = page.locator(check.selector.split(" [data-tool]")[0]);
-    await openWorkLogs(page, message);
+    const article = `[data-message="${check.messageID}"]`;
+    await revealAcquired(page, `${article} .otk-work-strip`);
+    const message = page.locator(article);
+    await openWork(message);
     await revealAcquired(page, check.selector);
     await expect(page.locator(check.selector)).toHaveAttribute(
       "data-tool-status",
       "completed",
     );
-    await expect(page.locator(check.selector + " .otk-tool-target")).toHaveText(
-      check.expected,
-    );
+    await expect(
+      page.locator(
+        `[data-work-source="${check.messageID}"] .otk-work-run-preview > .otk-chrome-meta:first-child`,
+      ),
+    )
+      .toHaveText(check.expected);
     await expandTool(page, check.selector, message);
     await expect(page.locator(check.selector + " .otk-tool-summary"))
       .toHaveCount(0);

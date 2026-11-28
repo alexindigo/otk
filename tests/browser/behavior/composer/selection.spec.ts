@@ -4,7 +4,11 @@ import {
   send as composerSend,
 } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
-import { revealTool, shellRun } from "../../pages/transcript.ts";
+import {
+  revealAcquired,
+  revealTool,
+  shellRun,
+} from "../../pages/transcript.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
@@ -49,9 +53,10 @@ test.describe("native picker choices", () => {
     });
     const frames = await wire(page);
     await openSession(state, page, session.id);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "scripted",
-    );
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "scripted",
+      );
     await pick(page, "model", JSON.stringify(["fake2", "scripted"]));
     await openPicker(page, "variant");
     const first = page.locator(
@@ -100,7 +105,9 @@ test.describe("native picker choices", () => {
     await expect(page.locator(".otk-prompt-context .otk-picker-groups"))
       .toHaveCount(0);
     await pick(page, "agent", "reviewer");
-    await expect(page.locator(".otk-composer-agent")).toHaveText("Reviewer");
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      "Reviewer",
+    );
     await page.keyboard.press("Control+'");
     const search = page.locator(".otk-model-picker input[type=search]");
     await expect(search).toBeFocused();
@@ -185,14 +192,17 @@ test.describe("native picker choices", () => {
       (await state.product("prefs.get", {}))["models.recent"][0]
     ).toEqual(selected.model);
     await page.reload();
-    await expect(page.locator(".otk-composer-agent")).toHaveText("Reviewer");
+    await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+      "Reviewer",
+    );
     await expect(page.locator(".otk-variant-picker > button > span"))
       .toHaveText("High");
     await openSession(state, page, other.id);
     await openSession(state, page, session.id);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "Scripted with variants",
-    );
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "Scripted with variants",
+      );
     await openPicker(page, "model");
     await expect(
       page.locator(".otk-model-picker h3").first(),
@@ -258,7 +268,8 @@ test.describe("native picker choices", () => {
     } else await expect(prompt(page)).toHaveValue("");
     await prompt(page).press("!");
     await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
-    await expect(page.locator(".otk-variant-picker")).toHaveCount(0);
+    await expect(page.locator(".otk-variant-picker:not([inert] *)"))
+      .toHaveCount(0);
     expect(
       await page.locator(".otk-prompt-context > .otk-popover > button")
         .evaluateAll((elements) =>
@@ -270,10 +281,12 @@ test.describe("native picker choices", () => {
     ]);
     await prompt(page).pressSequentially("echo PICKER-SHELL");
     await prompt(page).press("Enter");
-    // NT2: a V2 user shell is a plugin shell record; V1 keeps its bash tool.
-    await revealTool(page, shellRun(state, "completed"));
-    await expect(page.locator(shellRun(state, "completed")))
-      .toContainText("PICKER-SHELL");
+    const shellRecord = shellRun(state, "completed");
+    // D74: V2's background shell stays in the transcript; V1's bash is Work.
+    if (state.controller.info!.version.startsWith("2.")) {
+      await revealAcquired(page, shellRecord);
+    } else await revealTool(page, shellRecord);
+    await expect(page.locator(shellRecord)).toContainText("PICKER-SHELL");
     const shell = frames.sent.filter(({ frame }) =>
       frame.method === "session.shell"
     ).at(-1)!.frame.params!;
@@ -300,10 +313,12 @@ test.describe("native picker choices", () => {
     await expect(page.locator(".otk-model-picker .otk-picker-option"))
       .toHaveCount(1);
     await search.press("Enter");
-    await expect(page.locator(".otk-variant-picker")).toHaveCount(0);
-    await expect(page.locator(".otk-composer-model-name")).toHaveText(
-      "Plain model",
-    );
+    await expect(page.locator(".otk-variant-picker:not([inert] *)"))
+      .toHaveCount(0);
+    await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+      .toHaveText(
+        "Plain model",
+      );
     await page.keyboard.press("Control+'");
     await search.pressSequentially("Scripted with variants");
     await expect(page.locator(".otk-model-picker .otk-picker-option"))
@@ -479,9 +494,10 @@ test.describe("history choices", () => {
         await pick(page, "variant", variant ?? "");
         await prompt(page).press("ArrowUp");
         await expect(prompt(page)).toHaveValue("recalled history content");
-        await expect(page.locator(".otk-composer-model-name")).toHaveText(
-          "Chosen model",
-        );
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toHaveText(
+            "Chosen model",
+          );
         await expect(page.locator(".otk-variant-picker > button > span"))
           .toHaveText(variant ? "High" : "Default");
         await page.getByRole("button", { name: "Edit prompt", exact: true })
@@ -495,7 +511,7 @@ test.describe("history choices", () => {
         );
         await expect(page.locator("dialog[open]")).toHaveCount(0);
         await queue(state, "Reply from chosen history model");
-        await page.locator(".otk-prompt button[type=submit]").click();
+        await composerSend(page).click();
         await reply(state, page, target.id, "Reply from chosen history model");
         const frame = frames.sent.filter(({ frame }) =>
           frame.method === "session.prompt"

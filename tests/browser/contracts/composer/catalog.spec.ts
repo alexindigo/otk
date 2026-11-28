@@ -24,7 +24,7 @@ for (
         const frames = await wire(page);
         const id = kind === "native-null" ? "opcv1-core" : "tstv1-core";
         await page.goto(`${state.url}/#/local/${id}`);
-        const picker = page.locator(".otk-model-picker");
+        const picker = page.locator(".otk-model-picker:not([inert] *)");
         const open = async () => {
           await picker.locator(":scope > button").click();
           await expect(picker.locator(".otk-popover-panel")).toBeVisible();
@@ -37,9 +37,10 @@ for (
             action,
           });
         if (kind === "none") {
-          await expect(page.locator(".otk-prompt-context")).toContainText(
-            "Default model",
-          );
+          await expect(page.locator(".otk-prompt-context:not([inert] *)"))
+            .toContainText(
+              "Default model",
+            );
           await expect(picker).toHaveCount(0);
           expect(
             frames.sent.some(({ frame }) => frame.method === "models.list"),
@@ -47,8 +48,10 @@ for (
           return;
         }
         if (kind === "pending-choice") {
-          await expect(page.locator(".otk-agent-picker")).toBeVisible();
-          await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
+          await expect(page.locator(".otk-agent-picker:not([inert] *)"))
+            .toBeVisible();
+          await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+            .toHaveText("Build");
           await expect.poll(async () => (await observe()).calls).toBe(1);
           // Decision 34 and fx-green5's Send-latency requirement: only prompt
           // references join readiness. This plain text references no held model.
@@ -71,9 +74,10 @@ for (
           await page.locator(".otk-agent-picker > button").click();
           await page.locator('.otk-agent-picker [data-picker-key="review"]')
             .click();
-          await expect(page.locator(".otk-composer-agent")).toHaveText(
-            "Review",
-          );
+          await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+            .toHaveText(
+              "Review",
+            );
           expect((await observe()).sent).toHaveLength(1);
           await scenario("release");
           await prompt(page).fill("Send the later explicit choice");
@@ -98,7 +102,8 @@ for (
           return;
         }
         if (kind === "native-null") {
-          await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
+          await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+            .toHaveText("Build");
           await open();
           await expect(picker.locator("[role=status]")).toHaveText(
             "Loading...",
@@ -110,12 +115,14 @@ for (
           ).toHaveCount(0);
           await page.keyboard.press("Escape");
           await scenario("release");
-          await expect(page.locator(".otk-composer-provider")).toHaveText(
-            "Fixture provider",
-          );
-          await expect(page.locator(".otk-composer-model-name")).toHaveText(
-            "Plain model",
-          );
+          await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+            .toHaveText(
+              "Fixture provider",
+            );
+          await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+            .toHaveText(
+              "Plain model",
+            );
           await prompt(page).fill("Send with native absence");
           await prompt(page).press("Enter");
           await expect.poll(async () => (await observe()).sent).toHaveLength(1);
@@ -126,12 +133,19 @@ for (
           return;
         }
         if (kind === "failed-variant") {
-          await expect(page.locator(".otk-prompt-context > span:last-child"))
+          await expect(
+            page.locator(
+              ".otk-prompt-context:not([inert] *) > span:last-child",
+            ),
+          )
             .toHaveText("High");
-          await expect(page.locator(".otk-composer-provider")).toHaveText(
-            "offline",
-          );
-        } else {await expect(page.locator(".otk-composer-model-name"))
+          await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+            .toHaveText(
+              "offline",
+            );
+        } else {await expect(
+            page.locator(".otk-composer-model-name:not([inert] *)"),
+          )
             .toHaveText("restored-model");}
         await open();
         if (kind === "missing") {
@@ -234,7 +248,7 @@ test.describe("input-referenced catalog", () => {
         "aria-description",
         "Preparing or sending prompt...",
       );
-      await expectPrimaryBlocked(send(page), "Sending");
+      await expectPrimaryBlocked(send(page), "Previous message still sending");
       await expect(prompt(page)).toHaveValue(text);
       const submissions = () =>
         frames.sent.filter(({ frame }) =>

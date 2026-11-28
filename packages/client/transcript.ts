@@ -15,7 +15,7 @@ import {
   type TranscriptVersion,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
-import { RequestFailure } from "./failures.ts";
+import { RequestFailure, retireFailureOccurrence } from "./failures.ts";
 import { createProgress, type ProgressDisplay } from "./progress.ts";
 import {
   type FailureValue,
@@ -23,7 +23,7 @@ import {
   feedbackError,
 } from "./failure-features.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
-import { isAttentionOp } from "@otk/protocol";
+import { isAttentionOp, isCancellation } from "@otk/protocol";
 import {
   createNativeSources,
   type NativeSourceOwner,
@@ -51,10 +51,13 @@ import type {
   TranscriptRange,
 } from "./transcripts.ts";
 import { MESSAGE_ADMISSION_WATERMARK } from "./message-policy.ts";
+import { type CoverageGap, createAcquiredRange } from "./acquired-range.ts";
 import {
   createTranscriptInteraction,
   type TranscriptInteraction,
 } from "./transcript-interaction.ts";
+import type { Disclosures } from "./disclosure.ts";
+import { sessionKey } from "./index.ts";
 import {
   createTranscriptProjection,
   type TranscriptProjection,
@@ -82,6 +85,11 @@ function promptAfter(
   };
 }
 
+export interface TranscriptGapState extends CoverageGap {
+  state: "idle" | "loading" | "failed";
+  failure?: FailureValue;
+}
+
 export interface TranscriptState {
   appendRevision?: number;
   temperature: Temperature;
@@ -92,6 +100,7 @@ export interface TranscriptState {
   repliesByID: Record<string, TranscriptReply>;
   queuedIDs: Set<string>;
   records: import("./activity-spans.ts").RecordProjection;
+  gaps: readonly TranscriptGapState[];
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
   load?: LoadCoverage;
@@ -106,7 +115,6 @@ export interface TranscriptState {
   clock?: ContentClock;
   version?: TranscriptVersion;
   latestPrompt?: LatestPrompt;
-  siblings: import("@otk/protocol").SessionStructure[];
   content: ContentState;
   loading: boolean;
   paging: boolean;
@@ -159,15 +167,21 @@ export interface TranscriptOwner {
   reconcile(messageIDs: readonly string[]): Promise<void>;
   pin(keys: readonly string[]): () => void;
   refetch(): Promise<void>;
-  sibling(delta: number): Promise<string | undefined>;
   receive(sidecarId: string, frame: ServerFrame): void;
   older(): Promise<void>;
+  bridge(key?: string): Promise<void>;
   latestPrompt(): LatestPrompt | undefined;
   usesMetadata(ids: ReadonlySet<string>): boolean;
   stop(): void;
 }
 /** Opened Source folds in one transcript lifetime, each a bounded preview. */
 const SOURCE_RESULTS = 64;
+const missingMessage = () =>
+  new RequestFailure({
+    code: "message.missing",
+    retry: "none",
+    diagnosticID: randomID(),
+  });
 export function createTranscript(
   target: BodyTarget,
   connection: (id: string) => SidecarConnection,
@@ -177,10 +191,13 @@ export function createTranscript(
   policy: () => MessagePolicy | undefined = () =>
     connection(target.sidecarId).messages,
   entities?: EntityStateStore,
+  disclosures?: Disclosures,
+  retireScope?: (scope: string) => void,
 ): TranscriptOwner {
   const requests = connection(target.sidecarId).attention;
   const requestEntry = (id: string) => entry(target.sidecarId, id);
   const projection = createTranscriptProjection();
+  const acquired = createAcquiredRange();
   const deliveryDiagnostics = new ContentDeliveryDiagnostics("browser");
   const sources = createNativeSources({
     messages: () => projection.state.messagesByID,
@@ -332,7 +349,8 @@ export function createTranscript(
     });
     return early.promise;
   };
-  const interaction = createTranscriptInteraction();
+  const scope = sessionKey(target.sidecarId, target.sessionID);
+  const interaction = createTranscriptInteraction(disclosures, scope);
   const helper = (
     id: string,
   ): import("@otk/protocol").HelperSummary | undefined => {
@@ -361,7 +379,9 @@ export function createTranscript(
     return content as ContentState;
   };
   const firstRetained = () =>
-    projection.state.messagesByID[projection.state.messageIDs[0]];
+    projection.state.messagesByID[
+      projection.state.messageIDs.find((id) => projection.committed(id))!
+    ];
   // Source clocks may trail a page read. Updates can change the acquired range,
   // but only the cursor admits older history, including page-captured events.
   const outsideAcquiredRange = (
@@ -379,14 +399,36 @@ export function createTranscript(
     }
     if (
       op.op === "message.upsert" && hasBaseline &&
-      outsideAcquiredRange(op, firstRetained(), cursor !== null || tailDirty)
+      outsideAcquiredRange(op, firstRetained(), acquired.next !== null)
     ) return content;
-    if (op.op === "part.remove") interaction.retireIdentity(op.partID);
+    const retirePartFailure = (part: Part) => {
+      retireFailureOccurrence(interaction.disclosures, part);
+      if (part.kind === "external" && part.failure) {
+        retireFailureOccurrence(interaction.disclosures, part.failure);
+      }
+      if (part.kind === "tool") {
+        retireFailureOccurrence(interaction.disclosures, part.call);
+      }
+    };
+    if (op.op === "part.remove") {
+      const part = projection.state.messagesByID[op.messageID]?.parts.find(
+        (part) => part.id === op.partID,
+      );
+      if (part) retirePartFailure(part);
+      interaction.retireIdentity(op.partID);
+    }
+    const removedReply = op.op === "message.remove"
+      ? projection.entry(op.messageID)?.key
+      : undefined;
     if (op.op === "message.remove") {
+      acquired.remove(op.messageID);
       interaction.retireIdentity(op.messageID);
       for (
         const part of projection.state.messagesByID[op.messageID]?.parts ?? []
-      ) interaction.retireIdentity(part.id);
+      ) {
+        retirePartFailure(part);
+        interaction.retireIdentity(part.id);
+      }
     }
     const previous = op.op === "part.upsert"
       ? projection.state.messagesByID[op.messageID]
@@ -413,6 +455,16 @@ export function createTranscript(
     }
     const recordBefore = projection.state.records;
     const projected = projection.apply(op);
+    if (op.op === "message.upsert" && projection.materialized(op.message.id)) {
+      acquired.observe(op.message);
+    }
+    // A native message may be one step of a reply. Retire the logical key
+    // only when the reply itself is deleted, not when one step is removed.
+    if (
+      op.op === "message.remove" && removedReply !== undefined &&
+      removedReply !== op.messageID &&
+      !projection.state.repliesByID[removedReply]
+    ) interaction.retireIdentity(removedReply);
     if (recordBefore !== projection.state.records) {
       const before = new Set(Object.values(recordBefore.parents).flat());
       const after = new Set(
@@ -446,11 +498,11 @@ export function createTranscript(
     repliesByID: {},
     queuedIDs: new Set(),
     records: projection.state.records,
+    gaps: [],
     olderCursor: null,
     pageLoading: false,
     recovering: [],
     content: emptyContent(),
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: false,
@@ -461,8 +513,17 @@ export function createTranscript(
   const state = currentStore.state;
   const subscribe = (listener: (value: TranscriptState) => void) =>
     binding.subscribe(() => listener(state));
+  let updating = false;
   const setState = (change: (draft: TranscriptState) => void) => {
-    currentStore.update(change);
+    // Applying a page's attention events can synchronously notify this owner.
+    // Only the outer transaction publishes the projection.
+    if (updating) return;
+    updating = true;
+    try {
+      currentStore.update(change);
+    } finally {
+      updating = false;
+    }
     state.messageIDs = projection.state.messageIDs;
     state.messagesByID = projection.state.messagesByID;
     state.replyIDs = projection.state.replyIDs;
@@ -472,7 +533,8 @@ export function createTranscript(
     state.appendRevision = projection.state.appendRevision;
     sources.sync();
     state.recovering = state.content.recovering ?? [];
-    state.olderCursor = cursor;
+    state.olderCursor = acquired.next ?? null;
+    state.exhausted = state.view === "deleted" || acquired.next === null;
     state.pageLoading = state.paging || state.loading;
     state.session = state.info;
     state.revision++;
@@ -484,7 +546,9 @@ export function createTranscript(
   let view: "content" | "deleted" = "content";
   let subscribed = false;
   let buffer: ClockedContent[] = [], bufferBytes = 0, fetching = false;
-  let clock: ContentClock | undefined, cursor: MessageCursor | null = null;
+  let clock: ContentClock | undefined;
+  // Keep the last accepted clock even when live admission drops its clock.
+  let lastClock: ContentClock | undefined;
   let missing = false, retry: ReturnType<typeof setTimeout> | undefined;
   let recoveryAttempted = false;
   let hasBaseline = false;
@@ -497,22 +561,32 @@ export function createTranscript(
     events: Map<string, ContentOp>;
     bytes: number;
     count: number;
-    pending: Set<"permission" | "question">;
   } | undefined;
   let controller: AbortController | undefined;
   let attentionController: AbortController | undefined;
   let range: TranscriptRange | undefined;
   const visited = new Set<string>(), pins = new Map<string, number>();
-  const pages = new Map<string | undefined, {
-    requestCursor?: string;
-    ids: string[];
-    older: string | null;
-    clock: ContentClock;
-  }>();
   let inFlight: Promise<void> | undefined;
+  let repairingHead: Promise<void> | undefined;
   let reconciling: Promise<void> | undefined;
   let automatic = false;
-  let tailDirty = false;
+  let bridging: { key: string; failure?: FailureValue } | undefined;
+  const publishGaps = (draft: TranscriptState) => {
+    const gaps = acquired.gaps();
+    if (
+      gaps.length !== draft.gaps.length ||
+      gaps.some((gap, i) =>
+        gap.key !== draft.gaps[i].key || gap.newer !== draft.gaps[i].newer ||
+        gap.older !== draft.gaps[i].older
+      )
+    ) projection.gaps(gaps);
+    draft.gaps = gaps.map((gap) => {
+      if (gap.key !== bridging?.key) return { ...gap, state: "idle" };
+      return bridging.failure
+        ? { ...gap, state: "failed", failure: bridging.failure }
+        : { ...gap, state: "loading" };
+    });
+  };
   let toolGeneration = 0;
   let selectedForTools = false;
   // IDs only: the selected transcript remains the sole owner of part data.
@@ -560,7 +634,7 @@ export function createTranscript(
       retry = undefined;
       if (selected && id === generation) {
         recoveryAttempted = true;
-        void refetch();
+        void reacquireNewest("recovery");
       }
     }, settings.retryms);
   };
@@ -573,12 +647,15 @@ export function createTranscript(
     controller?.abort();
     boundaryRead = undefined;
     fetching = false;
+    inFlight = undefined;
+    bridging = undefined;
     attentionReads = undefined;
     setState((draft) => {
       draft.loading = false;
       draft.paging = false;
       draft.continuity = "missing";
       draft.load = undefined;
+      publishGaps(draft);
     });
     schedule();
   };
@@ -589,8 +666,7 @@ export function createTranscript(
     clock = frame.clock;
     return true;
   };
-  let siblingCursor: string | null = null;
-  const refreshAttention = (siblings = true) => {
+  const refreshAttention = () => {
     if (!selected || state.temperature !== "screen") return;
     attentionController?.abort();
     const abort = attentionController = new AbortController();
@@ -604,33 +680,15 @@ export function createTranscript(
       events: new Map<string, ContentOp>(),
       bytes: 0,
       count: 0,
-      pending: new Set<"permission" | "question">(["permission", "question"]),
     };
     const optional = async (kind: "permission" | "question") => {
       try {
         if (kind === "permission") {
-          const permissions = sidecar.supports("permissions")
-            ? await sidecar.rpc.call("permission.list", {
-              sessionID: target.sessionID,
-            }, abort.signal)
-            : [];
-          if (!valid()) return;
-          setState((draft) => {
-            requests.replace(
-              "permission",
-              permissions,
-              target.sessionID,
-              requestEntry,
-              [...attention.events.values()],
-            );
-            let content = attach(contentMetadata(draft.content));
-            for (const op of attention.events.values()) {
-              if (
-                op.op === "permission.upsert" || op.op === "permission.remove"
-              ) content = apply(content, op);
-            }
-            draft.content = content;
-          });
+          await sidecar.readPermissions(
+            target.sessionID,
+            requestEntry,
+            abort.signal,
+          );
         } else {
           const questions = sidecar.supports("questions")
             ? await sidecar.rpc.call("question.list", {
@@ -656,40 +714,114 @@ export function createTranscript(
           });
         }
       } catch (error) {
-        if (valid()) {
+        if (valid() && !isCancellation(error)) {
           setState((draft) => {
             draft.error = failureValue(error);
           });
         }
       } finally {
-        attention.pending.delete(kind);
-        if (!attention.pending.size && attentionReads === attention) {
+        if (kind === "question" && attentionReads === attention) {
           attentionReads = undefined;
         }
       }
     };
     void optional("permission");
     void optional("question");
-    if (siblings && state.info?.parentID) {
-      void sidecar.rpc.call("session.children", {
-        sessionID: state.info.parentID,
-      }, abort.signal).then((page) => {
-        if (valid()) {
-          siblingCursor = page.older;
-          setState((draft) => {
-            draft.siblings = page.items;
-          });
+  };
+  type NewestCause =
+    | "open"
+    | "recovery"
+    | "invalidated"
+    | "resync"
+    | "welcome"
+    | "latest"
+    | "send"
+    | "retry"
+    | "head-repair";
+  const reconcileNewest = (
+    page: MessagePage,
+    replay: readonly ClockedContent[],
+    cause: NewestCause,
+  ) => {
+    const { items, session: info } = page;
+    const same = authority !== undefined &&
+      compareTranscriptVersion(page.version, authority) === 0 &&
+      lastClock?.epoch === page.clock.epoch &&
+      // Same epoch/version alone does not prove that an unseen interval
+      // contains no edits to acquired history.
+      page.from.seq <= lastClock.seq;
+    const held = projection.messages().filter((message) =>
+      projection.committed(message.id)
+    );
+    const pageIDs = new Set(items.map((message) => message.id));
+    const recovering = state.recovering.filter((value) =>
+      !pageIDs.has(value.messageID)
+    );
+    clock = lastClock = replay.at(-1)?.clock ?? page.clock;
+    authority = minimum = page.version;
+    baseline(items);
+    buffer = [];
+    bufferBytes = 0;
+    fetching = false;
+    hasBaseline = true;
+    initialResync = false;
+    setState((draft) => {
+      const { deleted } = acquired.head(page, held, { same });
+      projection.reconcile(items, page);
+      let content: ContentState = attach({
+        ...contentMetadata(draft.content),
+        revert: info.revert || null,
+        revertCommitted: info.revertCommitted ?? draft.content.revertCommitted,
+        error: info.error,
+        errorState: info.errorState,
+        recovering: [...recovering, ...page.recovering],
+        selection: info.selection,
+      });
+      for (const messageID of deleted) {
+        content = apply(content, { op: "message.remove", messageID });
+      }
+      let latestPrompt = page.prompt;
+      for (const { event } of [...page.catchup, ...replay]) {
+        content = apply(content, event);
+        if (event.op === "session.selection" && latestPrompt) {
+          latestPrompt = mergePromptSelection(latestPrompt, event.selection);
         }
-      }).catch((error) => {
-        if (valid()) {
-          setState((draft) => {
-            draft.error = failureValue(error);
-          });
+        if (event.op === "message.upsert") {
+          latestPrompt = promptAfter(
+            latestPrompt,
+            event.message,
+            (id) => projection.state.messagesByID[id],
+          );
+        }
+      }
+      projection.helpers(helper);
+      projection.boundaries(
+        Object.values(page.turns).map((turn) => turn.boundary),
+      );
+      publishGaps(draft);
+      draft.info = info;
+      draft.clock = clock;
+      draft.version = authority;
+      draft.latestPrompt = latestPrompt;
+      draft.content = content;
+      draft.loading = false;
+      draft.continuity = "ready";
+    });
+    // Head repair's caller will run the batch. Otherwise only an on-screen
+    // transcript bridges automatically, after newest waiters can settle.
+    if (
+      cause !== "head-repair" && state.gaps.length &&
+      state.temperature === "screen"
+    ) {
+      const request = load;
+      queueMicrotask(() => {
+        if (request === load && state.temperature === "screen") {
+          void owner.bridge();
         }
       });
     }
   };
-  const refetch = async (retryRecovery = false) => {
+  const reacquireNewest = async (cause: NewestCause, retryRecovery = false) => {
     if (!selected) return;
     if (!policy()) return;
     clearTimeout(retry);
@@ -704,6 +836,8 @@ export function createTranscript(
     readLabel = "Loading messages";
     readStage("queued", progressGeneration);
     controller?.abort();
+    inFlight = undefined;
+    bridging = undefined;
     const abort = controller = new AbortController();
     fetching = true;
     buffer = [];
@@ -718,19 +852,11 @@ export function createTranscript(
         ? "ready"
         : "loading";
       draft.error = undefined;
-      draft.exhausted = false;
       draft.pageError = undefined;
+      publishGaps(draft);
     });
     try {
-      const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
-      const diagnostic = (error: unknown) => {
-        if (current(id, request)) {
-          setState((draft) => {
-            draft.error = failureValue(error);
-          });
-        }
-      };
-      refreshAttention(false);
+      refreshAttention();
       const page = await readBoundary(
         undefined,
         abort.signal,
@@ -739,7 +865,7 @@ export function createTranscript(
           readStage("reading", progressGeneration);
         },
       );
-      const info = page.session, messages = page.items;
+      const messages = page.items;
       if (boundaryRead) {
         boundaryRead.deliver = undefined;
         boundaryRead.prompt = page.prompt?.id;
@@ -771,116 +897,7 @@ export function createTranscript(
         nextClock = frame.clock;
         replay.push(frame);
       }
-      // A newest page covers only its suffix, not already acquired history.
-      // Retain the uncovered prefix only under the exact same source authority;
-      // a complete page, new epoch or boundary revision remains a replacement.
-      const prefix = hasBaseline && page.older !== null && messages[0] &&
-          state.clock?.epoch === page.clock.epoch && state.version &&
-          compareTranscriptVersion(state.version, page.version) === 0
-        ? projection.messages().filter((message) =>
-          projection.committed(message.id) &&
-          compareMessages(message, messages[0]) < 0
-        )
-        : [];
-      const retainedIDs = new Set(prefix.map((message) => message.id));
-      const boundaries = prefix.flatMap((message) => {
-        const boundary = projection.boundary(
-          message.role === "assistant"
-            ? message.replyTo ?? message.id
-            : message.id,
-        );
-        return boundary ? [boundary] : [];
-      });
-      const recoveringPrefix = state.recovering.filter((value) =>
-        retainedIDs.has(value.messageID)
-      );
-      clock = nextClock;
-      authority = minimum = page.version;
-      cursor = page.older;
-      tailDirty = false;
-      pages.clear();
-      pages.set(undefined, {
-        ids: messages.map((m) => m.id),
-        older: page.older,
-        clock: page.clock,
-      });
-      if (info.parentID && state.temperature === "screen") {
-        void rpc.call(
-          "session.children",
-          { sessionID: info.parentID },
-          abort.signal,
-        ).then((page) => {
-          if (current(id, request)) {
-            siblingCursor = page.older;
-            setState((draft) => {
-              draft.siblings = page.items;
-            });
-          }
-        }).catch(diagnostic);
-      } else {setState((draft) => {
-          draft.siblings = [];
-        });}
-      baseline(messages);
-      buffer = [];
-      bufferBytes = 0;
-      fetching = false;
-      hasBaseline = true;
-      initialResync = false;
-      setState((draft) => {
-        projection.replace([...prefix, ...messages]);
-        projection.helpers(helper);
-        projection.boundaries(
-          [
-            ...boundaries,
-            ...Object.values(page.turns).map((turn) => turn.boundary),
-          ],
-        );
-        let content: ContentState = attach({
-          ...contentMetadata(draft.content),
-          revert: info.revert || null,
-          revertCommitted: info.revertCommitted ??
-            draft.content.revertCommitted,
-          error: info.error,
-          errorState: info.errorState,
-          recovering: [...recoveringPrefix, ...page.recovering],
-          selection: info.selection,
-        });
-        let latestPrompt = page.prompt;
-        for (const { event } of page.catchup) {
-          content = apply(content, event);
-          if (event.op === "session.selection" && latestPrompt) {
-            latestPrompt = mergePromptSelection(latestPrompt, event.selection);
-          }
-          if (event.op === "message.upsert") {
-            latestPrompt = promptAfter(
-              latestPrompt,
-              event.message,
-              (id) => projection.state.messagesByID[id],
-            );
-          }
-        }
-        for (const { event } of replay) {
-          content = apply(content, event);
-          if (event.op === "session.selection" && latestPrompt) {
-            latestPrompt = mergePromptSelection(latestPrompt, event.selection);
-          }
-          if (event.op === "message.upsert") {
-            latestPrompt = promptAfter(
-              latestPrompt,
-              event.message,
-              (id) => projection.state.messagesByID[id],
-            );
-          }
-        }
-        draft.info = info;
-        draft.clock = clock;
-        draft.version = authority;
-        draft.latestPrompt = latestPrompt;
-        draft.content = content;
-        draft.loading = false;
-        draft.continuity = "ready";
-        draft.exhausted = page.older === null;
-      });
+      reconcileNewest(page, replay, cause);
       recoveryAttempted = false;
       queueMicrotask(reserve);
       deliveryDiagnostics.record({
@@ -913,7 +930,9 @@ export function createTranscript(
       if (resynced) {
         retriedVersion = minimum;
         queueMicrotask(() => {
-          if (selected && current(id, request) && !fetching) void refetch();
+          if (selected && current(id, request) && !fetching) {
+            void reacquireNewest("resync");
+          }
         });
       } else schedule();
     }
@@ -951,10 +970,14 @@ export function createTranscript(
     liveCompleted.clear();
     buffer = [];
     bufferBytes = 0;
-    clock = undefined;
+    clock = lastClock = undefined;
     authority = minimum = undefined;
     retriedVersion = undefined;
-    cursor = null;
+    acquired.clear();
+    // Body acquisition can reset without retiring the tab's interaction scope.
+    // Deletion and stop own retirement of disclosure choices and anchors.
+    inFlight = repairingHead = undefined;
+    bridging = undefined;
     missing = false;
     fetching = false;
     hasBaseline = false;
@@ -970,15 +993,14 @@ export function createTranscript(
       draft.clock = undefined;
       draft.version = undefined;
       draft.latestPrompt = undefined;
-      draft.siblings = [];
       // Window lifetime changes do not turn projected local sends into native
       // input. Replace only the native window; pending entries survive it.
-      projection.replace([]);
+      projection.reset([]);
+      publishGaps(draft);
       draft.content = attach(emptyContent());
       draft.loading = !!selection;
       draft.continuity = selection ? "loading" : "ready";
       draft.paging = false;
-      draft.exhausted = false;
       draft.error = undefined;
       if (deleted?.deleted) {
         draft.info = {
@@ -992,13 +1014,12 @@ export function createTranscript(
         };
         draft.loading = false;
         draft.continuity = "ready";
-        draft.exhausted = true;
       }
     });
     if (selection && !deleted?.deleted) {
       connection(selection.sidecarId).subscribe(selection.sessionID, true);
       subscribed = true;
-      void refetch();
+      void reacquireNewest("open");
     }
   };
   const trim = () => {
@@ -1009,63 +1030,35 @@ export function createTranscript(
           m.id
         ),
       );
-      const messages = draft.content.messages.filter((m) =>
-        tail.has(m.id) || visited.has(m.id) || pins.has(m.id)
-      );
-      if (messages.length !== draft.content.messages.length) {
-        const retained = new Set(messages.map((message) => message.id));
-        const removed = new Set(
-          draft.content.messages.filter((message) => !retained.has(message.id))
-            .map((message) => message.id),
-        );
-        const covered = new Set(
-          [...pages.values()].flatMap((page) => page.ids),
-        );
-        if (
-          [...removed].some((id) => !covered.has(id)) ||
-          pages.get(undefined)?.ids.some((id) => removed.has(id))
-        ) {
-          // Losing live-tail topology requires a new native tail cursor. Merely
-          // evicting historical reserve does not invalidate that current tail.
-          tailDirty = true;
-        } else if (!tailDirty) {
-          const seen = new Set<string | undefined>();
-          let before: string | undefined;
-          while (!seen.has(before)) {
-            seen.add(before);
-            const page = pages.get(before);
-            if (!page) break;
-            if (page.ids.some((id) => removed.has(id))) {
-              cursor = page.requestCursor!;
-              break;
-            }
-            if (page.older === null) break;
-            before = page.older;
-          }
-        }
-        draft.exhausted = false;
-        projection.retain(retained);
-      }
+      const retained = new Set([...tail, ...visited, ...pins.keys()]);
+      const ordered = draft.messageIDs.filter(projection.committed);
+      const removed = new Set(ordered.filter((id) => !retained.has(id)));
+      if (removed.size) projection.park(acquired.evict(ordered, removed));
+      projection.retain(retained);
     });
   };
   const reserve = () => {
     if (
-      !selected || state.loading || state.paging || state.exhausted ||
-      state.pageError || state.continuity !== "ready" ||
+      !selected || repairingHead || state.loading || state.paging ||
+      state.exhausted ||
+      state.pageError || state.gaps.length || state.continuity !== "ready" ||
       state.load?.state === "loading"
     ) return;
-    const ids = state.content.messages.map((m) => m.id);
+    const ids = state.messageIDs;
     const first = range ? ids.indexOf(range.first) : -1;
     if (
       ids.length < MESSAGE_ADMISSION_WATERMARK ||
-      (tailDirty && state.temperature === "screen") ||
+      (acquired.next === undefined && state.temperature === "screen") ||
       (state.temperature === "screen" && first >= 0 &&
         first <= MESSAGE_ADMISSION_WATERMARK)
     ) {
       automatic = true;
       const work = owner.older();
       automatic = false;
-      void work.then(reserve);
+      const length = ids.length;
+      void work.then(() => {
+        if (state.messageIDs.length > length) reserve();
+      });
     }
   };
   const snapshotLifetime = new AbortController();
@@ -1124,8 +1117,14 @@ export function createTranscript(
           const reply = state.repliesByID[key];
           if (!reply) throw new Error("Reply is no longer available");
           const boundary = projection.boundary(turnID);
-          if (boundary?.firstID && state.messagesByID[boundary.firstID]) break;
-          if (message.replyTo && state.messagesByID[message.replyTo]) break;
+          const first = boundary?.firstID ?? message.replyTo;
+          if (
+            first && projection.materialized(first) &&
+            acquired.current(first) &&
+            reply.segments.every((segment) =>
+              acquired.current(segment.messageID)
+            )
+          ) break;
           if (state.exhausted) break;
           await owner.older();
           if (state.pageError) throw feedbackError(state.pageError);
@@ -1133,9 +1132,15 @@ export function createTranscript(
         if (id !== generation || !selected) {
           throw new Error("Reply changed while loading source");
         }
-        return state.repliesByID[key].segments.flatMap((segment) =>
-          segment.parts.map(text)
-        ).filter(Boolean).join("\n\n");
+        const reply = state.repliesByID[key];
+        if (
+          !reply ||
+          reply.segments.some((segment) => !acquired.current(segment.messageID))
+        ) {
+          throw missingMessage();
+        }
+        return reply.segments.flatMap((segment) => segment.parts.map(text))
+          .filter(Boolean).join("\n\n");
       }
       return message.parts.map(text).filter(Boolean).join("\n\n");
     },
@@ -1177,13 +1182,10 @@ export function createTranscript(
         readProgress.stop();
         projection.releaseCommittedSends();
         open();
-        cursor = null;
         setState((draft) => {
           draft.recovering = [];
         });
         range = undefined;
-        tailDirty = false;
-        pages.clear();
         visited.clear();
         pins.clear();
         toolListeners.clear();
@@ -1215,20 +1217,16 @@ export function createTranscript(
         const first = ids.indexOf(value.first), last = ids.indexOf(value.last);
         if (first >= 0 && last >= first) {
           const visible = new Set(ids.slice(first, last + 1));
-          for (const page of pages.values()) {
-            if (page.ids.some((id) => visible.has(id))) {
-              for (const id of page.ids) {
-                visited.add(id);
-              }
-            }
-          }
+          acquired.visit(visible, visited);
         }
       }
       reserve();
     },
     async ensure(messageID, signal) {
+      const lifetime = generation;
       while (
-        selected && !state.content.messages.some((m) => m.id === messageID)
+        selected && lifetime === generation && (state.loading || missing ||
+          !projection.materialized(messageID) || !acquired.current(messageID))
       ) {
         signal?.throwIfAborted();
         if (state.loading) {
@@ -1240,16 +1238,20 @@ export function createTranscript(
               }
             });
           });
-        } else if (state.exhausted) {
-          throw new RequestFailure({
-            code: "message.missing",
-            retry: "none",
-            diagnosticID: randomID(),
-          });
+        } else if (state.exhausted && !missing) {
+          throw missingMessage();
+        } else if (missing) await owner.latest(signal);
+        else if (!state.gaps.length && acquired.next != null && !inFlight) {
+          await paginate(
+            undefined,
+            undefined,
+            () =>
+              projection.materialized(messageID) && acquired.current(messageID),
+          );
         } else await owner.older();
         if (state.pageError) throw feedbackError(state.pageError);
       }
-      if (!selected) {
+      if (!selected || lifetime !== generation) {
         throw new DOMException("Transcript demand ended", "AbortError");
       }
       signal?.throwIfAborted();
@@ -1287,7 +1289,7 @@ export function createTranscript(
         // may need a fresh *older continuation*, not another newest body read.
         // Missing authority uses the same generation-fenced recovery owner as
         // initial selection and reconnect. Cancelling a waiter never cancels it.
-        if (selected && missing && !fetching) void refetch();
+        if (selected && missing && !fetching) void reacquireNewest("latest");
         inspect();
       });
     },
@@ -1308,7 +1310,7 @@ export function createTranscript(
             });
           });
         }
-        if (selected && (absent() || missing)) await refetch();
+        if (selected && (absent() || missing)) await reacquireNewest("send");
       })();
       const pending = work.finally(() => {
         if (reconciling === pending) reconciling = undefined;
@@ -1329,12 +1331,13 @@ export function createTranscript(
         trim();
       };
     },
-    refetch: () => refetch(true),
+    refetch: () => reacquireNewest("retry", true),
     latestPrompt: () => state.latestPrompt,
     usesMetadata: (ids) =>
       ids.has(target.sessionID) || projection.usesMetadata(ids),
     receive(sidecarId: string, frame: ServerFrame): void {
-      if (sidecarId === target.sidecarId && frame.t === "harness") {
+      if (sidecarId !== target.sidecarId) return;
+      if (frame.t === "harness") {
         const linked = frame.state === "connected";
         if (nativeConnected !== linked) {
           nativeConnected = linked;
@@ -1343,8 +1346,7 @@ export function createTranscript(
         }
       }
       if (
-        sidecarId === target.sidecarId && frame.t === "harness" && readFacts &&
-        readFacts.phase !== "ready"
+        frame.t === "harness" && readFacts && readFacts.phase !== "ready"
       ) {
         readFacts = {
           ...readFacts,
@@ -1353,6 +1355,13 @@ export function createTranscript(
             : "native unavailable",
         };
         readProgress.receive("page", readFacts);
+      }
+      const indexed = frame.t === "index.snapshot" || frame.t === "index.patch";
+      const known = indexed ? entry(sidecarId, target.sessionID) : undefined;
+      if (known?.deleted) {
+        // The tab's choice survives cooling, but not deletion of a cold body.
+        interaction.clear();
+        retireScope?.(scope);
       }
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "load.chunk") {
@@ -1387,9 +1396,8 @@ export function createTranscript(
         }
         return;
       }
-      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+      if (indexed) {
         requests.retireSessions((id) => !!entry(sidecarId, id)?.deleted);
-        const known = entry(sidecarId, selected.sessionID);
         const busyChanged = projection.busy(
           !!entities &&
             sessionRunning(entities, entityKey("session", target.sessionID)),
@@ -1399,7 +1407,6 @@ export function createTranscript(
             draft.content = attach(contentMetadata(draft.content));
           });
         }
-        if (known?.deleted) interaction.clear();
         if (
           !!known?.deleted !== (view === "deleted") ||
           (!subscribed && view !== "deleted")
@@ -1413,7 +1420,7 @@ export function createTranscript(
       }
       if (view === "deleted") return;
       if (frame.t === "bootstrap.complete") {
-        refreshAttention(false);
+        refreshAttention();
         return;
       }
       if (frame.t === "transcript.invalidated") {
@@ -1435,13 +1442,13 @@ export function createTranscript(
         clock = undefined;
         sources.invalidate();
         missing = true;
-        void refetch();
+        void reacquireNewest("invalidated");
         return;
       }
       if (frame.t === "welcome") {
         sources.invalidate();
-        authority = minimum = undefined;
-        void refetch();
+        minimum = retriedVersion = undefined;
+        void reacquireNewest("welcome");
         return;
       }
       if (frame.t !== "content") return;
@@ -1456,7 +1463,7 @@ export function createTranscript(
           // Scoped index credit can deliver the request before its asking
           // session's ancestry. Reacquire from the pending owner, rather than
           // discard the only event or guess that the request is unrelated.
-          if (!entry(sidecarId, frame.sessionID)) refreshAttention(false);
+          if (!entry(sidecarId, frame.sessionID)) refreshAttention();
           return;
         }
       } else if (frame.sessionID !== selected.sessionID) return;
@@ -1468,21 +1475,12 @@ export function createTranscript(
         }
         if (isAttentionOp(frame.event) && attentionReads) {
           const event = frame.event;
-          const key = event.op === "permission.upsert"
-            ? `permission:${event.request.id}`
-            : event.op === "permission.remove"
-            ? `permission:${event.requestID}`
-            : event.op === "question.upsert"
-            ? `question:${event.request.id}`
+          const key = event.op === "question.upsert"
+            ? event.request.id
             : event.op === "question.remove"
-            ? `question:${event.requestID}`
+            ? event.requestID
             : undefined;
-          if (
-            key &&
-            attentionReads.pending.has(
-              key.startsWith("permission:") ? "permission" : "question",
-            )
-          ) {
+          if (key) {
             const settings = policy()!;
             const bytes =
               new TextEncoder().encode(JSON.stringify(event)).byteLength;
@@ -1551,13 +1549,7 @@ export function createTranscript(
             state.temperature === "warm" &&
             frame.event.op === "message.upsert" &&
             !state.messagesByID[frame.event.message.id] &&
-            ([...pages.values()].some((page) =>
-              page.ids.includes(
-                frame.event.op === "message.upsert"
-                  ? frame.event.message.id
-                  : "",
-              )
-            ) ||
+            (acquired.known(frame.event.message.id) ||
               (() => {
                 const first = state.content.messages.at(
                   -MESSAGE_ADMISSION_WATERMARK,
@@ -1584,6 +1576,9 @@ export function createTranscript(
           setState((draft) => {
             draft.content = apply(draft.content, frame.event);
             draft.clock = clock;
+            if (frame.event.op === "message.remove" && draft.gaps.length) {
+              publishGaps(draft);
+            }
             if (frame.event.op === "session.selection") {
               if (draft.latestPrompt) {
                 draft.latestPrompt = mergePromptSelection(
@@ -1611,6 +1606,7 @@ export function createTranscript(
               );
             }
           });
+          lastClock = clock;
           if (
             frame.event.op === "message.upsert" ||
             frame.event.op === "message.remove"
@@ -1642,164 +1638,30 @@ export function createTranscript(
         invalidate();
       }
     },
-    async sibling(delta) {
-      if (!selected || !state.info?.parentID) return;
-      const target = selected, id = generation, request = load;
-      const find = () =>
-        state.siblings.findIndex((item) => item.id === target.sessionID);
-      while (
-        siblingCursor &&
-        (find() < 0 || delta > 0 && find() === state.siblings.length - 1 ||
-          delta < 0 && find() === 0)
-      ) {
-        const before = siblingCursor;
-        const page = await connection(target.sidecarId).rpc.call(
-          "session.children",
-          {
-            sessionID: state.info.parentID,
-            before,
-          },
-          controller?.signal,
-        );
-        if (!current(id, request)) return;
-        if (page.older === before) {
-          throw new Error("Sibling cursor did not advance");
-        }
-        siblingCursor = page.older;
-        setState((draft) => {
-          const values = new Map(draft.siblings.map((item) => [item.id, item]));
-          for (const item of page.items) values.set(item.id, item);
-          draft.siblings = [...values.values()];
-        });
-      }
-      const at = find(), size = state.siblings.length;
-      return at < 0 || !size
-        ? undefined
-        : state.siblings[(at + delta + size) % size]?.id;
-    },
     older(): Promise<void> {
       if (inFlight) return inFlight;
-      if (
-        !selected || state.loading || state.paging ||
-        (!tailDirty && (state.exhausted || cursor === null))
-      ) return Promise.resolve();
-      const target = selected,
-        id = generation,
-        request = load;
-      let before: string | undefined = tailDirty
-        ? undefined
-        : cursor ?? undefined;
-      const retain = !automatic;
-      if (retain) {
-        for (const message of state.content.messages) visited.add(message.id);
+      if (repairingHead) return repairingHead;
+      if (!selected || state.loading || state.paging) return Promise.resolve();
+      if (state.gaps.length && !missing && acquired.ranges()[0]?.next != null) {
+        return owner.bridge();
       }
-      setState((draft) => {
-        draft.paging = true;
-        draft.error = undefined;
-        draft.pageError = undefined;
-      });
-      const read = async () => {
-        try {
-          for (;;) {
-            const progressGeneration = `${id}:${request}:older:${
-              before ?? "tail"
-            }`;
-            readLabel = "Loading earlier messages";
-            readStage("queued", progressGeneration);
-            const page = await readBoundary(
-              before,
-              controller!.signal,
-              false,
-              () => {
-                readStage("reading", progressGeneration);
-              },
-            );
-            if (!current(id, request)) return;
-            if (boundaryRead) boundaryRead.deliver = undefined;
-            if (page.load && !coverage(page.load)) {
-              throw new Error("Invalid message coverage");
-            }
-            if (
-              page.sessionID !== target.sessionID ||
-              page.clock.epoch !== clock?.epoch
-            ) {
-              invalidate();
-              return;
-            }
-            let loaded = { ...emptyContent(), messages: page.items };
-            const retained = firstRetained(), pageFirst = page.items[0];
-            const first = retained &&
-                (!pageFirst || retained.time.created < pageFirst.time.created)
-              ? retained
-              : pageFirst;
-            for (const { event } of page.catchup) {
-              if (outsideAcquiredRange(event, first, page.older !== null)) {
-                continue;
-              }
-              loaded = reduce(loaded, event);
-            }
-            const messages = loaded.messages;
-            if (page.older !== null && page.older === before) {
-              throw new Error("Message cursor did not advance");
-            }
-            if (retain) {
-              for (const message of messages) visited.add(message.id);
-            }
-            cursor = page.older;
-            tailDirty = false;
-            pages.set(before, {
-              requestCursor: before,
-              ids: messages.map((m) => m.id),
-              older: page.older,
-              clock: page.clock,
-            });
-            baseline(messages);
-            const added = messages.filter((m) => !state.messagesByID[m.id]);
-            setState((draft) => {
-              projection.merge(added);
-              projection.helpers(helper);
-              projection.boundaries(
-                Object.values(page.turns).map((turn) => turn.boundary),
-              );
-              let metadata = contentMetadata(draft.content);
-              for (const recovering of page.recovering) {
-                if (
-                  added.some((message) => message.id === recovering.messageID)
-                ) {
-                  metadata = reduceRecovery(metadata, {
-                    op: "stream.recovery",
-                    ...recovering,
-                    state: recovering.state ?? "recovering",
-                  });
-                }
-              }
-              draft.content = attach(metadata);
-              draft.exhausted = page.older === null;
-              draft.paging = !added.length && page.older !== null;
-            });
-            if (!page.load || page.load.state === "complete") {
-              readStage("ready", progressGeneration, page.items.length);
-            }
-            if (boundaryRead) boundaryRead.painted = true;
-            finishCoverage();
-            if (added.length || page.older === null) return;
-            before = page.older;
-          }
-        } catch (error) {
-          if (current(id, request)) {
-            setState((draft) => {
-              draft.paging = false;
-              draft.error = failureValue(error);
-              draft.pageError = draft.error;
-            });
-          }
+      if (acquired.next !== undefined && !missing) return paginate();
+      const lifetime = generation;
+      const work = reacquireNewest("head-repair").then(() => {
+        if (generation === lifetime && !missing && !state.pageError) {
+          return owner.bridge();
         }
-      };
-      const work = read().finally(() => {
-        if (inFlight === work) inFlight = undefined;
+      }).finally(() => {
+        if (repairingHead === work) repairingHead = undefined;
       });
-      inFlight = work;
-      return work;
+      return repairingHead = work;
+    },
+    bridge(key) {
+      if (inFlight) return inFlight;
+      if (key && !state.gaps.some((gap) => gap.key === key)) {
+        return Promise.resolve();
+      }
+      return paginate(state.gaps[0]?.key, key);
     },
     stop(): void {
       stopEntities?.();
@@ -1807,9 +1669,167 @@ export function createTranscript(
       snapshotLifetime.abort();
       readProgress.stop();
       interaction.clear();
+      retireScope?.(scope);
       sources.stop();
       owner.temperature("cold");
     },
+  };
+  const paginate = (
+    gapKey?: string,
+    requested = gapKey,
+    until?: () => boolean,
+  ): Promise<void> => {
+    const head = acquired.ranges()[0];
+    if (
+      !selected || state.loading || state.paging || missing || !head ||
+      head.next == null
+    ) {
+      return Promise.resolve();
+    }
+    const limit = policy()?.bridgepages ?? 1;
+    const target = selected,
+      id = generation,
+      request = load;
+    let before = head.next;
+    const retain = !automatic && !gapKey;
+    if (retain) {
+      for (const message of state.content.messages) visited.add(message.id);
+    }
+    setState((draft) => {
+      draft.paging = true;
+      draft.error = undefined;
+      draft.pageError = undefined;
+      bridging = gapKey ? { key: gapKey } : undefined;
+      if (gapKey) publishGaps(draft);
+    });
+    const read = async () => {
+      try {
+        for (let i = 0; i < limit; i++) {
+          const progressGeneration = `${id}:${request}:older:${
+            before ?? "tail"
+          }`;
+          readLabel = "Loading earlier messages";
+          readStage("queued", progressGeneration);
+          const page = await readBoundary(
+            before,
+            controller!.signal,
+            false,
+            () => {
+              readStage("reading", progressGeneration);
+            },
+          );
+          if (!current(id, request)) return;
+          if (boundaryRead) boundaryRead.deliver = undefined;
+          if (page.load && !coverage(page.load)) {
+            throw new Error("Invalid message coverage");
+          }
+          if (
+            page.sessionID !== target.sessionID ||
+            page.from.epoch !== page.clock.epoch ||
+            page.from.seq > page.clock.seq ||
+            page.clock.epoch !== clock?.epoch || !authority ||
+            compareTranscriptVersion(page.version, authority) !== 0
+          ) {
+            invalidate();
+            return;
+          }
+          const pageIDs = new Set(page.items.map(({ id }) => id));
+          let loaded = { ...emptyContent(), messages: page.items };
+          const tombstones = new Set<string>();
+          const retained = firstRetained(), pageFirst = page.items[0];
+          const first = retained &&
+              (!pageFirst || compareMessages(retained, pageFirst) < 0)
+            ? retained
+            : pageFirst;
+          for (const { event } of page.catchup) {
+            if (event.op === "message.remove") tombstones.add(event.messageID);
+            if (outsideAcquiredRange(event, first, page.older !== null)) {
+              continue;
+            }
+            loaded = reduce(loaded, event);
+          }
+          // Catchup can carry off-page headers without their bodies. The live
+          // stream owns current off-page rows even when the page clock is ahead.
+          // On-page bodies still must not roll back current rows.
+          const messages = loaded.messages.filter((message) =>
+            !projection.materialized(message.id) ||
+            !acquired.current(message.id) ||
+            (pageIDs.has(message.id) && page.clock.seq >= clock!.seq)
+          );
+          const { deleted } = acquired.extend(
+            head.key,
+            before,
+            page.older,
+            page.items,
+          );
+          if (retain) {
+            for (const message of messages) visited.add(message.id);
+          }
+          baseline(messages);
+          const added = messages.some((m) => !projection.materialized(m.id));
+          const gaps = acquired.gaps();
+          const next = acquired.ranges()[0]?.next;
+          let again = i + 1 < limit && next != null &&
+            (requested ? gaps.some(({ key }) => key === requested) : !added);
+          setState((draft) => {
+            projection.reconcile(
+              messages,
+              page.catchup.length ? undefined : page,
+            );
+            let content = draft.content;
+            for (const messageID of new Set([...deleted, ...tombstones])) {
+              content = apply(content, { op: "message.remove", messageID });
+            }
+            projection.helpers(helper);
+            projection.boundaries(
+              Object.values(page.turns).map((turn) => turn.boundary),
+            );
+            const reread = new Set(messages.map(({ id }) => id));
+            draft.content = attach({
+              ...contentMetadata(content),
+              recovering: [
+                ...(content.recovering ?? []).filter(({ messageID }) =>
+                  !reread.has(messageID)
+                ),
+                ...page.recovering.filter(({ messageID }) =>
+                  reread.has(messageID)
+                ),
+              ],
+            });
+            if (until?.()) again = false;
+            bridging = again && requested && gaps[0]
+              ? { key: gaps[0].key }
+              : undefined;
+            publishGaps(draft);
+            draft.paging = again;
+          });
+          if (!page.load || page.load.state === "complete") {
+            readStage("ready", progressGeneration, page.items.length);
+          }
+          if (boundaryRead) boundaryRead.painted = true;
+          finishCoverage();
+          if (!again || next == null) return;
+          before = next;
+        }
+      } catch (error) {
+        if (current(id, request)) {
+          setState((draft) => {
+            draft.paging = false;
+            draft.error = failureValue(error);
+            draft.pageError = draft.error;
+            if (bridging) {
+              bridging = { key: bridging.key, failure: draft.error };
+            }
+            publishGaps(draft);
+          });
+        }
+      }
+    };
+    const work = read().finally(() => {
+      if (inFlight === work) inFlight = undefined;
+    });
+    inFlight = work;
+    return work;
   };
   const refreshWork = () => {
     if (

@@ -56,8 +56,8 @@ test("inbox features create independent fresh schemas and upgrade the previous s
       assertEquals(
         new Projects(db).list("alice").map((
           p,
-        ) => [p.directory, p.order, p.added]),
-        [["/auto", 0, false], ["/empty", 1, true]],
+        ) => [p.directory, p.added]),
+        [["/auto", false], ["/empty", true]],
       );
       assertEquals(new Tasks(db).get(task.id).sessions, ["one", "two"]);
       assertEquals(new Seen(db).list("alice"), { one: 200 });
@@ -187,7 +187,7 @@ test("composite preference defaults are detached on every read", async () => {
   }
 });
 
-test("explicit project additions stay private to their user while automatic discovery appends in each user's stable order", async () => {
+test("explicit project additions stay private while automatic discovery materializes for each user", async () => {
   const db = new OtkDb(await fixture(), [projectsMigrations], { busyms: 5000 });
   const projects = new Projects(db, () => 100);
   try {
@@ -197,16 +197,16 @@ test("explicit project additions stay private to their user while automatic disc
     projects.add("alice", "/another-private");
     projects.discover("/later");
     projects.materialize("bob");
-    assertEquals(projects.list("alice").map((p) => [p.directory, p.order]), [
-      ["/private", 0],
-      ["/shared", 1],
-      ["/another-private", 2],
-      ["/later", 3],
-    ]);
-    assertEquals(projects.list("bob").map((p) => [p.directory, p.order]), [[
+    assertEquals(projects.list("alice").map((p) => p.directory), [
+      "/another-private",
+      "/later",
+      "/private",
       "/shared",
-      0,
-    ], ["/later", 1]]);
+    ]);
+    assertEquals(projects.list("bob").map((p) => p.directory), [
+      "/later",
+      "/shared",
+    ]);
     assertEquals(projects.get("bob", "/shared").added, false);
   } finally {
     db.close();

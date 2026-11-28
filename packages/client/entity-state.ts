@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
   BlockedCause,
+  ComposerLinkState,
+  EntityLamp,
   EntityState,
   HelperDisposition,
   ProjectStatus,
+  RunningShells,
   SessionEvidence,
   TaskHelpers,
 } from "@otk/protocol";
-import { entityKey, rollupStatus } from "@otk/protocol";
+import { entityKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { type CollectionState, collectionState } from "./collection-state.ts";
 
 export interface EntityTransition {
   key: string;
@@ -155,29 +159,32 @@ export function presentedEntity(
   };
 }
 
-/** Read a published lamp, or roll up the published states of an explicit roster. */
+/** Read a published lamp from the replica or from one of its scoped rosters. */
+export function lamp(publication: EntityLamp | undefined): ProjectStatus;
 export function lamp(
   store: EntityStateStore | undefined,
-  key: string | readonly string[] | undefined,
+  key: string | undefined,
+): ProjectStatus;
+export function lamp(
+  source: EntityStateStore | EntityLamp | undefined,
+  key?: string,
 ): ProjectStatus {
-  if (key === undefined || typeof key === "string") {
-    return entityState(store, key);
-  }
-  if (!store || store.isStale) return "none";
-  let state: ProjectStatus = "none";
-  for (const member of key) {
-    state = rollupStatus(state, store.get(member)?.state);
-    if (state === "blocked") break;
-  }
-  return state;
+  return source && "state" in source ? source.state : entityState(source, key);
 }
 
 export function permissionVisible(
   store: EntityStateStore,
   sessionID: string,
   id: string,
+  presentation: "fresh" | "cached-draft" = "fresh",
 ): boolean {
-  return sessionEvidence(store, entityKey("session", sessionID))?.requests
+  // An already-admitted request may keep its unsent draft visible offline.
+  // Never use the cached verdict for notification or action admission.
+  const key = entityKey("session", sessionID);
+  const evidence = presentation === "cached-draft"
+    ? store.get(key)?.evidence
+    : sessionEvidence(store, key);
+  return evidence?.requests
     ?.permissions.some((request) => request.id === id) ?? false;
 }
 
@@ -195,11 +202,34 @@ export function taskHelpers(
   return store.isStale || !key ? undefined : store.get(key)?.helpers;
 }
 
+export function taskHelpersState(
+  store?: EntityStateStore,
+  key?: string,
+): CollectionState {
+  const helpers = store && taskHelpers(store, key);
+  return collectionState(helpers !== undefined, helpers?.ids.length ?? 0);
+}
+
 export function helperDisposition(
   store: EntityStateStore,
   key: string,
 ): HelperDisposition | undefined {
   return sessionEvidence(store, key)?.helper;
+}
+
+export function sessionShells(
+  store: EntityStateStore,
+  key: string,
+): RunningShells | undefined {
+  return store.isStale ? undefined : store.get(key)?.shells;
+}
+
+export function sessionShellsState(
+  store?: EntityStateStore,
+  key?: string,
+): CollectionState {
+  const session = !store || !key || store.isStale ? undefined : store.get(key);
+  return collectionState(session !== undefined, session?.shells?.count ?? 0);
 }
 
 /** Own-session evidence only. Descendant counts retain their explicit scope. */
@@ -223,10 +253,7 @@ export function sessionWorkStatus(
 
 /** Run evidence excludes background shell work, not V1's native execution. */
 export function sessionRunning(store: EntityStateStore, key: string): boolean {
-  const evidence = sessionEvidence(store, key);
-  return !!evidence?.work &&
-    (!evidence.liveWork?.length ||
-      evidence.liveWork.some((item) => item.kind !== "shell"));
+  return sessionEvidence(store, key)?.nativeRun === true;
 }
 
 export const ENTITY_LABELS: Readonly<Record<ProjectStatus, string>> = {
@@ -244,6 +271,12 @@ export function emphasis(store: EntityStateStore, k: string): boolean {
   const value = store.get(k);
   return !store.isStale && (value?.counts.unseen ?? 0) > 0;
 }
+/** Published unseen runs of this session and its full subtree (D70). */
+export function attentionCount(store: EntityStateStore, k: string): number {
+  const value = store.isStale ? undefined : store.get(k);
+  return (value?.counts.unseen ?? 0) +
+    (value?.evidence?.descendants.unseen ?? 0);
+}
 /** Sessions that need the user: blocked, or finished and not seen. */
 export function attention(
   store: EntityStateStore,
@@ -252,10 +285,30 @@ export function attention(
   const value = store.isStale ? undefined : store.get(k)?.counts;
   return { blocked: value?.blocked ?? 0, finished: value?.finished ?? 0 };
 }
+/** Counts unique sessions across live sidecars, rather than delivery receipts. */
+export function globalAttention(stores: Iterable<EntityStateStore>): number {
+  let total = 0;
+  for (const store of stores) {
+    if (store.isStale) continue;
+    const counts = store.get(entityKey("global", "global"))?.counts;
+    if (counts) total += counts.blocked + counts.finished;
+  }
+  return total;
+}
 export function liveWork(
   store: EntityStateStore,
   k: string,
 ): SessionEvidence["liveWork"] {
   if (store.isStale) return undefined;
   return store.get(k)?.evidence?.liveWork;
+}
+
+/** Read the server's selected composer verdict, with the usual stale fence. */
+export function sessionComposerLink(
+  store: EntityStateStore | undefined,
+  sessionID: string,
+): ComposerLinkState {
+  return !store || store.isStale
+    ? "none"
+    : store.get(entityKey("session", sessionID))?.composerLink ?? "none";
 }

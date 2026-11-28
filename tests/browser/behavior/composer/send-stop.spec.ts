@@ -62,9 +62,12 @@ for (const activation of ["button", "escape", "slash", "palette"] as const) {
   });
 }
 
-for (const newer of [false, true]) {
+for (const recovery of ["automatic", "recover", "discard"] as const) {
+  const newer = recovery !== "automatic";
   test(
-    newer
+    recovery === "discard"
+      ? "composer.stop-discards-kept-draft"
+      : newer
       ? "composer.stop-keeps-newer-draft"
       : "composer.stop-queued-behind-running",
     {
@@ -121,24 +124,35 @@ for (const newer of [false, true]) {
       frames.release();
       if (newer) {
         await expect(input).toHaveValue("A newer draft");
-        await expect(
-          page.getByText(
+        const notice = page.locator(".otk-composer-notice-row").filter({
+          hasText:
             "Stopped before it started. Draft kept separately: Keep this draft after Stop",
-            { exact: true },
-          ),
-        ).toBeVisible();
-        await page.getByRole("button", { name: "Recover draft" }).click();
+        });
+        const recover = notice.getByRole("button", { name: "Recover draft" });
+        await expect(notice).toBeVisible();
+        await expect(recover).toBeVisible();
+        if (recovery === "discard") {
+          const discard = notice.getByRole("button", { name: "Discard draft" });
+          await expect(discard).toBeVisible();
+          await discard.click();
+          await expect(notice).toHaveCount(0);
+        } else await recover.click();
       }
-      await expect(input).toHaveValue("Keep this draft after Stop");
+      await expect(input).toHaveValue(
+        recovery === "discard" ? "A newer draft" : "Keep this draft after Stop",
+      );
       if (!newer) {
         await expect(readyChips(page)).toHaveCount(1);
-        await expect(
-          page.getByText(
+        const notice = page.locator(".otk-composer-notice-row").filter({
+          hasText:
             "Stopped before it started. Your message is back in the composer.",
-            { exact: true },
-          ),
-        ).toBeVisible();
+        });
+        await expect(notice).toBeVisible();
         await expect(send).toBeFocused();
+        await notice.getByRole("button", { name: "Dismiss notice" }).click();
+        await expect(notice).toHaveCount(0);
+        await expect(input).toHaveValue("Keep this draft after Stop");
+        await expect(readyChips(page)).toHaveCount(1);
       }
       await expect.poll(async () =>
         JSON.stringify(await state.native(`/session/${session.id}/message`))
@@ -148,6 +162,14 @@ for (const newer of [false, true]) {
       )
         .toMatch(/Abort|interrupt/i);
       await state.release(held.gate);
+      if (recovery === "discard") {
+        await page.reload();
+        await expect(input).toHaveValue("A newer draft");
+        await expect(
+          page.getByRole("button", { name: "Recover draft" }),
+        ).toHaveCount(0);
+        await expect(page.getByText(/Draft kept separately:/)).toHaveCount(0);
+      }
     },
   );
 }
@@ -318,6 +340,8 @@ isolatedTest.describe("native sends with held receipts", () => {
         }).toBe(true);
         expect(frames.sent.filter(({ frame }) => frame.method === method))
           .toHaveLength(1);
+        await expect(page.locator(`[data-session="${session.id}"]`))
+          .toHaveAttribute("data-status", "idle");
         await expect(input).toHaveValue("");
         await expect(send).toBeDisabled();
       }

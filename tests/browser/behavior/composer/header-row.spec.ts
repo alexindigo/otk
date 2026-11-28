@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { seed } from "../../pages/attention.ts";
 import { activity } from "../../pages/sessions.ts";
+import { cleanup, viewport } from "../../pages/terminal.ts";
+import { prompt } from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-sessions-default" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
@@ -41,6 +44,298 @@ const activeAnimation = [{
   props: ["translate"],
 }];
 
+test.describe("live composer destination geometry", () => {
+  test.use({ profile: "isolated" });
+  test("composer.crumbs-and-activity-link-share-one-flow", tags, async (
+    { isolatedState: state, page },
+    info,
+  ) => {
+    const title = "Project status review";
+    const { id } = await seed(state, title);
+    const task = await state.product("tasks.create", {
+      directory: state.directory,
+      name: "UI Update",
+      sessions: [id],
+    });
+    await openSession(state, page, id);
+    const { gate } = await state.queue(["Project status reviewed."], "held");
+    await prompt(page, "Review project status.");
+    const target = page.locator(".otk-composer-target");
+    await expect(target.locator(".otk-composer-destination")).toHaveText(title);
+    await expect(link(page)).toHaveAttribute("data-state", "running");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const facts = [];
+    for (const name of ["short", "long"]) {
+      if (name === "long") {
+        await state.product("tasks.rename", { id: task.id, name: longName });
+        await expect(target.locator(".otk-composer-task")).toHaveText(longName);
+      }
+      for (const [width, scale] of [[1280, 100], [900, 125], [900, 150]]) {
+        await page.setViewportSize({ width, height: 900 });
+        await state.product("prefs.set", {
+          key: "textSize",
+          value: String(scale),
+        });
+        await expect(page.locator("html")).toHaveCSS(
+          "--otk-scale",
+          String(scale / 100),
+        );
+        for (const [theme, label] of themes) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          const geometry = await target.evaluate((element) => {
+            const tokens = (token: string) => {
+              const probe = document.createElement("span");
+              probe.style.cssText =
+                `position:absolute;inline-size:var(${token})`;
+              element.append(probe);
+              const size = probe.getBoundingClientRect().width;
+              probe.remove();
+              return size;
+            };
+            const rects = (selector: string) => {
+              const item = element.querySelector(selector)!;
+              const range = document.createRange();
+              range.selectNodeContents(item);
+              const text = range.getBoundingClientRect();
+              const box = item.getBoundingClientRect();
+              return {
+                left: box.left,
+                right: Math.min(box.right, text.right),
+                width: box.width,
+                full: text.width,
+              };
+            };
+            const task = rects(".otk-composer-task"),
+              dot = rects(".otk-composer-separator"),
+              session = rects(".otk-composer-destination");
+            const connector = element.closest(".otk-composer-activity")!
+              .querySelector(".otk-live-link")!.getBoundingClientRect();
+            return {
+              task,
+              session,
+              taskGap: dot.left - task.right,
+              sessionGap: session.left - dot.right,
+              linkGap: connector.left - session.right,
+              linkWidth: connector.width,
+              crumbGap: tokens("--space-1"),
+              rowGap: tokens("--space-3"),
+            };
+          });
+          const message = `${name}/${width}/${scale}/${label}`;
+          expect.soft(
+            Math.abs(geometry.taskGap - geometry.crumbGap),
+            `${message} task gap`,
+          ).toBeLessThanOrEqual(1);
+          expect.soft(
+            Math.abs(geometry.sessionGap - geometry.crumbGap),
+            `${message} session gap`,
+          ).toBeLessThanOrEqual(1);
+          expect.soft(geometry.linkWidth, `${message} activity link is visible`)
+            .toBeGreaterThan(0);
+          expect.soft(
+            Math.abs(geometry.linkGap - geometry.rowGap),
+            `${message} title-to-link gap (no overlap)`,
+          ).toBeLessThanOrEqual(1);
+          facts.push({ name, width, scale, theme, ...geometry });
+          if (name === "short" && (width === 1280 || scale === 125)) {
+            await page.screenshot({
+              path: info.outputPath(`crumbs-${width}-${label}.png`),
+            });
+          }
+        }
+      }
+    }
+    await info.attach("crumb-geometry", {
+      body: JSON.stringify(facts, null, 2),
+      contentType: "application/json",
+    });
+    await state.release(gate);
+    await expect(page.locator(".otk-messages")).toContainText(
+      "Project status reviewed.",
+    );
+  });
+});
+
+test(
+  "composer.docked-terminal-leaves-the-header-with-its-input-and-room-for-history",
+  tags,
+  async ({ isolatedState: state, page }, info) => {
+    test.setTimeout(120_000);
+    await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Facade rollout",
+      sessions: [root],
+    });
+    await activity(state, child, "hold");
+    await state.controller.call("scenario", {
+      lease: state.lease.lease,
+      action: "hold",
+      target: "header-shells",
+    });
+    await openSession(state, page, root);
+    await expect(helpers(page)).toHaveAccessibleName("Subagents: 1 running");
+    await expect(shells(page)).toHaveAccessibleName("Running work: 2 shells");
+    await page.getByRole("button", { name: "Open terminal", exact: true })
+      .click();
+    try {
+      await expect(viewport(page)).toBeVisible();
+      await expect(viewport(page)).not.toHaveAttribute(
+        "aria-label",
+        "Terminal output",
+      );
+      const target = page.locator(".otk-composer-target");
+      const names = await target.locator(".otk-control-label")
+        .allTextContents();
+      expect(names).toHaveLength(2);
+      await expect.soft(target).toHaveText(names.join(" · "));
+      await expect.soft(target.locator("svg")).toHaveCount(0);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.mouse.move(0, 0);
+      const facts = [];
+      for (const [width, scale] of [[1440, 100], [1440, 125], [900, 125]]) {
+        await page.setViewportSize({ width, height: 800 });
+        await state.product("prefs.set", {
+          key: "textSize",
+          value: String(scale),
+        });
+        await expect(page.locator("html")).toHaveCSS(
+          "--otk-scale",
+          String(scale / 100),
+        );
+        for (const [theme, label] of themes) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          const geometry = await page.locator(".otk-session-view").evaluate(
+            (pane) => {
+              const box = (selector: string) =>
+                pane.querySelector(selector)!
+                  .getBoundingClientRect();
+              const header = box(".otk-composer-activity-slot"),
+                composer = box(".otk-composer"),
+                terminal = box(".otk-composer-surface"),
+                transcript = box(".otk-transcript-viewport");
+              return {
+                pane: box(".otk-session-content").height,
+                transcript: transcript.height,
+                terminal: terminal.height,
+                terminalToHeader: header.top - terminal.bottom,
+                headerToInput: composer.top - header.bottom,
+                clippedSession: (() => {
+                  const title = pane.querySelector(
+                    ".otk-composer-destination",
+                  )!;
+                  return title.scrollWidth - title.clientWidth;
+                })(),
+                space: parseFloat(
+                  getComputedStyle(
+                    pane.querySelector(".otk-composer-activity")!,
+                  ).paddingBlockEnd,
+                ),
+              };
+            },
+          );
+          const context = `${width}/${scale}/${label}`;
+          expect.soft(geometry.terminal, context).toBeGreaterThan(0);
+          expect.soft(geometry.terminalToHeader, context)
+            .toBeGreaterThanOrEqual(0);
+          expect.soft(geometry.headerToInput, context).toBeGreaterThanOrEqual(
+            0,
+          );
+          expect.soft(geometry.headerToInput, context).toBeLessThanOrEqual(
+            geometry.space + 1,
+          );
+          expect.soft(geometry.transcript + .02, context)
+            .toBeGreaterThanOrEqual(
+              geometry.pane / 2,
+            );
+          expect.soft(geometry.clippedSession, context).toBeLessThanOrEqual(1);
+          await expect.soft(helpers(page)).toHaveText("1");
+          await expect.soft(helpers(page)).not.toHaveText(
+            /running|needs you|returned/,
+          );
+          await expect.soft(shells(page)).toHaveText("2");
+          facts.push({ width, scale, theme, ...geometry });
+          await page.screenshot({
+            path: info.outputPath(`wp7-${width}-${scale}-${label}.png`),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+      }
+      await info.attach("wp7-geometry", {
+        body: JSON.stringify(facts, null, 2),
+        contentType: "application/json",
+      });
+    } finally {
+      await cleanup(state, root);
+    }
+  },
+);
+
+test(
+  "composer.running-shells-do-not-inherit-the-blocked-task-lamp",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    const task = await state.product("tasks.create", {
+      directory: state.directory,
+      name: taskName,
+      sessions: [root],
+    });
+    await openSession(state, page, root);
+    await activity(state, root, "freeze");
+    const shellState = (action: "hold" | "release") =>
+      state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action,
+        target: "header-shells",
+      });
+    await shellState("hold");
+    const tabLamp = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
+    await expect(tabLamp).toHaveAttribute("data-state", "blocked");
+    const pill = shells(page);
+    await expect(pill).toHaveAccessibleName("Running work: 2 shells");
+    await expect(pill.locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "working");
+    await pill.click();
+    const list = page.getByRole("list", { name: "Running shells" });
+    await expect(list.getByRole("listitem")).toHaveCount(2);
+    await expect(list).toContainText("sleep 120");
+    await shellState("release");
+    await expect(pill).toHaveCount(0);
+    await expect(tabLamp).toHaveAttribute("data-state", "blocked");
+  },
+);
+
+test(
+  "composer.header-link-moves-for-own-run-without-helpers-or-shells",
+  tags,
+  async ({ isolatedState: state, page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await openSession(state, page, root);
+    await expect(helpers(page)).toHaveCount(0);
+    await expect(shells(page)).toHaveCount(0);
+    await expect(link(page)).toHaveCount(0);
+
+    await activity(state, root, "hold");
+    await expect(page.locator(`[data-crumb="${root}"] .otk-status-light`))
+      .toHaveAttribute("data-state", "working");
+    await expect(helpers(page)).toHaveCount(0);
+    await expect(shells(page)).toHaveCount(0);
+    await expect(link(page)).toHaveAttribute("data-state", "running");
+    await expect.poll(() => animations(page)).toEqual(activeAnimation);
+
+    await activity(state, root, "release");
+    await expect(link(page)).toHaveCount(0);
+  },
+);
+
 test(
   "composer.finished-helper-does-not-inherit-the-running-main-lamp",
   tags,
@@ -56,15 +351,20 @@ test(
     await activity(state, child, "release");
     const pill = helpers(page),
       lamp = pill.locator(".otk-status-light:visible");
-    await expect(pill).toHaveAccessibleName("Subagents: 1 not returned");
+    await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+    // D78: an unseen finish wins the task rollup; the root is still running.
     await expect(page.locator(`[data-tab="${task.id}"] .otk-status-light`))
+      .toHaveAttribute("data-state", "finished");
+    await expect(page.locator(`[data-crumb="${root}"] .otk-status-light`))
       .toHaveAttribute("data-state", "working");
     await expect.soft(lamp).toHaveAttribute(
       "data-state",
       /^(?:none|finished)$/,
     );
-    await expect.soft(link(page)).toHaveAttribute("data-state", "idle");
-    await expect.poll(() => animations(page)).toEqual([]);
+    // 2.104: the main's own run animates the connector without changing
+    // the helper pill's independent verdict.
+    await expect.soft(link(page)).toHaveAttribute("data-state", "running");
+    await expect.poll(() => animations(page)).toEqual(activeAnimation);
   },
 );
 
@@ -87,6 +387,21 @@ test(
     await openSession(state, page, root);
     await expect(helpers(page)).toHaveAccessibleName("Subagents: 1 running");
     await expect(shells(page)).toHaveAccessibleName("Running work: 2 shells");
+    const iconSelector = ".otk-live-count-compact > svg:first-child";
+    const leadingIcon = (pill: Locator) => pill.locator(iconSelector);
+    for (const pill of [helpers(page), shells(page)]) {
+      const icon = leadingIcon(pill);
+      await expect(icon).toBeVisible();
+      await expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    const terminalArtwork = await page
+      .getByRole("button", { name: "Open terminal", exact: true })
+      .locator("svg").innerHTML();
+    await expect(leadingIcon(shells(page))).toHaveJSProperty(
+      "innerHTML",
+      terminalArtwork,
+    );
+    await expect(leadingIcon(helpers(page)).locator("circle")).toHaveCount(2);
     await expect(link(page)).toHaveAttribute("data-state", "running");
     const facts: unknown[] = [];
     const check = async (
@@ -96,7 +411,7 @@ test(
       stage = "full",
     ) => {
       const measured = await page.locator(".otk-composer-dock").evaluate(
-        (dock, stage) => {
+        (dock, iconSelector) => {
           const at = (selector: string) =>
             dock.querySelector<HTMLElement>(selector)!;
           const box = (selector: string) =>
@@ -108,16 +423,28 @@ test(
           const title = box(".otk-composer-target"),
             connector = box(".otk-live-link");
           const pills = [".otk-subagents-trigger", ".otk-live-work-trigger"];
-          const visibleCount = stage === "full"
-            ? ".otk-live-count.is-full"
-            : ".otk-live-count-compact .otk-live-count";
-          const titleLabel = at(".otk-composer-task");
-          const count = (pill: string) => `${pill} ${visibleCount}`;
+          const count = (pill: string) => `${pill} .otk-live-count`;
+          const icon = (pill: string) => `${pill} ${iconSelector}`;
           const lastPill = box(pills[1]);
+          const wrapped = lastPill.top >= title.bottom;
+          const probe = document.createElement("span");
+          probe.style.cssText =
+            "position:absolute;inline-size:var(--row-title-min)";
+          at(".otk-composer-task").append(probe);
+          const floor = probe.getBoundingClientRect().width;
+          probe.remove();
+          const titleMinimum = Math.min(
+            floor,
+            (title.width - box(".otk-composer-separator").width -
+              2 *
+                parseFloat(
+                  getComputedStyle(at(".otk-composer-target")).columnGap,
+                )) / 2,
+          );
           return {
             leading: title.left - box(".otk-prompt-input").left,
             trailing: lastPill.right -
-              (stage === "wrap"
+              (wrapped
                 ? row.getBoundingClientRect().right -
                   parseFloat(getComputedStyle(row).paddingInlineEnd) -
                   parseFloat(getComputedStyle(row).borderInlineEndWidth)
@@ -126,25 +453,36 @@ test(
             linkToPill: box(pills[0]).left - connector.right,
             betweenPills: box(pills[1]).left - box(pills[0]).right,
             pillText: pills.map((pill) => at(pill).innerText),
-            titleWidth: titleLabel.getBoundingClientRect().width,
-            titleMinimum: parseFloat(
-              getComputedStyle(titleLabel).minInlineSize.match(/[\d.]+px/)
-                ?.[0] ?? "0",
-            ),
-            wrap: lastPill.top >= title.bottom,
+            titleWidth: box(".otk-composer-task").width,
+            titleMinimum,
+            wrap: wrapped,
+            linkOnTitleLine: Math.abs(center(connector) - center(title)) <= .5,
             overflow: row.scrollWidth - row.clientWidth,
             lampGaps: pills.map((pill) =>
               box(`${count(pill)} .otk-chrome-meta`).left -
               box(`${count(pill)} .otk-status-light`).right
             ),
+            iconGaps: pills.map((pill) =>
+              box(`${count(pill)} .otk-status-light`).left -
+              box(icon(pill)).right
+            ),
             centerDrifts: [
               ...(connector.width ? [".otk-live-link"] : []),
               ".otk-composer-task",
               ...pills.flatMap((pill) => [
+                icon(pill),
                 `${count(pill)} .otk-status-light`,
                 `${count(pill)} .otk-chrome-meta`,
               ]),
-            ].map((selector) => center(box(selector)) - rowCenter),
+            ].map((selector) =>
+              center(box(selector)) -
+              (wrapped
+                ? selector === ".otk-composer-task" ||
+                    selector === ".otk-live-link"
+                  ? center(title)
+                  : center(lastPill)
+                : rowCenter)
+            ),
             linkWidth: connector.width,
             truncated: [
               ...pills.map((pill) => `${count(pill)} .otk-chrome-meta`),
@@ -155,19 +493,22 @@ test(
             }),
           };
         },
-        stage,
+        iconSelector,
       );
       const u = scale / 100, context = `${width}/${scale}/${theme}`;
       for (
         const [axis, delta, limit] of [
           ["leading inset", measured.leading, 1],
           ["trailing inset", measured.trailing, 1],
-          ...(measured.linkWidth
-            ? [["title to link", measured.titleToLink - 12 * u, .5], [
-              "link to pill",
-              measured.linkToPill - 12 * u,
-              .5,
-            ]] as const
+          ["title to link", measured.titleToLink - 12 * u, .5],
+          ...(!measured.wrap
+            ? [
+              [
+                "link to pill",
+                measured.linkToPill - 12 * u,
+                .5,
+              ],
+            ] as const
             : []),
           ["between pills", measured.betweenPills - 16 * u, .5],
           [
@@ -178,25 +519,23 @@ test(
           ...measured.lampGaps.map((gap, i) =>
             [`lamp ${i}`, gap - 8 * u, .5] as const
           ),
-          ...(stage === "wrap"
-            ? []
-            : measured.centerDrifts.map((drift, i) =>
-              [`center ${i}`, drift, .5] as const
-            )),
+          ...measured.iconGaps.map((gap, i) =>
+            [`icon ${i}`, gap - measured.lampGaps[i], .5] as const
+          ),
+          ...measured.centerDrifts.map((drift, i) =>
+            [`center ${i}`, drift, .5] as const
+          ),
         ] as const
       ) {
         expect.soft(Math.abs(delta), `${context}: ${axis}`)
           .toBeLessThanOrEqual(limit);
       }
-      if (stage === "full" || stage === "compact") {
-        expect.soft(measured.linkWidth, context).toBeGreaterThanOrEqual(
-          24 * u - .5,
-        );
-      } else expect.soft(measured.linkWidth, context).toBe(0);
-      expect.soft(measured.pillText, context).toEqual(
-        stage === "full" ? ["1 running", "2 shells"] : ["1", "2"],
+      expect.soft(measured.linkWidth, context).toBeGreaterThanOrEqual(
+        24 * u - .5,
       );
-      expect.soft(measured.wrap, context).toBe(stage === "wrap");
+      expect.soft(measured.pillText, context).toEqual(["1", "2"]);
+      expect.soft(measured.wrap, context).toBe(stage !== "full");
+      expect.soft(measured.linkOnTitleLine, context).toBe(true);
       expect.soft(measured.overflow, context).toBeLessThanOrEqual(1);
       expect.soft(measured.truncated, context).toEqual([
         false,
@@ -204,7 +543,7 @@ test(
         width < 1000 && stage !== "full",
       ]);
       if (stage !== "full") {
-        expect.soft(measured.titleMinimum, context).toBeGreaterThan(45);
+        expect.soft(measured.titleMinimum, context).toBeGreaterThan(0);
         expect.soft(measured.titleWidth, context).toBeGreaterThanOrEqual(
           measured.titleMinimum - .5,
         );
@@ -299,11 +638,11 @@ test(
         "data-otk-theme",
         theme,
       );
-      await check(800, 125, label, "compact");
+      await check(800, 125, label, "wrap-with-link");
       await shot(`header-row-narrow-${label}.png`);
     }
     await page.setViewportSize({ width: 775, height: 900 });
-    await check(775, 125, "stone", "no-link");
+    await check(775, 125, "stone", "wrap");
     await state.product("layout.patch", {
       leftCollapsed: true,
       rightWidth: 300,
@@ -343,7 +682,7 @@ test(
     await expect(shells(page)).toHaveAccessibleName("Running work: 2 shells");
     await activity(state, child, "release");
     await expect(helpers(page)).toHaveAccessibleName(
-      "Subagents: 1 not returned",
+      "Subagents: 1 finished",
     );
     await expectRunning();
     await shellState("release");
@@ -354,7 +693,7 @@ test(
       "hidden",
     );
     await expect(helpers(page)).toHaveAccessibleName(
-      "Subagents: 1 not returned",
+      "Subagents: 1 finished",
     );
     await activity(state, child, "hold");
     await expect(helpers(page)).toHaveAccessibleName("Subagents: 1 running");

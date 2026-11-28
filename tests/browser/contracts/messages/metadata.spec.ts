@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { wire } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork } from "../../pages/transcript.ts";
 
 test.describe("neutral backend facts", () => {
   test.use({ profile: "contract-messages-facts" });
@@ -12,8 +12,9 @@ test.describe("neutral backend facts", () => {
     async ({ isolatedState: state, page }) => {
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.goto(`${state.url}/#/local/tstv1-core`);
-      await openWorkLogs(page);
-      await expect(page.locator(".otk-composer-agent")).toHaveText("Action");
+      await openLatestWork(page);
+      await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+        .toHaveText("Action");
       await page.locator(".otk-agent-picker > button").click();
       await expect(
         page.locator(".otk-popover-panel:popover-open .otk-picker-name"),
@@ -24,9 +25,11 @@ test.describe("neutral backend facts", () => {
       await expect(page.locator(".otk-agent-picker > button")).not.toHaveClass(
         /is-applied/,
       );
-      await page.locator("[data-tool=external] .otk-tool-toggle").click();
-      await expect(page.locator("[data-tool=external] .otk-tool-toggle"))
-        .toHaveAttribute("aria-expanded", "true");
+      const external = page.locator("[data-tool=external] .otk-tool-toggle");
+      if (await external.getAttribute("aria-expanded") === "false") {
+        await external.click();
+      }
+      await expect(external).toHaveAttribute("aria-expanded", "true");
       await page.locator(".otk-reply-start .otk-entity-pill").hover();
       const observed = await page.evaluate(() => {
         const probe = document.createElement("span");
@@ -37,7 +40,9 @@ test.describe("neutral backend facts", () => {
         const foreground = getComputedStyle(probe).color;
         probe.remove();
         return {
-          task: document.querySelector("[data-tool=task] .otk-tool-target")
+          task: document.querySelector(
+            "[data-tool=task] .otk-work-run-preview .otk-chrome-meta",
+          )
             ?.textContent,
           notice: document.querySelector("[data-tool=external] small")
             ?.textContent,
@@ -90,9 +95,11 @@ test.describe("honest native metadata", () => {
   }, async ({ isolatedState: state, page }) => {
     const frames = await wire(page);
     await page.goto(`${state.url}/#/local/tstv1-core`);
-    await openWorkLogs(page);
-    await expect(page.locator("[data-tool=search]")).toHaveCount(2);
-    const rows = await page.locator("[data-tool=search] .otk-tool-toggle")
+    const work = await openLatestWork(page);
+    await work.getByRole("button", { name: "Search 2 searches", exact: true })
+      .click();
+    await expect(work.locator("[data-tool=search]")).toHaveCount(2);
+    const rows = await work.locator("[data-tool=search] .otk-tool-toggle")
       .allTextContents();
     expect(rows[0]).not.toContain("0 matches");
     expect(rows[0]).not.toContain("*");
@@ -103,7 +110,10 @@ test.describe("honest native metadata", () => {
       "aria-label",
       "Change Path not reported",
     );
-    await expect(page.locator("[data-tool=patch] .otk-tool-target")).toHaveText(
+    await expect(
+      work.locator("[data-tool=patch] .otk-work-run-preview > .otk-chrome-meta")
+        .first(),
+    ).toHaveText(
       "Path not reported",
     );
     await patch.click({ button: "right" });

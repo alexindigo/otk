@@ -5,10 +5,12 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import {
   compactionBoundary,
   expectCompactionSummary,
-  openWorkLogs,
+  openActivityGroups,
+  openWork,
   recordToggle,
   revealAcquired,
   runNativeTool,
+  workPanel,
 } from "../../pages/transcript.ts";
 
 test.use({ profile: "messages-forms" });
@@ -60,9 +62,9 @@ test("messages.reveal-joins-delayed-browser-publication", {
     capture.release();
   }
   await reveal;
-  await openWorkLogs(page, page.locator(`[data-message="${part.messageID}"]`));
+  await openWork(page.locator(`[data-message="${part.messageID}"]`));
   await expect(
-    page.locator(`[data-message="${part.messageID}"] [data-tool=bash]`),
+    workPanel(page).locator("[data-tool=bash]"),
   ).toBeVisible();
 });
 
@@ -109,48 +111,82 @@ test(
 
 test("messages.work-reveal-survives-virtual-segment-replacement", {
   tag: ["@messages", "@contracts"],
-}, async ({ page }) => {
-  await page.setContent(
-    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><article data-message="reply"><div style="height:600px"></div><section data-virtual-key="work-running"><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">First work log</button><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">Next work log</button></section><div style="height:400px"></div></article></div>`,
-  );
-  await page.locator(".otk-messages").evaluate((pane) => {
-    pane.addEventListener("scroll", () => {
-      pane.querySelector("[data-virtual-key]")!.setAttribute(
-        "data-virtual-key",
-        "work-completed",
-      );
-    }, { once: true });
+}, async ({ page, isolatedState: state }) => {
+  const session = await state.native<{ id: string }>("/session", "POST", {
+    title: "Reveal a work record",
   });
-  await openWorkLogs(page);
-  await expect(page.locator('.otk-work-fold[aria-expanded="true"]'))
-    .toHaveCount(2);
-  await expect(page.locator("[data-virtual-key]")).toHaveAttribute(
-    "data-virtual-key",
-    "work-completed",
+  await openSession(state, page, session.id);
+  const work = await runNativeTool(state, page, session.id, "bash", {
+    command: "pwd",
+    description: "Locate project directory",
+  });
+  const reply = page.locator(`[data-message="${work.messageID}"]`);
+  const strip = reply.locator(".otk-work-strip");
+  await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+  await expect(workPanel(page)).toHaveCount(0);
+  // Native tool IDs and the projected part IDs differ on V2. Select the
+  // declared run from its visible strip and check that the same run is shown.
+  const segment = strip.getByTitle(/^Locate project directory,/);
+  await expect(segment).toHaveAttribute("data-run", /\S+/);
+  const run = await segment.getAttribute("data-run");
+  await segment.click();
+  const selected = workPanel(page).locator(
+    `[data-work-run=${JSON.stringify(run)}]`,
   );
+  await expect(selected).toHaveClass(/is-selected/);
+  await expect(selected).toContainText("Locate project directory");
+  await expect(strip).toHaveAttribute("aria-current", "true");
+  await expect(strip).toBeInViewport();
+});
+
+test.describe("direct Work part reveal", () => {
+  test.use({ profile: "contract-menus-work-reveal" });
+  test("messages.transcript-reveal-selects-the-requested-work-part", {
+    tag: ["@messages", "@contracts"],
+  }, async ({ page, isolatedState: state }) => {
+    await state.product("layout.patch", {
+      rightView: "sessions",
+      rightCollapsed: false,
+    });
+    await page.goto(
+      `${state.url}/?revealMessage=reply&revealPart=edit#/local/tstv1-otk`,
+    );
+    const strip = page.locator('[data-message="reply"] .otk-work-strip');
+    await expect(strip).toBeAttached();
+    await expect(workPanel(page)).toHaveCount(0);
+    await page.getByRole("button", { name: "Reveal fixture part" }).click();
+    // Omitting the part ID on this reply would select bash, its first run.
+    await expect(workPanel(page).locator("[data-work-run].is-selected"))
+      .toHaveAttribute("data-work-run", "edit");
+    await expect(
+      workPanel(page).locator("[data-work-run=edit] [data-tool=edit]"),
+    )
+      .toBeVisible();
+    await expect(strip).toHaveAttribute("aria-current", "true");
+    await expect(strip).toBeInViewport();
+  });
 });
 
 test("messages.work-reveal-reacquires-a-retired-disclosure", {
   tag: ["@messages", "@contracts"],
 }, async ({ page }) => {
   await page.setContent(
-    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><button class="otk-record-group-toggle" aria-expanded="false">Temporary Activity</button><article data-message="reply" hidden><button class="otk-work-fold" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">Work log</button></article></div>`,
+    `<div class="otk-messages" aria-busy="false" style="height:200px;overflow:auto"><button class="otk-record-group-toggle" aria-expanded="false">Temporary Activity</button><article data-message="reply" hidden><button class="otk-record-group-toggle" aria-expanded="false" onclick="this.setAttribute('aria-expanded','true')">Retained activity</button></article></div>`,
   );
   await page.evaluate(() => {
     const ready = document.fonts.ready;
     Object.defineProperty(document.fonts, "ready", {
       get() {
-        document.querySelector(".otk-record-group-toggle")?.remove();
+        document.querySelector(".otk-messages > .otk-record-group-toggle")
+          ?.remove();
         document.querySelector("article")!.hidden = false;
         return ready;
       },
     });
   });
-  await openWorkLogs(page);
-  await expect(page.getByRole("button", { name: "Work log" })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
+  await openActivityGroups(page);
+  await expect(page.getByRole("button", { name: "Retained activity" }))
+    .toHaveAttribute("aria-expanded", "true");
 });
 
 test("messages.compaction-summary-reveal-opens-published-ancestry", {

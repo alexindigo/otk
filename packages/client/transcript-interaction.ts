@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { DisclosureCategory, Preferences } from "@otk/protocol";
 import {
-  DEFAULT_PREFS,
-  type DisclosureCategory,
-  type Preferences,
-} from "@otk/protocol";
+  createDisclosures,
+  type DisclosureIdentity,
+  type DisclosureKind,
+  type Disclosures,
+} from "./disclosure.ts";
 import type { WindowAnchor } from "./window.ts";
 export interface TranscriptAnchor extends WindowAnchor {
   messageID?: string;
@@ -21,15 +23,24 @@ interface Disclosure {
 
 /** Source-free choices survive virtual unmount and body cooling, not deletion. */
 export interface TranscriptInteraction {
+  readonly disclosures: Disclosures;
+  identify(
+    id: string,
+    generation?: string,
+    placement?: DisclosureIdentity["placement"],
+  ): DisclosureIdentity;
   defaultFor(
     category: DisclosureCategory,
     prefs?: Partial<Preferences>,
   ): boolean;
-  disclosure(key: string, generation: string): Disclosure;
-  workDisclosure(scope: string, records: readonly string[]): Disclosure;
-  subscribeWork(scope: string, listener: () => void): () => void;
+  disclosure(kind: DisclosureKind, key: string, generation: string): Disclosure;
   retire(key: string): void;
-  subscribe(listener: () => void, key: string): () => void;
+  subscribe(
+    listener: () => void,
+    kind: DisclosureKind,
+    key: string,
+    generation: string,
+  ): () => void;
   reveal(ancestors: readonly string[]): void;
   generation(identity: string): string;
   retireIdentity(identity: string): void;
@@ -38,134 +49,64 @@ export interface TranscriptInteraction {
   anchor(value: TranscriptAnchor | null): void;
   clear(): void;
 }
-export function createTranscriptInteraction(): TranscriptInteraction {
-  const choices = new Map<string, { generation: string; open?: boolean }>();
-  type WorkIntent = { order: number; open: boolean };
-  const workGroups = new Map<string, Map<string, WorkIntent>>();
-  const workKey = (scope: string) => JSON.stringify(["work", scope]);
-  let workOrder = 0, lifetime = 0;
+export function createTranscriptInteraction(
+  disclosures: Disclosures = createDisclosures({}),
+  scope = "standalone",
+): TranscriptInteraction {
   const generations = new Map<string, number>();
+  const generation = (id: string) => `${id}:${generations.get(id) ?? 0}`;
+  const identify: TranscriptInteraction["identify"] = (
+    id,
+    version = generation(id),
+    placement,
+  ) => ({
+    scope,
+    id,
+    generation: version,
+    ...(placement && { placement }),
+  });
   const windows = new Map<string, Map<string, number>>();
-  const listeners = new Map<string, Set<() => void>>();
-  const publish = (key: string) => {
-    for (const listener of listeners.get(key) ?? []) listener();
-  };
   let anchor: TranscriptAnchor | undefined;
-  const defaultFor = (
-    category: DisclosureCategory,
-    prefs: Partial<Preferences> = {},
+  const disclosure: TranscriptInteraction["disclosure"] = (
+    kind,
+    key,
+    version,
   ) => {
-    const defaults = { ...DEFAULT_PREFS, ...prefs };
-    const categories: Record<DisclosureCategory, boolean> = {
-      work: defaults.expandWork,
-      toolOutput: defaults.expandToolOutput,
-      reasoning: defaults.thinking === "show",
-      fileChanges: !defaults.collapseFileChanges,
-      system: defaults.expandSystem,
-      delegation: defaults.expandDelegation,
-      outgoing: defaults.expandOutgoing,
-      compaction: defaults.expandCompaction,
-      record: defaults.expandRecords,
-      stepMarkers: defaults.expandStepMarkers,
-      snapshots: defaults.expandSnapshots,
-      source: defaults.expandSource,
+    const state = disclosures.bind(kind, identify(key, version));
+    const value = () => state.chosen() ? state.open() : undefined;
+    return {
+      value,
+      expanded: (category, prefs = {}, required = false) =>
+        value() ??
+          disclosures.defaultFor(kind, {
+            category,
+            prefs: () => prefs,
+            required: () => required,
+          }),
+      set(open) {
+        void state.set(open);
+      },
     };
-    return categories[category];
   };
   return {
-    defaultFor,
-    subscribe(listener, key) {
-      let selected = listeners.get(key);
-      if (!selected) listeners.set(key, selected = new Set());
-      selected.add(listener);
-      return () => {
-        selected.delete(listener);
-        if (!selected.size) listeners.delete(key);
-      };
+    disclosures,
+    identify,
+    defaultFor: (category, prefs = {}) =>
+      disclosures.defaultFor("recordKinds", { category, prefs: () => prefs }),
+    disclosure,
+    subscribe(listener, kind, key, version) {
+      return disclosures.subscribe(listener, kind, identify(key, version));
     },
     reveal(ancestors) {
-      for (const key of ancestors) {
-        choices.set(key, {
-          generation: `${key}:${generations.get(key) ?? 0}`,
-          open: true,
-        });
-        publish(key);
-      }
+      disclosures.reveal("activity", ancestors.map((key) => identify(key)));
+      disclosures.reveal("silent", ancestors.map((key) => identify(key)));
     },
-    disclosure(key, generation) {
-      let value = choices.get(key);
-      if (value?.generation !== generation) {
-        value = { generation };
-        choices.set(key, value);
-      }
-      return {
-        value: () =>
-          choices.get(key)?.generation === generation
-            ? choices.get(key)?.open
-            : undefined,
-        expanded: (category, prefs, required = false) =>
-          (choices.get(key)?.generation === generation
-            ? choices.get(key)?.open
-            : undefined) ??
-            (required || defaultFor(category, prefs)),
-        set(open) {
-          if (choices.get(key)?.generation === generation) {
-            choices.get(key)!.open = open;
-            publish(key);
-          }
-        },
-      };
-    },
-    subscribeWork(scope, listener) {
-      return this.subscribe(listener, workKey(scope));
-    },
-    workDisclosure(scope, records) {
-      const key = workKey(scope);
-      const epoch = lifetime;
-      const members = records.map((id) => ({ id, key: this.generation(id) }));
-      const current = () =>
-        epoch === lifetime &&
-        members.every(({ id, key }) => this.generation(id) === key);
-      const value = () => {
-        if (!current()) return;
-        const assigned = workGroups.get(key);
-        if (!assigned) return;
-        let latest: WorkIntent | undefined;
-        for (const member of members) {
-          const intent = assigned.get(member.key);
-          if (intent && (!latest || intent.order > latest.order)) {
-            latest = intent;
-          }
-        }
-        // A newly admitted member borrows the existing group's choice, not
-        // its position in the layout. Unrelated work has no matching member.
-        if (latest) {
-          for (const member of members) {
-            if (!assigned.has(member.key)) assigned.set(member.key, latest);
-          }
-        }
-        return latest?.open;
-      };
-      return {
-        value,
-        expanded: (category, prefs, required = false) =>
-          value() ?? (required || defaultFor(category, prefs)),
-        set(open) {
-          if (!members.length || !current()) return;
-          let assigned = workGroups.get(key);
-          if (!assigned) workGroups.set(key, assigned = new Map());
-          const intent = { order: ++workOrder, open };
-          for (const member of members) assigned.set(member.key, intent);
-          publish(key);
-        },
-      };
-    },
-    retire: (key) => {
-      choices.delete(key);
-    },
-    generation: (id) => `${id}:${generations.get(id) ?? 0}`,
+    retire: (id) => disclosures.retire({ scope, id }),
+    generation,
     retireIdentity(id) {
+      const previous = generation(id);
       generations.set(id, (generations.get(id) ?? 0) + 1);
+      disclosures.retire({ scope, generation: previous });
     },
     measurements(window) {
       let sizes = windows.get(window);
@@ -189,12 +130,10 @@ export function createTranscriptInteraction(): TranscriptInteraction {
       return anchor && { ...anchor };
     },
     clear() {
-      choices.clear();
-      workGroups.clear();
-      lifetime++;
       generations.clear();
       windows.clear();
       anchor = undefined;
+      disclosures.retire({ scope });
     },
   };
 }

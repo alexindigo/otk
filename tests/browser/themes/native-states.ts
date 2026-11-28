@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import { menuGeometry } from "./overlays.ts";
+import { cssLength } from "../pages/css-length.ts";
 export async function nativeStates({
   state,
   page,
@@ -86,11 +87,11 @@ export async function nativeStates({
       await expect(page.locator(".otk-permission-activity")).not.toContainText(
         "Stored failure fixture",
       );
-      await expect(
-        page.locator(
-          ".otk-permission-activity [role=status]:not([aria-hidden=true])",
-        ),
-      ).toHaveCount(0);
+      // Record-owned status labels are valid; the ready journal has no
+      // remaining pane-level loading status.
+      await expect(page.locator(
+        ".otk-permission-activity [role=status]:not([aria-hidden=true],[data-activity] *)",
+      )).toHaveCount(0);
       await shot(`native-auto-activity-${theme.id}`);
     }
     // Sidebar measurements own the Sessions projection, never the Activity
@@ -163,7 +164,7 @@ export async function nativeStates({
             getComputedStyle(el.querySelector(".otk-lamp-body")!).borderRadius,
           ];
         }),
-      ).toEqual([8, 0, "50%"]);
+      ).toEqual([await cssLength(marker, "--lamp-size"), 0, "50%"]);
       await shot(`native-interrupted-marker-${theme.id}`);
     }
   });

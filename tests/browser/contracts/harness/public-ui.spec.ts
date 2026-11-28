@@ -9,16 +9,20 @@ test("harness.public-ui-unregistered-extension-fallbacks", {
   await page.goto(`${state.url}/?interaction-failures`);
   // NT1 presents unknown parts as native-record rows, not muted paragraphs.
   await expect(
-    page.locator('[data-native-record="consumer.unregistered"] .otk-tool-verb'),
-  ).toHaveText(
-    "Unsupported part: consumer.unregistered",
-  );
-  // UX1 also folds this standalone consumer's work before its lazy tool body.
-  await page.getByRole("button", { name: "Work log", exact: true }).click();
-  await page.locator('.otk-tool-toggle[aria-expanded="false"]').click();
-  await expect(page.locator(".otk-tool-body")).toBeVisible();
+    page.locator('[data-native-record="consumer.unregistered"]').getByText(
+      "Unsupported part: consumer.unregistered",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  // D74 leaves standalone native records in flow with their own lazy body.
+  const record = page.locator('[data-tool="consumer.unregistered"]');
+  const toggle = record.getByRole("button", { name: "consumer.unregistered" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(record.locator(".otk-tool-body")).toHaveCount(0);
+  await toggle.click();
+  await expect(record.locator(".otk-tool-body")).toBeVisible();
   await expect(page.locator("body")).not.toContainText("Output truncated.");
-  await expect(page.locator(".otk-tool-body")).toContainText(
+  await expect(record.locator(".otk-tool-body")).toContainText(
     "Common output survives an unregistered extension.",
   );
 });

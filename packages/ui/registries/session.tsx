@@ -11,7 +11,7 @@ import type {
   InboxRpc,
   LiveWorkOwner,
   ModelCatalogOwner,
-  RunningWork,
+  QuestionResponse,
   SessionDelivery,
   SessionSubmission,
   ToolCompletionSource,
@@ -26,6 +26,7 @@ import type {
   Preferences,
   PromptPart,
   QuestionRequest,
+  RunningShells,
 } from "@otk/protocol";
 
 /** Session-scoped data and typed operations, independent of any feature list. */
@@ -42,6 +43,8 @@ export interface SessionPorts {
   directoryCatalog?: DirectoryCatalogLease;
   frecencyCatalog?: FrecencyCatalogLease;
   approvals?: ApprovalModel;
+  /** The explicit approval policy controls this whole session family. */
+  approvalTarget?(): { sidecarId: string; sessionID: string; title?: string };
   feedback?: FeedbackOwner;
   sessionID(): string;
   /** Name of the captured send destination, supplied by the selection owner. */
@@ -51,19 +54,20 @@ export interface SessionPorts {
   entry(id: string): IndexEntry | undefined;
   entityFacts?(identity: EntityIdentity): EntityFacts;
   entities?(): EntityStateStore;
-  workEntityKey?(): string;
   status?(id: string): import("@otk/client").InboxStatus | undefined;
   /** Consumer-supplied project/task context for a session's surfaces. */
   location?(id: string): string;
-  /** Borrowed family and active shell projection; no UI-owned activity store. */
-  workItems?(): readonly RunningWork[];
+  shells?(): RunningShells | undefined;
   trail?(): TrailModel | undefined;
   liveWork?: LiveWorkOwner;
   delivery?: SessionDelivery;
   stopHelper?(id: string): Promise<void>;
+  clearFinished?(task: string): Promise<void>;
   permissions(): PermissionRequest[];
   permissionVisible?(request: PermissionRequest): boolean;
   questions(): QuestionRequest[];
+  questionResponse?(id: string): QuestionResponse | undefined;
+  observeQuestionResponse?(listener: () => void): () => void;
   forms?(): readonly import("@otk/protocol").FormRequest[];
   requests?: import("@otk/client").RequestLifetimes;
   prefs(): Preferences;

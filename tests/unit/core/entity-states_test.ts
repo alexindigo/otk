@@ -28,6 +28,7 @@ import { InboxFeature } from "../../../core/features/inbox.ts";
 import { ProjectSummaries } from "../../../core/index/project-summaries.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import { fixture } from "../../support/config.ts";
+import { ManualClock } from "../../support/manual-clock.ts";
 
 const base: IndexMetadata = {
   id: "s",
@@ -48,27 +49,8 @@ const base: IndexMetadata = {
 const keys = (...values: string[]) => ({ keys: values, fresh: true });
 
 function owner() {
-  let now = 0;
-  const timers = new Map<() => void, number>();
-  const clock = {
-    now: () => now,
-    set: (callback: () => void, delay: number) => {
-      timers.set(callback, now + delay);
-      return callback;
-    },
-    clear: (timer: unknown) => {
-      timers.delete(timer as () => void);
-    },
-  };
-  const mature = () => {
-    now += 500;
-    for (const [callback, due] of timers) {
-      if (due <= now) {
-        timers.delete(callback);
-        callback();
-      }
-    }
-  };
+  const clock = new ManualClock();
+  const mature = () => clock.runNext();
   const entries = new Map<string, IndexMetadata>();
   const published: { upserts: EntityState[]; removals: string[] }[] = [];
   const family = {
@@ -108,7 +90,162 @@ function owner() {
   return { entries, published, states, supervision, put, get, mature };
 }
 
-test("D66: parent delivery and native run clocks survive human seen independently", () => {
+test("an orphan result and an in-flight settlement read prove no live session work", () => {
+  const o = owner();
+  for (const pending of ["native-confirmation", "result:orphan"]) {
+    o.put({
+      ...base,
+      activity: {
+        terminal: 50,
+        outcome: "succeeded",
+        completion: { pending: [pending] },
+        work: keys(),
+      },
+    }, 50);
+    const state = o.get(base.id);
+    assertEquals(state?.state, "none");
+    assertEquals(state?.evidence?.work, false);
+    assertEquals(state?.evidence?.nativeRun, undefined);
+    assertEquals(state?.evidence?.settlement, undefined);
+    assertEquals(o.states.composerLink(base.id), "none");
+  }
+});
+
+test("successful session settles only after native confirmation of its current work", () => {
+  const o = owner();
+  const success = {
+    terminal: 50,
+    outcome: "succeeded" as const,
+    terminalOrigin: "live" as const,
+  };
+  const put = (activity: IndexMetadata["activity"]) =>
+    o.put({ ...base, activity });
+  const settlement = () => o.get(base.id)?.evidence?.settlement?.id;
+  put({ work: keys("run") });
+  put(success);
+  assertEquals(settlement(), undefined);
+  for (const pending of ["queued", "parked", "starting", "returning"]) {
+    put({
+      ...success,
+      completion: {
+        pending: [pending],
+        continuation: [pending],
+        confirmed: 50,
+      },
+    });
+    assertEquals(settlement(), undefined);
+    assertEquals(o.get(base.id)?.state, "working");
+    assertEquals(o.states.composerLink(base.id), "running");
+  }
+  put({ ...success, completion: { pending: [], confirmed: 49 } });
+  assertEquals(settlement(), undefined);
+  o.put({
+    ...base,
+    activityAuthority: "stale",
+    activity: { ...success, completion: { pending: [], confirmed: 50 } },
+  });
+  assertEquals(settlement(), undefined);
+  put({
+    ...success,
+    completion: { pending: [], confirmed: 50 },
+    inputs: keys("question"),
+  });
+  assertEquals(settlement(), undefined);
+  put({ ...success, completion: { pending: [], confirmed: 50 } });
+  assertEquals(settlement(), 50);
+  assertEquals(o.get(base.id)?.state, "finished");
+  const child = { ...base, id: "helper", parentID: base.id };
+  o.put({ ...child, activity: { terminal: 58, outcome: "succeeded" } });
+  assertEquals(settlement(), 50, "an unseen child end is not pending delivery");
+  o.put({
+    ...child,
+    activity: {
+      terminal: 58,
+      outcome: "succeeded",
+      delivered: { parentID: base.id, receipt: "result", terminal: 58 },
+    },
+  });
+  assertEquals(settlement(), 50);
+  const publications = o.published.length;
+  put({ ...success, completion: { pending: [], confirmed: 50 } });
+  assertEquals(o.published.length, publications);
+  put({ ...success, work: keys("next-run") });
+  assertEquals(settlement(), undefined);
+  o.supervision.freshness(false);
+  put({ ...success, completion: { pending: [], confirmed: 50 } });
+  assertEquals(settlement(), undefined);
+});
+
+test("composer link owns native work and task helper activity independently of lamps", () => {
+  const o = owner(), link = () => o.states.composerLink(base.id);
+  o.put(base);
+  assertEquals(link(), "none");
+  o.states.operation(base.id, "working");
+  o.put(base);
+  assertEquals(o.get(base.id)?.state, "working");
+  assertEquals(link(), "none");
+  o.states.operation(base.id);
+  o.put({ ...base, activity: { work: keys("native-run") } });
+  assertEquals(o.get(base.id)?.evidence?.nativeRun, true);
+  assertEquals(link(), "running");
+  o.put({
+    ...base,
+    activity: {
+      work: {
+        ...keys("old-shell"),
+        items: [{
+          id: "old-shell",
+          kind: "shell",
+          label: "Shell",
+          title: "sleep",
+          startedAt: Date.now() - 7 * 86_400_000,
+        }],
+      },
+      inputs: keys("live-question"),
+    },
+  });
+  assertEquals(o.get(base.id)?.state, "blocked");
+  assertEquals(o.get(base.id)?.evidence?.nativeRun, undefined);
+  assertEquals(o.get(base.id)?.shells?.state, "working");
+  assertEquals(link(), "running");
+  o.put(base);
+  const helper = { ...base, id: "helper", parentID: base.id, directory: "/q" };
+  o.put({ ...helper, activity: { terminal: 70, outcome: "succeeded" } });
+  assertEquals(link(), "idle");
+  o.put({
+    ...helper,
+    activity: { work: keys("cross-checkout-run") },
+  });
+  o.put({
+    ...helper,
+    id: "waiting",
+    activity: { inputs: keys("another-question") },
+  });
+  assertEquals(o.get(base.id)?.state, "none");
+  assertEquals(link(), "running");
+  o.supervision.freshness(false);
+  o.put({ ...helper, activity: { work: keys("cross-checkout-run") } });
+  o.put({ ...helper, id: "waiting" });
+  assertEquals(link(), "none");
+});
+
+test("terminal dependencies stay independent of freshness and session lamps", () => {
+  const o = owner();
+  let running = 2;
+  o.states.terminalOwners(() => running);
+  o.supervision.freshness(false);
+  const native = o.put(base);
+  assertEquals(native.state, "none");
+  assertEquals(o.get(base.id)?.state, "none");
+  assertEquals(o.get(base.id)?.dependencies, 2);
+  o.put({ ...base, deleted: { at: 1, how: "provider" } });
+  assertEquals(o.get(base.id), undefined);
+  running = 0;
+  o.put(base);
+  assertEquals(o.get(base.id)?.dependencies, undefined);
+});
+
+test("D72: a helper leaves the roster after human seen or matching parent delivery", () => {
   const o = owner();
   const entry = { ...base, parentID: "root" };
   o.put({
@@ -131,9 +268,11 @@ test("D66: parent delivery and native run clocks survive human seen independentl
     ...entry,
     activity: { terminal: 50, outcome: "succeeded" as const },
   };
+  o.put(terminal);
+  assertEquals(o.get("s")?.evidence?.helper, "finished");
   o.put(terminal, 50);
   assertEquals(o.get("s")?.state, "none");
-  assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+  assertEquals(o.get("s")?.evidence?.helper, undefined);
   assertEquals(o.get("s")?.evidence?.run, { startedAt: 10, endedAt: 50 });
   for (
     const delivered of [
@@ -142,8 +281,8 @@ test("D66: parent delivery and native run clocks survive human seen independentl
       { parentID: "root", receipt: "result", terminal: 49 },
     ]
   ) {
-    o.put({ ...terminal, activity: { ...terminal.activity, delivered } }, 50);
-    assertEquals(o.get("s")?.evidence?.awaitingDelivery, true);
+    o.put({ ...terminal, activity: { ...terminal.activity, delivered } });
+    assertEquals(o.get("s")?.evidence?.helper, "finished");
   }
   o.put({
     ...terminal,
@@ -151,8 +290,8 @@ test("D66: parent delivery and native run clocks survive human seen independentl
       ...terminal.activity,
       delivered: { parentID: "root", receipt: "result", terminal: 50 },
     },
-  }, 50);
-  assertEquals(o.get("s")?.evidence?.awaitingDelivery, false);
+  });
+  assertEquals(o.get("s")?.evidence?.helper, undefined);
   o.put({ ...entry, activity: { work: keys("rerun"), terminal: 50 } }, 50);
   assertEquals(o.get("s")?.evidence?.run, undefined);
   o.put({
@@ -304,9 +443,10 @@ test("retry evidence shares the interpreter's native freshness rather than retai
   assertEquals(o.get("s")?.evidence?.retry, undefined);
 });
 
-test("a failed helper delivered to its parent stays blocked until seen (C1 unchanged)", () => {
+test("D81: a delivered failed helper leaves attention but preserves its failure", () => {
   const o = owner();
-  o.put({ ...base, id: "parent" });
+  const parent = { ...base, id: "parent", activity: { work: keys("parent") } };
+  o.put(parent);
   const helper: IndexMetadata = {
     ...base,
     id: "helper",
@@ -314,15 +454,18 @@ test("a failed helper delivered to its parent stays blocked until seen (C1 uncha
     activity: {
       terminal: 70,
       outcome: "failed",
-      delivered: { parentID: "parent", receipt: "r", terminal: 70 },
     },
   };
   o.put(helper);
+  const roster = () => o.states.get(entityKey("task", "session/parent"));
   assertEquals(o.get("helper")?.state, "blocked");
   assertEquals(o.get("helper")?.cause, "failedHelper");
+  assertEquals(o.get("helper")?.evidence?.helper, "needsYou");
+  assertEquals(roster()?.state, "blocked");
+  assertEquals(roster()?.helpers?.counts.needsYou, 1);
   assertEquals(o.get("helper")?.outcome, "failed");
   // The parent's own lamp is its own state (D35); the child is evidence.
-  assertEquals(o.get("parent")?.state, "none");
+  assertEquals(o.get("parent")?.state, "working");
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 1);
   // An unseen failure is immediate, so a pending permission cannot grace it.
   o.put({
@@ -330,11 +473,23 @@ test("a failed helper delivered to its parent stays blocked until seen (C1 uncha
     activity: { ...helper.activity, permissions: keys("per_1") },
   });
   assertEquals(o.get("helper")?.cause, "failedHelper");
-  o.put(helper, 70);
+  // The existing blocker wins even after the child rewakes (F02).
+  o.put({ ...helper, activity: { ...helper.activity, work: keys("new-run") } });
+  assertEquals(o.get("helper")?.state, "blocked");
+  assertEquals(o.get("helper")?.evidence?.helper, "needsYou");
+  const delivered = { parentID: "parent", receipt: "r", terminal: 70 };
+  o.put({ ...helper, activity: { ...helper.activity, delivered } });
   assertEquals(o.get("helper")?.state, "none");
+  assertEquals(o.get("helper")?.outcome, "failed");
+  assertEquals(o.get("helper")?.evidence?.helper, undefined);
+  assertEquals(roster()?.state, "working");
+  assertEquals(roster()?.helpers?.counts.needsYou ?? 0, 0);
   assertEquals(o.get("parent")?.evidence?.descendants.blocked, 0);
   // A succeeded helper's delivery is its acknowledgement (D58).
-  o.put({ ...helper, activity: { ...helper.activity, outcome: "succeeded" } });
+  o.put({
+    ...helper,
+    activity: { ...helper.activity, delivered, outcome: "succeeded" },
+  });
   assertEquals(o.get("helper")?.state, "none");
 });
 
@@ -377,6 +532,72 @@ test("an unchanged session publishes nothing", () => {
   o.published.length = 0;
   o.put(entry);
   assertEquals(o.published, []);
+});
+
+test("2.99: only fresh shells in the session contribute to its shell roster and lamp", () => {
+  const o = owner();
+  const shell = {
+    id: "shell",
+    kind: "shell" as const,
+    label: "Shell",
+    title: "sleep 120",
+    startedAt: 10,
+  };
+  const entry = {
+    ...base,
+    activity: {
+      inputs: keys("pending-question"),
+      work: {
+        ...keys(shell.id, "run"),
+        items: [shell, { ...shell, id: "ended" }, {
+          ...shell,
+          id: "run",
+          kind: "execution" as const,
+        }],
+      },
+    },
+  };
+  o.put(entry);
+  o.put({
+    ...base,
+    id: "child",
+    parentID: base.id,
+    activity: {
+      work: {
+        ...keys("child-shell"),
+        items: [{ ...shell, id: "child-shell" }],
+      },
+    },
+  });
+  const task = () => o.states.get(entityKey("task", "session/s"));
+  assertEquals(task()?.state, "blocked");
+  assertEquals(o.get(base.id)?.state, "blocked");
+  const { kind: _kind, ...row } = shell;
+  assertEquals(o.get(base.id)?.shells, {
+    items: [row],
+    count: 1,
+    state: "working",
+  });
+  const empty = { items: [], count: 0, state: "none" } as const;
+  o.put({
+    ...entry,
+    activity: {
+      ...entry.activity,
+      work: { ...entry.activity.work, fresh: false },
+    },
+  });
+  assertEquals(o.get(base.id)?.shells, empty);
+  o.put({
+    ...entry,
+    activity: {
+      ...entry.activity,
+      work: { ...entry.activity.work, ...keys("run") },
+    },
+  });
+  assertEquals(o.get(base.id)?.shells, empty);
+  assertEquals(o.get(base.id)?.evidence?.work, true);
+  assertEquals(task()?.state, "blocked");
+  assertEquals(o.get("child")?.shells?.count, 1);
 });
 
 test("live work belongs to the entity owner, including blocked helpers, title changes and retirement", () => {
@@ -508,11 +729,18 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     templates: new ProjectTemplates(db),
   };
   const index = new IndexStore();
+  const clock = new ManualClock();
   const feature = new InboxFeature(
     stores,
     index,
     "alice",
     () => Promise.resolve([]),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    clock,
   );
   const settle = async () => {
     for (let i = 0; i < 4; i++) await Promise.resolve();
@@ -576,16 +804,17 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     );
     const key = entityKey("task", taskEntityID("task", task.id));
     const get = () => feature.get().entities?.[key];
-    assertEquals(get()?.state, "working");
+    // D78: both views publish the finished parent over the working helper.
+    assertEquals(get()?.state, "finished");
     for (const view of views) {
       const frame = await view.snapshot!();
       assertEquals(
         frame?.t === "inbox.snapshot" && frame.inbox.entities?.[key]?.state,
-        "working",
+        "finished",
       );
     }
     index.upsert({ ...child, activity: { permissions: keys("per_child") } });
-    await new Promise((done) => setTimeout(done, 525));
+    clock.runNext();
     await settle();
     assertEquals(get()?.state, "blocked");
     assertEquals(
@@ -601,7 +830,7 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     );
     index.upsert({ ...child, directory: "/p" });
     await settle();
-    assertEquals(get()?.state, "working");
+    assertEquals(get()?.state, "finished");
     assertEquals(get()?.counts.unseen, 1);
     stores.tasks.close(task.id);
     await settle();
@@ -609,7 +838,7 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
     assertEquals(
       feature.get().entities
         ?.[entityKey("task", taskEntityID("session", "parent"))]?.state,
-      "working",
+      "finished",
     );
     assertEquals(
       feature.get().entities?.[entityKey("session", "parent")]?.state,
@@ -633,7 +862,17 @@ test("the inbox leases one task identity independently of D8, and refreshes its 
 });
 
 function summaries(marks: (id: string) => { seen: number; finish: number }) {
-  const owner = new ProjectSummaries(marks, () => {});
+  const clock = new ManualClock();
+  const owner = new ProjectSummaries(
+    marks,
+    () => {},
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    clock,
+  );
   owner.authority("current");
   owner.seed(["/repo", "/repo/tree"].map((directory) => ({
     directory,
@@ -650,7 +889,7 @@ function summaries(marks: (id: string) => { seen: number; finish: number }) {
   })));
   const state = (kind: "checkout" | "project" | "global", id: string) =>
     owner.states.get(entityKey(kind, id));
-  return { owner, state };
+  return { owner, state, clock };
 }
 const row = (
   id: string,
@@ -666,7 +905,7 @@ const row = (
   activity,
 });
 
-test("live 2.61 shape: a working project with two unseen finishes is green with unseen 2", () => {
+test("2.61: two sessions working on newer runs stay green while keeping their unseen counts (D35/D69/D78)", () => {
   const { owner, state } = summaries(() => ({ seen: 10, finish: 0 }));
   owner.entry(row("main", "/repo", { terminal: 20, work: keys("shell") }));
   owner.entry(
@@ -686,20 +925,26 @@ test("live 2.61 shape: a working project with two unseen finishes is green with 
   });
 });
 
-test("X10 shape: a working helper wins the repository while the main session stays finished", () => {
+test("D78: a finished main lights the repository yellow while its helper is working", () => {
   const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
-  owner.entry(row("main", "/repo", { terminal: 20 }));
+  owner.entry(row("main", "/repo", {}));
   owner.entry(
     row("helper", "/repo/tree", { terminal: 5, work: keys("run") }, "main"),
   );
+  assertEquals(state("project", "/repo")?.state, "working");
+  owner.entry(row("main", "/repo", { terminal: 20 }));
   assertEquals(
     owner.states.get(entityKey("session", "main"))?.state,
     "finished",
   );
+  assertEquals(
+    owner.states.get(entityKey("session", "helper"))?.state,
+    "working",
+  );
   assertEquals(state("checkout", "/repo/tree")?.state, "working");
-  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(state("project", "/repo")?.counts.finished, 1);
-  assertEquals(owner.values.get("/repo")?.status, "working");
+  assertEquals(owner.values.get("/repo")?.status, "finished");
   // Moving out of a checkout moves its contribution, nothing is rescanned.
   owner.remove("helper");
   assertEquals(state("checkout", "/repo/tree")?.state, "none");
@@ -720,11 +965,11 @@ test("a fresh location form blocks its checkout and project with cause form", ()
   assertEquals(state("project", "/repo")?.state, "working");
 });
 
-test("an aggregate blocked only by permissions shares their grace cause", async () => {
-  const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
+test("an aggregate blocked only by permissions shares their grace cause", () => {
+  const { owner, state, clock } = summaries(() => ({ seen: 0, finish: 0 }));
   const asking = row("a", "/repo", { permissions: keys("per_1") });
   owner.entry({ ...asking, attention: { ...base.attention, permissions: 1 } });
-  await new Promise((done) => setTimeout(done, 525));
+  clock.runNext();
   assertEquals(state("project", "/repo")?.cause, "permission");
   assertEquals(state("global", "global")?.cause, "permission");
   assertEquals(state("project", "/repo")?.requests, [{ id: "per_1" }]);
@@ -734,7 +979,7 @@ test("an aggregate blocked only by permissions shares their grace cause", async 
     attention: { ...base.attention, permissions: 1 },
   });
   assertEquals(state("project", "/repo")?.requests, undefined);
-  await new Promise((done) => setTimeout(done, 525));
+  clock.runNext();
   assertEquals(state("project", "/repo")?.requests, [{ id: "per_2" }]);
   assertEquals(state("checkout", "/repo")?.requests, [{ id: "per_2" }]);
   owner.entry(row("b", "/repo", { inputs: keys("que_1") }));
@@ -756,6 +1001,10 @@ test("a received operation is work on its target session and its wait blocks it 
   assertEquals(o.get("s")?.state, "working");
   assertEquals(o.get("s")?.evidence?.work, true);
   assertEquals(o.get("s")?.counts.working, 1);
+  // D35/D69: an older unseen finish cannot mask work on that same session.
+  o.put({ ...entry, activity: { ...entry.activity, terminal: 6 } }, 5);
+  assertEquals(o.get("s")?.counts.unseen, 1);
+  assertEquals(o.get("s")?.state, "working");
   // An operation waiting for input is immediate, never graced as a permission.
   o.states.operation("s", "blocked");
   o.put({
@@ -818,13 +1067,13 @@ test("the inbox borrows received operations by target session", async () => {
   }
 });
 
-test("a received operation without a session colours its checkout and project", () => {
+test("D78: an unseen finish beats a working checkout operation but not its blocker", () => {
   const { owner, state } = summaries(() => ({ seen: 0, finish: 0 }));
   owner.entry(row("main", "/repo", { terminal: 5 }));
   owner.states.checkoutOperation("/repo/tree", "working");
   owner.touch("/repo/tree");
   assertEquals(state("checkout", "/repo/tree")?.state, "working");
-  assertEquals(state("project", "/repo")?.state, "working");
+  assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(owner.values.get("/repo/tree")?.status, "working");
   owner.states.checkoutOperation("/repo/tree", "blocked");
   assertEquals(state("project", "/repo")?.state, "blocked");
@@ -833,6 +1082,26 @@ test("a received operation without a session colours its checkout and project", 
   owner.touch("/repo/tree");
   assertEquals(state("project", "/repo")?.state, "finished");
   assertEquals(owner.values.get("/repo/tree")?.status, "none");
+});
+
+test("D78: a working checkout operation keeps a yellow leaf out of Archived", () => {
+  const { states, put } = owner();
+  const checkout = () => states.get(entityKey("checkout", "/p"));
+  const archive = () => states.get(entityKey("archive", "p"));
+  states.placement({
+    directory: "/p",
+    archived: true,
+    availability: "removed",
+    topology: { repoID: "p", canonicalRoot: "/repo", leafDirectory: "/p" },
+  });
+  states.member(base.id, "/p");
+  put({ ...base, activity: { terminal: 10 } });
+  assertEquals(archive()?.state, "finished");
+  states.checkoutOperation("/p", "working");
+  assertEquals(checkout()?.state, "finished");
+  assertEquals(archive()?.state, "none");
+  states.checkoutOperation("/p");
+  assertEquals(archive()?.state, "finished");
 });
 
 test("a deleted member stops counting toward its project's unseen finishes", () => {
@@ -847,6 +1116,43 @@ test("a deleted member stops counting toward its project's unseen finishes", () 
   assertEquals(state("project", "/repo")?.state, "none");
   assertEquals(owner.values.get("/repo")?.unseenCount, 0);
 });
+test("D79: project and task retain the oldest current native run, not the last update", () => {
+  const o = owner();
+  const task = "task/review", project = "/p", other = "other";
+  o.states.project(project, [project]);
+  o.states.roots(new Map([[base.id, task], [other, task]]));
+  const update = (id: string, start?: number) => {
+    o.put({
+      ...base,
+      id,
+      activity: {
+        work: start === undefined ? keys() : {
+          ...keys(id),
+          items: [{
+            id,
+            kind: "execution",
+            label: "Execution",
+            title: id,
+            startedAt: start,
+          }],
+        },
+      },
+    });
+    o.states.member(id, project);
+  };
+  const starts = () => [
+    o.states.get(entityKey("task", task))?.runStartedAt,
+    o.states.get(entityKey("project", project))?.runStartedAt,
+  ];
+  update(base.id, 60_000);
+  update(other, 90_000);
+  assertEquals(starts(), [60_000, 60_000]);
+  update(base.id);
+  assertEquals(starts(), [90_000, 90_000]);
+  update(other);
+  assertEquals(starts(), [undefined, undefined]);
+});
+
 test("D69/D70: one task spans checkouts and a project counts it once", () => {
   const o = owner();
   const get = (kind: EntityState["kind"], id: string) =>
@@ -884,7 +1190,7 @@ test("D69/D70: one task spans checkouts and a project counts it once", () => {
     activity: { terminal: 51 },
   };
   o.put(terminal);
-  assertEquals(get("task", "task/review")?.state, "working");
+  assertEquals(get("task", "task/review")?.state, "finished", "D78");
   assertEquals(get("project", "/repo")?.counts.finished, 1);
   o.put({ ...terminal, activity: { inputs: keys("q") } });
   assertEquals(get("task", "task/review")?.state, "blocked");
@@ -913,7 +1219,7 @@ test("D70: moving a parent moves its entire subtree, and unlinking retires the o
   assertEquals(o.get("d")?.state, "working");
   assertEquals(get("session/d")?.counts.working, 1);
 });
-test("D66/D58: one task publishes its ordered non-root dispositions", () => {
+test("D66/D58/D78/D81: one task publishes its ordered non-root dispositions", () => {
   const o = owner();
   o.put(base);
   const put = (
@@ -955,21 +1261,29 @@ test("D66/D58: one task publishes its ordered non-root dispositions", () => {
   put(6, { terminal: 80, outcome: "failed" }, "helper-0");
   const task = () => o.states.get(entityKey("task", "session/s"));
   assertEquals(task()?.helpers, {
-    counts: { running: 2, needsYou: 1, notReturned: 3 },
+    counts: { running: 2, needsYou: 2, finished: 2 },
+    lamps: {
+      all: { state: "blocked" },
+      groups: {
+        running: { state: "working" },
+        needsYou: { state: "blocked" },
+        finished: { state: "finished" },
+      },
+    },
     ids: [
-      "helper-0",
-      "helper-1",
       "helper-2",
       "helper-6",
       "helper-4",
       "helper-3",
+      "helper-0",
+      "helper-1",
     ],
   });
   assertEquals(o.get("s")?.evidence?.helper, undefined);
   assertEquals(o.get("helper-2")?.evidence?.helper, "needsYou");
-  assertEquals(o.get("helper-5")?.state, "blocked");
+  assertEquals(o.get("helper-5")?.state, "none");
   assertEquals(o.get("helper-5")?.evidence?.helper, undefined);
-  assertEquals(o.get("helper-6")?.evidence?.helper, "notReturned");
+  assertEquals(o.get("helper-6")?.evidence?.helper, "needsYou");
   put(1, running(5));
-  assertEquals(task()?.helpers?.ids.slice(0, 2), ["helper-1", "helper-0"]);
+  assertEquals(task()?.helpers?.ids.slice(-2), ["helper-1", "helper-0"]);
 });

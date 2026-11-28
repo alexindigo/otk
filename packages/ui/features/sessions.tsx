@@ -36,15 +36,11 @@ export function registerSessionsPanel(
             return (
               <ProjectSessions
                 project={project}
+                now={shell.now()}
+                disclosure={shell.disclosures}
                 holdOrder={() => shell.holdTaskOrder?.(project) ?? (() => {})}
-                ready={shell.inbox(sidecarId).state.ready &&
-                  shell.sessionRowsReady(project)}
-                loading={shell.sessionRowsLoading(project)}
-                loadingText={shell.sessionRowsStatus(project).busy
-                  ? shell.sessionRowsStatus(project).text
-                  : undefined}
+                collection={(query) => shell.sessionCollection(project, query)}
                 metadata={(id) => shell.metadataEntry(sidecarId, id)}
-                rows={(query) => shell.sessionRows(project, query)}
                 onRows={(keys, query) =>
                   shell.visibleRows(project, keys, query)}
                 progress={shell.projectProgress(project)}

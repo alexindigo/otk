@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
@@ -21,7 +22,7 @@ test(
     await openSession(state, page, session.id);
     await state.queue(["The first prompt establishes a durable window."]);
     await prompt(page).fill("First prompt before deployment");
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await reply(
       state,
       page,
@@ -38,7 +39,7 @@ test(
     await prompt(page).fill(
       "Retained draft while a pre-send read crosses deployment",
     );
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(() =>
       frames.held.filter(({ request }) => request?.method === "session.get")
         .length

@@ -52,6 +52,16 @@ concurrency = 4 # OTK_ATTACHMENTS_CONCURRENCY — aggregate origin/path preparat
 maxrefs = 64 # OTK_ATTACHMENTS_MAXREFS — maximum attachment references per send, positive count
 maxbytes = 33554432 # OTK_ATTACHMENTS_MAXBYTES — combined decoded upload bytes per send
 
+[images]
+# OTK_IMAGES_ROOTS: comma-separated. {checkouts} expands to this session's checkout,
+# canonical root and known worktrees. {project} is the canonical folder's basename.
+# These roots also govern file previews. ~/ is the sidecar HOME.
+# Absolute paths are supported; an empty list disables local images and file previews.
+roots = ["{checkouts}", "~/Documents/{project}", "~/TemporaryFiles/{project}"]
+maxbytes = 10485760 # OTK_IMAGES_MAXBYTES: maximum size of one served image
+maxpixels = 40000000 # OTK_IMAGES_MAXPIXELS: maximum width times height
+concurrency = 4 # OTK_IMAGES_CONCURRENCY: simultaneous image byte reads
+
 [index]
 days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older sessions remain indexed
 
@@ -71,6 +81,7 @@ busyms = 100 # OTK_DIGEST_BUSYMS — cooperative derived SQLite lock-readiness w
 
 # Memory-only transcript snapshot/replay policy (server and browser).
 [messages]
+bridgepages = 4 # OTK_MESSAGES_BRIDGEPAGES - pages per transcript gap bridge or revalidation batch
 prefetchms = 300000 # OTK_MESSAGES_PREFETCHMS - insertion lifetime of memory-only older pages
 prefetchbytes = 67108864 # OTK_MESSAGES_PREFETCHBYTES - aggregate encoded cache bytes; oldest evicted first
 coolms = 300000 # OTK_MESSAGES_COOLMS — milliseconds after an inactive scope's last interaction before unloading bodies

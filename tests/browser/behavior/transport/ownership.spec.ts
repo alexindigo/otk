@@ -21,6 +21,10 @@ test.describe("creation ownership", () => {
           : undefined;
         const frames = await wire(page);
         await openSession(state, page, a.id);
+        // B must be published before the freeze can stall native discovery.
+        if (b) {
+          await expect(page.locator(`[data-session="${b.id}"]`)).toBeVisible();
+        }
         await state.controller.call("scenario", {
           lease: state.lease.lease,
           action: "freeze",

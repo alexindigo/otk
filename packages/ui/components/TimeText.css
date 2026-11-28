@@ -26,3 +26,7 @@
 .otk-time-unit:is([data-unit="h"], [data-unit="d"]) {
   color: var(--otk-accent-text);
 }
+.otk-time[data-tone="muted"] :is(.otk-time-value, .otk-time-unit) {
+  color: var(--otk-fg-3);
+  font-weight: 400;
+}

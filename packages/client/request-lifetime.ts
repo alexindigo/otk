@@ -3,19 +3,21 @@ import {
   belongsToSession,
   type ContentOp,
   type FormRequest,
+  type InputPhase,
+  inputTransition,
   type PermissionRequest,
   type QuestionRequest,
   type SessionLookup,
 } from "@otk/protocol";
+import { type EntryChanges, permissionRouting } from "./entry-observations.ts";
+import type { ParkDeletedInput } from "./input-guard.ts";
 
 export type RequestKind = "permission" | "question" | "form";
-export interface RequestLifetime {
+export interface RequestLifetime extends InputPhase {
   id: string;
   kind: "permission" | "input";
   sessionID?: string;
-  state: "pending" | "settled-locally" | "settled-remotely" | "retired";
   reason?: string;
-  dismissed: boolean;
   permission?: PermissionRequest;
   question?: QuestionRequest;
   form?: FormRequest;
@@ -26,6 +28,34 @@ export interface RequestLifetime {
 }
 const key = (kind: RequestKind, id: string) =>
   `${kind === "permission" ? "permission" : "input"}:${id}`;
+type DeletionLookup = (
+  id: string,
+) =>
+  | (NonNullable<ReturnType<SessionLookup>> & { deleted?: unknown })
+  | undefined;
+
+function retainedText(draft: unknown): string {
+  if (typeof draft === "string") return draft;
+  const form = draft as import("./forms.ts").FormState | undefined;
+  return form?.drafts &&
+      Object.values(form.drafts).some((draft) => draft.touched)
+    ? JSON.stringify(form.drafts) ?? ""
+    : "";
+}
+
+type PermissionOp = Extract<ContentOp, {
+  op: "permission.upsert" | "permission.remove";
+}>;
+type PermissionRead = {
+  controller: AbortController;
+  events: Map<string, PermissionOp>;
+  entry: SessionLookup;
+  budget?: { replayops: number; replaybytes: number };
+  count: number;
+  bytes: number;
+  result: Promise<PermissionRequest[]>;
+  users: number;
+};
 /** One identity owns authority, local presentation and retained input. Views only project it. */
 export class RequestLifetimes {
   #records = new Map<string, RequestLifetime>();
@@ -35,7 +65,15 @@ export class RequestLifetimes {
   #batch = 0;
   #dirty = false;
   #deleted: (id: string) => boolean = () => false;
-  constructor(readonly now: () => number = () => performance.now()) {}
+  #permissionReads = new Map<string, PermissionRead>();
+  #permissionScopes = new Map<
+    string,
+    { ids: Set<string>; entry: SessionLookup }
+  >();
+  constructor(
+    readonly now: () => number = () => performance.now(),
+    readonly retireDisclosures?: (scope: string) => void,
+  ) {}
   snapshot(): unknown {
     return [...this.#records].filter(([, row]) =>
       row.draft !== undefined || row.dismissed
@@ -83,7 +121,151 @@ export class RequestLifetimes {
   get(kind: RequestKind, id: string): RequestLifetime | undefined {
     return this.#records.get(key(kind, id));
   }
+  /** Transcript and background delivery lease the same scoped inventory. */
+  readPermissions(
+    scope: string,
+    entry: SessionLookup,
+    load: (signal: AbortSignal) => Promise<PermissionRequest[]>,
+    budget: PermissionRead["budget"],
+    signal?: AbortSignal,
+  ): Promise<PermissionRequest[]> {
+    signal?.throwIfAborted();
+    if (this.#permissionScopes.has(scope)) {
+      return Promise.resolve(this.permissions(scope, entry));
+    }
+    let current = this.#permissionReads.get(scope);
+    if (!current) {
+      const controller = new AbortController();
+      const events = new Map<string, PermissionOp>();
+      const loading = Promise.withResolvers<PermissionRequest[]>();
+      const result = loading.promise.then((rows) => {
+        controller.signal.throwIfAborted();
+        const live = [...events.values()].filter((op) =>
+          op.op === "permission.remove" ||
+          belongsToSession(op.request.sessionID, scope, entry)
+        );
+        this.replace("permission", rows, scope, entry, live);
+        const inventory = this.permissions(scope, entry);
+        if (inventory.length) {
+          this.#permissionScopes.set(scope, {
+            ids: new Set(inventory.map((r) => r.id)),
+            entry,
+          });
+        }
+        return inventory;
+      }).finally(() => {
+        if (this.#permissionReads.get(scope) === current) {
+          this.#permissionReads.delete(scope);
+        }
+      });
+      current = {
+        controller,
+        events,
+        entry,
+        budget,
+        count: 0,
+        bytes: 0,
+        result,
+        users: 0,
+      };
+      this.#permissionReads.set(scope, current);
+      try {
+        loading.resolve(load(controller.signal));
+      } catch (error) {
+        loading.reject(error);
+      }
+    }
+    const read = current;
+    read.users++;
+    let cancelled: (() => void) | undefined;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      if (cancelled) signal?.removeEventListener("abort", cancelled);
+      if (--read.users === 0 && this.#permissionReads.get(scope) === read) {
+        this.#permissionReads.delete(scope);
+        read.controller.abort();
+      }
+    };
+    return new Promise<PermissionRequest[]>((resolve, reject) => {
+      if (signal) {
+        cancelled = () => {
+          release();
+          reject(signal.reason);
+        };
+        signal.addEventListener("abort", cancelled, { once: true });
+      }
+      void read.result.then(resolve, reject);
+    }).finally(release);
+  }
+  /** New routing facts invalidate coverage before notification consumers run. */
+  observePermissionScopes(change: EntryChanges, entry: SessionLookup): void {
+    for (const { id, before, after } of change.changes) {
+      const previous = permissionRouting(before);
+      const current = permissionRouting(after);
+      if (
+        previous?.fresh === current?.fresh &&
+        before?.parentID === after?.parentID &&
+        before?.deleted === after?.deleted &&
+        previous?.keys.length === current?.keys.length &&
+        previous?.keys.every((key, i) => key === current?.keys[i]) !== false
+      ) continue;
+      for (const [scope, { ids }] of this.#permissionScopes) {
+        if (
+          current?.fresh && current.keys.some((key) => !ids.has(key)) &&
+            belongsToSession(id, scope, entry) ||
+          [...ids].some((key) => {
+            const row = this.get("permission", key);
+            return row?.sessionID === id &&
+              (!current?.fresh || !current.keys.includes(key) ||
+                !!after?.deleted || !belongsToSession(id, scope, entry));
+          })
+        ) this.#permissionScopes.delete(scope);
+      }
+    }
+  }
+  resetPermissionScopes(): void {
+    this.#permissionScopes.clear();
+    for (const read of this.#permissionReads.values()) read.controller.abort();
+    this.#permissionReads.clear();
+  }
   receive(op: ContentOp): void {
+    if (op.op === "permission.upsert" || op.op === "permission.remove") {
+      const id = op.op === "permission.upsert" ? op.request.id : op.requestID;
+      for (const [scope, read] of this.#permissionReads) {
+        if (
+          op.op === "permission.upsert" &&
+          !belongsToSession(op.request.sessionID, scope, read.entry)
+        ) continue;
+        read.bytes += JSON.stringify(op).length * 2;
+        if (
+          !read.budget || ++read.count > read.budget.replayops ||
+          read.bytes > read.budget.replaybytes
+        ) {
+          this.#permissionReads.delete(scope);
+          read.controller.abort();
+        } else read.events.set(id, op);
+      }
+      if (op.op === "permission.upsert") {
+        for (const [scope, { ids, entry }] of this.#permissionScopes) {
+          if (
+            !ids.has(id) && belongsToSession(op.request.sessionID, scope, entry)
+          ) {
+            this.#permissionScopes.delete(scope);
+          }
+        }
+      }
+      if (op.op === "permission.remove") this.#retirePermissionScopes(id);
+    }
+    this.#receive(op);
+  }
+  #retirePermissionScopes(id: string): void {
+    for (const [scope, { ids }] of this.#permissionScopes) {
+      if (ids.has(id)) this.#permissionScopes.delete(scope);
+    }
+  }
+  #receive(op: ContentOp): void {
     const kind: RequestKind | undefined = op.op.startsWith("permission.")
       ? "permission"
       : op.op.startsWith("question.")
@@ -112,7 +294,8 @@ export class RequestLifetimes {
       op.op !== "form.upsert"
     ) return;
     const previous = this.get(kind, op.request.id);
-    if (previous && previous.state !== "pending") return;
+    const { phase } = inputTransition(previous, { type: "observe" });
+    if (!phase) return;
     // The typed inventory owns its presentation. A lagging question inventory
     // cannot recreate the removed compatibility projection of that same input.
     if (
@@ -123,8 +306,7 @@ export class RequestLifetimes {
       {
         id: op.request.id,
         kind: kind === "permission" ? "permission" : "input",
-        state: "pending",
-        dismissed: false,
+        ...phase,
         arrivedAt: this.now(),
       };
     if (op.op === "permission.upsert") {
@@ -162,7 +344,10 @@ export class RequestLifetimes {
       }
     }
     if (row.sessionID && this.#deleted(row.sessionID)) {
-      row.state = "retired";
+      Object.assign(
+        row,
+        inputTransition(row, { type: "settle", state: "retired" }).phase,
+      );
       row.reason = "session deleted";
     }
     this.#records.set(key(kind, row.id), row);
@@ -181,7 +366,7 @@ export class RequestLifetimes {
   settlement(kind: RequestKind, id: string): () => void {
     const row = this.get(kind, id), draft = row?.draft;
     return () => {
-      if (!row || this.get(kind, id) !== row) return;
+      if (!row || this.get(kind, id) !== row || this.#consumed.has(row)) return;
       this.#atomic(() => {
         if (row.draft === draft) {
           row.draft = undefined;
@@ -198,30 +383,29 @@ export class RequestLifetimes {
     state: Exclude<RequestLifetime["state"], "pending">,
     reason: string,
   ): void {
-    const row: RequestLifetime = this.get(kind, id) ??
-      {
-        id,
-        kind: kind === "permission" ? "permission" : "input",
-        state: "pending",
-        dismissed: false,
-      };
-    if (row.state !== "pending") return;
-    row.state = state;
+    const previous = this.get(kind, id);
+    const { phase } = inputTransition(previous, { type: "settle", state });
+    if (!phase) return;
+    const row: RequestLifetime = previous ??
+      { id, kind: kind === "permission" ? "permission" : "input", ...phase };
+    if (kind === "permission") this.#retirePermissionScopes(id);
+    Object.assign(row, phase);
     row.reason = reason;
     this.#records.set(key(kind, id), row);
+    if (row.kind === "permission") this.retireDisclosures?.(id);
     this.#changed();
   }
   dismiss(kind: RequestKind, id: string): void {
-    const row = this.get(kind, id);
-    if (row?.state === "pending") {
-      row.dismissed = true;
-      this.#changed();
-    }
+    this.#present(kind, id, "dismiss");
   }
   show(kind: RequestKind, id: string): void {
+    this.#present(kind, id, "show");
+  }
+  #present(kind: RequestKind, id: string, type: "dismiss" | "show"): void {
     const row = this.get(kind, id);
-    if (row?.state === "pending") {
-      row.dismissed = false;
+    const { phase } = inputTransition(row, { type });
+    if (row && phase) {
+      Object.assign(row, phase);
       this.#changed();
     }
   }
@@ -254,14 +438,8 @@ export class RequestLifetimes {
     );
     const captured = rows.map((row) => ({ row, draft: row.draft }));
     const inputs = new Map<string, string[]>();
-    for (const row of rows) {
-      const form = typeof row.draft === "object" && row.draft !== null
-        ? row.draft as import("./forms.ts").FormState
-        : undefined;
-      const value = typeof row.draft === "string" ? row.draft : form?.drafts &&
-          Object.values(form.drafts).some((draft) => draft.touched)
-        ? JSON.stringify(form.drafts)
-        : "";
+    for (const { row, draft } of captured) {
+      const value = retainedText(draft);
       if (!value) continue;
       const owner = row.permission
         ? "permissions"
@@ -285,6 +463,41 @@ export class RequestLifetimes {
       },
     };
   }
+  /** Transfer individual values, not the grouped display (which can include
+   * active helpers). A claimed descendant requires deletion and ancestry proof. */
+  transferDeleted(
+    scope: string,
+    entry: DeletionLookup,
+    park: ParkDeletedInput,
+  ): void {
+    if (!entry(scope)?.deleted) return;
+    const capture = [...this.#records].filter(([, row]) =>
+      row.sessionID && entry(row.sessionID)?.deleted &&
+      belongsToSession(row.sessionID, scope, entry) && !this.#consumed.has(row)
+    ).map(([id, row]) => ({ id, row, draft: row.draft }));
+    const inputs = capture.map(({ draft }) => retainedText(draft)).filter(
+      (text) => text !== "",
+    );
+    this.#atomic(() => {
+      park(inputs, () => {
+        for (const { id, row, draft } of capture) {
+          if (
+            this.#records.get(id) !== row || row.draft !== draft ||
+            this.#consumed.has(row)
+          ) continue;
+          row.draft = undefined;
+          this.#consumed.add(row);
+          this.#retire(
+            row.kind === "permission" ? "permission" : "form",
+            row.id,
+            "retired",
+            "session deleted",
+          );
+          this.#changed();
+        }
+      });
+    });
+  }
   retireSessions(deleted: (id: string) => boolean): void {
     this.#deleted = deleted;
     let changed = false;
@@ -292,6 +505,7 @@ export class RequestLifetimes {
       if (row.state === "pending" && row.sessionID && deleted(row.sessionID)) {
         row.state = "retired";
         row.reason = "session deleted";
+        if (row.kind === "permission") this.retireDisclosures?.(row.id);
         changed = true;
       }
     }
@@ -339,7 +553,7 @@ export class RequestLifetimes {
         }
       }
       for (const request of rows) {
-        this.receive({ op: `${kind}.upsert`, request } as ContentOp);
+        this.#receive({ op: `${kind}.upsert`, request } as ContentOp);
         const row = this.get(kind, request.id);
         if (scope && row) (row.scopes ??= new Set()).add(scope);
       }

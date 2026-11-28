@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
+  EntityState,
   ErrorObservation,
   IndexEntry,
   ServerFrame,
+  SessionSettlement,
   TerminalEvidence,
   TerminalOutcome,
 } from "@otk/protocol";
@@ -18,6 +20,7 @@ import {
   acceptsPatch,
   type ClientIndex,
   createIndex,
+  decodeIndexObservation,
   type IndexChanges,
   sessionKey,
 } from "./index.ts";
@@ -25,42 +28,77 @@ import type { EntryChanges } from "./entry-observations.ts";
 import type { Note } from "./notifications.ts";
 type IndexFrame = Extract<ServerFrame, { t: "index.snapshot" | "index.patch" }>;
 interface Facts {
-  status: IndexEntry["status"];
+  working: boolean;
   permissions: number;
   permissionIDs: readonly string[];
   questions: number;
+  questionIDs: readonly string[];
   errorIdentity: string;
   error?: string;
   observations?: ErrorObservation[];
   directory?: string;
   title: string;
   terminal?: number;
+  runID?: string;
   outcome?: TerminalOutcome;
   unseen?: boolean;
   terminalOrigin?: TerminalEvidence["terminalOrigin"];
   terminalFailure?: TerminalEvidence["terminalFailure"];
 }
-const facts = (entry?: IndexEntry): Facts | undefined =>
-  !entry || entry.deleted || entry.archived ? undefined : {
-    status: entry.status,
-    permissions: entry.attention.permissions,
-    permissionIDs: entry.activity?.permissions?.keys ?? [],
-    questions: entry.attention.questions,
-    error: entry.attention.error,
-    observations: entry.attention.errorState?.observations.filter((item) =>
-      !item.cleared
-    ),
-    directory: entry.directory,
-    errorIdentity: JSON.stringify(
-      entry.attention.errorState?.observations.filter((o) => !o.cleared) ??
-        entry.attention.error ?? "",
-    ),
-    title: entry.title,
-    terminal: entry.activity?.terminal,
-    outcome: entry.activity?.outcome,
-    terminalOrigin: entry.activity?.terminalOrigin,
-    terminalFailure: entry.activity?.terminalFailure,
+function diagnosticFacts(
+  entry: IndexEntry,
+): Pick<Facts, "error" | "observations" | "errorIdentity"> {
+  const { diagnostic } = decodeIndexObservation(entry);
+  const errors = diagnostic["errorState"]?.observations.filter((item) =>
+    !item.cleared
+  );
+  return {
+    error: diagnostic.error,
+    observations: errors,
+    errorIdentity: JSON.stringify(errors ?? diagnostic.error ?? ""),
   };
+}
+const facts = (entry?: IndexEntry): Facts | undefined => {
+  if (!entry || entry.deleted || entry.archived) return;
+  const { diagnostic, native, phase } = decodeIndexObservation(entry);
+  return {
+    working: phase !== "idle",
+    permissions: diagnostic.permissions,
+    permissionIDs: native?.permissions?.keys ?? [],
+    questions: diagnostic.questions,
+    questionIDs: native?.inputs?.keys ?? [],
+    ...diagnosticFacts(entry),
+    directory: entry.directory,
+    title: entry.title,
+    terminal: native?.terminal,
+    outcome: native?.outcome,
+    terminalOrigin: native?.terminalOrigin,
+    terminalFailure: native?.terminalFailure,
+  };
+};
+function publishedFacts(
+  entry: IndexEntry | undefined,
+  entity: EntityState | null,
+): Facts | undefined {
+  if (!entry || entry.deleted || entry.archived) return;
+  const evidence = entity?.evidence;
+  return {
+    title: entry.title,
+    directory: entry.directory,
+    working: evidence?.work === true,
+    permissions: evidence?.permissions ?? 0,
+    permissionIDs: evidence?.requests?.permissions.map(({ id }) => id) ?? [],
+    questions: evidence?.questions ?? 0,
+    questionIDs: evidence?.requests?.questions.map(({ id }) => id) ?? [],
+    ...diagnosticFacts(entry),
+    terminal: entity?.terminal,
+    runID: entity?.runID,
+    terminalOrigin: entity?.terminalOrigin,
+    outcome: entity?.outcome,
+    unseen: entity ? entity.counts.unseen > 0 : undefined,
+    terminalFailure: evidence?.failure,
+  };
+}
 /** Root comparison facts only; application delivery borrows accepted projected deltas. */
 export class NotificationTriggers {
   #connections = new Map<
@@ -70,6 +108,8 @@ export class NotificationTriggers {
       generation?: string;
       roots: Map<string, Facts>;
       finishes: Map<string, TerminalEvidence>;
+      settled: Map<string, number>;
+      pendingSettlement: Map<string, SessionSettlement>;
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
@@ -158,55 +198,107 @@ export class NotificationTriggers {
     const replaced = !state || state.generation !== change.generation;
     const baseline = replaced || change.baseline;
     if (!state || replaced) {
+      if (state) {
+        for (const session of state.settled.keys()) {
+          this.settlement(sidecar, session, null);
+        }
+      }
       state = {
         rev: change.revision,
         generation: change.generation,
         roots: new Map(),
         finishes: new Map(),
+        settled: new Map(),
+        pendingSettlement: new Map(),
       };
       this.#connections.set(sidecar, state);
     } else if (change.revision <= state.rev) return;
     state.rev = change.revision;
     for (const entry of change.changes) {
+      if (entry.entity !== undefined) {
+        const value = publishedFacts(entry.after, entry.entity);
+        this.#compare(
+          sidecar,
+          entry.id,
+          value,
+          baseline || entry.admitted === true,
+          value?.terminalOrigin === "live" ? value.terminal : undefined,
+          !replaced,
+        );
+        const pending = state.pendingSettlement.get(entry.id);
+        if (pending && value) this.settlement(sidecar, entry.id, pending);
+        else if (!value) state.pendingSettlement.delete(entry.id);
+        continue;
+      }
       const current = facts(entry.after);
-      // Native terminal evidence can precede its view-scoped inbox publication.
-      // An acknowledgement of an older terminal cannot acknowledge this run.
-      const nativeLive = !!entry.before && current?.terminalOrigin === "live" &&
-        ((current.terminal ?? 0) > (entry.before.activity?.terminal ?? 0) ||
-          current.terminal === entry.before.activity?.terminal &&
-            entry.before.activity?.terminalOrigin !== "live");
-      if (
-        current && entry.completedAt &&
-        entry.completedAt >= (current.terminal ?? 0) &&
-        !(nativeLive && entry.completedAt === current.terminal &&
-          entry.completionOrigin !== "live")
-      ) {
-        current.terminal = entry.completedAt;
-        current.outcome = entry.completedOutcome;
-        current.terminalOrigin = entry.completionOrigin;
-        current.terminalFailure = entry.completedFailure;
-      }
-      if (current && entry.completedAt === current.terminal) {
-        current.unseen = entry.completedUnseen;
-      }
-      if (entry.after && !current && entry.completedAt) {
-        state.finishes.set(entry.id, {
-          terminal: entry.completedAt,
-          outcome: entry.completedOutcome,
-          terminalOrigin: entry.completionOrigin,
-          terminalFailure: entry.completedFailure,
-        });
-      }
       this.#compare(
         sidecar,
         entry.id,
         current,
         baseline,
-        nativeLive
+        current?.terminalOrigin === "live" || baseline
           ? current?.terminal
-          : entry.completedAt || (baseline ? current?.terminal : undefined),
+          : undefined,
+        !replaced,
       );
+      const pending = state.pendingSettlement.get(entry.id);
+      if (pending && current) this.settlement(sidecar, entry.id, pending);
+      else if (!current && (entry.before || entry.after)) {
+        state.pendingSettlement.delete(entry.id);
+      }
     }
+    if (!baseline) {
+      for (const { sessionID, value } of change.settlements ?? []) {
+        this.settlement(sidecar, sessionID, value);
+      }
+    }
+  }
+
+  settlement(
+    sidecar: string,
+    session: string,
+    value: SessionSettlement | null,
+  ): void {
+    const connection = this.#connections.get(sidecar);
+    if (!connection) return;
+    const id = sessionKey(sidecar, session), previous = this.#outcomes.get(id);
+    if (!value || !value.unseen || value.outcome !== "succeeded") {
+      connection.pendingSettlement.delete(session);
+      if (previous?.kind === "done") {
+        this.#outcomes.delete(id);
+        this.retract(previous.id);
+      }
+      return;
+    }
+    if (!value.live || value.id <= (connection.settled.get(session) ?? 0)) {
+      return;
+    }
+    const entry = connection.roots.get(session);
+    if (!entry) {
+      const pending = connection.pendingSettlement.get(session);
+      if (!pending || value.id >= pending.id) {
+        connection.pendingSettlement.set(session, value);
+      }
+      return;
+    }
+    connection.pendingSettlement.delete(session);
+    connection.settled.set(session, value.id);
+    const note: Note = {
+      id,
+      kind: "done",
+      sessionRef: { sidecar, session },
+      title: "Session done",
+      body: sessionTitle(session, entry.title),
+      actions: [{
+        label: "Open",
+        command: "session.open",
+        args: { sidecarId: sidecar, sessionID: session },
+        default: true,
+      }],
+    };
+    if (previous && previous.id !== id) this.retract(previous.id);
+    this.#outcomes.set(id, note);
+    this.emit(note);
   }
 
   // Standalone frame consumers borrow the ordinary canonical reducer as before.
@@ -239,6 +331,8 @@ export class NotificationTriggers {
         rev,
         roots: new Map(),
         finishes: new Map(),
+        settled: new Map(),
+        pendingSettlement: new Map(),
       });
     }
     const rows = this.project(sidecar, [
@@ -252,7 +346,7 @@ export class NotificationTriggers {
         entry.id,
         facts(entry),
         !previous,
-        entry.activity?.terminal,
+        decodeIndexObservation(entry).native?.terminal,
       );
     }
     for (const id of pending) this.#compare(sidecar, id, undefined, false);
@@ -264,16 +358,18 @@ export class NotificationTriggers {
     entry: Facts | undefined,
     baseline: boolean,
     completedAt?: number,
+    connected = false,
   ): void {
     const state = this.#connections.get(sidecar)!;
     const previous = state.roots.get(session),
       id = sessionKey(sidecar, session);
     const old = previous ??
       {
-        status: "idle",
+        working: false,
         permissions: 0,
         permissionIDs: [],
         questions: 0,
+        questionIDs: [],
         errorIdentity: "",
         title: "",
       };
@@ -301,7 +397,7 @@ export class NotificationTriggers {
           (outcome !== undefined && outcome !== priorFinish.outcome ||
             entry.terminalOrigin === "live" &&
               priorFinish.terminalOrigin !== "live"));
-    if (completedAt && (baseline || entry.status === "idle")) {
+    if (completedAt && (baseline || !entry.working)) {
       state.finishes.set(
         session,
         latestTerminal(priorFinish, {
@@ -317,39 +413,45 @@ export class NotificationTriggers {
         }),
       );
     }
-    const acknowledged = !!entry.terminal && entry.unseen === false;
+    const acknowledged = !!entry.terminal && (entry.unseen === false ||
+      old.unseen === false && old.terminal === entry.terminal &&
+        old.runID === entry.runID);
+    if (acknowledged) entry.unseen = false;
     if (acknowledged) {
       const note = this.#outcomes.get(id);
-      if (note) {
+      if (note && note.kind !== "done") {
         this.#outcomes.delete(id);
         this.retract(note.id);
       }
     }
+    if (baseline) {
+      // A scope snapshot can be the first accepted frame to carry a live input
+      // edge for a known session. It is not a reconnect or a historical admission.
+      if (connected && previous) {
+        this.#compareInput(
+          sidecar,
+          session,
+          id,
+          entry,
+          old,
+          this.#resolveInput(id, entry),
+        );
+      }
+      return;
+    }
     if (
-      baseline ||
       !previous && !finished && !entry.permissions && !entry.questions &&
-        !entry.error
+      !entry.error
     ) return;
     const priorOutcome = this.#outcomes.get(id);
-    if (old.status === "idle" && entry.status !== "idle" && priorOutcome) {
+    if (
+      !old.working && entry.working && priorOutcome &&
+      priorOutcome.kind !== "done"
+    ) {
       this.#outcomes.delete(id);
       this.retract(priorOutcome.id);
     }
-    const pending = this.#kinds.get(id);
-    const resolved = (pending === "permission" && !entry.permissions) ||
-      (pending === "question" && !entry.questions);
-    const remaining = resolved
-      ? entry.permissions
-        ? "permission"
-        : entry.questions
-        ? "question"
-        : undefined
-      : undefined;
-    // Retire the old input before its root ID can acquire a completion owner.
-    if (resolved && !remaining) {
-      this.#kinds.delete(id);
-      this.#retractInput(id);
-    }
+    const remaining = this.#resolveInput(id, entry);
     const publishOutcome = (note: Note) => {
       const previous = this.#outcomes.get(id);
       const beforeCause = previous &&
@@ -442,7 +544,8 @@ export class NotificationTriggers {
       });
     } else if (
       !acknowledged && finished && outcome !== "failed" &&
-      entry.status === "idle" &&
+      outcome !== "succeeded" &&
+      !entry.working &&
       !entry.permissions &&
       !entry.questions
     ) {
@@ -456,12 +559,10 @@ export class NotificationTriggers {
         publishOutcome({
           // Failures always use structured action/target/cause/recovery above.
           id,
-          kind: outcome === "succeeded" ? "done" : "info",
+          kind: "info",
           sessionRef: { sidecar, session },
           title: outcome === "interrupted"
             ? "Session interrupted"
-            : outcome === "succeeded"
-            ? "Session done"
             : "Session finished (outcome unknown)",
           body: sessionTitle(session, entry.title),
           actions: [{
@@ -473,14 +574,45 @@ export class NotificationTriggers {
         });
       }
     }
+    this.#compareInput(sidecar, session, id, entry, old, remaining);
+  }
+  #resolveInput(
+    id: string,
+    entry: Facts,
+  ): "permission" | "question" | undefined {
+    const pending = this.#kinds.get(id);
+    const resolved = (pending === "permission" && !entry.permissions) ||
+      (pending === "question" && !entry.questions);
+    if (!resolved) return undefined;
+    if (entry.permissions) return "permission";
+    if (entry.questions) return "question";
+    // Retire the old input before its root ID can acquire a completion owner.
+    this.#kinds.delete(id);
+    this.#retractInput(id);
+  }
+  #compareInput(
+    sidecar: string,
+    session: string,
+    id: string,
+    entry: Facts,
+    old: Pick<
+      Facts,
+      "permissions" | "permissionIDs" | "questions" | "questionIDs"
+    >,
+    remaining?: "permission" | "question",
+  ): void {
+    const newQuestion = entry.questionIDs.find((id) =>
+      !old.questionIDs.includes(id)
+    );
     const newPermission = entry.permissions > old.permissions ||
       entry.permissions > 0 &&
         entry.permissionIDs.some((id) => !old.permissionIDs.includes(id));
-    const kind: Note["kind"] | undefined = entry.questions > old.questions
-      ? "question"
-      : newPermission || this.#held.has(id) && entry.permissions > 0
-      ? "permission"
-      : remaining;
+    const kind: Note["kind"] | undefined =
+      entry.questions > 0 && (newQuestion || entry.questions > old.questions)
+        ? "question"
+        : newPermission || this.#held.has(id) && entry.permissions > 0
+        ? "permission"
+        : remaining;
     if (kind) {
       // Ordinary completion and input attention historically replace one root
       // note. Do not retain a stale alias that could later retract its input.
@@ -490,6 +622,11 @@ export class NotificationTriggers {
         {
           id,
           kind,
+          ...(kind === "question" && (newQuestion ?? entry.questionIDs[0])
+            ? {
+              dismissalKey: `question/${newQuestion ?? entry.questionIDs[0]}`,
+            }
+            : {}),
           sessionRef: { sidecar, session },
           title: kind === "permission"
             ? "Permission needed"

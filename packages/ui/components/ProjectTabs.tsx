@@ -5,6 +5,7 @@ import {
   exactCount,
   type FailureValue,
   failureValue,
+  folderName,
 } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectTabs.css" with { type: "text" };
@@ -22,7 +23,7 @@ import {
   Show,
 } from "solid-js";
 import { dynamic } from "@solidjs/web";
-import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback, TitleLabel } from "./TitleEditor.tsx";
 import type {
   ContentSession,
   InboxSnapshot,
@@ -43,7 +44,7 @@ import {
   type TaskActions,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
-import { entityKey } from "@otk/protocol";
+import { entityKey, MAX_SESSION_TITLE } from "@otk/protocol";
 import EdgeTriangle from "./EdgeTriangle.tsx";
 import ScrollRegion from "./ScrollRegion.tsx";
 import UsageCost from "./UsageCost.tsx";
@@ -51,6 +52,7 @@ import { PlusIcon } from "./ChromeIcons.tsx";
 import {
   ownedAction,
   ownedCommand,
+  selectionFocus,
   useCommandPorts,
 } from "../keyboard/context.tsx";
 import { createTaskControls } from "../features/task-controls.ts";
@@ -61,7 +63,7 @@ import TaskTrail from "./TaskTrail.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import ProjectChip from "./ProjectChip.tsx";
 import { orderInteraction } from "./order-interaction.ts";
-import { metaList } from "./ChromeMeta.tsx";
+import { MetaItem, metaList, MetaRow } from "./ChromeMeta.tsx";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -82,8 +84,8 @@ export default function ProjectTabs(props: {
   rename?: SessionRename;
   displayMenu?: Element;
   projectChip?: Element;
-  /** Reserve space for consumer chrome without inspecting its class or state. */
-  reserveTrailing?: boolean;
+  /** Optional chrome content in its own in-flow trailing slot. */
+  trailing?: Element;
   ready: boolean;
   /** Guarded navigation; its accepted route reconciles the session's owning tab. */
   onOpen(id: string): boolean;
@@ -394,14 +396,16 @@ export default function ProjectTabs(props: {
       ref={orderInput}
       class="otk-project-tabs"
       aria-label="Project tabs"
-      data-reserve-trailing={props.reserveTrailing ? "true" : undefined}
     >
       <Show when={error()}>
         <FeedbackStatus feedback={errorFeedback(error())} />
       </Show>
       <div class="otk-task-strip">
         {props.projectChip ?? (
-          <ProjectChip directory={props.project.directory} />
+          <ProjectChip
+            directory={props.project.directory}
+            name={folderName(props.project.directory)}
+          />
         )}
         <EdgeTriangle
           direction="previous"
@@ -433,16 +437,24 @@ export default function ProjectTabs(props: {
         >
           <For each={tabRows()} keyed={(tab) => tab.key}>
             {(tab) => {
-              const editing = () =>
+              const renaming = () =>
                 tab().kind === "phantom" &&
                 props.rename?.matches({
                   sidecarId: props.project.sidecarId,
                   sessionID: tab().id,
                 }, "tab");
+              const editing = () => renaming() && props.rename!.editing;
               const Control = dynamic(() => editing() ? "div" : "button");
+              let control: HTMLElement | undefined;
+              const selected = () =>
+                props.model.state.selected?.id === tab().id;
+              const bindFocus = selectionFocus("tab", selected, () =>
+                editing() ? undefined : control);
               const native = nativeAttributes(() => ({
                 onClick: () => {
-                  if (!editing()) run(select(tab()));
+                  if (!editing()) {
+                    run(select(tab()));
+                  }
                 },
                 onDblClick: () =>
                   !editing() && tab().kind === "phantom" && run(pin(tab().id)),
@@ -450,26 +462,30 @@ export default function ProjectTabs(props: {
               return (
                 <div
                   class="otk-tab"
-                  ref={contextTarget<SessionContextTarget | TaskContextTarget>(
-                    () =>
-                      tab().kind === "task"
-                        ? {
-                          kind: "task",
-                          data: {
-                            ...props.project,
-                            directory:
-                              tasks().find((task) => task.id === tab().id)
-                                ?.directory ?? props.project.directory,
-                            taskID: tab().id,
-                          },
-                        }
-                        : sessionTarget(tab().id, "tab"),
-                  )}
+                  ref={[
+                    bindFocus,
+                    contextTarget<SessionContextTarget | TaskContextTarget>(
+                      () =>
+                        tab().kind === "task"
+                          ? {
+                            kind: "task",
+                            data: {
+                              ...props.project,
+                              directory:
+                                tasks().find((task) => task.id === tab().id)
+                                  ?.directory ?? props.project.directory,
+                              taskID: tab().id,
+                            },
+                          }
+                          : sessionTarget(tab().id, "tab"),
+                    ),
+                  ]}
                   data-kind={tab().kind}
                   data-preview={String(tab().preview)}
                 >
                   <Control
-                    ref={native.ref}
+                    ref={[native.ref, (node: HTMLElement) =>
+                      control = node]}
                     type="button"
                     role="tab"
                     {...selection({
@@ -481,7 +497,7 @@ export default function ProjectTabs(props: {
                           : ""
                       ) + (editing() ? " is-editing" : ""),
                       kind: "selected",
-                      selected: props.model.state.selected?.id === tab().id,
+                      selected: selected(),
                     })}
                     data-otk-selection="horizontal"
                     title={tab().title}
@@ -510,17 +526,35 @@ export default function ProjectTabs(props: {
                         />
                       }
                     >
-                      <span class="otk-control-label">
-                        <Show
-                          when={editing()}
-                          fallback={tab().title || "Session"}
-                        >
-                          <TitleEditor owner={props.rename!} />
+                      <span class="otk-tab-text">
+                        <span class="otk-control-label otk-tab-title">
+                          <Show
+                            when={editing()}
+                            fallback={
+                              <TitleLabel
+                                pending={renaming()
+                                  ? props.rename!.state.pendingTitle
+                                  : undefined}
+                              >
+                                {tab().title || "Session"}
+                              </TitleLabel>
+                            }
+                          >
+                            <TitleEditor
+                              owner={props.rename!}
+                              label="Rename session"
+                              maxLength={MAX_SESSION_TITLE}
+                            />
+                          </Show>
+                        </span>
+                        <Show when={tab().preview}>
+                          <MetaRow whole intrinsic class="otk-tab-meta">
+                            <MetaItem rank={1}>
+                              <span class="otk-preview-label">Preview</span>
+                            </MetaItem>
+                          </MetaRow>
                         </Show>
                       </span>
-                      <Show when={tab().preview}>
-                        <span class="otk-preview-label">Preview</span>
-                      </Show>
                     </SelectionContent>
                   </Control>
                 </div>
@@ -556,6 +590,7 @@ export default function ProjectTabs(props: {
           </button>
         </Show>
         <div class="otk-topbar-end">{props.displayMenu}</div>
+        {props.trailing}
       </div>
       <div class="otk-breadcrumb-row">
         <nav class="otk-task-crumbs" aria-label="Task sessions">
@@ -570,66 +605,81 @@ export default function ProjectTabs(props: {
             rename={props.rename}
             feedbackID={crumbFeedbackID}
           />
-          <Show when={props.ready}>
-            <button
-              type="button"
-              class="otk-new-session"
-              onClick={() => run(createSession())}
-            >
-              <PlusIcon /> Session
-            </button>
-          </Show>
         </nav>
-        <output
-          class="otk-context-meter"
-          aria-label={props.showCost === false
-            ? "Session context"
-            : "Session context and cost"}
-          title={`${"Session context"}; latest reported context tokens; ${
-            meter().limit === undefined
-              ? "context window unavailable"
-              : `${contextRange()}, ${
-                (meter().tokens! / meter().limit! * 100).toFixed(1)
-              }%`
-          }`}
-          data-tokens={meter().tokens}
-          data-cost={props.showCost === false ? undefined : cost()}
-          data-limit={meter().limit}
-        >
-          <Show when={meter().tokens !== undefined}>
-            <span>
-              {countLabel(
-                meter().tokens!,
-                "token",
-                undefined,
-                exactCount(meter().tokens!),
-              )}
-            </span>
-            <Show when={meter().fraction !== undefined}>
-              <span
-                class="otk-context-bar"
-                role="meter"
-                aria-label="Context window used"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={meter().fraction! * 100}
-                aria-valuetext={contextRange()}
+        <MetaRow whole intrinsic class="otk-context-fit">
+          <Show when={props.ready}>
+            <MetaItem rank={2}>
+              <button
+                type="button"
+                class="otk-new-session"
+                onClick={() => run(createSession())}
               >
-                <span style={{ width: `${meter().fraction! * 100}%` }} />
-              </span>
-            </Show>
+                <PlusIcon /> Session
+              </button>
+            </MetaItem>
           </Show>
-          <Show when={props.showCost !== false && cost() !== undefined}>
-            <UsageCost value={cost()!} />
-          </Show>
-          <Show
-            when={meter().tokens === undefined &&
-              (props.showCost === false || cost() === undefined)}
-          >
-            <span>{digestLabel(props.entry)}</span>
-          </Show>
-        </output>
+          <MetaItem rank={1}>
+            <output
+              class="otk-context-meter"
+              aria-label={props.showCost === false
+                ? "Session context"
+                : "Session context and cost"}
+              title={`${"Session context"}; latest reported context tokens; ${
+                meter().limit === undefined
+                  ? "context window unavailable"
+                  : `${contextRange()}, ${
+                    (meter().tokens! / meter().limit! * 100).toFixed(1)
+                  }%`
+              }`}
+              data-tokens={meter().tokens}
+              data-cost={props.showCost === false ? undefined : cost()}
+              data-limit={meter().limit}
+            >
+              <Show when={meter().tokens !== undefined}>
+                <span>
+                  {countLabel(
+                    meter().tokens!,
+                    "token",
+                    undefined,
+                    exactCount(meter().tokens!),
+                  )}
+                </span>
+                <Show when={meter().fraction !== undefined}>
+                  <span
+                    class="otk-context-bar"
+                    role="meter"
+                    aria-label="Context window used"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={meter().fraction! * 100}
+                    aria-valuetext={contextRange()}
+                  >
+                    <span style={{ width: `${meter().fraction! * 100}%` }} />
+                  </span>
+                </Show>
+              </Show>
+              <Show when={props.showCost !== false && cost() !== undefined}>
+                <UsageCost value={cost()!} />
+              </Show>
+              <Show
+                when={meter().tokens === undefined &&
+                  (props.showCost === false || cost() === undefined)}
+              >
+                <span>{digestLabel(props.entry)}</span>
+              </Show>
+            </output>
+          </MetaItem>
+        </MetaRow>
       </div>
+      <Show
+        when={props.rename?.state.editing?.origin === "tab" &&
+          props.rename.state.editing.sidecarId === props.project.sidecarId &&
+          props.rename.state.error}
+      >
+        <div class="otk-crumb-feedback">
+          <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />
+        </div>
+      </Show>
       <Show
         when={trail().crumbs.some((crumb) =>
           props.rename?.matches({
@@ -639,7 +689,10 @@ export default function ProjectTabs(props: {
         )}
       >
         <div class="otk-crumb-feedback">
-          <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />
+          <TitleFeedback
+            owner={props.rename!}
+            id={crumbFeedbackID}
+          />
         </div>
       </Show>
     </section>

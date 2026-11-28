@@ -20,14 +20,9 @@ export function projectRoute(hash: string): ProjectSelection | undefined {
     return;
   }
 }
-export function projectName(directory: string): string {
-  return directory.split(/[\\/]/).filter(Boolean).at(-1) || directory;
-}
 export function shellTitle(
   title: string | undefined,
-  project: ProjectSelection | undefined,
+  project: string | undefined,
 ): string {
-  return [title, project && projectName(project.directory), "OTK"].filter(
-    Boolean,
-  ).join(" — ");
+  return [title, project, "OTK"].filter(Boolean).join(" — ");
 }

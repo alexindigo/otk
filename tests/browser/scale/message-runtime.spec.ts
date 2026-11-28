@@ -37,6 +37,15 @@ async function open(state: TestState, page: Page) {
   await expect.poll(() =>
     page.locator("#heap-state").getAttribute("data-a-count")
   ).toMatch(/^(?:[2-9]\d|\d{3,})$/);
+  const pane = page.locator(".heap-view .otk-messages");
+  await expect.poll(() =>
+    pane.evaluate((element) => {
+      const view = element.closest(".heap-view")!.getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
+      return bounds.height > 0 && bounds.bottom <= view.bottom + 1 &&
+        element.scrollHeight > element.clientHeight;
+    })
+  ).toBe(true);
   await page.evaluate("document.fonts.ready");
 }
 test.describe("scroll", () => {

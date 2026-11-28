@@ -21,6 +21,8 @@ for (const mount of mounts) {
     width: "1000px",
     height: "600px",
     position: "relative",
+    fontSize: "12px",
+    lineHeight: "16px",
   });
   surfaces.push(
     await GhosttyTerminalSurface.create(mount, {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Block, ToolResult } from "@otk/protocol";
 import { markdown } from "@otk/content";
-import { fileLanguage } from "./language.ts";
+import { fileLanguage } from "@otk/content";
 import { join } from "@std/path";
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)

@@ -2,12 +2,14 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { activity } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-hierarchy" });
 const tags = { tag: ["@composer", "@sessions", "@contracts", "@isolated"] };
 const main = "tstv1-otk";
-const pillText = "2 running · 1 needs you · 3 not returned";
-const rowsInOrder = [0, 1, 2, 6, 4, 3].map((n) => `tstv1-disp-${n}`);
+// D78 ranks the groups; each group keeps its own deterministic row order.
+const pillText = /^\s*1\s*3\s*2\s*$/;
+const rowsInOrder = [2, 6, 4, 3, 0, 1].map((n) => `tstv1-disp-${n}`);
 const longTitle =
   "Disposition helper 7 checking every checkout of the task for guest inventory drift before the merge queue runs";
 const themes = [["otk-dark", "dark"], ["otk-light", "linen"], [
@@ -71,6 +73,116 @@ const openTask = async (
   return task;
 };
 
+test.describe("last subagent leaves the roster", () => {
+  test.use({ profile: "contract-sessions-default" });
+  const child = "tstv1-urgent-child";
+  const startHelper = async (
+    state: Parameters<typeof openSession>[0],
+    page: Parameters<typeof openSession>[1],
+  ) => {
+    await state.product("prefs.set", { key: "notify.toast", value: false });
+    await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Review helper",
+      sessions: [main],
+    });
+    await openSession(state, page, main);
+    await activity(state, child, "hold");
+  };
+
+  test(
+    "composer.subagents.open-list-empties-closes-to-header",
+    tags,
+    async ({ isolatedState: state, page }, info) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await startHelper(state, page);
+      const pill = page.locator(".otk-subagents-trigger");
+      const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+      const header = page.locator(".otk-composer-activity");
+      const capture = async (phase: string) => {
+        for (const [theme, label] of themes) {
+          await state.product("prefs.set", { key: "theme", value: theme });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-otk-theme",
+            theme,
+          );
+          await page.screenshot({
+            path: info.outputPath(`activity-${phase}-${label}.png`),
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+      };
+      await expect(pill).toHaveAccessibleName("Subagents: 1 running");
+      await capture("pill");
+      await activity(state, child, "release");
+      await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+      await pill.focus();
+      await page.keyboard.press("Enter");
+      await expect(menu.getByRole("menuitem").first()).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("button", { name: "Clear finished" }))
+        .toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(menu.getByRole("menuitem").first()).toBeFocused();
+      await header.evaluate((region, panel) => {
+        region.addEventListener("focus", () => {
+          region.dataset.activityHandoff = JSON.stringify({
+            open: !!document.querySelector(panel),
+            mounted: !!region.querySelector(".otk-subagents-trigger"),
+          });
+        }, { once: true });
+      }, dropdown);
+      await state.controller.call("scenario", {
+        lease: state.lease.lease,
+        action: "release",
+        sessionID: child,
+        target: "trail-delivery",
+      });
+      await expect(menu).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(header).toBeFocused();
+      await expect(header).toHaveAttribute(
+        "data-activity-handoff",
+        '{"open":false,"mounted":true}',
+      );
+      await expect(header).toHaveCSS("outline-style", "none");
+      await capture("header-focus");
+      await expect(header).toBeFocused();
+
+      await activity(state, child, "hold");
+      await expect(pill).toHaveAccessibleName("Subagents: 1 running");
+      await expect(pill).toHaveAttribute("aria-expanded", "false");
+      await expect(menu).toHaveCount(0);
+    },
+  );
+
+  test(
+    "composer.subagents.clear-finished-closes-to-header",
+    tags,
+    async ({ isolatedState: state, page }) => {
+      await startHelper(state, page);
+      await expect(page.locator(".otk-subagents-trigger"))
+        .toHaveAccessibleName("Subagents: 1 running");
+      await activity(state, child, "release");
+      const pill = page.locator(".otk-subagents-trigger");
+      const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+      const clear = page.getByRole("button", { name: "Clear finished" });
+      await expect(pill).toHaveAccessibleName("Subagents: 1 finished");
+      await pill.focus();
+      await page.keyboard.press("Enter");
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole("menuitem").first()).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(clear).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(menu).toHaveCount(0);
+      await expect(pill).toHaveCount(0);
+      await expect(page.locator(".otk-composer-activity")).toBeFocused();
+    },
+  );
+});
+
 test(
   "composer.subagents-pill-shows-per-state-counts",
   tags,
@@ -78,15 +190,20 @@ test(
     await page.setViewportSize({ width: 1440, height: 900 });
     const task = await openTask(state, page);
     const pill = page.getByRole("button", {
-      name: "Subagents: 2 running, 1 needs you, 3 not returned",
+      name: "Subagents: 1 needs you, 3 finished, 2 running",
     });
     await expect(pill).toHaveText(pillText, { useInnerText: true });
     const tab = page.locator(`[data-tab="${task.id}"] .otk-status-light`);
     const lamp = pill.locator(".otk-status-light:visible");
     await expect(tab).toHaveAttribute("data-state", "blocked");
-    await expect(lamp).toHaveAttribute("data-state", "blocked");
+    await expect(lamp).toHaveCount(3);
+    await expect(lamp.nth(0)).toHaveAttribute("data-state", "blocked");
+    await expect(lamp.nth(1)).toHaveAttribute("data-state", "finished");
+    await expect(lamp.nth(2)).toHaveAttribute("data-state", "working");
     const paint = (node: Element) => getComputedStyle(node).backgroundImage;
-    expect(await lamp.evaluate(paint)).toEqual(await tab.evaluate(paint));
+    expect(await lamp.first().evaluate(paint)).toEqual(
+      await tab.evaluate(paint),
+    );
   },
 );
 
@@ -105,11 +222,17 @@ test(
         // Zero-blur spread extends the painted button, not its layout box.
         const css = getComputedStyle(button);
         const spread = Number(css.boxShadow.match(/(-?[\d.]+)px$/)?.[1] ?? 0);
-        const content = button.querySelector(".otk-live-count.is-full")!;
-        const lamp = content.querySelector(".otk-status-light")!
-          .getBoundingClientRect();
-        const label = content.querySelector(".otk-control-label")!
-          .getBoundingClientRect();
+        const content = button.querySelector(".otk-live-count-compact")!;
+        // 2.151: the icon is now the leading artwork, before every lamp and
+        // count. Measure the complete contents against the painted surface.
+        const items = Array.from(
+          content.querySelectorAll(
+            ":scope > svg, .otk-status-light, .otk-control-label",
+          ),
+          (item) => item.getBoundingClientRect(),
+        );
+        const start = Math.min(...items.map((item) => item.left));
+        const end = Math.max(...items.map((item) => item.right));
         const probe = document.createElement("span");
         probe.style.inlineSize = "var(--pill-work-inset, var(--space-2))";
         probe.style.blockSize = "var(--pill-block-inset, var(--space-1))";
@@ -121,11 +244,14 @@ test(
         return {
           token,
           blockToken,
-          left: lamp.left - border.left + spread,
-          right: border.right - label.right + spread,
-          top: Math.min(lamp.top, label.top) - border.top + spread,
-          bottom: border.bottom - Math.max(lamp.bottom, label.bottom) + spread,
-          end: label.right,
+          left: start - border.left + spread,
+          right: border.right - end + spread,
+          top: Math.min(...items.map((item) => item.top)) - border.top + spread,
+          bottom: border.bottom - Math.max(...items.map((item) =>
+            item.bottom
+          )) +
+            spread,
+          end,
         };
       });
     const check = async (mode: string) => {
@@ -183,9 +309,9 @@ test(
     await page.locator(".otk-subagents-trigger").click();
     const menu = page.getByRole("menu", { name: "Subagents", exact: true });
     await expect(menu.locator(".otk-subagent-heading")).toHaveText([
-      "Running 2",
       "Needs you 1",
-      "Not returned 3",
+      "Finished 3",
+      "Running 2",
     ]);
     const rows = menu.locator("[data-subagent]");
     await expect(rows).toHaveCount(rowsInOrder.length);
@@ -194,12 +320,12 @@ test(
         items.map((row) => row.getAttribute("data-subagent"))
       )
     ).toEqual(rowsInOrder);
-    for (const [index, id] of rowsInOrder.entries()) {
+    for (const id of rowsInOrder) {
       await expect(
         menu.locator(`[data-subagent="${id}"]`).getByRole("menuitem", {
-          name: /^Stop /,
+          name: /^Terminate /,
         }),
-      ).toHaveCount(index < 2 ? 1 : 0);
+      ).toHaveCount(id === "tstv1-disp-0" || id === "tstv1-disp-1" ? 1 : 0);
     }
     const time = (n: number) =>
       menu.locator(`[data-subagent="tstv1-disp-${n}"] .otk-subagent-time`);
@@ -235,22 +361,22 @@ test(
           const glyphs = document.createRange();
           glyphs.selectNodeContents(content);
           const textRight = glyphs.getBoundingClientRect().right;
-          const cell = row.querySelector(".otk-subagent-stop")!;
-          const stop = cell.querySelector("button");
-          const svg = stop?.querySelector("svg")?.getBoundingClientRect();
-          const stopBox = stop?.getBoundingClientRect();
-          const gaps = stopBox && svg
+          const cell = row.querySelector(".otk-subagent-terminate")!;
+          const terminate = cell.querySelector("button");
+          const svg = terminate?.querySelector("svg")?.getBoundingClientRect();
+          const target = terminate?.getBoundingClientRect();
+          const gaps = target && svg
             ? [
-              svg.top - stopBox.top,
-              stopBox.bottom - svg.bottom,
-              svg.left - stopBox.left,
-              stopBox.right - svg.right,
+              svg.top - target.top,
+              target.bottom - svg.bottom,
+              svg.left - target.left,
+              target.right - svg.right,
             ]
             : undefined;
           return {
             timeRight: time.right,
             textRight,
-            stopLeft: cell.getBoundingClientRect().left,
+            terminateLeft: cell.getBoundingClientRect().left,
             gaps,
             title: title.getAttribute("title"),
             truncated: title.scrollWidth > title.clientWidth,
@@ -267,7 +393,10 @@ test(
           `${context}: drawn time text`,
         )
           .toBeLessThanOrEqual(.5);
-        expect.soft(Math.abs(pos.stopLeft - positions[0].stopLeft), context)
+        expect.soft(
+          Math.abs(pos.terminateLeft - positions[0].terminateLeft),
+          context,
+        )
           .toBeLessThanOrEqual(.5);
         if (pos.truncated) {
           expect.soft(Math.abs(panel.width - line.width), context)
@@ -281,7 +410,10 @@ test(
             ? longTitle
             : `Disposition helper ${Number(rowsInOrder[index].at(-1)) + 1}`,
         );
-        if (index < 2) {
+        if (
+          rowsInOrder[index] === "tstv1-disp-0" ||
+          rowsInOrder[index] === "tstv1-disp-1"
+        ) {
           expect(pos.gaps, context).toBeDefined();
           expect.soft(Math.max(...pos.gaps!) - Math.min(...pos.gaps!), context)
             .toBeLessThanOrEqual(1);
@@ -312,6 +444,7 @@ test(
     await expect(page.locator("html")).toHaveCSS("--otk-scale", "1.25");
     const trigger = page.locator(".otk-subagents-trigger");
     const menu = page.getByRole("menu", { name: "Subagents", exact: true });
+    const main = page.locator(".otk-main");
     const facts = [];
     for (const width of [1440, 1280, 1100, 960, 800]) {
       await page.setViewportSize({ width, height: 900 });
@@ -320,6 +453,16 @@ test(
           .toBeVisible();
         await expect(page.getByRole("tabpanel", { name: "Sessions" }))
           .toBeVisible();
+      }
+      if (width <= 960) {
+        // wl-3-sheet (work log plan 1.3): the open sidebar now covers the
+        // conversation at these widths. Return to the conversation before
+        // measuring the same live menu against its column.
+        await state.product("layout.patch", { rightCollapsed: false });
+        await expect(main).toHaveAttribute("inert", "");
+        await page.getByRole("button", { name: "Back to conversation" })
+          .click();
+        await expect(main).not.toHaveAttribute("inert", "");
       }
       await trigger.click();
       await expect(menu).toBeVisible();
@@ -349,9 +492,7 @@ test(
       await page.keyboard.press("Escape");
       await expect(menu).toBeHidden();
     }
-    // Retain the 800px two-sidebar geometry check above. Use the compact shell
-    // for the three narrow screenshots, so there is room to read the agent.
-    await state.product("layout.patch", { rightCollapsed: true });
+    // The Back action leaves the panel collapsed for the three narrow captures.
     await expect(page.getByRole("tabpanel", { name: "Sessions" })).toBeHidden();
     await trigger.click();
     await expect(menu).toBeVisible();

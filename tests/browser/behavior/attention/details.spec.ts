@@ -29,7 +29,7 @@ test(
             getComputedStyle(s).position === "static";
         }),
       ).toBe(true);
-      await note.locator(".otk-toast-actions button").first().click();
+      await note.locator("button.otk-toast-target").click();
       await expect(page).toHaveURL(new RegExp(`${b.id}$`));
       await expect(page.locator(".otk-permission-dock .otk-permission-summary"))
         .toContainText(target);

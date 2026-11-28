@@ -94,15 +94,15 @@ test(
       modelID: "scripted",
     });
     const compaction = compactionBoundary(state);
-    await expect(page.locator(compaction.title)).toHaveText(
-      compaction.completed,
-    );
+    const boundary = page.locator(compaction.title);
+    await expect(boundary).toBeVisible();
+    await expect(boundary).toHaveText(compaction.completed);
     await state.queue(["Reply after the native compaction."]);
     await state.native(`/session/${target.id}/prompt_async`, "POST", {
       parts: [{ type: "text", text: "Pickup context after compaction" }],
     });
     await expectInOrder([
-      page.locator(compaction.title),
+      boundary,
       visible(page, "Pickup context after compaction"),
       visible(page, "Reply after the native compaction."),
     ]);

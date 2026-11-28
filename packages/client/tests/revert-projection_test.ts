@@ -20,7 +20,7 @@ const row = (id: string, at: number): Message => ({
 Deno.test("revert display anchors one fixed group before later activity without changing live ownership", () => {
   const live = createTranscriptProjection(),
     display = createRevertRecordProjection();
-  live.replace([row("earlier", 1), row("later", 4)]);
+  live.reset([row("earlier", 1), row("later", 4)]);
   const state = {
     phase: "saved" as const,
     record: {
@@ -44,7 +44,6 @@ Deno.test("confirmation snapshots framework-bound message DTOs without cloning t
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "s" },
     content: { ...emptyContent(), messages: [new Proxy(row("p", 1), {})] },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

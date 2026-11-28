@@ -37,23 +37,6 @@
   margin-block: var(--space-2);
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
 }
-.otk-reply-start {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
-}
-.otk-reply-agent {
-  justify-self: start;
-  max-width: 100%;
-  min-width: 0;
-}
-.otk-reply-start.is-continuation {
-  margin-top: var(--space-6);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--otk-border);
-}
 .otk-send-meta {
   display: inline-flex;
   align-items: center;
@@ -62,4 +45,10 @@
 .otk-send-failure {
   justify-self: end;
   inline-size: fit-content;
+}
+
+.otk-reply-end {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }

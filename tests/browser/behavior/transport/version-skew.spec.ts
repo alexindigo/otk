@@ -3,7 +3,7 @@ import type { WebSocketRoute } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { reply } from "../../pages/composer.ts";
+import { chips, reply } from "../../pages/composer.ts";
 
 for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
   test(`transport.version-skew-reload preserves unsent work ${theme}`, {
@@ -83,6 +83,23 @@ for (const outcome of ["rejected", "preparing"] as const) {
   test(`transport.reload retains ${outcome} send custody`, {
     tag: ["@transport", "@isolated", "@composer", "@messages"],
   }, async ({ isolatedState: state, page }) => {
+    const original = "Original send retained through reload";
+    if (outcome === "preparing") {
+      await state.native("/session", "POST", {
+        title: "Attachment recall source for reload custody",
+        messages: [{
+          parts: [
+            { type: "text", text: original },
+            {
+              type: "file",
+              filename: "report.pdf",
+              mime: "application/pdf",
+              url: `data:application/pdf;base64,${btoa("%PDF-1.4\n%%EOF\n")}`,
+            },
+          ],
+        }],
+      });
+    }
     const session = await state.native<{ id: string }>("/session", "POST", {
       title: "Reload custody",
     });
@@ -90,7 +107,9 @@ for (const outcome of ["rejected", "preparing"] as const) {
     await openSession(state, page, session.id);
     frames.hold((frame, request) =>
       outcome === "preparing"
-        ? request?.method === "tasks.create"
+        // 07a75161: promotion is bookkeeping after Send admission. Hold the
+        // real recalled-attachment read instead, while the send is preparing.
+        ? request?.method === "history.attachments"
         : frame.t === "content" && frame.sessionID === session.id ||
           frame.t === "load.chunk" &&
             (frame.data as { kind?: string })?.kind === "message-page" ||
@@ -99,7 +118,11 @@ for (const outcome of ["rejected", "preparing"] as const) {
     );
     if (outcome === "rejected") await state.queue(["Held native send"]);
     const prompt = page.locator("textarea[name=prompt]");
-    await prompt.fill("Original send retained through reload");
+    if (outcome === "preparing") {
+      await prompt.press("ArrowUp");
+      await expect(prompt).toHaveValue(`${original} [PDF 1]`);
+      await expect(chips(page)).toHaveCount(1);
+    } else await prompt.fill(original);
     await page.getByRole("button", { name: "Send", exact: true }).click();
     const pending = page.locator('[data-send-state="pending"]');
     await expect(pending).toBeInViewport();
@@ -115,13 +138,18 @@ for (const outcome of ["rejected", "preparing"] as const) {
       ).toContain("Held native send");
     } else {
       await expect.poll(() =>
-        frames.held.some(({ request }) => request?.method === "tasks.create")
+        frames.held.some(({ request }) =>
+          request?.method === "history.attachments"
+        )
       ).toBe(true);
+      expect(
+        frames.sent.filter(({ frame }) => frame.method === "session.prompt"),
+      ).toHaveLength(0);
     }
     await prompt.fill("Newer draft stays independent");
     await page.reload();
     const entry = page.locator(`[data-message="${id}"]`);
-    await expect(entry).toContainText("Original send retained through reload");
+    await expect(entry).toContainText(original);
     await expect(prompt).toHaveValue("Newer draft stays independent");
     await expect(page.locator('[data-connection-state="connected"]').first())
       .toBeVisible();

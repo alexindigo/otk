@@ -13,11 +13,41 @@ import {
 import { isCancellation } from "@otk/protocol";
 import VirtualList, { type VirtualListControl } from "./VirtualList.tsx";
 import { pickerProjection } from "./picker-projection.ts";
-import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import Popover, {
+  type PopoverControl,
+  PopoverFace,
+} from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import ControlValue from "./ControlValue.tsx";
 import { ChevronDownIcon } from "./ChromeIcons.tsx";
+
+const pickerClass = (extra?: string) => `otk-list-picker ${extra ?? ""}`;
+const triggerClass = (extra?: string) => `otk-control-trigger ${extra ?? ""}`;
+
+function PickerValue(props: { children: Element }): Element {
+  return (
+    <ControlValue accessory={<ChevronDownIcon />}>
+      {props.children}
+    </ControlValue>
+  );
+}
+
+/** The trigger's intrinsic geometry without its interactive lifetime. */
+export function ListPickerFace(props: {
+  class?: string;
+  triggerClass?: string;
+  children: Element;
+}): Element {
+  return (
+    <PopoverFace
+      class={pickerClass(props.class)}
+      triggerClass={triggerClass(props.triggerClass)}
+    >
+      <PickerValue>{props.children}</PickerValue>
+    </PopoverFace>
+  );
+}
 
 export function PickerHeading(props: { children: Element }) {
   return <h3 class="otk-picker-heading otk-control-label">{props.children}</h3>;
@@ -172,14 +202,10 @@ export default function ListPicker<T = string>(props: {
       triggerColor={props.triggerColor}
       trigger={props.trigger === undefined
         ? undefined
-        : (
-          <ControlValue accessory={<ChevronDownIcon />}>
-            {props.trigger}
-          </ControlValue>
-        )}
-      triggerClass={`otk-control-trigger ${props.triggerClass ?? ""}`}
+        : <PickerValue>{props.trigger}</PickerValue>}
+      triggerClass={triggerClass(props.triggerClass)}
       triggerAttributes={props.triggerAttributes}
-      class={`otk-list-picker ${props.class ?? ""}`}
+      class={pickerClass(props.class)}
       control={(control) => {
         popover = control;
         props.control?.({ open: control.open });

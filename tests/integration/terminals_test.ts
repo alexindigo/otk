@@ -3,10 +3,11 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { RequestFailure, SidecarConnection, TerminalSocket } from "@otk/client";
 import type { Harness } from "@otk/harness";
-import type {
-  ContentSession,
-  IndexMetadata,
-  TerminalInfo,
+import {
+  type ContentSession,
+  entityKey,
+  type IndexMetadata,
+  type TerminalInfo,
 } from "@otk/protocol";
 import { startApplication } from "../../application.ts";
 import { PtyDaemon, readHandoff } from "../../core/terminals/daemon.ts";
@@ -45,6 +46,7 @@ async function application(
     indexed?: boolean;
     removed?: Set<string>;
     environment?: Record<string, string>;
+    beforeIdentities?: (ids: readonly string[]) => Promise<void>;
   } = {},
 ) {
   const root = options.root ?? await tempDir("terminal-app-");
@@ -96,15 +98,15 @@ async function application(
       },
       stop: () => Promise.resolve(),
       subscriptions() {},
-      identities: (ids) =>
-        Promise.resolve(
-          ids.filter((id) =>
-            !removed.has(id) && (id === A || id === B || id === C)
-          ).map((id) => ({
-            id,
-            directory: id === C ? join(root, "other-checkout") : root,
-          })),
-        ),
+      identities: async (ids) => {
+        await options.beforeIdentities?.(ids);
+        return ids.filter((id) =>
+          !removed.has(id) && (id === A || id === B || id === C)
+        ).map((id) => ({
+          id,
+          directory: id === C ? join(root, "other-checkout") : root,
+        }));
+      },
       getSession: (id) => Promise.resolve(session(id)),
       createSession: () => Promise.resolve(session(A)),
       listChildren: () => Promise.resolve([]),
@@ -685,9 +687,14 @@ test("checkout dependency publication observes owner counts, orphan-only project
   await socket.stop();
   const active = await summary(client.conn, app.root, 2);
   assertEquals(active.summaries?.[app.root]?.status, "dependencies");
-  assertEquals(active.supervision?.[A]?.state, "none");
-  assertEquals(active.supervision?.[A]?.dependencies?.running, 1);
-  assertEquals(active.supervision?.[B]?.dependencies?.running, 1);
+  // D62/D65: terminal dependencies and native activity come from the same
+  // session entity; the former does not make an idle native session working.
+  const ownerA = active.entities?.[entityKey("session", A)];
+  const ownerB = active.entities?.[entityKey("session", B)];
+  assertEquals(ownerA?.state, "none");
+  assertEquals(ownerB?.state, "none");
+  assertEquals(ownerA?.dependencies, 1);
+  assertEquals(ownerB?.dependencies, 1);
   assert(active.tasks.some((row) => row.id === task.id));
   const control = await Probe.open(app.url);
   await control.attach(1, a.id, B);
@@ -712,4 +719,43 @@ test("checkout dependency publication observes owner counts, orphan-only project
   const recovered = await summary(nextClient.conn, next.root, 2);
   assertEquals(recovered.summaries?.[next.root]?.sessionCount, 0);
   assertEquals(recovered.summaries?.[next.root]?.status, "dependencies");
+});
+
+test("terminal operations do not overwrite the checkout's inactive policy", async () => {
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  let holdClose = false;
+  const app = await application({
+    indexed: true,
+    async beforeIdentities(ids) {
+      if (!holdClose || ids.length !== 1 || ids[0] !== A) return;
+      holdClose = false;
+      entered.resolve();
+      await release.promise;
+    },
+  });
+  const client = await rpc(app.url);
+  const terminal = await client.conn.rpc.call("terminal.create", {
+    sessionID: A,
+    cols: 80,
+    rows: 24,
+  });
+  holdClose = true;
+  const closing = client.conn.rpc.call("terminal.close", {
+    sessionID: A,
+    terminalID: terminal.id,
+  });
+  try {
+    await bounded("terminal close waiting on its owner", entered.promise);
+    const policy = await client.conn.rpc.call("projects.inactive", {
+      directory: app.root,
+      inactive: true,
+    });
+    assertEquals(policy.inactive, true);
+  } finally {
+    release.resolve();
+    await closing;
+  }
+  const projects = await client.conn.rpc.call("projects.list", {});
+  assertEquals(projects.find((p) => p.directory === app.root)?.inactive, true);
 });

@@ -18,18 +18,17 @@ test(
     });
     await openSession(state, page, session.id);
     await focusNotifications(page);
-    await sessionContext(
-      page,
-      `[data-session="${session.id}"]`,
-      "session.rename",
-    );
+    const target = `[data-session="${session.id}"]`;
+    const row = page.locator(target);
+    const title = row.locator(".otk-sidebar-title-text");
     const editor = page.getByRole("textbox", {
       name: "Rename session",
       exact: true,
     });
-    const errorID = await editor.getAttribute("aria-describedby");
-    expect(errorID).toBeTruthy();
-    const entry = page.locator(`[id=${JSON.stringify(errorID)}]`);
+    const entry = row.getByRole("alert");
+    // Join the Sessions list read and capture the live row before deletion.
+    await sessionContext(page, target, "session.rename");
+    await expect(editor).toBeEditable();
     // Delay real authoritative deletion publication, not requests or native results.
     // This reproduces acting from an older rendered view of a real native session.
     traffic.hold((frame) =>
@@ -45,23 +44,37 @@ test(
     try {
       await state.native(`/session/${session.id}`, "DELETE");
       for (let n = 1; n <= 22; n++) {
+        // Issue 2.122: rejection restores the confirmed title, not the editor.
+        // Retry via the same explicit row command, after the last result settles.
+        if (n > 1) await sessionContext(page, target, "session.rename");
         await expect(editor).toBeEditable();
+        const errorID = await editor.getAttribute("aria-describedby");
+        expect(errorID).toBeTruthy();
         await editor.fill(`Rejected rename ${n}`);
         await editor.press("Enter");
+        await expect(editor).toHaveCount(0);
         await expect(entry).toContainText("Renaming session");
         if (n > 1) await expect(entry).toContainText(`${n} identical failures`);
-        await expect(editor).toBeEditable();
+        await expect(entry).toHaveAttribute("id", errorID!);
+        await expect(title.locator(".otk-rename-pending")).toHaveCount(0);
+        await expect(title).toHaveText("Failure owner fixture");
       }
       await expect(entry.locator(".otk-failure-content")).toHaveCount(1);
       const geometry = await entry.evaluate((el) => {
-        const row = el.closest(".otk-list-row")!;
-        const content = row.querySelector(".otk-list-row-content")!
+        // Tree lanes WP1: feedback spans the sidebar content tracks below
+        // the action, not the tree's separate node and connector lanes.
+        const row = el.closest(".otk-tree-frame")!;
+        const grid = row.querySelector(".otk-sidebar-row-grid")!;
+        const content = grid.getBoundingClientRect();
+        const padding = parseFloat(getComputedStyle(grid).paddingInlineEnd);
+        const action = row.querySelector(".otk-sidebar-row-main")!
           .getBoundingClientRect();
         const feedback = el.getBoundingClientRect();
         return {
-          width: Math.abs(content.width - feedback.width),
+          width: Math.abs(content.width - padding - feedback.width),
           left: Math.abs(content.left - feedback.left),
-          separate: !!el.closest(".otk-list-row-feedback"),
+          separate: !!el.closest(".otk-tree-feedback-slot") &&
+            feedback.top >= action.bottom - .5,
         };
       });
       expect(geometry.separate).toBe(true);
@@ -70,24 +83,27 @@ test(
       await expect(entry).toContainText(/not found|no longer available/);
       // A missing session has no owner-supplied recovery; do not invent advice.
       await expect(entry.locator(".otk-failure-recovery")).toHaveCount(0);
-      for (
-        const surface of [
-          page.locator(".otk-operation-feedback"),
-          entry,
-        ]
-      ) {
-        // The open session is already the inline target. Background notification
-        // navigation remains covered by failure-toast-native.spec.ts.
+      // WP5: the composer notice row is now inside FailureContent, while the
+      // inline rename exposes that same presentation inside its row alert.
+      const notice = page.locator(".otk-operation-feedback");
+      await expect(notice).toHaveCount(1);
+      for (const surface of [notice, entry]) {
         await expect(surface.getByRole("link")).toHaveCount(0);
         await expect(surface).not.toContainText("Failure owner fixture");
         await expect(surface).not.toContainText(`Session ${session.id}`);
-        expect(
-          await surface.locator(".otk-failure-content").evaluate((el) =>
-            el.closest(".otk-control-label") === null
-          ),
-          "Failure prose has its own content slot, never a single-line control label",
-        ).toBe(true);
       }
+      const failureContent = (element: Element) =>
+        element.closest(".otk-control-label") === null;
+      expect(
+        await entry.locator(".otk-failure-content").evaluate(failureContent),
+      )
+        .toBe(true);
+      expect(
+        await notice.evaluate((element) => {
+          const content = element.closest(".otk-failure-content");
+          return !!content && content.closest(".otk-control-label") === null;
+        }),
+      ).toBe(true);
       // This selected target already owns inline feedback. Background-toast title
       // and link coverage belongs to failure-toast-native.spec.ts, not a duplicate.
       await expect(page.locator(".otk-toast")).toHaveCount(0);

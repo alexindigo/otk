@@ -10,6 +10,8 @@ import {
   lamp,
   liveWork,
   sessionEvidence,
+  sessionRunning,
+  sessionShells,
   sessionWorkStatus,
 } from "../entity-state.ts";
 import { createInbox } from "../inbox.ts";
@@ -49,25 +51,60 @@ Deno.test("session execution excludes shell-only activity and stale evidence", a
     id: string,
   ) => boolean;
   let value = session("working");
+  value.evidence = { ...value.evidence!, nativeRun: true };
   const store = createEntityStateStore({ read: () => ({ [S]: value }) });
   assertEquals(running(store, S), true);
   value = {
     ...value,
-    evidence: {
-      ...value.evidence!,
-      liveWork: [{
+    evidence: { ...value.evidence!, nativeRun: undefined },
+    shells: {
+      items: [{
         id: "shell",
-        kind: "shell",
         label: "Shell",
         title: "Shell",
-        state: "working",
       }],
+      count: 1,
+      state: "working",
     },
   };
+  assertEquals(sessionShells(store, S), value.shells);
   assertEquals(running(store, S), false);
+  store.stale(true);
+  assertEquals(sessionShells(store, S), undefined);
+  store.stale(false);
   value = session("working");
   store.stale(true);
   assertEquals(running(store, S), false);
+});
+
+Deno.test("descendant work and a continuation are not stoppable own execution", () => {
+  const f = fixture();
+  try {
+    for (
+      const shells of [undefined, {
+        state: "working",
+        count: 1,
+        items: [],
+      }] as const
+    ) {
+      const input = session("working", { shells });
+      input.evidence = {
+        ...input.evidence!,
+        continuation: true,
+        liveWork: [{
+          id: "child",
+          kind: "helper",
+          label: "Helper",
+          title: "Child",
+          state: "working",
+        }],
+      };
+      f.put(input);
+      assertEquals(sessionRunning(f.store, S), false);
+    }
+  } finally {
+    f.store.stop();
+  }
 });
 
 Deno.test("evidence observers update without fabricating a lamp transition", () => {
@@ -198,10 +235,10 @@ Deno.test("emphasis, attention counts, labels and live work borrow the same stat
   assertEquals(label("working"), "Working");
   assertEquals(label("blocked", "permission"), "Needs you");
   const item = {
-    id: "shell-1",
-    kind: "shell" as const,
-    label: "Shell",
-    title: "sleep",
+    id: "exec-1",
+    kind: "execution" as const,
+    label: "Execution",
+    title: "Run",
     state: "working" as const,
   };
   f.put(session("working", {

@@ -2,7 +2,13 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { prompt, revealAcquired } from "../../pages/transcript.ts";
+import {
+  openWork,
+  prompt,
+  revealAcquired,
+  scrollTranscript,
+  settledNativeReply,
+} from "../../pages/transcript.ts";
 import type { MessagePage } from "@otk/protocol";
 test.use({ profile: "messages-tools" });
 test("messages.native-newest10-offpage-undo-cursors-live-reload", {
@@ -25,12 +31,16 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
       },
     });
   }
-  await state.queue(["The cursor keeps every earlier step."]);
-  await state.native(`/session/${session.id}/message`, "POST", {
+  const answer = "The cursor keeps every earlier step.";
+  const input = "Boundary prompt outside newest ten";
+  await state.queue([answer]);
+  // Admission is bounded by one native request; the eleven tool calls are not.
+  await state.native(`/session/${session.id}/prompt_async`, "POST", {
     agent: "build",
     model: { providerID: "fake", modelID: "scripted" },
-    parts: [{ type: "text", text: "Boundary prompt outside newest ten" }],
+    parts: [{ type: "text", text: input }],
   });
+  await settledNativeReply(state, session.id, answer);
   await page.setViewportSize({ width: 1280, height: 900 });
   const capture = await wire(page);
   await openSession(state, page, session.id);
@@ -60,10 +70,13 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
   expect(newest.prompt!.model).toEqual({ provider: "fake", model: "scripted" });
   expect(newest.prompt!.agent).toBe("build");
   expect(newest.older).toBeTruthy();
-  await expect(page.locator(".otk-composer-agent")).toHaveText("Build");
-  await expect(page.locator(".otk-composer-model-name")).toContainText(
-    "scripted",
+  await expect(page.locator(".otk-composer-agent:not([inert] *)")).toHaveText(
+    "Build",
   );
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toContainText(
+      "scripted",
+    );
   const requests = capture.sent.filter(({ frame }) =>
     frame.method === "session.messages"
   );
@@ -87,6 +100,9 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
     );
   await page.locator(".otk-revert-restore").click();
   await expect(page.locator(".otk-revert-group")).toHaveCount(0);
+  // Opening the revert group leaves reader-follow off. Acquire the restored
+  // tail through the same scroll input a reader uses before inspecting it.
+  await scrollTranscript(page, true);
   await expect(page.locator(".otk-message-flow")).toContainText(
     "The cursor keeps every earlier step.",
   );
@@ -109,6 +125,12 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
     delay: 100,
   });
   await prompt(page, "Continue with a short reply");
+  const fresh = await settledNativeReply(
+    state,
+    session.id,
+    "A fresh stream remains aligned.",
+  );
+  await revealAcquired(page, `[data-message="${fresh}"]`);
   await expect(page.locator(".otk-message-flow")).toContainText(
     "A fresh stream remains aligned.",
   );
@@ -239,22 +261,24 @@ test(
       .toBe(markers.join("\n\n"));
     await expect(page.locator("[data-role=assistant] .otk-message-footer"))
       .toHaveCount(1);
-    await expect(
-      // Decisions 1/20 keep idle separate; whole-reply Copy still acquires all 205 segments.
-      page.locator("[data-message][data-role=assistant]").getByRole("list", {
-        name: "Reply segments",
-        exact: true,
-      }),
-      // Step bookkeeping adds a leading and a trailing work group around the
-      // existing 102 text segments and 101 between-text tool groups.
-    ).toHaveAttribute("data-acquired-count", "205");
+    // D74 keeps the 102 prose segments separate from the bounded Work strip.
+    const assistant = page.locator("[data-message][data-role=assistant]");
+    await expect(assistant.getByRole("list", {
+      name: "Reply segments",
+      exact: true,
+    })).toHaveAttribute("data-acquired-count", String(markers.length));
+    await expect(assistant.locator(".otk-work-strip")).toHaveCount(1);
     if (state.controller.info!.version.startsWith("2.")) {
-      // A singleton remains bare; retained spans disclose by record identity.
-      await revealAcquired(page, '[data-native-record="opencode-v2/idle"]');
-      await expect(page.locator('[data-native-record="opencode-v2/idle"]'))
-        .toBeVisible();
+      const work = await openWork(assistant);
+      await expect(work.locator('[data-tool="bash"]')).not.toHaveCount(0);
+      await expect(work.getByText("Execution succeeded", { exact: true }))
+        .toHaveCount(0);
+      await page.getByRole("tab", { name: "Sessions", exact: true }).click();
+      await expect(assistant.locator(".otk-work-strip")).not.toHaveAttribute(
+        "aria-current",
+        "true",
+      );
     }
-    expect(await page.locator(".otk-work-log").count()).toBeLessThan(101);
     expect(
       capture.sent.filter(({ frame }) => frame.method === "session.messages")
         .length,

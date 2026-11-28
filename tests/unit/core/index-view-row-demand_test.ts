@@ -51,6 +51,51 @@ function entry(id: string, directory: string, parentID?: string): IndexEntry {
   };
 }
 
+Deno.test("transcript references admit only known sessions, independently of sidebar rows", () => {
+  const index = new IndexStore(), client = createIndex();
+  const parent = entry("tstv1-parent", "/repo");
+  const child = entry("tstv1-child", "/worktree", parent.id);
+  const unknown = "tstv1-unknown";
+  index.upsert(parent);
+  index.upsert(child);
+  index.flush();
+  let scope: ViewLease = {
+    epoch: 0,
+    selected: parent.id,
+    crumbs: [],
+    rows: [],
+  };
+  let rev = 0;
+  const view = new IndexView(index, () => scope, () => [], (frame) => {
+    if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+      assertEquals(client.receive("s", frame), true);
+      rev = frame.rev;
+    }
+  });
+  const stop = index.listen((frame) => view.refresh(frame));
+  try {
+    view.snapshot();
+    assertEquals(client.get("s", child.id), undefined);
+    view.applied(0, rev);
+    scope = { ...scope, epoch: 1, references: [child.id, unknown] };
+    view.refresh();
+    assertEquals(client.get("s", child.id)?.title, child.title);
+    assertEquals(client.get("s", child.id)?.digest.turns, {});
+    assertEquals(client.get("s", unknown), undefined);
+    view.applied(1, rev);
+    index.upsertMetadata({ ...child, title: "Updated" });
+    index.flush();
+    assertEquals(client.get("s", child.id)?.title, "Updated");
+    view.applied(1, rev);
+    scope = { ...scope, epoch: 2, references: [] };
+    view.refresh();
+    assertEquals(client.get("s", child.id), undefined);
+  } finally {
+    stop();
+    view.close();
+  }
+});
+
 Deno.test("index epoch replay reports restored admissions but not content-only updates", () => {
   const index = new IndexStore(), row = entry("tstv1-restored", "/p");
   index.upsert(row);

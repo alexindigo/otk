@@ -395,6 +395,11 @@ authority.
 result dialects. Snapshot/recovery mapping, live tools, usage labels and helper
 progress share it; `sourceName` stays native. SQL requests only its declared,
 bounded scalar fields and never tool input/output bodies for helper summaries.
+Stock V2 does not persist the running tool's progress metadata. The transcript
+owner retains the exact observed parent/message/call -> child identity in its
+plugin namespace, independently of viewers. Only a matching native running task
+can borrow that edge after restart; terminal tool metadata remains native
+authority. Progress is reacquired by the existing child read, not persisted.
 
 Turn timing supplies native streamed model intervals and scalar tool clocks to
 the shared accumulator. Bounded header batches project clocks, never tool

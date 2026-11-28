@@ -125,7 +125,7 @@ test.describe("sidebar disclosure intent", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     const feedback = parent.locator(
-      ":scope > .otk-tree-feedback .otk-project-disclosure-error",
+      ".otk-sidebar-row-feedback .otk-project-disclosure-error",
     );
     await expect(feedback).toBeVisible();
     await expect(feedback).toContainText("The project layout is not valid.");
@@ -134,7 +134,7 @@ test.describe("sidebar disclosure intent", () => {
         ":scope > .otk-tree-heading .otk-tree-toggle",
       )!.getBoundingClientRect();
       const row = node.querySelector(
-        ":scope > .otk-tree-heading .otk-project-row",
+        ":scope > .otk-tree-heading .otk-sidebar-row-main",
       )!.getBoundingClientRect();
       const lamp = node.querySelector(
         ":scope > .otk-tree-heading .otk-status-light",
@@ -182,7 +182,7 @@ test.describe("sidebar row-level presentation", () => {
       `.otk-project-row[data-project=${JSON.stringify(entries[0].directory)}]`,
     );
     await expect(parent.locator(".otk-project-avatar")).toHaveCount(1);
-    await expect(parent.locator(".otk-project-name")).toHaveText(
+    await expect(parent.locator(".otk-sidebar-title-text")).toHaveText(
       "Fixture project",
     );
     for (const name of ["feature-one", "feature-two", "archived-tree"]) {
@@ -197,10 +197,17 @@ test.describe("sidebar row-level presentation", () => {
         page.locator(
           `.otk-project-row[data-project=${
             JSON.stringify(root + "/worktrees/" + name)
-          }] .otk-project-name`,
+          }] .otk-sidebar-title-text`,
         ),
       ).toHaveText(name);
     }
+    // D79: use a grey worktree as the ChromeMeta reference, not the working parent.
+    const reference = page.locator(
+      `.otk-project-row[data-project=${
+        JSON.stringify(root + "/worktrees/feature-two")
+      }]`,
+    );
+    await expect(reference).toHaveAttribute("data-rollup", "none");
     for (
       const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
         "otk-light-stone",
@@ -212,23 +219,24 @@ test.describe("sidebar row-level presentation", () => {
         "data-otk-theme",
         theme,
       );
+      const visit = await reference.locator(".otk-project-visit")
+        .evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { font: style.fontSize, color: style.color };
+        });
       const values = await page.locator(
         ".otk-archived-toggle, .otk-inactive-toggle, .otk-discovered-toggle",
       ).evaluateAll((headers) =>
         headers.map((header) => {
           const meta = header.querySelector(".otk-chrome-meta")!;
-          const visit = document.querySelector(".otk-project-visit")!;
           const label = header.querySelector(".otk-control-label")!;
           const m = meta.getBoundingClientRect(),
             l = label.getBoundingClientRect();
-          const style = getComputedStyle(meta),
-            reference = getComputedStyle(visit);
+          const style = getComputedStyle(meta);
           return {
             text: meta.textContent,
             font: style.fontSize,
             color: style.color,
-            referenceFont: reference.fontSize,
-            referenceColor: reference.color,
             centerDelta: Math.abs(m.y + m.height / 2 - l.y - l.height / 2),
           };
         })
@@ -236,8 +244,8 @@ test.describe("sidebar row-level presentation", () => {
       expect(values.length).toBeGreaterThanOrEqual(2);
       for (const value of values) {
         expect(value.text).toMatch(/^\d+$/);
-        expect(value.font).toBe(value.referenceFont);
-        expect(value.color).toBe(value.referenceColor);
+        expect(value.font).toBe(visit.font);
+        expect(value.color).toBe(visit.color);
         expect(value.centerDelta).toBeLessThanOrEqual(1);
       }
       await page.screenshot({
@@ -283,13 +291,16 @@ test.describe("sidebar branch topology cases", () => {
         await expect(row(`${root}/sidebar/all-required-child-${n}`))
           .toBeVisible();
       }
-      await expect(branch("archive-only").locator(".otk-archived-toggle"))
+      const archive = branch("archive-only")
+        .locator("xpath=parent::div[@data-project-root]")
+        .locator(".otk-archived-toggle");
+      await expect(archive)
         .toBeVisible();
       await toggle("archive-only").click();
-      await expect(branch("archive-only").locator(".otk-archived-toggle"))
+      await expect(archive)
         .toHaveCount(0);
       await toggle("archive-only").click();
-      await branch("archive-only").locator(".otk-archived-toggle").click();
+      await archive.click();
       await expect(row(`${root}/sidebar/archive-only-child-0`)).toBeVisible();
       await expect(row(`${root}/sidebar/missing-root-child-0`)).toBeAttached();
       await expect(

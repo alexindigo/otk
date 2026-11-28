@@ -12,6 +12,8 @@ import {
   createIndex,
   createServerResources,
   createState,
+  notificationBody,
+  NotificationHub,
   NotificationTriggers,
   SidecarConnection,
   type SidecarState,
@@ -22,6 +24,7 @@ import {
   type InboxOp,
   type InboxSnapshot,
   type IndexEntry,
+  projectSessionHierarchy,
   type ProjectStatus,
   type ServerFrame,
 } from "@otk/protocol";
@@ -53,20 +56,30 @@ function entry(id = "session", directory = "/p"): IndexEntry {
   };
 }
 
-Deno.test("admitted finishes advance an existing clock silently while live and baseline recovery still complete", () => {
+Deno.test("observers borrow live entity outcomes, not clocks or admission replay", () => {
   const f = fixture();
   const completions: number[] = [];
   const origins: unknown[] = [];
   const stop = f.resources.observeEntries("local", (event) => {
     for (const change of event.changes) {
-      if (change.completedAt) {
-        origins.push([change.completedAt, change.completionOrigin]);
-        if (change.completionOrigin !== "historical") {
-          completions.push(change.completedAt);
+      if (change.entity?.terminal) {
+        const live = change.entity.terminalOrigin === "live" &&
+          !event.baseline && !change.admitted;
+        origins.push([change.entity.terminal, live ? "live" : "historical"]);
+        if (live) {
+          completions.push(change.entity.terminal);
         }
       }
     }
   });
+  const entity = (terminal: number) =>
+    sessionEntity("session", {
+      state: "finishedUnseen",
+      terminal,
+      outcome: "succeeded",
+      unseen: true,
+      terminalOrigin: "live",
+    });
   try {
     f.receive("local", { t: "index.snapshot", rev: 0, entries: [entry()] });
     f.receive("local", {
@@ -93,7 +106,7 @@ Deno.test("admitted finishes advance an existing clock silently while live and b
       from: 0,
       revision: 1,
       admitted: true,
-      ops: [{ op: "finish", sessionID: "session", time: 20 }],
+      ops: [{ op: "entity.upsert", value: entity(20) }],
     });
     assertEquals(completions, [], "Lease replay is not a new completion");
     f.receive("local", {
@@ -113,14 +126,18 @@ Deno.test("admitted finishes advance an existing clock silently while live and b
       generation: "finishes",
       from: 2,
       revision: 3,
-      ops: [{ op: "finish", sessionID: "session", time: 30 }],
+      ops: [{ op: "entity.upsert", value: entity(30) }],
     });
     assertEquals(completions, [30]);
     f.receive("local", {
       t: "inbox.snapshot",
       generation: "finishes",
       revision: 4,
-      inbox: { ...metadata(), finishes: { session: 40 } },
+      inbox: {
+        ...metadata(),
+        finishes: { session: 40 },
+        entities: { [entityKey("session", "session")]: entity(40) },
+      },
     });
     assertEquals(
       completions,
@@ -354,10 +371,81 @@ Deno.test("live Sessions context overlays preserve creation order when a page ro
   }
 });
 
+function publishOrder(
+  f: ReturnType<typeof fixture>,
+  id: string,
+  directories: (string | string[])[],
+  revision = 1,
+  programs = true,
+) {
+  f.receive(id, {
+    t: "projects.order",
+    revision,
+    projects: directories.map((directory) => {
+      const aliases = typeof directory === "string" ? [directory] : directory;
+      return { id: aliases[0], directories: aliases };
+    }),
+  });
+  if (programs && !f.resources.programs(id).ready) {
+    f.receive(id, {
+      t: "programs",
+      revision: 1,
+      auto: false,
+      programs: [],
+      members: {},
+    });
+  }
+}
+
+Deno.test("programs and project order jointly gate rows per sidecar; roots borrow membership", () => {
+  const f = fixture();
+  const row = () =>
+    f.resources.projects(100).map((r) => [r.sidecarId, r.program]);
+  try {
+    for (const id of ["local", "remote"]) {
+      f.receive(id, {
+        t: "inbox.snapshot",
+        generation: "programs",
+        revision: 1,
+        inbox: metadata(),
+      });
+    }
+    publishOrder(f, "local", ["/p"], 1, false);
+    const membership = {
+      t: "programs" as const,
+      revision: 1,
+      auto: true,
+      programs: [{
+        id: "first",
+        name: "First",
+        named: true,
+        origin: "user" as const,
+      }],
+      members: { "/p": { program: "first", by: "user" as const } },
+    };
+    f.receive("remote", membership);
+    assertEquals(row(), []);
+    f.receive("local", membership);
+    assertEquals(row(), [["local", { id: "first", by: "user" }]]);
+    publishOrder(f, "remote", ["/p"], 1, false);
+    f.receive("remote", {
+      ...membership,
+      revision: 2,
+      members: { "/p": { program: null, by: "user" } },
+    });
+    assertEquals(row(), [["local", { id: "first", by: "user" }], ["remote", {
+      id: null,
+      by: "user",
+    }]]);
+  } finally {
+    f.resources.stop();
+  }
+});
+
 Deno.test("sidebar identities stay ordered through state/recency ticks, explicit moves reorder and arrivals append", () => {
   const f = fixture();
   const inbox = metadata();
-  inbox.projects.push({ ...inbox.projects[0], directory: "/q", order: 1 });
+  inbox.projects.push({ ...inbox.projects[0], directory: "/q" });
   inbox.discovered = ["/new-discovered"];
   const summary = (
     directory: string,
@@ -389,6 +477,8 @@ Deno.test("sidebar identities stay ordered through state/recency ticks, explicit
       "/q": summary("/q", "blocked", 1),
     };
     publish();
+    assertEquals(ids(), []);
+    publishOrder(f, "local", ["/p", "/q", "/new-discovered"]);
     const initial = ids();
     assertEquals(initial, ["/p", "/q", "/new-discovered"]);
     for (const status of ["working", "blocked", "finished"] as const) {
@@ -399,11 +489,10 @@ Deno.test("sidebar identities stay ordered through state/recency ticks, explicit
         assertEquals(ids(), initial);
       }
     }
-    inbox.projects[0].order = 1;
-    inbox.projects[1].order = 0;
-    publish();
+    publishOrder(f, "local", ["/q", "/p", "/new-discovered"], 2);
     assertEquals(ids(), ["/q", "/p", "/new-discovered"]);
     inbox.summaries["/arrival"] = summary("/arrival", "blocked", 9999999);
+    publishOrder(f, "local", ["/q", "/p", "/new-discovered", "/arrival"], 3);
     publish();
     assertEquals(ids(), ["/q", "/p", "/new-discovered", "/arrival"]);
     delete inbox.summaries["/q"];
@@ -433,15 +522,15 @@ Deno.test("project order is the durable server and saved order, whichever server
       inbox: {
         ...metadata(),
         tasks: [],
-        projects: directories.map((directory, order) => ({
+        projects: [...directories].reverse().map((directory) => ({
           directory,
-          order,
           lastVisit: 1,
           inactive: false,
           added: true,
         })),
       },
     });
+    publishOrder(f, id, directories);
   };
   const order = (f: ReturnType<typeof fixture>) =>
     f.resources.projects(100).map((p) => `${p.sidecarId}:${p.directory}`);
@@ -471,7 +560,6 @@ function metadata(): InboxSnapshot {
   return {
     projects: [{
       directory: "/p",
-      order: 0,
       lastVisit: 1,
       inactive: false,
       added: true,
@@ -781,6 +869,7 @@ Deno.test("leaf Sessions demand keeps bounded exact native scopes and projects n
     ) => [r.id, r.group]),
     [["tstv1-idle", "nested-task"]],
   );
+  publishOrder(f, "local", [["/tree", "/tree/src"]]);
   assertEquals(f.resources.projects(0).map((r) => r.directory), ["/tree"]);
   assertEquals(inbox.tasks[0].directory, "/tree/src");
   assertEquals(f.resources.tabs(project).tasks()[0].directory, "/tree/src");
@@ -824,7 +913,7 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
   const f = fixture(), project = { sidecarId: "local", directory: "/p" };
   f.resources.scope(project);
   const epoch = f.connections.get("local")!.viewEpoch;
-  assertEquals(f.resources.sessionRowsReady(project), false);
+  assertEquals(f.resources.projectContents(project), "loading");
   f.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
@@ -851,7 +940,7 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
     },
   });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assertEquals(f.resources.sessionRowsReady(project), false);
+  assertEquals(f.resources.projectContents(project), "loading");
   f.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
@@ -859,19 +948,81 @@ Deno.test("Sessions hierarchy waits for its requested page and coherent inbox bu
     inbox: metadata(),
     epoch,
   });
-  assertEquals(f.resources.sessionRowsReady(project), true);
+  assertEquals(f.resources.projectContents(project), "items");
   assertEquals(f.resources.sessionRows(project)[0].key, "heading:task");
   f.resources.visibleRows(project, ["session"]);
-  assertEquals(f.resources.sessionRowsReady(project), true);
+  assertEquals(f.resources.projectContents(project), "items");
   const other = { ...project, directory: "/other" };
   f.resources.scope(other);
-  assertEquals(f.resources.sessionRowsReady(other), false);
+  assertEquals(f.resources.projectContents(other), "loading");
   assertEquals(
-    f.resources.sessionRowsReady(project),
-    true,
+    f.resources.projectContents(project),
+    "items",
     "same-directory retained inbox and page remain coherent",
   );
   f.resources.stop();
+});
+
+Deno.test("project collection distinguishes unknown, confirmed empty and items by project", async () => {
+  const f = fixture();
+  const empty = { sidecarId: "local", directory: "/empty" };
+  const items = { ...empty, directory: "/other" };
+  const list = f.resources.projectContents;
+  const snapshot = (revision: number) =>
+    f.receive("local", {
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision,
+      inbox: { ...metadata(), tasks: [] },
+      epoch: f.connections.get("local")!.viewEpoch,
+    });
+  const answer = async (p: typeof empty, hasItem: boolean) => {
+    const read = f.listReads.findLast((read) =>
+      read.input.directory === p.directory
+    )!;
+    read.resolve({
+      items: hasItem
+        ? [{
+          id: "item",
+          title: "Item",
+          directory: p.directory,
+          timeCreated: 1,
+        }]
+        : [],
+      older: null,
+      load: {
+        id: read.intent!.key,
+        scope: { kind: "project-sessions", directory: p.directory },
+        boundary: { kind: "page", limit: 20 },
+        generation: "source",
+        revision: 1,
+        state: "complete",
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  try {
+    f.resources.scope(empty);
+    assertEquals(list(empty), "loading");
+    snapshot(1);
+    assertEquals(list(empty), "loading");
+    await answer(empty, false);
+    assertEquals(list(empty), "empty");
+
+    f.resources.scope(items);
+    assertEquals(list(items), "loading");
+    await answer(items, true);
+    assertEquals(list(items), "loading", "waiting for the scoped task answer");
+    snapshot(2);
+    assertEquals(list(items), "items");
+
+    f.resources.scope(empty);
+    assertEquals(list(empty), "empty", "revisit with a valid cache");
+    f.resources.scope(items);
+    assertEquals(list(items), "items", "revisit with a valid cache");
+  } finally {
+    f.resources.stop();
+  }
 });
 
 Deno.test("mandatory and task context paints with a coherent inbox while its list boundary is still loading", () => {
@@ -891,8 +1042,9 @@ Deno.test("mandatory and task context paints with a coherent inbox while its lis
     revision: 0,
     inbox: metadata(),
   });
-  assertEquals(f.resources.sessionRowsReady(project), true);
-  assertEquals(f.resources.sessionRowsLoading(project), true);
+  const collection = f.resources.sessionCollection(project);
+  assertEquals(collection.state, "items");
+  assertEquals(collection.progress.busy, true);
   assert(f.resources.sessionRows(project).some((row) => row.key === "session"));
   f.resources.stop();
 });
@@ -906,6 +1058,7 @@ Deno.test("@load @sessions digest-only patches do zero project-row recomputation
     return createState(initial);
   };
   const f = fixture(factory);
+  publishOrder(f, "local", ["/p", "/other"]);
   f.receive("local", {
     t: "index.snapshot",
     rev: 0,
@@ -978,6 +1131,7 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     attention: { ...entry().attention, permissions: 0 },
   };
   const b = { ...a, id: "b", directory: "/two/shared" };
+  publishOrder(f, "local", [a.directory, b.directory, "/empty"]);
   f.receive("local", { t: "index.snapshot", rev: 0, entries: [a, b] });
   f.receive("local", {
     t: "inbox.snapshot",
@@ -1027,6 +1181,7 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     f.resources.projects(100).find((r) => r.directory === b.directory),
     other,
   );
+  publishOrder(f, "local", [[a.directory, "/moved"], b.directory, "/empty"], 2);
   f.receive("local", {
     t: "index.patch",
     rev: 1,
@@ -1064,6 +1219,117 @@ Deno.test("project keys maintain membership, lamps, unread, name collisions and 
     false,
   );
   f.resources.stop();
+});
+
+Deno.test("notification delivery projects the target's project, task and session for every session note", () => {
+  const f = fixture();
+  const root = { ...entry("root", "/other"), title: "Search implementation" };
+  const child = {
+    ...entry("child", "/other"),
+    parentID: root.id,
+    title: "Verify index",
+  };
+  const task = {
+    id: "task",
+    directory: "/other",
+    name: "Search",
+    sessions: [root.id],
+    order: 1,
+  };
+  f.receive("local", { t: "index.snapshot", rev: 0, entries: [root, child] });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "notification-location",
+    revision: 0,
+    inbox: {
+      ...metadata(),
+      tasks: [task],
+    },
+  });
+  const hub = new NotificationHub(
+    () => ({ channels: [] }),
+    async () => {},
+    () => {},
+    f.resources.notificationLocation,
+  );
+  for (
+    const kind of ["done", "permission", "question", "error", "info"] as const
+  ) {
+    const note = hub.publish({
+      id: kind,
+      kind,
+      sessionRef: { sidecar: "local", session: child.id },
+      title: kind,
+      actions: [],
+    });
+    assertEquals(note.location, {
+      project: { name: "other" },
+      task: "Search",
+      session: "Verify index",
+    });
+    assertEquals(notificationBody(note), "other · Search · Verify index");
+  }
+  const hierarchy = projectSessionHierarchy([root, child], [task]);
+  f.receive("local", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "upsert",
+      entry: { ...child, hierarchy: hierarchy.get(child.id) },
+    }],
+  });
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "notification-location",
+    from: 0,
+    revision: 1,
+    ops: [{ op: "task.remove", id: task.id }],
+  });
+  const background = hub.publish({
+    id: "background",
+    kind: "done",
+    sessionRef: { sidecar: "local", session: child.id },
+    title: "Session done",
+    actions: [],
+  });
+  assertEquals(notificationBody(background), "other · Search · Verify index");
+  f.resources.stop();
+});
+
+Deno.test("duplicate checkout hints follow native project name publications", () => {
+  const f = fixture();
+  const a = "/one/shared", b = "/two/shared";
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "names",
+    revision: 0,
+    inbox: metadata(),
+  });
+  const summary = (directory: string, name?: string) => ({
+    directory,
+    presentation: { id: directory, name },
+    hasSessions: true,
+    status: null,
+    sessionCount: 1,
+    unseenCount: 0,
+    lastActivity: null,
+    authority: "current" as const,
+  });
+  const publish = (from: number, ...summaries: ReturnType<typeof summary>[]) =>
+    f.receive("local", {
+      t: "inbox.summaries",
+      generation: "names",
+      from,
+      revision: from + summaries.length,
+      summaries,
+    });
+  publish(0, summary(a), summary(b));
+  assertEquals(f.resources.duplicateProjectName("shared"), true);
+  publish(2, summary(a, "Shared app"));
+  assertEquals(f.resources.duplicateProjectName("shared"), false);
+  assertEquals(f.resources.duplicateProjectName("Shared app"), false);
+  publish(3, summary(b, "Shared app"));
+  assertEquals(f.resources.duplicateProjectName("Shared app"), true);
 });
 
 Deno.test("keyed project attention follows operation lifetimes, task membership, policy and native link", () => {
@@ -1308,6 +1574,8 @@ Deno.test("server resources project per-server attention and labelled projects f
     f.resources.projectEntries({ sidecarId: "local", directory: "/other" }),
     [],
   );
+  publishOrder(f, "local", ["/p"]);
+  publishOrder(f, "remote", ["/p"]);
   assertEquals(
     f.resources.projects(100).map((p) => [p.sidecarId, p.label, p.status]),
     [["local", "This server", "working"], [

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { openLatestWork } from "../../pages/transcript.ts";
 import { expect, type Locator } from "@playwright/test";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -7,55 +8,56 @@ import { revealAcquired, scrollTranscript } from "../../pages/transcript.ts";
 async function geometry(nodes: Locator) {
   const facts = await nodes.evaluateAll((nodes) =>
     nodes.map((node) => {
-      const rail = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-own",
-      )!;
-      const box = rail.querySelector(".otk-tree-toggle");
+      const row = node.querySelector(":scope > .otk-tree-heading")!;
+      const rail = row.querySelector(":scope > .otk-tree-junction")!;
+      const box = row.querySelector(
+        ":scope > .otk-tree-trigger-slot .otk-tree-toggle, :scope > button.otk-tree-trigger .otk-disclosure-icon svg",
+      );
       const connector = rail.querySelector(".otk-tree-connector")!;
       const upper = rail.querySelector(".otk-tree-upper")!;
       const lower = rail.querySelector(".otk-tree-lower")!;
       const r = rail.getBoundingClientRect(), b = box?.getBoundingClientRect();
-      const heading = rail.parentElement!.getBoundingClientRect();
+      const heading = rail.querySelector(
+        ".otk-tree-junction-line",
+      )!
+        .getBoundingClientRect();
       const c = connector.getBoundingClientRect(),
         u = upper.getBoundingClientRect();
-      const content = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-label",
-      )!.firstElementChild!.getBoundingClientRect();
+      const label = row.querySelector(
+        ":scope > .otk-tree-frame > .otk-tree-label, :scope > .otk-tree-trigger > .otk-disclosure-caption",
+      )!;
+      const content = (label.firstElementChild ?? label)
+        .getBoundingClientRect();
       const style = getComputedStyle(lower);
       const continuation = node.querySelector(
-        ":scope > .otk-tree-body > .otk-tree-continuation",
+        ":scope > .is-gap > .otk-tree-junction > .otk-tree-through-paint",
       );
-      const incoming = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-incoming",
-      );
+      const incoming = rail.matches(".is-tee, .is-elbow") ? rail : null;
       const incomingBox = incoming?.getBoundingClientRect();
       const parent = node.parentElement?.closest(".otk-tree-node");
       const parentRail = parent?.querySelector(
-        // The content gutter can be wider than the native junction cell. The
-        // child guide follows the artwork axis, not the gutter's outer box.
-        ":scope > .otk-tree-heading .otk-tree-icon-art",
+        ":scope > .otk-tree-heading .otk-tree-node-lane",
       )?.getBoundingClientRect();
       const parentJunction = parent?.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-own",
+        ":scope > .otk-tree-heading > .otk-tree-junction",
       )?.getBoundingClientRect();
       const parentStem = parent?.querySelector(
-        ":scope > .otk-tree-heading .otk-tree-icon-stem",
+        ":scope > .otk-tree-heading .otk-tree-node-lane.is-stem",
       )?.getBoundingClientRect();
-      const icon =
-        node.querySelector(":scope > .otk-tree-heading .otk-tree-icon") ??
-          parent?.querySelector(":scope > .otk-tree-heading .otk-tree-icon");
-      const svg = box?.querySelector("svg");
+      const art = ".otk-tree-node-slot, .otk-disclosure-lead";
+      const icon = row.querySelector(art) ??
+        parent?.querySelector(":scope > .otk-tree-heading")?.querySelector(art);
+      const svg = box?.matches("svg") ? box : box?.querySelector("svg");
       const parentHeading = parent?.querySelector(":scope > .otk-tree-heading")
         ?.getBoundingClientRect();
       const firstChild = parent?.querySelector(
-        ":scope > .otk-tree-body > .otk-tree-children .otk-tree-node",
+        ":scope > .otk-tree-region .otk-tree-node",
       );
-      const label = node.querySelector(
-        ":scope > .otk-tree-heading > .otk-tree-label",
-      )!.getBoundingClientRect();
+      const contentEdge = row.querySelector(":scope > .otk-tree-frame")!
+        .getBoundingClientRect();
       return {
         connected: node.classList.contains("is-connected"),
-        last: node.classList.contains("is-last"),
+        last: rail.matches(".is-elbow"),
         outgoing: node.classList.contains("is-outgoing"),
         box: b ? [b.x + b.width / 2, b.y + b.height / 2] : undefined,
         boxTop: b?.top,
@@ -66,7 +68,7 @@ async function geometry(nodes: Locator) {
           : undefined,
         boxColor: svg ? getComputedStyle(svg).color : undefined,
         muted: getComputedStyle(node).getPropertyValue("--otk-fg-3").trim(),
-        junction: [r.x + r.width / 2, r.y + r.height / 2],
+        junction: [r.x + r.width / 2, heading.y + heading.height / 2],
         indent: r.width,
         iconSize: parseFloat(getComputedStyle(icon ?? rail).fontSize),
         iconSlot: icon?.getBoundingClientRect().width,
@@ -78,8 +80,8 @@ async function geometry(nodes: Locator) {
         rowCenter: heading.y + heading.height / 2,
         connector: [c.x, c.right, c.y],
         labelEdge: node.classList.contains("is-outgoing")
-          ? label.right
-          : label.left,
+          ? contentEdge.right
+          : contentEdge.left,
         parentBottom: firstChild === node ? parentHeading?.bottom : undefined,
         upper: u.bottom,
         lowerStart: lower.getBoundingClientRect().top,
@@ -99,7 +101,7 @@ async function geometry(nodes: Locator) {
             .backgroundSize,
         horizontalDots: getComputedStyle(connector).backgroundSize,
         tail: continuation
-          ? getComputedStyle(continuation, "::before").backgroundImage
+          ? getComputedStyle(continuation).backgroundImage
           : "none",
       };
     })
@@ -185,13 +187,20 @@ test.describe("work tree", () => {
   }, async ({ isolatedState: state, page }, info) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await openSession(state, page, "tstv1-otk");
-    const root = page.locator(".otk-work-log > .otk-tree-node");
-    await expect(root.locator(":scope > .otk-tree-heading .otk-tree-icon-art"))
-      .toBeEmpty();
-    const toggle = root.locator(":scope > .otk-tree-heading .otk-tree-control");
-    await expect(root.locator(":scope > .otk-tree-heading [aria-expanded]"))
+    const work = await openLatestWork(page);
+    const root = work.locator("[data-tool] > .otk-tree-node");
+    await expect(
+      root.locator(":scope > .otk-tree-heading .otk-disclosure-lead svg"),
+    )
       .toHaveCount(1);
-    await root.locator(":scope > .otk-tree-heading label.otk-tree-toggle")
+    const toggle = root.locator(
+      ":scope > .otk-tree-heading > button.otk-tree-trigger",
+    );
+    await expect(
+      root.locator(":scope > .otk-tree-heading > button[aria-expanded]"),
+    )
+      .toHaveCount(1);
+    await toggle.locator(".otk-disclosure-icon svg")
       .click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await toggle.press("ArrowLeft");
@@ -199,10 +208,14 @@ test.describe("work tree", () => {
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    const tool = page.locator(".otk-tool-toggle");
-    await expect(page.locator(".otk-tool-state > .otk-tree-icon svg"))
+    const tool = work.locator(".otk-tool-toggle");
+    await expect(
+      page.locator(
+        "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
+      ),
+    )
       .toHaveCount(1);
-    await tool.click();
+    await expect(tool).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator(".otk-code")).toContainText("foldedSecret");
     await tool.evaluate((element) => (element as HTMLElement).blur());
     for (
@@ -291,7 +304,7 @@ test.describe("project tree", () => {
           ":scope > .otk-tree-heading .otk-tree-connector",
         )!
           .getBoundingClientRect();
-        const marker = element.querySelector(".otk-project-marker")!
+        const marker = element.querySelector(".otk-tree-node-line")!
           .getBoundingClientRect();
         return {
           end: connector.right,
@@ -353,15 +366,15 @@ test.describe("activity tree", () => {
     const span = page.locator(".otk-record-group").first();
     await expect(
       span.locator(
-        ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-icon-art",
+        ":scope > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
       ),
-    ).toBeEmpty();
+    ).toHaveCount(1);
     await expect(span).toHaveAttribute("data-count", "3");
     await span.locator(".otk-record-group-toggle").first().click();
     const run = span.locator(".otk-record-group");
     await expect(run).toHaveCount(1);
     const toggle = run.locator(
-      ":scope > .otk-tree-node > .otk-tree-heading .otk-tree-control",
+      ":scope > .otk-tree-node > .otk-tree-heading > button.otk-tree-trigger",
     );
     await toggle.focus();
     await page.keyboard.press("ArrowRight");
@@ -408,7 +421,8 @@ test.describe("outgoing tree", () => {
     await revealAcquired(page, selector);
     const outgoing = page.locator(selector);
     await expect(outgoing.first()).toHaveClass(/is-outgoing/);
-    await outgoing.first().locator(".otk-tree-toggle").first().click();
+    await outgoing.first().locator(".otk-tree-trigger .otk-disclosure-icon svg")
+      .first().click();
     await geometry(outgoing);
   });
 });
@@ -419,15 +433,22 @@ test.describe("virtual session tree", () => {
     tag: ["@sessions", "@contracts", "@tree"],
   }, async ({ isolatedState: state, page }) => {
     await openSession(state, page, "tstv1-otk");
-    const row = page.locator('[data-session="tstv1-nested"]');
+    const row = page.locator('.otk-session-row[data-session="tstv1-nested"]')
+      .locator("xpath=ancestor::section[@data-tree-node][1]");
     await expect(row).toBeVisible();
     const facts = await row.evaluate((element) => {
       const row = element.getBoundingClientRect();
-      return Array.from(element.querySelectorAll(".otk-tree-junction")).map(
+      // Issue 2.96: TreeNode owns rails beside its heading label, not inside
+      // the consumer's row frame.
+      const heading = element.querySelector(":scope > .otk-tree-heading")!;
+      return Array.from(heading.querySelectorAll(
+        ":scope > .otk-tree-lanes > .otk-tree-lane, :scope > .otk-tree-junction",
+      )).map(
         (cell) => {
           const box = cell.getBoundingClientRect();
           const connector = cell.querySelector(".otk-tree-connector");
           return {
+            blank: cell.matches(".is-blank"),
             height: box.height,
             rowHeight: row.height,
             y: box.y,
@@ -438,7 +459,13 @@ test.describe("virtual session tree", () => {
         },
       );
     });
-    expect(facts).toHaveLength(2);
+    // The row keeps two ancestor rails and its junction, plus the explicit
+    // blank lane that replaces the old unmeasured root spacer.
+    expect(facts).toHaveLength(4);
+    expect(facts[0].blank).toBe(true);
+    expect(facts.filter((fact) => fact.connector !== undefined)).toHaveLength(
+      1,
+    );
     for (const fact of facts) {
       expect(Math.abs(fact.height - fact.rowHeight)).toBeLessThanOrEqual(1);
       expect(Math.abs(fact.y - fact.rowY)).toBeLessThanOrEqual(1);

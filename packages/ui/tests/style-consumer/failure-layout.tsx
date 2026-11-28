@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createTranscriptProjection, type SidecarState } from "@otk/client";
+import {
+  createDisclosures,
+  createTranscriptProjection,
+  type SidecarState,
+} from "@otk/client";
+import { solidState } from "../../state/binding.ts";
 import {
   DEFAULT_PREFS,
   type Derived,
@@ -12,7 +17,8 @@ import ProjectInbox from "../../components/ProjectInbox.tsx";
 import Settings from "../../components/Settings.tsx";
 import Message from "../../components/Message.tsx";
 import ActivityGroup from "../../components/ActivityGroup.tsx";
-import WorkLog from "../../components/WorkLog.tsx";
+import WorkStrip from "../../components/WorkStrip.tsx";
+import { workRuns } from "../../components/work-log.ts";
 import Reasoning from "../../components/Reasoning.tsx";
 import NativeSource from "../../components/parts/NativeSource.tsx";
 import Timeline from "../../components/Timeline.tsx";
@@ -156,6 +162,7 @@ const records: MessageData[] = [
 
 /** Shared production consumers with fixed facts for placement/geometry regression. */
 export default function FailureLayout() {
+  const tree = createDisclosures({ factory: solidState });
   const surface = new URL(location.href).searchParams.get("surface");
   const registry = useUiRegistries();
   registerUnknownPart(registry.parts);
@@ -215,10 +222,22 @@ export default function FailureLayout() {
           }}
         />
         <h3>Work and source</h3>
-        <WorkLog
-          owner="style-failure"
-          records={["work"]}
-          body={() => <p>Owned work content remains available.</p>}
+        <WorkStrip
+          runs={workRuns({
+            parts: [{ kind: "meta", id: "check" }],
+            terminal: true,
+            now: 2000,
+            presentation: () => ({
+              work: { start: 1000, end: 2000 },
+              run: { label: "Check output" },
+            }),
+          })}
+          shown={false}
+          action={() => ({
+            availability: () => ({ available: true }),
+            subscribe: () => () => {},
+            run: () => Promise.resolve({ kind: "shown" }),
+          })}
         />
         <Reasoning
           part={{
@@ -337,6 +356,7 @@ export default function FailureLayout() {
     return (
       <div class="error-review-layout">
         <ProjectInbox
+          disclosure={tree}
           projects={[]}
           duplicateName={() => false}
           servers={[server]}
@@ -353,7 +373,7 @@ export default function FailureLayout() {
   }
   if (surface === "interval") {
     const projection = createTranscriptProjection();
-    projection.replace(records);
+    projection.reset(records);
     const group =
       projection.state.records.groups[projection.state.records.keys[0]];
     return (

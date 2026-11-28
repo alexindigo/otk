@@ -5,7 +5,12 @@ import { randomUUID } from "node:crypto";
 import type { Json } from "../../../support/fixture-control.ts";
 import { readFile } from "node:fs/promises";
 import { wire } from "../../fixtures/wire.ts";
-import { prompt, revealTool, toolScript } from "../../pages/transcript.ts";
+import {
+  prompt,
+  revealTool,
+  sessionStatus,
+  toolScript,
+} from "../../pages/transcript.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 
 test(
@@ -133,10 +138,7 @@ test("messages.revert-files-counted-strip-reload", {
   await revealTool(page, "[data-tool=edit][data-tool-status=completed]");
   await expect(page.locator("[data-tool=edit][data-tool-status=completed]"))
     .toHaveCount(1);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   expect(await readFile(state.directory + "/revert.txt", "utf8")).toBe(
     "after\n",
   );
@@ -237,11 +239,19 @@ isolatedTest.describe("configured message details", () => {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Shift+Tab");
     await expect(agent).toBeFocused();
+    // 2.105 WP6 moves the chip into muted footer metadata, but the shared
+    // EntityPill keeps the regular foreground when it has keyboard focus.
+    const foreground = await agent.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--otk-fg)";
+      el.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    });
     await expect(agent).toHaveCSS(
       "color",
-      await page.locator(".otk-reply-start").evaluate((el) =>
-        getComputedStyle(el).color
-      ),
+      foreground,
     );
     await expect(page.locator("[data-role=user]").first()).toHaveCSS(
       "border-left-width",

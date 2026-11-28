@@ -33,6 +33,18 @@ export function unknownPartPresentation(part: Part): PartPresentation {
     ...(activity?.layout === "row" && activity.direction !== "outgoing"
       ? { work: {} }
       : {}),
+    run: activity && {
+      lane: activity.category === "delegation" ? "delegation" : undefined,
+      agent: activity.entity?.label,
+      label: activity.title,
+      merge: activity.summary && {
+        key: `activity:${activity.summary.kind}`,
+        verb: activity.kindLabel,
+        noun: activity.summary.noun,
+        plural: activity.summary.plural,
+      },
+      child: activity.child?.sessionID ?? activity.entity?.sessionID,
+    },
     required: activity?.tone === "error" ||
       part.kind === "external" && !!part.failure,
     copyable: content !== undefined,

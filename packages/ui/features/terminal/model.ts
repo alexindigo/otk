@@ -3,10 +3,15 @@ import {
   createState,
   type FailureValue,
   failureValue,
+  FeedbackFailure,
   SessionTerminals,
   type SidecarConnection,
   type StateFactory,
+  TERMINAL_RUN_LABEL,
   type TerminalAttachment,
+  type TerminalBox,
+  type TerminalRunTarget,
+  TERMINALS_UNAVAILABLE,
 } from "@otk/client";
 import type { TerminalInfo } from "@otk/protocol";
 import type { ThemeEngine } from "../../theme/engine.ts";
@@ -20,6 +25,17 @@ interface Pane {
   alive: boolean;
   renderer?: TerminalRenderer;
   attachment?: TerminalAttachment;
+  detachRun?: () => void;
+}
+
+function runTarget(id: string, pane: Pane): TerminalRunTarget {
+  return {
+    terminalID: id,
+    bracketedPaste: () => pane.renderer!.bracketedPaste(),
+    paste: (text) => pane.renderer!.paste(text),
+    submit: () => pane.renderer!.submit(),
+    erase: (count) => pane.renderer!.erase(count),
+  };
 }
 export function terminalPrompt(text: string, title: string) {
   let length = 3;
@@ -40,6 +56,8 @@ export function createTerminalPanel(
   theme: ThemeEngine,
   add: (text: string, label: string) => void,
   factory: StateFactory = createState,
+  box?: TerminalBox,
+  rendererFactory = createTerminalRenderer,
 ) {
   const terminals = new SessionTerminals(
     terminalSocketFor(connection),
@@ -56,9 +74,53 @@ export function createTerminalPanel(
   });
   const panes = new Map<string, Pane>();
   let alive = true,
+    started = false,
+    wasLoading = false,
     intent = "",
     observed: string | undefined,
     creating: Promise<void> | undefined;
+  const fail = (cause: unknown, actionLabel: string) => {
+    if (!alive) return;
+    const failure = failureValue(cause, { actionLabel, target: { sessionID } });
+    if (!failure) return;
+    const code = failure.failure?.value.code;
+    if (code === "terminal-unavailable" || code === "method") {
+      box?.markUnavailable(TERMINALS_UNAVAILABLE);
+    }
+    store.update((state) => {
+      state.error = failure;
+    });
+    const error = new FeedbackFailure(failure);
+    box?.runs.fail(error);
+    return error;
+  };
+  // Input is admitted only after the mux restores the shell's active modes.
+  const drain = () => {
+    if (
+      !alive || !started || !box?.runs.waiting || box.mode === "closed" ||
+      box.unavailable || creating ||
+      terminals.state.loading || terminals.state.error
+    ) return;
+    const selected = terminals.state.list.find((item) =>
+      item.id === terminals.state.selected
+    );
+    if (!selected || selected.status !== "running") {
+      void create();
+      return;
+    }
+    const pane = panes.get(selected.id);
+    if (
+      !pane?.alive || !pane.attachment || !pane.renderer ||
+      !box.runs.ready(selected.id) ||
+      terminals.state.disconnected.includes(selected.id)
+    ) return;
+    try {
+      box.runs.deliver(selected.id);
+      if (!box.runs.pending) pane.renderer.focus();
+    } catch (cause) {
+      fail(cause, TERMINAL_RUN_LABEL);
+    }
+  };
   const title = (id: string) =>
     terminals.state.list.find((item) => item.id === id)?.title ||
     `Terminal ${id}`;
@@ -71,15 +133,33 @@ export function createTerminalPanel(
         panes.get(terminals.state.selected ?? "")?.renderer?.selection() ?? "";
     });
   };
+  // A retained renderer can remain attached while offscreen. The write port
+  // exists only while its live channel can actually accept bytes.
+  const bindRunTarget = (id: string, pane: Pane) => {
+    if (!box) return;
+    const { list, disconnected } = terminals.state;
+    if (
+      pane.alive && pane.renderer && pane.attachment?.retained &&
+      !disconnected.includes(id) &&
+      list.some((item) => item.id === id && item.status === "running")
+    ) {
+      pane.detachRun ??= box.runs.attach(runTarget(id, pane));
+    } else {
+      pane.detachRun?.();
+      pane.detachRun = undefined;
+    }
+  };
   const activate = (id: string, pane: Pane) => {
     if (!alive || !pane.alive || !pane.renderer || intent !== id) return;
     pane.attachment = terminals.show(id, pane.renderer.sink);
+    bindRunTarget(id, pane);
     intent = "";
     store.update((state) => {
       state.preparing = "";
     });
     display();
-    pane.renderer.focus();
+    if (box?.runs.pending?.terminalID !== id) pane.renderer.focus();
+    drain();
   };
   const select = (id: string) => {
     if (!alive || !terminals.state.list.some((item) => item.id === id)) return;
@@ -92,6 +172,17 @@ export function createTerminalPanel(
     if (pane) activate(id, pane);
   };
   const unlisten = terminals.subscribe(() => {
+    const { loading, error } = terminals.state;
+    if (!loading && !error) {
+      box?.runs.present(
+        terminals.state.list.filter((item) => item.status === "running").map((
+          item,
+        ) => item.id),
+      );
+    }
+    for (const [id, pane] of panes) bindRunTarget(id, pane);
+    const refreshed = wasLoading && !loading;
+    wasLoading = loading;
     const selected = terminals.state.selected;
     if (intent && !terminals.state.list.some((item) => item.id === intent)) {
       intent = "";
@@ -102,39 +193,69 @@ export function createTerminalPanel(
     if (!intent && selected && selected !== observed) select(selected);
     observed = selected;
     display();
+    if (refreshed && box) {
+      if (error) {
+        fail(new FeedbackFailure(error), "Opening terminal");
+      } else if (box.unavailable) {
+        store.update((state) => {
+          state.error = "";
+        });
+        box.markUnavailable(undefined);
+      }
+    }
+    drain();
   });
+  const stopRuns = box?.subscribe(drain);
   const stopTheme = theme.subscribe(() => {
     for (const pane of panes.values()) {
       pane.renderer?.theme(theme.snapshot().colors);
     }
   });
-  const fail = (cause: unknown, actionLabel: string) => {
-    if (alive) {
-      store.update((state) => {
-        state.error = failureValue(cause, {
-          actionLabel,
-          target: { sessionID },
-        });
-      });
-    }
-  };
   const create = (): Promise<void> => {
     if (creating) return creating;
     store.update((state) => {
       state.creating = true;
       state.error = "";
     });
-    creating = terminals.create(80, 24).then((info) => {
-      if (alive) select(info.id);
-    }).catch((cause) => fail(cause, "Creating terminal")).finally(() => {
+    creating = Promise.resolve().then(() => terminals.create(80, 24)).then(
+      (info) => {
+        if (alive) select(info.id);
+      },
+    ).catch((cause) => {
+      fail(cause, "Creating terminal");
+    }).finally(() => {
       creating = undefined;
       if (alive) {
         store.update((state) => {
           state.creating = false;
         });
+        drain();
       }
     });
     return creating;
+  };
+  const pendingRun = () => box?.runs.pending;
+  const runReady = () => {
+    const id = pendingRun()?.terminalID;
+    return !!id && !!box?.runs.ready(id) &&
+      !terminals.state.disconnected.includes(id);
+  };
+  const focus = () => {
+    if (alive) panes.get(terminals.state.selected ?? "")?.renderer?.focus();
+  };
+  const actOnPending = (act: "confirm" | "cancel") => {
+    const id = pendingRun()?.terminalID;
+    if (!alive || !box || !id || !runReady()) return;
+    if (terminals.state.selected !== id) select(id);
+    if (pendingRun()?.terminalID !== id || !runReady()) return;
+    try {
+      if (box.runs[act]()) focus();
+    } catch (cause) {
+      fail(
+        cause,
+        act === "confirm" ? TERMINAL_RUN_LABEL : "Cancel pasted command",
+      );
+    }
   };
   return {
     terminals,
@@ -142,9 +263,11 @@ export function createTerminalPanel(
     title,
     select,
     create,
-    focus() {
-      if (alive) panes.get(terminals.state.selected ?? "")?.renderer?.focus();
-    },
+    focus,
+    pendingRun,
+    runReady,
+    confirmRun: () => actOnPending("confirm"),
+    cancelRun: () => actOnPending("cancel"),
     failure: (cause: unknown) => fail(cause, "Opening terminal"),
     selectedIndex: () =>
       terminals.state.list.findIndex((item) =>
@@ -161,9 +284,14 @@ export function createTerminalPanel(
     async start() {
       await terminals.refresh();
       if (!alive) return;
-      if (!terminals.state.list.length && !terminals.state.error) {
+      started = true;
+      if (terminals.state.error) return;
+      if (!terminals.state.list.length) {
         await create();
-      } else if (terminals.state.selected) select(terminals.state.selected);
+      } else {
+        if (terminals.state.selected) select(terminals.state.selected);
+      }
+      drain();
     },
     wants(id: string) {
       return terminals.state.selected === id || store.state.preparing === id ||
@@ -172,9 +300,12 @@ export function createTerminalPanel(
     mount(id: string, element: HTMLElement): () => void {
       const pane: Pane = { alive: true };
       panes.set(id, pane);
-      void createTerminalRenderer(element, {
+      void rendererFactory(element, {
         colors: theme.snapshot().colors,
-        input: (bytes) => pane.attachment?.input(bytes),
+        input: (bytes, origin) => {
+          pane.attachment?.input(bytes);
+          if (origin === "user" && pane.detachRun) box?.runs.input(id);
+        },
         resize: (cols, rows) => pane.attachment?.resize(cols, rows),
         selection: (text) => {
           if (
@@ -199,6 +330,7 @@ export function createTerminalPanel(
       }).catch((cause) => fail(cause, "Opening terminal"));
       return () => {
         pane.alive = false;
+        pane.detachRun?.();
         pane.attachment?.close();
         pane.renderer?.dispose();
         if (panes.get(id) === pane) panes.delete(id);
@@ -233,10 +365,12 @@ export function createTerminalPanel(
       alive = false;
       intent = "";
       unlisten();
+      stopRuns?.();
       stopTheme();
       terminals.dispose();
       for (const pane of panes.values()) {
         pane.alive = false;
+        pane.detachRun?.();
         pane.renderer?.dispose();
       }
       panes.clear();

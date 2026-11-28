@@ -1,20 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type Element, Show } from "solid-js";
+import type { Element } from "solid-js";
+import { DisclosureIcon } from "./Disclosure.tsx";
 import "./DisclosureToggle.css" with { type: "text" };
-
-export function DisclosureIcon(props: { open?: boolean }): Element {
-  return (
-    <span class="otk-disclosure-icon" aria-hidden="true">
-      <svg viewBox="0 0 9 9" fill="none">
-        <rect x=".5" y=".5" width="8" height="8" />
-        <path d="M2.5 4.5h4" />
-        <Show when={!props.open}>
-          <path d="M4.5 2.5v4" />
-        </Show>
-      </svg>
-    </span>
-  );
-}
 
 /** Decorative junction for a header's existing button; shares the same owned
  * tree geometry as the independent disclosure button. */
@@ -24,6 +11,7 @@ export function DisclosureLabel(
   return (
     <label
       class="otk-disclosure-toggle otk-tree-toggle"
+      data-disclosure-variant="tree"
       for={props.for}
       aria-label={props.label}
       aria-hidden="true"
@@ -50,6 +38,7 @@ export default function DisclosureToggle(props: {
         "otk-tree-toggle": props.variant === "tree",
         "otk-meta-toggle": props.variant === "meta",
       }]}
+      data-disclosure-variant={props.variant}
       data-record-kind={props["data-record-kind"]}
       aria-label={props.label}
       aria-expanded={props.open ? "true" : "false"}

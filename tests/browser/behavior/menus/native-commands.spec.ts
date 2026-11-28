@@ -4,6 +4,7 @@ import { openSession } from "../../fixtures/wire.ts";
 import { prompt, reply } from "../../pages/composer.ts";
 import {
   appActions,
+  composerInputActions,
   dismiss,
   groups,
   menuLabels,
@@ -22,7 +23,8 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
     ? ["Archive"]
     : [];
   await openSession(state, page, created.id);
-  await expect(page.locator(".otk-composer-model-name")).toHaveText("scripted");
+  await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+    .toHaveText("scripted");
   for (
     const [area, expected] of [
       [".otk-inbox-scroll", [["Add project", "Collapse projects"], appActions]],
@@ -41,8 +43,7 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
       [".otk-prompt-actions", [[
         "Choose agent",
         "Choose model",
-        "Edit prompt",
-        "Attach files",
+        ...composerInputActions,
       ], appActions]],
     ] as const
   ) {
@@ -156,5 +157,9 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
     ".otk-turn-usage :popover-open .otk-usage-breakdown tbody tr",
   );
   await expect(rows).toHaveCount(1);
-  await expect(rows.locator("td").first()).toHaveText("answered");
+  // WL5 shares the Call and Activity tracks within one presentation cell.
+  await expect(rows.getByRole("rowheader", { name: "1", exact: true }))
+    .toBeVisible();
+  await expect(rows.getByRole("cell", { name: "answered", exact: true }))
+    .toHaveText("answered");
 });

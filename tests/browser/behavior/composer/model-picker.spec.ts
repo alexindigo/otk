@@ -40,7 +40,7 @@ test("composer.catalog-demand-warms-the-selected-native-working-folder", {
       frame.params?.directory === directory && frame.params?.intent === "warm"
     ),
   ).toBe(true);
-  const picker = page.locator(".otk-model-picker");
+  const picker = page.locator(".otk-model-picker:not([inert] *)");
   await picker.locator(":scope > button").click();
   await expect(picker.locator("[role=option]").first()).toBeVisible();
 });
@@ -122,7 +122,7 @@ test(
     expect(completeKinds()).not.toContain("resourceTemplates");
     await prompt(page).fill("");
     const before = demands().length;
-    const picker = page.locator(".otk-model-picker");
+    const picker = page.locator(".otk-model-picker:not([inert] *)");
     await picker.locator(":scope > button").click();
     await expect(picker.locator("[role=option]").first()).toBeVisible();
     expect(demands()).toHaveLength(before);
@@ -148,8 +148,23 @@ test(
     await expect(page.locator(".otk-skills-picker [role=status]")).toHaveCount(
       0,
     );
-    expect(frames.sent.filter(({ frame }) => frame.method === "catalogs.watch"))
-      .toHaveLength(1);
+    // Issue 2.158: one passive directory subscription plus the mention's
+    // temporary file observer, which must not survive the cleared mention.
+    const watches = frames.sent.filter(({ frame }) =>
+      frame.method === "catalogs.watch"
+    ).map(({ frame }) => frame);
+    expect(watches.map((frame) => frame.params)).toEqual([
+      { directory: state.directory },
+      { directory: state.directory, files: true },
+    ]);
+    expect(
+      frames.sent.filter(({ frame }) => frame.t === "request.release")
+        .flatMap(({ frame }) => frame.refs as { key: string }[]).filter((
+          { key },
+        ) => watches.some((watch) => watch.ref?.key === key)).map(({ key }) =>
+          key
+        ),
+    ).toEqual([watches[1].ref!.key]);
   },
 );
 test("composer.model-picker-warm-before-open-and-independent-candidate", {
@@ -174,7 +189,8 @@ test("composer.model-picker-warm-before-open-and-independent-candidate", {
       frame.t === "request" &&
       /^(catalogs\.|models\.list)/.test(String(frame.method))
     ).length;
-  const before = requestCount(), picker = page.locator(".otk-model-picker");
+  const before = requestCount(),
+    picker = page.locator(".otk-model-picker:not([inert] *)");
   await picker.locator(":scope > button").click();
   const rows = picker.locator("[role=option]");
   await expect(rows.first()).toBeVisible();

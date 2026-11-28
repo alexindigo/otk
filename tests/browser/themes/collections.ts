@@ -10,8 +10,13 @@ import { accessoryGeometry } from "../../support/control-geometry.ts";
 import {
   expectPrimaryBlocked,
   expectRuleThree,
+  send,
 } from "../pages/primary-action.ts";
-import { revealAcquired as reveal } from "../pages/transcript.ts";
+import {
+  openLatestWork,
+  revealAcquired as reveal,
+  workPanel,
+} from "../pages/transcript.ts";
 
 interface Theme {
   id: string;
@@ -332,7 +337,7 @@ export async function collections456(input: Inputs) {
         );
         expect(empty.height).toBe(48);
         await expectPrimaryBlocked(
-          page.locator(".otk-send-button"),
+          send(page),
           "Write a message",
         );
         await footer(page, 8);
@@ -402,14 +407,16 @@ export async function collections456(input: Inputs) {
         });
         expect(modelGeometry.gap).toBe(8);
         expect(modelGeometry.centre).toBeLessThanOrEqual(.5);
-        await expect(page.locator(".otk-composer-provider")).toHaveCSS(
-          "color",
-          applied,
-        );
-        await expect(page.locator(".otk-composer-model-name")).toHaveCSS(
-          "color",
-          applied,
-        );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
         const appliedBox = await variant.boundingBox();
         await variant.click();
         await page.locator(
@@ -472,15 +479,17 @@ export async function collections456(input: Inputs) {
           '.otk-model-picker [data-picker-key=\'["fake2","scripted"]\'] .otk-picker-option',
         ).click();
         await expect(model).not.toHaveClass(/is-applied/);
-        await expect(page.locator(".otk-composer-provider")).toHaveCSS(
-          "color",
-          applied,
-        );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
         expect(
-          await page.locator(".otk-composer-model-name").evaluate((el) =>
-            getComputedStyle(el).color ===
-              getComputedStyle(el.closest("button")!).color
-          ),
+          await page.locator(".otk-composer-model-name:not([inert] *)")
+            .evaluate((el) =>
+              getComputedStyle(el).color ===
+                getComputedStyle(el.closest("button")!).color
+            ),
         ).toBe(true);
         await footer(page, 8);
         await shot(`composer-chosen-${theme.id}-1280`);
@@ -488,10 +497,11 @@ export async function collections456(input: Inputs) {
         await page.locator(
           ".otk-agent-picker [data-picker-key=reviewer] .otk-picker-option",
         ).click();
-        await expect(page.locator(".otk-composer-agent")).toHaveCSS(
-          "color",
-          "rgb(18, 171, 239)",
-        );
+        await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            "rgb(18, 171, 239)",
+          );
         const chevrons = await page.locator(
           ".otk-prompt-context > .otk-popover > button",
         ).evaluateAll((els) =>
@@ -511,7 +521,9 @@ export async function collections456(input: Inputs) {
         ]);
         for (const c of chevrons) expect(c.delta).toBeLessThanOrEqual(.5);
         expect(
-          await page.locator(".otk-composer-provider,.otk-composer-model-name")
+          await page.locator(
+            ".otk-composer-provider:not([inert] *),.otk-composer-model-name:not([inert] *)",
+          )
             .evaluateAll((els) =>
               els.every((el) => el.scrollWidth <= el.clientWidth)
             ),
@@ -595,9 +607,10 @@ export async function collections456(input: Inputs) {
                 centre: Math.abs(a.y + a.height / 2 - r.y - r.height / 2),
                 icon:
                   action.querySelector("svg")!.getBoundingClientRect().width,
-                common:
-                  document.querySelector(".otk-prompt-actions > button svg")!
-                    .getBoundingClientRect().width,
+                common: document.querySelector(
+                  ".otk-prompt-actions [data-primary-action] svg",
+                )!
+                  .getBoundingClientRect().width,
               };
             });
             expect(geometry.inside && geometry.shared).toBe(true);
@@ -658,35 +671,34 @@ export async function collections456(input: Inputs) {
             `composer-responsive-geometry-${theme.id}-${width}`,
             {
               body: JSON.stringify(
-                await page.locator(".otk-composer-model-name").evaluate((
-                  el,
-                ) => ({
-                  name: el.textContent,
-                  client: el.clientWidth,
-                  source: el.scrollWidth,
-                  model: el.closest("button")!.getBoundingClientRect().width,
-                  lane: document.querySelector(".otk-composer")!
-                    .getBoundingClientRect().width,
-                  panels: [".otk-project-inbox", ".otk-right-panel"].map((
-                    selector,
-                  ) =>
-                    document.querySelector(selector)!.getBoundingClientRect()
-                      .width
-                  ),
-                })),
+                await page.locator(".otk-composer-model-name:not([inert] *)")
+                  .evaluate((
+                    el,
+                  ) => ({
+                    name: el.textContent,
+                    client: el.clientWidth,
+                    source: el.scrollWidth,
+                    model: el.closest("button")!.getBoundingClientRect().width,
+                    lane: document.querySelector(".otk-composer")!
+                      .getBoundingClientRect().width,
+                    panels: [".otk-project-inbox", ".otk-right-panel"].map((
+                      selector,
+                    ) =>
+                      document.querySelector(selector)!.getBoundingClientRect()
+                        .width
+                    ),
+                  })),
               ),
               contentType: "application/json",
             },
           );
           expect(
-            await page.locator(".otk-composer-provider").evaluate((el) =>
-              el.scrollWidth > el.clientWidth
-            ),
+            await page.locator(".otk-composer-provider:not([inert] *)")
+              .evaluate((el) => el.scrollWidth > el.clientWidth),
           ).toBe(true);
           expect(
-            await page.locator(".otk-composer-model-name").evaluate((el) =>
-              el.scrollWidth > el.clientWidth
-            ),
+            await page.locator(".otk-composer-model-name:not([inert] *)")
+              .evaluate((el) => el.scrollWidth > el.clientWidth),
           ).toBe(truncated);
           await footer(page, 8);
           await shot(`composer-responsive-${theme.id}-${width}`);
@@ -829,7 +841,8 @@ export async function collections456(input: Inputs) {
           await page.locator(
             `.otk-agent-picker [data-picker-key=${agent}] .otk-picker-option`,
           ).click();
-          await expect(page.locator(".otk-composer-agent")).toHaveText(label);
+          await expect(page.locator(".otk-composer-agent:not([inert] *)"))
+            .toHaveText(label);
           await expect(page.locator(".otk-variant-picker > button > span"))
             .toHaveText(choice);
           await shot(`composer-${agent}-${theme.id}-1280`);
@@ -841,16 +854,19 @@ export async function collections456(input: Inputs) {
         }
         await expect(page.locator(".otk-variant-picker > button"))
           .toHaveAttribute("aria-label", "Variant: High");
-        await expect(page.locator(".otk-composer-provider")).toHaveText(
-          "Second fixture provider",
-        );
-        await expect(page.locator(".otk-composer-model-name")).toHaveText(
-          "Scripted with variants",
-        );
-        await expect(page.locator(".otk-composer-provider")).toHaveCSS(
-          "color",
-          applied,
-        );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveText(
+            "Second fixture provider",
+          );
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toHaveText(
+            "Scripted with variants",
+          );
+        await expect(page.locator(".otk-composer-provider:not([inert] *)"))
+          .toHaveCSS(
+            "color",
+            applied,
+          );
         expect(
           await model.evaluate((el) => {
             const provider = el.querySelector(".otk-composer-provider")!,
@@ -869,7 +885,7 @@ export async function collections456(input: Inputs) {
   const select = async (name: string) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     // These renderer sweeps explicitly choose open work/helper bodies.
-    await state.product("prefs.set", { key: "expandWork", value: true });
+    await openLatestWork(page);
     await state.product("prefs.set", { key: "expandDelegation", value: true });
     // Each fixed source owns its disclosure input. The files scene expands
     // changes; later scenes retain the legacy default instead of inheriting it.
@@ -1132,8 +1148,14 @@ export async function collections456(input: Inputs) {
           if (mode === "error") {
             await expect(group).toHaveAttribute("role", "alert");
             await expect(group).toContainText(
+              "Rolling back conversation failed",
+            );
+            const details = group.locator(".otk-record-group-toggle");
+            await details.click();
+            await expect(group.locator(".otk-failure-reason")).toHaveText(
               "The requested rollback is no longer available",
             );
+            await details.click();
           }
           expect(
             await group.evaluate((el) => {
@@ -1181,70 +1203,39 @@ export async function collections456(input: Inputs) {
               n.top >= destination.bottom - 1 &&
               n.top >= transcript.bottom - 1,
             contentInset: Math.max(
-              Math.abs(r.left - input.left),
+              Math.abs((i?.left ?? t.left) - input.left),
               Math.abs(r.right - send.right),
             ),
           };
         });
         baseline ??= { row: g.row, notice: g.notice, icon: g.icon };
+        expect({ row: g.row, notice: g.notice, icon: g.icon }).toEqual(
+          baseline,
+        );
+        expect(g.icon).toEqual([g.row, g.row]);
+        expect(g.iconOffset).toBe(0);
         if (mode === "notice-error") {
-          // FailureContent owns the structured failure's gutter signal, not a
-          // duplicate activity icon. Complete facts still grow within the row.
-          expect(g.row).toBeGreaterThanOrEqual(baseline.row);
-          expect(g.notice).toBeGreaterThanOrEqual(baseline.notice);
-          expect(g.icon).toEqual([]);
-          const signal = page.locator(
-            ".otk-failure-content.otk-failure-signal.is-gutter",
+          const failure = page.locator(
+            ".otk-composer-notice .otk-failure-content",
           );
-          await expect(signal).toHaveCount(1);
-          expect(
-            await signal.evaluate((el) => {
-              const css = getComputedStyle(el),
-                box = el.getBoundingClientRect();
-              const heading = el.querySelector(".otk-failure-heading")!
-                .getBoundingClientRect();
-              const reason = el.querySelector(".otk-failure-main-reason")!
-                .getBoundingClientRect();
-              const label = el.querySelector(".otk-failure-detail-toggle")!
-                .getBoundingClientRect();
-              return {
-                painted: /^(?!rgba\(0, 0, 0, 0\)).* 2px 0px 0px 0px inset$/
-                  .test(css.boxShadow),
-                width: box.width > 0,
-                height: box.height > 0,
-                aligned: Math.max(heading.left, reason.left, label.left) -
-                    Math.min(heading.left, reason.left, label.left) <= .5,
-              };
-            }),
-          ).toEqual({
-            painted: true,
-            width: true,
-            height: true,
-            aligned: true,
-          });
-          expect(
-            await page.locator(".otk-failure-content").evaluate((el) => {
-              const row = el.closest(".otk-composer-notice-row")!
-                .getBoundingClientRect();
-              return Array.from(el.children).every((child) => {
-                const range = document.createRange();
-                range.selectNodeContents(child);
-                const text = range.getBoundingClientRect();
-                return text.left >= row.left - .5 &&
-                  text.right <= row.right + .5 &&
-                  text.top >= row.top - .5 && text.bottom <= row.bottom + .5;
-              });
-            }),
-          ).toBe(true);
-          await expect(page.locator(".otk-failure-content")).toContainText(
+          await expect(
+            failure.locator(".otk-failure-signal, .otk-disclosure-icon"),
+          )
+            .toHaveCount(0);
+          await expect(failure.locator(".otk-composer-notice-icon svg"))
+            .toHaveCSS(
+              "color",
+              await token(page, "--otk-danger"),
+            );
+          await expect(failure.locator(".otk-record-row-label")).toContainText(
             "The requested rollback is no longer available",
           );
-        } else {
-          expect({ row: g.row, notice: g.notice, icon: g.icon }).toEqual(
-            baseline,
-          );
-          expect(g.icon).toEqual([g.row, g.row]);
-          expect(g.iconOffset).toBe(0);
+          const details = failure.getByRole("button", { name: "Details" });
+          await expect(details).toHaveAttribute("aria-expanded", "false");
+          await details.click();
+          await expect(failure.locator(".otk-failure-detail-body"))
+            .toBeVisible();
+          await details.click();
         }
         expect(g.text).toBeLessThanOrEqual(.5);
         expect(g.joined, `${theme.id}/${mode} joined frames`).toBe(true);
@@ -1371,12 +1362,12 @@ export async function collections456(input: Inputs) {
             await expect(page.locator("[data-tool=external] small")).toHaveText(
               "Output truncated.",
             );
-            await page.locator(".otk-reply-agent .otk-entity-pill").hover();
-            await expect(page.locator(".otk-reply-agent .otk-entity-pill"))
-              .toHaveCSS(
-                "color",
-                await token(page, "--otk-fg"),
-              );
+            const agent = page.locator("[data-reply-source] .otk-entity-pill");
+            await agent.hover();
+            await expect(agent).toHaveCSS(
+              "color",
+              await token(page, "--otk-fg"),
+            );
             await expect(page.locator(":popover-open .otk-entity-facts"))
               .toContainText("This reply");
             await page.mouse.move(1, 1);
@@ -1460,8 +1451,8 @@ export async function collections456(input: Inputs) {
               "[data-tool=read][data-tool-status=error] .otk-failure-details",
             );
             await page.locator(
-              "[data-tool=read][data-tool-status=error] .otk-failure-details",
-            ).click();
+              "[data-tool=read][data-tool-status=error]",
+            ).getByRole("button", { name: "Details", exact: true }).click();
             await expect(
               page.locator(
                 "[data-tool=read][data-tool-status=error] .otk-failure-detail-body",
@@ -1680,7 +1671,9 @@ export async function collections456(input: Inputs) {
           if (name === "reading") {
             const bubble = ".otk-user-bubble";
             const prose = "[data-message=reading] .otk-text p";
-            const code = "[data-message=reading] .otk-code";
+            // CodeBlock owns the outer lane edges; .otk-code now measures
+            // only the inset text inside its frame.
+            const code = "[data-message=reading] .otk-code-block";
             // The transcript and its nested blocks have zero overscan. Compare
             // inline geometry after acquiring each row, not at one scrollTop.
             const bounds = async (selector: string) => {
@@ -1754,38 +1747,17 @@ export async function collections456(input: Inputs) {
               await shot(`reading-${theme.id}-${width}`);
             }
             await page.setViewportSize({ width: 1280, height: 900 });
-            const fold = page.locator(".otk-work-fold").first();
-            await expect(fold).toBeAttached();
-            await expect(fold.locator(".otk-work-label.otk-chrome-meta"))
-              .toHaveCSS(
-                "font",
-                await fold.evaluate((el) => getComputedStyle(el).font),
-              );
-            const rule = await fold.locator(".otk-tree-icon-stem").evaluate(
-              (el) => {
-                const s = getComputedStyle(el);
-                return {
-                  width: s.width,
-                  image: s.backgroundImage,
-                  size: s.backgroundSize,
-                  color: getComputedStyle(el.parentElement!).color,
-                  labelColor: getComputedStyle(el.closest("button")!).color,
-                };
-              },
-            );
-            expect([rule.width, rule.size]).toEqual(["1px", "1px 2px"]);
-            expect(rule.image).toContain("repeating-linear-gradient");
-            expect(rule.image).toContain(rule.color);
-            expect(rule.color).toBe(rule.labelColor);
-            const wasOpen = await fold.getAttribute("aria-expanded");
-            await fold.click();
-            await expect(fold).toHaveAttribute(
-              "aria-expanded",
-              wasOpen === "true" ? "false" : "true",
-            );
-            await shot(`work-fold-${theme.id}-1280`);
-            await fold.click();
-            await expect(fold).toHaveAttribute("aria-expanded", wasOpen!);
+            const strip = page.locator(".otk-work-strip").first();
+            await expect(strip.getByText("Work log", { exact: true }))
+              .toBeVisible();
+            await expect(strip.locator("[data-run]").first()).toBeVisible();
+            await openLatestWork(page);
+            await expect(strip).toHaveAttribute("aria-current", "true");
+            await shot(`work-strip-${theme.id}-1280`);
+            await page.getByRole("tab", { name: "Sessions", exact: true })
+              .click();
+            await expect(workPanel(page)).toHaveCount(0);
+
             await shot(`work-expanded-${theme.id}-1280`);
             await expect(page.locator("[data-tool=task] .otk-tool-target"))
               .toHaveText("Unknown agent");
@@ -1859,11 +1831,10 @@ export async function collections456(input: Inputs) {
             await expect(page.locator(".otk-queued")).toHaveCount(
               name === "queued" ? 1 : 0,
             );
-            await page.locator(".otk-reply-agent .otk-entity-pill").first()
-              .hover();
-            await expect(
-              page.locator(".otk-reply-agent .otk-entity-pill").first(),
-            ).toHaveCSS(
+            const agent = page.locator("[data-reply-source] .otk-entity-pill")
+              .first();
+            await agent.hover();
+            await expect(agent).toHaveCSS(
               "color",
               await token(page, "--otk-fg"),
             );
@@ -2033,15 +2004,12 @@ export async function collections456(input: Inputs) {
                   "color",
                   await token(page, "--otk-fg"),
                 );
-                const signal = page.locator(
-                  ".otk-operation-feedback .otk-failure-content.otk-failure-signal.is-gutter",
+                const notice = page.locator(".otk-operation-feedback");
+                await expect(notice.locator(".otk-failure-signal")).toHaveCount(
+                  0,
                 );
-                await expect(signal).toBeVisible();
-                const shadow = await signal.evaluate((el) =>
-                  getComputedStyle(el).boxShadow
-                );
-                expect(shadow).toContain(await token(page, "--otk-danger"));
-                expect(shadow).toMatch(/ 2px 0px 0px 0px inset$/);
+                await expect(notice.locator(".otk-composer-notice-icon svg"))
+                  .toHaveCSS("color", await token(page, "--otk-danger"));
               }
               await shot(`notice-${status}-${theme.id}-${width}`);
             }
@@ -2106,7 +2074,9 @@ export async function collections456(input: Inputs) {
         }
         if (scene === "journal") {
           for (
-            const toggle of await page.locator(".otk-permission-scope").all()
+            const toggle of await page.getByRole("button", {
+              name: /^Requested scope/,
+            }).all()
           ) {
             if (await toggle.getAttribute("aria-expanded") !== "true") {
               await toggle.click();
@@ -2136,15 +2106,13 @@ export async function collections456(input: Inputs) {
           expect(values[1]).toEqual(values[0]);
         }
         if (scene === "siblings") {
-          const initial = theme.id === themes[0].id;
-          await expect(page.locator(".otk-work-fold")).toHaveAttribute(
-            "aria-expanded",
-            initial ? "false" : "true",
-          );
-          if (initial) await page.locator(".otk-work-fold").click();
-          await expect(page.locator(".otk-work-fold")).toHaveCSS(
-            "display",
-            "flex",
+          const strip = page.getByRole("button", {
+            name: "Work log: 1 action. Check output",
+          });
+          await expect(strip).toHaveCSS("display", "inline-grid");
+          await expect(strip.locator("[data-run]")).toHaveAttribute(
+            "title",
+            /Check output/,
           );
           await expect(page.locator(".otk-view-header")).toHaveCSS(
             "display",
@@ -2172,10 +2140,6 @@ export async function collections456(input: Inputs) {
           );
           expect(colors[1]).not.toBe(colors[0]);
           expect(colors[2]).not.toBe(colors[0]);
-          await page.locator(".otk-work-fold").click();
-          await expect(page.locator(".otk-work-body")).toHaveCount(0);
-          await page.locator(".otk-work-fold").click();
-          await expect(page.locator(".otk-work-body")).toBeVisible();
           await disclosure.click();
           await expect(file).toHaveCount(0);
         }

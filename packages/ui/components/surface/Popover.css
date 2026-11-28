@@ -34,7 +34,9 @@
   background: transparent;
   color: var(--otk-fg);
   width: stretch;
-  min-width: min(calc(200 * var(--otk-unit)), var(--popover-bound-width));
+  /* Try the other side when the content cannot fit here, not at a preset width. */
+  min-width: min-content;
+  min-width: calc-size(min-content, min(size, var(--popover-bound-width)));
   max-width: min(28rem, var(--popover-bound-width));
   height: fit-content;
   /* An empty anchor side cannot admit a zero-height control surface. */
@@ -64,7 +66,7 @@
   position: fixed;
   pointer-events: none;
 }
-/* If neither inline side can hold the minimum width, use the bounds rectangle
+/* If neither inline side can hold the content minimum, use the bounds rectangle
    while retaining the same native block-side choice. */
 @position-try --otk-popover-inline-bounds {
   left: var(--popover-bound-left);

@@ -106,7 +106,7 @@ function rawAttention(source: Source): boolean {
       node.type !== "OptionalMemberExpression"
     ) return false;
     const key = field(source, node);
-    if (["supervision", "unseenCount", "errorState"].includes(key ?? "")) {
+    if (["supervision", "unseenCount"].includes(key ?? "")) {
       return true;
     }
     if (
@@ -115,7 +115,9 @@ function rawAttention(source: Source): boolean {
     ) return true;
     // Native metadata fields share names with tool, HTTP and connection states.
     // Resolve aliases and typed metadata receivers, not those separate entities.
-    if (!["status", "retry", "attention"].includes(key ?? "")) return false;
+    if (!["status", "retry", "attention", "errorState"].includes(key ?? "")) {
+      return false;
+    }
     // Callable retry belongs to a request/delivery resource, not native retry
     // evidence (which is a data object). Do not classify it by a local name.
     const parent = source.parent.get(node);
@@ -167,6 +169,12 @@ function rawAttention(source: Source): boolean {
           )
         )
       );
+    if (key === "errorState") {
+      // Content session diagnostics and request failures have their own
+      // lifetime; only native index diagnostics are an attention input here.
+      return !!typed || /(^|\.)attention$/.test(receiver) ||
+        /^(meta|metadata|entry|raw|deleted)$/.test(receiver);
+    }
     return !!typed ||
       /^(meta|metadata|entry|raw|known|deleted)$/.test(receiver);
   });
@@ -230,17 +238,35 @@ function canonicalTrailType(
   return imported?.module === "@otk/client" &&
     ["TrailCrumb", "TrailModel"].includes(imported.name);
 }
-function lampInput(source: Source, value: t.Node | undefined): boolean {
+function selectorInput(
+  source: Source,
+  value: t.Node | undefined,
+  selector: "lamp" | "sessionComposerLink",
+  visited = new Set<t.Node>(),
+): boolean {
   const resolved = source.value(value);
+  if (!resolved || visited.has(resolved)) return false;
+  visited.add(resolved);
   if (
-    resolved?.type === "MemberExpression" && !resolved.computed &&
+    selector === "lamp" && resolved.type === "MemberExpression" &&
+    !resolved.computed &&
     property(resolved.property) === "status"
   ) {
     return canonicalTrailType(source, trailInputType(source, resolved.object));
   }
-  if (!resolved || resolved.type !== "CallExpression") return false;
+  if (resolved.type !== "CallExpression") return false;
   const origin = source.imported(resolved.callee);
-  return origin?.name === "lamp" &&
+  if (!origin && !resolved.arguments.length) {
+    const accessor = source.value(resolved.callee);
+    return accessor?.type === "ArrowFunctionExpression" &&
+      accessor.params.length === 0 && accessor.body.type !== "BlockStatement" &&
+      selectorInput(source, accessor.body, selector, visited);
+  }
+  // Calling the right function is not provenance if the caller constructs a
+  // competing lamp, including through an immutable alias or a type assertion.
+  const input = source.value(resolved.arguments[0]);
+  if (input?.type === "ObjectExpression") return false;
+  return origin?.name === selector &&
     ["@otk/client", "./entity-state.ts", "../entity-state.ts"].includes(
       origin.module,
     );
@@ -303,12 +329,23 @@ function violations(path: string, text: string): string[] {
     found.add("state-producer");
   }
   for (const node of source.all) {
-    if (
-      node.type === "JSXOpeningElement" &&
-      (source.name(node.name)?.split(".").at(-1) === "StatusLight" ||
-        source.imported(node.name)?.name === "StatusLight") &&
-      !lampInput(source, source.attr(node, "state"))
-    ) found.add("lamp-input");
+    if (node.type !== "JSXOpeningElement") continue;
+    const uses = (name: string) =>
+      source.imported(node.name)?.name === name ||
+      source.name(node.name)?.split(".").at(-1) === name;
+    if (uses("StatusLight")) {
+      if (!selectorInput(source, source.attr(node, "state"), "lamp")) {
+        found.add("lamp-input");
+      }
+      // The renderer animates changes to the accepted verdict. A raw native
+      // event or metadata timestamp cannot independently flash a lamp.
+      if (source.attr(node, "event")) found.add("lamp-event");
+    } else if (
+      uses("LiveLink") &&
+      !selectorInput(source, source.attr(node, "state"), "sessionComposerLink")
+    ) {
+      found.add("composer-link-input");
+    }
   }
   if (path !== client && timeAttention(source)) found.add("attention-clock");
   if (/(?:\.otk-age-|--otk-age-|otk-age-\$\{)/.test(text)) {
@@ -317,27 +354,12 @@ function violations(path: string, text: string): string[] {
   return [...found].sort();
 }
 
-// WP3.1 records existing violations. Each migration removes its entries. WP3.11
-// removes this mechanism and requires an empty result, not an expanding allowlist.
-const PENDING: string[] = [
-  "packages/client/entry-observations.ts: raw-attention",
-  "packages/client/notification-triggers.ts: raw-attention",
-  "packages/client/project-projection.ts: raw-attention",
-  "packages/client/reduce.ts: raw-attention",
-  "packages/client/transcript.ts: raw-attention",
-  "packages/ui/components/ProjectInbox.tsx: lamp-input",
-  "packages/ui/components/ProjectInbox.tsx: raw-attention",
-  "packages/ui/components/SessionView.tsx: raw-attention",
-  "packages/ui/features/timeline.tsx: raw-attention",
-  "packages/ui/shell/Shell.tsx: raw-attention",
-];
-
-Deno.test("entity state ownership ratchets every existing independent computation", async () => {
+Deno.test("entity state ownership has no independent attention computation exemptions", async () => {
   const found: string[] = [];
   for (const [path, text] of await productionSources()) {
     for (const rule of violations(path, text)) found.push(`${path}: ${rule}`);
   }
-  assertEquals(found.sort(), PENDING);
+  assertEquals(found.sort(), []);
 });
 
 Deno.test("entity state ownership catches priority copies and crossed owners", () => {
@@ -407,6 +429,7 @@ Deno.test("entity state ownership detects raw metadata including aliases without
       "owner.attention;",
       "connection.attention.permissions(id, lookup, true);",
       "entry.retry?.();",
+      "content.errorState;",
     ]
   ) assertEquals(violations("packages/client/example.ts", text), []);
   assertEquals(violations(client, "meta.status; inbox.supervision;"), []);
@@ -445,6 +468,12 @@ Deno.test("entity state lamps require the selector, directly or through its bind
       'const lamp = () => "working"; <StatusLight state={lamp()} />;',
       'import {StatusLight as Light} from "@otk/ui"; <Light state="blocked" />;',
       'import {lamp} from "@otk/client"; let state = lamp(store,key,options); state = other; <StatusLight state={state} />;',
+      '<StatusLight state={shell.status === "running" ? "working" : "none"} />;',
+      '<StatusLight state={terminal.count ? "dependencies" : "none"} />;',
+      '<StatusLight state={permission ? "blocked" : "none"} />;',
+      'import {lamp} from "@otk/client"; const read = () => shell.state; <StatusLight state={read()} />;',
+      'import {lamp} from "@otk/client"; const constructed = {state: "working"} as const; <StatusLight state={lamp(constructed)} />;',
+      "const read = () => read(); <StatusLight state={read()} />;",
     ]
   ) assert(violations("packages/ui/example.tsx", text).includes("lamp-input"));
   for (
@@ -452,8 +481,36 @@ Deno.test("entity state lamps require the selector, directly or through its bind
       'import {lamp} from "@otk/client"; <StatusLight state={lamp(store,key,options)} />;',
       'import {lamp as select} from "@otk/client"; const state = select(store,key,options); <StatusLight state={state} />;',
       'import * as model from "@otk/client"; <StatusLight state={model.lamp(store,key,options)} />;',
+      'import {lamp} from "@otk/client"; const read = () => lamp(store,key); <StatusLight state={read()} />;',
     ]
   ) assertEquals(violations("packages/ui/example.tsx", text), []);
+});
+
+Deno.test("entity state lamps cannot pulse on separately supplied raw events", () => {
+  assertEquals(
+    violations(
+      "packages/ui/example.tsx",
+      'import Light from "./StatusLight.tsx"; import {lamp} from "@otk/client"; <Light state={lamp(store,key)} event={entry.timeUpdated} />;',
+    ),
+    ["lamp-event"],
+  );
+});
+
+Deno.test("composer link only reads its published verdict", () => {
+  assertEquals(
+    violations(
+      "packages/ui/example.tsx",
+      'import Link from "./LiveLink.tsx"; <Link state={shells.length ? "running" : "idle"} />;',
+    ),
+    ["composer-link-input"],
+  );
+  assertEquals(
+    violations(
+      "packages/ui/example.tsx",
+      'import {sessionComposerLink} from "@otk/client"; <LiveLink state={sessionComposerLink(store,id)} />;',
+    ),
+    [],
+  );
 });
 
 Deno.test("entity state lamps accept canonical trail input provenance, never lookalikes or casts", () => {

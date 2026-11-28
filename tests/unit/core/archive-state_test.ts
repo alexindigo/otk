@@ -7,14 +7,21 @@ import {
 } from "@otk/protocol";
 import { EntityStates } from "../../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../../core/index/supervision.ts";
+import { ManualClock } from "../../support/manual-clock.ts";
 
-Deno.test("archive state follows the unchanged C3 placement, checkout deltas, acknowledgement and repository moves", async () => {
+Deno.test("archive state follows the unchanged C3 placement, checkout deltas, acknowledgement and repository moves", () => {
+  const clock = new ManualClock();
   const rows = new Map<string, IndexMetadata>();
-  const states = new EntityStates(new SessionSupervision(), {
-    getMetadata: (id) => rows.get(id),
-    ancestors: () => [],
-    descendants: () => new Set(),
-  }, () => {});
+  const states = new EntityStates(
+    new SessionSupervision(),
+    {
+      getMetadata: (id) => rows.get(id),
+      ancestors: () => [],
+      descendants: () => new Set(),
+    },
+    () => {},
+    clock,
+  );
   const row: IndexMetadata = {
     id: "s",
     directory: "/removed",
@@ -57,7 +64,7 @@ Deno.test("archive state follows the unchanged C3 placement, checkout deltas, ac
   put({ work: { keys: ["run"], fresh: true }, terminal: 10 });
   assertEquals(archive()?.state, "none"); // C3: working removed checkouts remain live.
   put({ permissions: { keys: ["p"], fresh: true }, terminal: 10 });
-  await new Promise((done) => setTimeout(done, 525));
+  clock.runNext();
   assertEquals(archive()?.state, "none"); // C3: blocked removed checkouts remain live.
   put({ terminal: 20 });
   assertEquals(archive()?.state, "finished");

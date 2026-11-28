@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { treePaths } from "@otk/client";
-import { TreeGuide } from "./Tree.tsx";
-import ChromeMeta, { SectionHeader } from "./ChromeMeta.tsx";
+import { TreeNode } from "./Tree.tsx";
+import ChromeMeta, { MetaItem, SectionHeader } from "./ChromeMeta.tsx";
 import { solidState } from "../state/binding.ts";
 import { sessionSummary } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import "./ProjectSessions.css" with { type: "text" };
-import ListRow from "./ListRow.tsx";
+import { collectionState, type ServerResources } from "@otk/client";
+import SidebarRow, { SidebarFeedback, SidebarFrame } from "./SidebarRow.tsx";
+import DisclosureFeedback from "./DisclosureFeedback.tsx";
 import { ControlIcon } from "./ControlValue.tsx";
 import ProgressStatus from "./ProgressStatus.tsx";
 import {
@@ -20,11 +21,16 @@ import {
 } from "solid-js";
 import VirtualList from "./VirtualList.tsx";
 import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
-import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
+import type {
+  InboxSnapshot,
+  IndexEntry,
+  SessionTreeTarget,
+} from "@otk/protocol";
 import {
   createEntityStateStore,
-  createSessionGroupDisclosure,
   createSessionTree,
+  type Disclosures,
+  type DisclosureState,
   type EntityStateStore,
   lamp,
   type ListInteraction,
@@ -32,21 +38,28 @@ import {
   type MergedMetadata,
   type ProjectSelection,
   type Selection,
+  SESSION_TREE_DISCLOSURES,
   type SessionListRow,
   type SessionRename,
+  type SessionTreeItem,
+  sessionTreeView,
   sessionWorkStatus,
+  sidebarTimer,
   usageCost,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import SidebarTimer from "./SidebarTimer.tsx";
 import SessionStateMeta from "./SessionStateMeta.tsx";
-import { entityKey } from "@otk/protocol";
+import { entityKey, MAX_SESSION_TITLE, taskEntityID } from "@otk/protocol";
 import UsageCost from "./UsageCost.tsx";
-import { PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
+import { PlusIcon, SearchIcon, SessionsIcon } from "./ChromeIcons.tsx";
 import {
   ownedAction,
   ownedCommand,
+  selectionFocus,
   useCommandPorts,
 } from "../keyboard/context.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import { contextTarget } from "./context-target.ts";
 import { sessionState } from "./selection.ts";
 import { digestLabel, digestProgress } from "@otk/client";
@@ -54,6 +67,7 @@ import { orderInteraction } from "./order-interaction.ts";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
+  disclosure: Disclosures;
   entries?: readonly MergedEntry[];
   rows?(query: string): SessionListRow[];
   onRows?(keys: readonly string[], query: string): void;
@@ -63,9 +77,8 @@ export default function ProjectSessions(props: {
   interaction?: ListInteraction;
   holdOrder?(): () => void;
   project?: ProjectSelection;
-  ready?: boolean;
-  loading?: boolean;
-  loadingText?: string;
+  now?: number;
+  collection?(query: string): ReturnType<ServerResources["sessionCollection"]>;
   selected?: Selection;
   rename?: SessionRename;
   showCost?: boolean;
@@ -113,7 +126,9 @@ export default function ProjectSessions(props: {
     enabled: () =>
       !!props.project && search?.isConnected &&
       !!search.getClientRects().length,
-    run: () => search.focus(),
+    run: () => {
+      focusControl(search);
+    },
   });
   const open = ownedAction("project.session.open", props.onOpen, {
     arguments: {
@@ -145,13 +160,18 @@ export default function ProjectSessions(props: {
       setError(failureValue(e, { actionLabel: "Opening session" }))
     );
   const hierarchy = createSessionTree();
-  const disclosure = createSessionGroupDisclosure(
-    props.interaction,
-    solidState,
-  );
+  const collection = createMemo(() => props.collection?.(query()));
+  const state = () =>
+    collection()?.state ??
+      collectionState(props.entries !== undefined, allRows().length);
+  const busy = () => state() === "loading" || !!collection()?.progress.busy;
+  const bind = ({ kind, sidecarId: scope, id }: SessionTreeTarget) =>
+    props.disclosure.bind(SESSION_TREE_DISCLOSURES[kind], { scope, id });
   const allRows = createMemo(() => {
+    const answer = collection();
+    if (answer) return answer.rows;
     const project = props.project;
-    return project && props.ready !== false
+    return project && (props.entries || props.rows)
       ? props.rows?.(query()) ?? hierarchy.rows(
         (props.entries ?? []).filter((e) => e.sidecarId === project.sidecarId),
         props.inbox(project.sidecarId).tasks,
@@ -169,16 +189,25 @@ export default function ProjectSessions(props: {
     }
     return counts;
   });
-  const rows = createMemo(() => disclosure.rows(allRows()));
-  const byKey = createMemo(() => new Map(rows().map((row) => [row.key, row])));
-  const treeGuides = createMemo(() => {
-    const items = rows();
-    const paths = treePaths(
-      items,
-      (item) => item.kind === "session" ? item.depth : 0,
-    );
-    return new Map(items.map((item, index) => [item.key, paths[index]]));
+  const tree = createMemo(() => {
+    let failure: DisclosureState | undefined;
+    const bindings = new Map<string, DisclosureState>();
+    const rows = props.project
+      ? sessionTreeView(allRows(), props.project, (item) => {
+        const disclosure = bind(item.target);
+        bindings.set(item.key, disclosure);
+        if (disclosure.failureOrder() > (failure?.failureOrder() ?? 0)) {
+          failure = disclosure;
+        }
+        return disclosure.open();
+      })
+      : [];
+    return { rows, bindings, failure };
   });
+  const rows = () => tree().rows;
+  const byKey = createMemo(() =>
+    new Map(rows().map((item) => [item.key, item]))
+  );
   const keys = createMemo(() => rows().map((row) => row.key));
   const merged = (id: string): MergedEntry => {
     const raw = props.entry?.(id),
@@ -218,18 +247,188 @@ export default function ProjectSessions(props: {
       ),
     )
   );
+
+  function SessionBranch(propsRow: { item: SessionTreeItem }) {
+    const item = () => propsRow.item;
+    const row = () => item().row;
+    const key = item().key;
+    const entry = () => merged(key);
+    const title = () => entry()?.title ?? row().title;
+    const parent = () => {
+      const value = row();
+      return value.kind === "session" ? value.parentID : undefined;
+    };
+    const stateKey = entityKey("session", key);
+    const disclosure = () => tree().bindings.get(key);
+    const selected = () =>
+      props.selected?.sidecarId === props.project!.sidecarId &&
+      props.selected.sessionID === key;
+    const renaming = () =>
+      props.rename?.matches({
+        sidecarId: props.project!.sidecarId,
+        sessionID: key,
+      }, "row");
+    const editing = () => renaming() && props.rename!.editing;
+    let control: HTMLButtonElement | undefined;
+    const bindFocus = selectionFocus("session", selected, () => control);
+    const feedbackID = createUniqueId();
+    const openRow = () => {
+      const session = entry();
+      if (session && !editing()) run(open(session));
+    };
+    const pinRow = () => {
+      const session = entry();
+      if (session && !session.deleted && !editing()) run(pin(session));
+    };
+    const ref = contextTarget(() => ({
+      kind: "session",
+      data: {
+        ...props.project!,
+        directory: entry()?.directory ?? props.project!.directory,
+        sessionID: key,
+        title: title(),
+        origin: "row" as const,
+      },
+    }));
+    const description = () =>
+      `${entry()?.deleted ? "Deleted session, " : ""}${title()}${
+        parent() ? `, child of ${merged(parent()!)?.title ?? parent()}` : ""
+      }${
+        costLabel(key) === undefined ? "" : `, session cost ${costLabel(key)}`
+      }`;
+    return (
+      <div
+        role="group"
+        aria-label={row().title}
+        data-depth={item().depth - 1}
+        data-parent={parent()}
+      >
+        <TreeNode
+          path={item().path}
+          class="otk-session-tree otk-sidebar-tree"
+          selected={selected()}
+          open={disclosure()?.open() ?? true}
+          hasChildren={item().hasChildren}
+          showEmptyToggle={false}
+          onOpen={(value) => void disclosure()?.set(value)}
+          label={`Child sessions of ${title()}`}
+          frame={({ class: surface, children }) => (
+            <SidebarFrame
+              frame={{
+                selected: selected(),
+                class: `${surface} otk-session-row ${
+                  entry() ? sessionState(entry()!) : ""
+                }${editing() ? " is-editing" : ""}`,
+                ref: (element) => {
+                  ref(element);
+                  bindFocus(element);
+                },
+                attributes: {
+                  "data-session": entry() ? key : undefined,
+                  "data-status": entry()
+                    ? sessionWorkStatus(entities(), stateKey)
+                    : undefined,
+                  title: title(),
+                  onClick: openRow,
+                  onDblClick: pinRow,
+                },
+              }}
+            >
+              {children}
+            </SidebarFrame>
+          )}
+          node={() => (
+            <Show when={entry()} fallback={<SessionsIcon />}>
+              <StatusLight state={lamp(entities(), stateKey)} />
+            </Show>
+          )}
+          feedback={() => (
+            <Show
+              when={renaming() &&
+                (props.rename!.state.invalid || props.rename!.state.error)}
+            >
+              <SidebarFeedback>
+                <TitleFeedback owner={props.rename!} id={feedbackID} />
+              </SidebarFeedback>
+            </Show>
+          )}
+          header={() => (
+            <SidebarRow
+              mainRef={(element) => control = element}
+              action={entry() && !editing()
+                ? {
+                  class: "otk-session-open",
+                  "aria-label": description(),
+                  "aria-description": costDescription(key),
+                }
+                : undefined}
+              title={{
+                text: title(),
+                pending: renaming()
+                  ? props.rename!.state.pendingTitle
+                  : undefined,
+                struck: !!entry()?.deleted,
+              }}
+              editor={editing()
+                ? (
+                  <TitleEditor
+                    owner={props.rename!}
+                    feedbackID={feedbackID}
+                    label="Rename session"
+                    maxLength={MAX_SESSION_TITLE}
+                  />
+                )
+                : undefined}
+              meta={
+                <Show when={entry()}>
+                  {(session) => (
+                    <>
+                      <SessionStateMeta
+                        entities={entities()}
+                        entityKey={stateKey}
+                      />
+                      <Show when={costLabel(key)}>
+                        <MetaItem rank={6}>
+                          <ChromeMeta
+                            class="otk-session-cost"
+                            aria-hidden="true"
+                            title="Session cost"
+                          >
+                            <UsageCost value={cost(key)!} />
+                          </ChromeMeta>
+                        </MetaItem>
+                      </Show>
+                      <Show
+                        when={session().digest?.total?.state !== "known" ||
+                          (props.showCost && costLabel(key) === undefined)}
+                      >
+                        <MetaItem rank={7}>
+                          <ChromeMeta class="otk-session-digest-state">
+                            {digestLabel(session())}
+                          </ChromeMeta>
+                        </MetaItem>
+                      </Show>
+                    </>
+                  )}
+                </Show>
+              }
+            />
+          )}
+        />
+      </div>
+    );
+  }
   return (
     <nav
       ref={orderInput}
       class="otk-project-sessions"
+      data-panel-span="full"
       aria-label="Project sessions"
       data-session-project={props.project?.directory}
-      aria-busy={props.ready === false || props.loading || progress().busy
-        ? "true"
-        : "false"}
+      aria-busy={busy() || progress().busy ? "true" : "false"}
     >
       <Show
-        when={props.ready !== false && !props.loading &&
+        when={!busy() &&
           progress().announcement}
       >
         <span
@@ -241,7 +440,10 @@ export default function ProjectSessions(props: {
         </span>
       </Show>
       <Show when={error()}>
-        <FeedbackStatus feedback={errorFeedback(error())} />
+        <FeedbackStatus
+          class="otk-project-session-error"
+          feedback={errorFeedback(error())}
+        />
       </Show>
       <Show
         when={props.project}
@@ -282,24 +484,29 @@ export default function ProjectSessions(props: {
             </button>
           </Show>
         </div>
+        <DisclosureFeedback
+          disclosure={tree().failure}
+          actionLabel="Saving session tree"
+          class="otk-project-session-disclosure"
+        />
         <div class="otk-project-session-content">
-          <Show when={props.ready !== false}>
+          <Show when={state() !== "loading"}>
             <VirtualList
-              class="otk-project-session-tree"
+              class="otk-project-session-tree otk-sidebar-list"
               label="Task groups and sessions"
               keys={keys()}
               onRange={(keys) => {
                 visibleKeys = keys;
                 props.onRows?.(keys, query());
               }}
-              samples={[{ role: "session", class: "otk-list-row" }, {
+              samples={[{ role: "session", class: "otk-sidebar-row-grid" }, {
                 role: "heading",
-                class: "otk-session-group-heading",
+                class: "otk-sidebar-row-grid",
               }]}
-              role={(key) => byKey().get(key)?.kind ?? "session"}
+              role={(key) => byKey().get(key)?.row.kind ?? "session"}
               position={props.interaction}
               itemAttributes={(key) => {
-                const row = byKey().get(key);
+                const row = byKey().get(key)?.row;
                 return row?.kind === "session"
                   ? { "aria-posinset": row.position, "aria-setsize": row.size }
                   : { role: "presentation" };
@@ -317,182 +524,59 @@ export default function ProjectSessions(props: {
               render={(key) => {
                 const initial = byKey().get(key)!;
                 const item = () => byKey().get(key) ?? initial;
-                if (initial.kind === "heading") {
+                if (initial.row.kind === "heading") {
+                  const group = initial.row.group;
+                  const disclosure = () => tree().bindings.get(key);
+                  const taskKey = group
+                    ? entityKey("task", taskEntityID("task", group))
+                    : undefined;
+                  const status = () => lamp(entities(), taskKey);
+                  const timer = () =>
+                    taskKey && props.now !== undefined
+                      ? sidebarTimer(
+                        status(),
+                        entities().get(taskKey)?.runStartedAt,
+                        props.now,
+                      )
+                      : undefined;
                   return (
                     <h3
-                      class="otk-session-group otk-session-group-heading"
-                      data-session-group={initial.group}
-                      aria-label={item().title}
+                      class="otk-session-group"
+                      data-session-group={group}
+                      aria-label={item().row.title}
                     >
                       <SectionHeader
-                        label={item().title}
-                        count={groupCounts().get(initial.group) ?? 0}
-                        open={disclosure.open(initial.group)}
-                        onOpen={(value) => disclosure.set(initial.group, value)}
+                        sidebar
+                        class="otk-session-tree"
+                        path={item().path}
+                        hasChildren={item().hasChildren}
+                        label={item().row.title}
+                        count={groupCounts().get(group) ?? 0}
+                        open={disclosure()?.open() ?? true}
+                        onOpen={(value) => void disclosure()?.set(value)}
+                        leading={() => (
+                          <Show when={group} fallback={<SessionsIcon />}>
+                            <StatusLight state={status()} />
+                          </Show>
+                        )}
+                        sidebarMeta={() => <SidebarTimer value={timer()} />}
                       />
                     </h3>
                   );
                 }
-                const original = merged(key);
-                const row = () => {
-                  const value = item();
-                  return {
-                    session: merged(key) ?? original,
-                    depth: value.kind === "session" ? value.depth : 0,
-                    parentID: value.kind === "session"
-                      ? value.parentID
-                      : undefined,
-                  };
-                };
-                const editing = () =>
-                  props.rename?.matches({
-                    sidecarId: props.project!.sidecarId,
-                    sessionID: row().session.id,
-                  }, "row");
-                const feedbackID = createUniqueId();
-                return (
-                  <Show
-                    when={!!merged(key)}
-                    fallback={
-                      <ListRow as="div" selected={false}>
-                        {item().title}
-                      </ListRow>
-                    }
-                  >
-                    <div
-                      role="group"
-                      aria-label={item().title}
-                      data-depth={row().depth}
-                      data-parent={row().parentID}
-                    >
-                      <ListRow
-                        editing={editing()}
-                        feedback={
-                          <Show when={editing()}>
-                            <TitleFeedback
-                              owner={props.rename!}
-                              id={feedbackID}
-                            />
-                          </Show>
-                        }
-                        ref={contextTarget(() => ({
-                          kind: "session",
-                          data: {
-                            ...props.project!,
-                            directory: row().session.directory,
-                            sessionID: row().session.id,
-                            title: row().session.title,
-                            origin: "row" as const,
-                          },
-                        }))}
-                        class={`otk-session-row ${sessionState(row().session)}`}
-                        selected={props.selected?.sidecarId ===
-                            props.project!.sidecarId &&
-                          props.selected.sessionID === row().session.id}
-                        attributes={{
-                          "data-session": row().session.id,
-                          "data-status": sessionWorkStatus(
-                            entities(),
-                            entityKey("session", row().session.id),
-                          ),
-                          title: row().session.title,
-                          "aria-description": costDescription(
-                            row().session.id,
-                          ),
-                          "aria-label": `${
-                            row().session.deleted ? "Deleted session, " : ""
-                          }${row().session.title}${
-                            row().parentID
-                              ? `, child of ${
-                                merged(row().parentID!)?.title ?? row().parentID
-                              }`
-                              : ""
-                          }${
-                            costLabel(row().session.id) === undefined
-                              ? ""
-                              : `, session cost ${costLabel(row().session.id)}`
-                          }`,
-                          onClick: () => run(open(merged(row().session.id))),
-                          onDblClick: () => {
-                            if (!row().session.deleted) {
-                              run(
-                                pin(merged(row().session.id)),
-                              );
-                            }
-                          },
-                        }}
-                        leading={
-                          <span class="otk-session-leading">
-                            <Show when={row().depth > 0}>
-                              <TreeGuide path={treeGuides().get(key) ?? []} />
-                            </Show>
-                            <StatusLight
-                              small
-                              state={lamp(
-                                entities(),
-                                entityKey("session", row().session.id),
-                              )}
-                              event={row().session.timeUpdated}
-                            />
-                          </span>
-                        }
-                        labelClass="otk-session-title"
-                        trailing={
-                          <>
-                            <SessionStateMeta
-                              entities={entities()}
-                              entityKey={entityKey("session", row().session.id)}
-                            />
-                            <Show when={costLabel(row().session.id)}>
-                              <ChromeMeta
-                                class="otk-session-cost"
-                                aria-hidden="true"
-                                title="Session cost"
-                              >
-                                <UsageCost
-                                  value={cost(row().session.id)!}
-                                />
-                              </ChromeMeta>
-                            </Show>
-                            <Show
-                              when={row().session.digest.total?.state !==
-                                  "known" ||
-                                (props.showCost &&
-                                  costLabel(row().session.id) ===
-                                    undefined)}
-                            >
-                              <ChromeMeta class="otk-session-digest-state">
-                                {digestLabel(row().session)}
-                              </ChromeMeta>
-                            </Show>
-                          </>
-                        }
-                      >
-                        <Show
-                          when={editing()}
-                          fallback={row().session.title}
-                        >
-                          <TitleEditor
-                            owner={props.rename!}
-                            feedbackID={feedbackID}
-                          />
-                        </Show>
-                      </ListRow>
-                    </div>
-                  </Show>
-                );
+                return <SessionBranch item={item()} />;
               }}
             />
-            <Show when={!props.loading && !rows().length}>
+            <Show when={state() === "empty" && !!query().trim()}>
               <p class="otk-muted">No matching sessions</p>
             </Show>
           </Show>
         </div>
         <div class="otk-session-loading-slot">
-          <Show when={props.ready === false || props.loading}>
+          <Show when={busy()}>
             <ProgressStatus
               class="otk-session-loading-row"
-              text={props.loadingText || "Loading sessions..."}
+              text={collection()?.progress.text || "Loading sessions..."}
             />
           </Show>
         </div>

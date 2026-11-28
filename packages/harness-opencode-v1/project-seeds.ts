@@ -2,7 +2,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ProjectIdentityFact, ProjectSeed } from "@otk/harness";
 import type { ProjectTopology } from "@otk/protocol";
-import { projectPresentation } from "./project-presentation.ts";
+import {
+  nativeProjectMetadata,
+  projectPresentation,
+} from "./project-presentation.ts";
 
 export interface NativeProjectRoot {
   id: string;
@@ -16,6 +19,17 @@ function presentation(
 ): NonNullable<ProjectSeed["presentation"]> {
   const { id, name, color } = projectPresentation(project);
   return { id, name, color };
+}
+function metadata(project: NativeProjectRoot) {
+  const native = nativeProjectMetadata({ ...project });
+  return {
+    presentation: presentation(project),
+    ...(native
+      ? {
+        nativeProject: { updated: native.updated, topology: native.topology },
+      }
+      : {}),
+  };
 }
 /** V1 uses one project ID across its canonical checkout and registered sandboxes. */
 export function projectTopology(
@@ -112,7 +126,7 @@ export function emptyProjectSeed(
     : undefined;
   return {
     directory,
-    ...(owner ? { presentation: presentation(owner) } : {}),
+    ...(owner ? metadata(owner) : {}),
     hasSessions: false,
     sessionCount: 0,
     lastActivity: null,
@@ -155,7 +169,7 @@ export function projectSeeds(
       : undefined;
     return {
       directory: String(row.directory),
-      ...(owner ? { presentation: presentation(owner) } : {}),
+      ...(owner ? metadata(owner) : {}),
       hasSessions: Number(row.count) > 0,
       sessionCount: Number(row.count),
       lastActivity: Number(row.latest),

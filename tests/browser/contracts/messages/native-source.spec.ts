@@ -2,14 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt as composer } from "../../pages/composer.ts";
-import {
-  openWorkLogs,
-  prompt,
-  recordToggle,
-  revealAcquired,
-  toolScript,
-} from "../../pages/transcript.ts";
+import { recordToggle, revealAcquired } from "../../pages/transcript.ts";
 
 test.use({ profile: "transport-shell" });
 test("messages.native-source-loads-exactly-when-its-fold-opens", {
@@ -23,26 +16,25 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Native source",
   });
-  await openSession(state, page, session.id);
   const v2 = state.controller.info!.version.startsWith("2.");
   if (v2) {
-    // A V2 shell is a native shell record.
-    await composer(page).press("!");
-    await composer(page).pressSequentially("echo native-source");
-    await composer(page).press("Enter");
-  } else {
-    // V1 step boundaries are qualified native records.
-    await state.product("prefs.set", { key: "expandStepMarkers", value: true });
-    await toolScript(state, "bash", {
+    // Acquire a settled native shell record from history. An already-exited
+    // live row can still receive a newer Source revision during the hold.
+    await state.product("session.shell", {
+      sessionID: session.id,
       command: "echo native-source",
-      description: "Source fixture",
     });
-    await prompt(page, "Run the source fixture");
-    await expect(page.locator(".otk-message-flow")).toContainText(
-      "Tool finished.",
-    );
-    await openWorkLogs(page);
+  } else {
+    // V1 synthetic context is still an inspectable native record.
+    await state.native(`/session/${session.id}/message`, "POST", {
+      noReply: true,
+      parts: [
+        { type: "text", text: "Source fixture" },
+        { type: "text", text: "native-source", synthetic: true },
+      ],
+    });
   }
+  await openSession(state, page, session.id);
   const open = async (button: import("@playwright/test").Locator) => {
     if (await button.getAttribute("aria-expanded") !== "true") {
       await button.click();
@@ -51,7 +43,7 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   };
   const records = v2
     ? '[data-native-record="opencode-v2/shell"]'
-    : '[data-native-record^="opencode-v1/step-"]';
+    : '[data-native-record="opencode-v1/text"]';
   await revealAcquired(page, records);
   const record = page.locator(records).first();
   await recordToggle(record).click();
@@ -81,10 +73,11 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
     "true",
   );
   await expect(source).toContainText("Loading source");
+  await expect.poll(() => page.evaluate("window.sourceReads.length")).toBe(1);
   await shoot("loading");
-  await page.evaluate("window.releaseSource()");
+  await page.evaluate("window.sourceMode='pass';window.releaseSource()");
   await expect(source.locator(".otk-native-preview")).toContainText(
-    v2 ? "native-source" : '"type":"step-',
+    "native-source",
   );
   await expect(source).toContainText("bytes");
   await expect(source.locator(".otk-tool-body")).toHaveAttribute(
@@ -104,7 +97,6 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   expect(await page.evaluate("window.sourceReads.length")).toBe(1);
   await page.evaluate("sessionStorage.setItem('sourceMode','fail')");
   await page.reload();
-  if (!v2) await openWorkLogs(page);
   await revealAcquired(page, records);
   const again = page.locator(records).first();
   const againToggle = recordToggle(again);
@@ -134,7 +126,7 @@ test("messages.native-source-loads-exactly-when-its-fold-opens", {
   await page.evaluate("window.sourceMode='pass'");
   await status.getByRole("button", { name: "Retry" }).click();
   await expect(failed.locator(".otk-native-preview")).toContainText(
-    v2 ? "native-source" : '"type":"step-',
+    "native-source",
   );
   expect(await page.evaluate("window.sourceReads.length")).toBe(2);
 });

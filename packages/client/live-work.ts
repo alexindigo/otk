@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState } from "./state.ts";
-import type {
-  EntityState,
-  HelperDisposition,
-  TaskHelpers,
+import {
+  type EntityState,
+  HELPER_LAMP_ORDER,
+  type HelperDisposition,
+  type TaskHelpers,
 } from "@otk/protocol";
-import { age, elapsed, metaList, type TimeText } from "./format.ts";
+import { age, elapsed, type TimeText } from "./format.ts";
 
 export interface RunningWork {
   id: string;
@@ -26,21 +27,29 @@ export interface LiveWorkOwner {
 export function createLiveWork(input: {
   items(): readonly RunningWork[];
   stopHelper?(): ((id: string) => Promise<void>) | undefined;
+  stopShell?(): ((id: string) => Promise<void>) | undefined;
 }): LiveWorkOwner {
   const state = createState({ pending: new Set<string>() });
   const pending = new Map<string, Promise<void>>();
-  const item = (id: string) => input.items().find((item) => item.id === id);
+  const action = (id: string) => {
+    const item = input.items().find((item) => `${item.kind}/${item.id}` === id);
+    if (!item) return;
+    const stop = item.kind === "helper"
+      ? input.stopHelper?.()
+      : input.stopShell?.();
+    if (stop) return () => stop(item.id);
+  };
   return {
     items: input.items,
-    canStop: (id) => item(id)?.kind === "helper" && !!input.stopHelper?.(),
+    canStop: (id) => !!action(id),
     stopping: (id) => state.state.pending.has(id),
     subscribe: (listener) => state.subscribe(listener),
     stop(id) {
       const admitted = pending.get(id);
       if (admitted) return admitted;
-      const current = item(id), stop = input.stopHelper?.();
-      if (current?.kind !== "helper" || !stop) return Promise.resolve();
-      const work = Promise.resolve().then(() => stop(current.sessionID))
+      const stop = action(id);
+      if (!stop) return Promise.resolve();
+      const work = Promise.resolve().then(stop)
         .finally(() => {
           pending.delete(id);
           state.update((s) => s.pending.delete(id));
@@ -52,52 +61,45 @@ export function createLiveWork(input: {
   };
 }
 
-export function runningWorkLabel(items: readonly RunningWork[]): string {
-  return (["helper", "shell"] as const).flatMap((kind) => {
-    const count = items.filter((item) => item.kind === kind).length;
-    const label = kind === "helper" ? "subagent" : "shell";
-    return count ? [`${count} ${label}${count === 1 ? "" : "s"}`] : [];
-  }).join(", ");
-}
+const helperLabels = {
+  needsYou: {
+    title: "Needs you",
+    singular: "needs you",
+    plural: "need you",
+  },
+  running: { title: "Running", singular: "running", plural: "running" },
+  finished: {
+    title: "Finished",
+    singular: "finished",
+    plural: "finished",
+  },
+  opened: { title: "Opened", singular: "opened", plural: "opened" },
+} as const;
 
 /** Display order and vocabulary shared by every form of the same counts. */
-export function helperCountParts(counts: TaskHelpers["counts"]): readonly {
+export function helperCountParts(counts?: TaskHelpers["counts"]): readonly {
   kind: HelperDisposition;
   title: string;
   count: number;
   phrase: string;
 }[] {
-  return ([
-    {
-      kind: "running",
-      title: "Running",
-      count: counts.running,
-      phrase: "running",
-    },
-    {
-      kind: "needsYou",
-      title: "Needs you",
-      count: counts.needsYou,
-      phrase: counts.needsYou === 1 ? "needs you" : "need you",
-    },
-    {
-      kind: "notReturned",
-      title: "Not returned",
-      count: counts.notReturned,
-      phrase: "not returned",
-    },
-  ] as const).filter(({ count }) => count > 0);
+  if (!counts) return [];
+  return HELPER_LAMP_ORDER.flatMap((kind) => {
+    const { title, singular, plural } = helperLabels[kind];
+    const count = counts[kind] ?? 0;
+    return count > 0
+      ? [{ kind, title, count, phrase: count === 1 ? singular : plural }]
+      : [];
+  });
 }
 
 /** One vocabulary for the pill and its accessible name, from published counts. */
 export function helperCountsLabel(
-  counts: TaskHelpers["counts"],
-  form: "visible" | "spoken" = "visible",
+  counts?: TaskHelpers["counts"],
 ): string {
-  const items = helperCountParts(counts).map(({ count, phrase }) =>
+  return helperCountParts(counts).map(({ count, phrase }) =>
     `${count} ${phrase}`
-  );
-  return form === "spoken" ? items.join(", ") : metaList(items);
+  ).join(", ");
 }
 
 /** One clock per published disposition; an earlier run cannot date a wait. */
@@ -122,21 +124,11 @@ export function helperClock(
         return { time: elapsed(now - evidence.waitingSince), ago: false };
       }
       break;
-    case "notReturned":
+    case "finished":
+    case "opened":
       if (entity?.terminal !== undefined) {
         const time = age(entity.terminal, now);
         return { time, ago: !time.word };
       }
   }
-}
-
-export type ComposerLinkState = "none" | "idle" | "running";
-
-/** The link reflects helper and shell work, never the main session's run. */
-export function composerLinkState(
-  helpers: TaskHelpers | undefined,
-  shells: number,
-): ComposerLinkState {
-  if (!helpers?.ids.length && !shells) return "none";
-  return shells || (helpers?.counts.running ?? 0) > 0 ? "running" : "idle";
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { projectEditor } from "./project-edit.ts";
+import { nativeProjectMetadata } from "./project-presentation.ts";
 import { DeliveryBackfill, DeliveryJoin } from "@otk/harness";
 import {
   type DigestPolicy,
@@ -41,7 +42,7 @@ import { PendingAttentionIndex } from "./attention.ts";
 import { commands } from "./commands.ts";
 import { type PendingRoute, V2Pending } from "./pending.ts";
 import { V2Prompt } from "./prompt.ts";
-import { V2Shells } from "./shells.ts";
+import { parkedShellResult, V2Shells } from "./shells.ts";
 import { requestFailureRecord } from "./request-failure.ts";
 import { EventRefresh } from "./event-refresh.ts";
 
@@ -69,6 +70,7 @@ type MetadataRefresh = {
 export class OpencodeV2ServerAdapter implements Harness {
   storage(storage: import("@otk/harness").PluginStorage): void {
     this.transcript.requests.bind(storage);
+    this.transcript.helperEdges.bind(storage);
   }
   readonly core: HarnessCore;
   readonly capabilities: Readonly<Capabilities>;
@@ -162,6 +164,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           this.#metadataRefresh.clear();
           this.#activeRead = undefined;
           this.#activityCurrent = false;
+          this.#completion.clear();
+          this.#completionReads.clear();
+          this.#completionCandidates.clear();
+          this.#admissions.clear();
           this.pending.uncertain();
           this.transcript.disconnect();
           this.#generation = generation;
@@ -302,8 +308,8 @@ export class OpencodeV2ServerAdapter implements Harness {
         models: this.catalogs.models,
         files: this.catalogs.files,
         catalogs: {
-          watch: (directory, listener, signal) =>
-            this.catalogs!.watch(directory, listener, signal),
+          watch: (directory, listener, signal, files) =>
+            this.catalogs!.watch(directory, listener, signal, files),
           demand: (directory, demand, signal) =>
             this.catalogs!.demand(directory, demand, signal),
           refresh: (directory, signal, kinds) =>
@@ -315,9 +321,17 @@ export class OpencodeV2ServerAdapter implements Harness {
       : {};
     const capabilities: Capabilities = {
       revertCommit: this.transcript.revertCommit,
+      "shell.terminate": {
+        terminate: (id, shellID, operation) =>
+          this.#shells.terminate(this.stream.client, id, shellID, operation),
+      },
       projectEdit: projectEditor(
         () => this.stream.client,
-        () => this.catalogs?.catalogs.invalidateAll(["project"]),
+        (project) => {
+          this.catalogs?.catalogs.invalidateAll(["project"]);
+          const update = nativeProjectMetadata({ ...project });
+          if (update) this.#sink?.projectMetadata?.(update, "reply");
+        },
       ),
       ...digestCapabilities,
       ...catalogCapabilities,
@@ -335,7 +349,9 @@ export class OpencodeV2ServerAdapter implements Harness {
             input.sessionID,
             "prompt",
             operation,
-            () => this.prompts.prompt(input, operation),
+            () =>
+              this.#admit(input.sessionID, () =>
+                this.prompts.prompt(input, operation)),
           ),
         abort: (id, operation) => this.prompts.abort(id, operation),
         withdraw: (id, messageID, operation) =>
@@ -467,6 +483,13 @@ export class OpencodeV2ServerAdapter implements Harness {
             (id, fact) => this.#applyDelivered(id, fact),
             this.diagnostic,
             config.digest?.publishrows,
+            (id) => {
+              const entry = this.#index.getMetadata(id);
+              const runID = entry?.activity?.runID;
+              return entry?.parentID && runID
+                ? { parentID: entry.parentID, runID }
+                : undefined;
+            },
           );
         }
         this.transcript.start();
@@ -698,6 +721,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       ...entry,
       activity: {
         ...terminal,
+        completion: this.#completion.get(entry.id),
         delivered: this.#delivered(entry),
         work: {
           keys: [
@@ -744,7 +768,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     const delivered = entry.activity?.delivered;
     if (
       entry.parentID && terminal.terminal &&
-      (delivered?.terminal ?? 0) < terminal.terminal
+      (!delivered || delivered.parentID !== entry.parentID ||
+        (terminal.runID
+          ? terminal.runID !== delivered.runID
+          : terminal.terminal !== delivered.terminal))
     ) this.#deliveryJoin?.request([entry.id]);
     if (
       entry.parentID && terminal.terminal &&
@@ -934,6 +961,133 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     this.#upsert(entry);
   }
+  #completion = new Map<
+    string,
+    NonNullable<NonNullable<SessionMetadata["activity"]>["completion"]>
+  >();
+  #completionReads = new Map<string, { terminal: number }>();
+  #completionCandidates = new Map<string, number>();
+  #admissions = new Map<string, Set<string>>();
+
+  #completionInput(
+    id: string,
+    pending: readonly string[] = [],
+    continuation: readonly string[] = [],
+  ): void {
+    this.#completionReads.delete(id);
+    const keys = [...this.#admissions.get(id) ?? [], ...pending];
+    if (keys.length) this.#completion.set(id, { pending: keys, continuation });
+    else this.#completion.delete(id);
+    const entry = this.#index.getMetadata(id);
+    if (entry) this.#upsert(entry);
+  }
+
+  async #admit<T>(id: string, submit: () => Promise<T>): Promise<T> {
+    const admissions = this.#admissions.get(id) ?? new Set<string>();
+    const key = `start:${crypto.randomUUID()}`;
+    admissions.add(key);
+    this.#admissions.set(id, admissions);
+    this.#completionInput(id);
+    try {
+      return await submit();
+    } finally {
+      admissions.delete(key);
+      if (this.#admissions.get(id) === admissions) {
+        if (!admissions.size) this.#admissions.delete(id);
+        this.#completionInput(id);
+        // Admission has reached the native inbox or failed. Read the native
+        // handoff, never join the prompt receipt to a possibly old idle row.
+        this.#confirmCompletion(
+          id,
+          this.stream.client,
+          this.stream.client.signal,
+        );
+      }
+    }
+  }
+
+  #confirmCompletion(id: string, client: V2Client, signal: AbortSignal): void {
+    if (!this.#activityCurrent || signal.aborted) return;
+    const entry = this.#index.getMetadata(id), sid = ids.decode(id);
+    const terminal = entry?.activity?.terminal;
+    if (
+      !terminal || this.#completionCandidates.get(id) !== terminal ||
+      entry?.activity?.outcome !== "succeeded" ||
+      this.#admissions.get(id)?.size ||
+      this.#running.has(sid) || this.#shells.busy(sid) ||
+      this.#completion.get(id)?.confirmed === terminal ||
+      this.#completionReads.get(id)?.terminal === terminal
+    ) return;
+    this.#completionInput(id, ["native-confirmation"]);
+    // A previous terminal's wait can span the successor execution. Its
+    // completion must neither suppress nor retire this terminal's proof.
+    const read = { terminal };
+    this.#completionReads.set(id, read);
+    const current = () =>
+      this.#completionReads.get(id) === read && !signal.aborted;
+    void (async () => {
+      // The coordinator owns the final drain, including late wakes. Jobs
+      // remain on this roster through enqueue+wake, not just process exit.
+      await client.settled(sid);
+      if (!current()) return;
+      const jobs = await client.read(
+        (api) => api.experimental.job.list({ sessionID: sid }, { signal }),
+        signal,
+      );
+      if (!current()) return;
+      const inbox = await this.transcript.reader.inbox(id, signal);
+      if (!current()) return;
+      const active = await client.read(
+        (api) => api.session.active({ signal }),
+        signal,
+      );
+      if (!current()) return;
+      const native = await client.read(
+        (api) => api.session.get({ sessionID: sid }, { signal }),
+        signal,
+      );
+      const latest = this.#index.getMetadata(id);
+      if (!current() || latest?.activity?.terminal !== terminal) return;
+      const continuation = [
+        ...(inbox.state === "available"
+          ? inbox.items.filter((item) => !parkedShellResult(item))
+            .map(({ id, delivery }) => `queued:${delivery}:${id}`)
+          : []),
+        ...(active[sid] ? ["native-start"] : []),
+      ];
+      // A durable job record can survive the execution that wrote it. It can
+      // leave a result unconfirmed, but is not proof that the parent is active.
+      const pending = [
+        ...continuation,
+        ...jobs.map((job) => {
+          const live = job.status === "running" &&
+            (job.kind === "subagent"
+              ? active[job.childSessionID] !== undefined
+              : job.kind === "shell" &&
+                this.#shells.keys(sid).includes(job.shellID));
+          return live ? `result:${job.id}` : `unconfirmed-result:${job.id}`;
+        }),
+        ...(millis(native.time.busy) > terminal ? ["native-start"] : []),
+      ];
+      this.#completion.set(id, {
+        pending,
+        continuation,
+        ...(inbox.state === "available" && !pending.length &&
+            metadata(native).activity?.terminal === terminal
+          ? { confirmed: terminal }
+          : {}),
+      });
+      this.#upsert(latest);
+    })().catch((error) => {
+      if (!current()) return;
+      this.#completionInput(id);
+      if (!(error instanceof V2MissingSession)) this.diagnostic(error);
+    }).finally(() => {
+      if (this.#completionReads.get(id) === read) {
+        this.#completionReads.delete(id);
+      }
+    });
+  }
   async #hydrate(
     wanted: readonly string[],
     signal: AbortSignal,
@@ -990,6 +1144,10 @@ export class OpencodeV2ServerAdapter implements Harness {
     this.#shells.retire(ids.decode(id));
     this.#running.delete(ids.decode(id));
     this.#finished.delete(id);
+    this.#completion.delete(id);
+    this.#completionReads.delete(id);
+    this.#completionCandidates.delete(id);
+    this.#admissions.delete(id);
     this.#lists.invalidate();
     if (this.digest) {
       await this.digest.deleted(generation, id, Date.now(), metadata);
@@ -1281,9 +1439,12 @@ export class OpencodeV2ServerAdapter implements Harness {
       if (this.digest && !this.#deliveries) {
         this.#deliveries = new DeliveryBackfill(
           this.digest,
-          (parent, updates, reset) => {
+          (parent, updates, reset, invalidated) => {
             if (generation !== this.#generation || !this.#sink) return;
-            const dirty = new Set(updates.map((row) => row.id));
+            const dirty = new Set([
+              ...invalidated,
+              ...updates.map((row) => row.id),
+            ]);
             if (reset) {
               for (const entry of this.#index.snapshotEntries()) {
                 if (entry.parentID === parent) dirty.add(entry.id);
@@ -1380,9 +1541,40 @@ export class OpencodeV2ServerAdapter implements Harness {
     generation: number,
   ): Promise<void> {
     this.catalogs?.event(event);
+    if (event.type === "project.updated") {
+      signal.throwIfAborted();
+      if (generation !== this.#generation) return;
+      const update = nativeProjectMetadata(event.data);
+      if (!update || !this.#sink?.projectMetadata?.(update, "event")) {
+        this.#queueInventory(client, signal, generation);
+      }
+      return;
+    }
     const changedID = typeof event.data.sessionID === "string"
       ? ids.encode(event.data.sessionID)
       : undefined;
+    const parked = event.type === "session.inbox.enqueued" &&
+      parkedShellResult(event.data.item);
+    if (
+      changedID && generation === this.#generation && !parked &&
+      /^session\.(inbox\.|execution\.started$|compaction\.started$|retry\.scheduled$)/
+        .test(event.type)
+    ) {
+      const candidate = this.#completionCandidates.get(changedID);
+      if (
+        event.type === "session.execution.started" && candidate !== undefined &&
+        (event.created === undefined || event.created >= candidate)
+      ) {
+        // A successor owns settlement from its start, including when its
+        // interruption leaves the previous durable idle clock in place.
+        this.#completionCandidates.delete(changedID);
+      }
+      this.#completionInput(
+        changedID,
+        event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
+        event.type === "session.inbox.enqueued" ? ["native-admission"] : [],
+      );
+    }
     if (
       this.#inventoryChanges &&
       /^(session\.(execution\.|shell\.|created$|forked$|moved$|deleted$|renamed$|metadata\.updated$|archived$|unarchived$)|shell\.)/
@@ -1501,7 +1693,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     if (
-      /^(project\.updated|worktree\.(updated|resolved)|location\.shutdown)$/
+      /^(worktree\.(updated|resolved)|location\.shutdown)$/
         .test(event.type)
     ) {
       this.#queueInventory(client, signal, generation);
@@ -1516,6 +1708,9 @@ export class OpencodeV2ServerAdapter implements Harness {
       return;
     }
     if (typeof sid !== "string" || sid === "global") return;
+    if (!parked && /^session\.inbox\./.test(event.type)) {
+      this.#confirmCompletion(ids.encode(sid), client, signal);
+    }
     if (
       !/^session\.execution\./.test(event.type) &&
       !/^session\.(created|forked|renamed|moved|metadata\.updated|archived|unarchived|deleted|retry\.scheduled|step\.started)$/
@@ -1699,7 +1894,10 @@ export class OpencodeV2ServerAdapter implements Harness {
           : {}),
       };
     }
-    if (value.shellEnd && entry.activity?.terminal === value.shellEnd) {
+    if (
+      !entry.parentID && value.shellEnd &&
+      entry.activity?.terminal === value.shellEnd
+    ) {
       entry.activity = { ...entry.activity, terminalOrigin: "live" };
     }
     if (
@@ -1712,8 +1910,16 @@ export class OpencodeV2ServerAdapter implements Harness {
       entry.activity = {
         ...entry.activity,
         terminalOrigin: "live",
+        ...(entry.parentID && event.id?.startsWith("evt_")
+          ? { runID: event.id.replace(/^evt_/, "msg_") }
+          : {}),
         ...(executionFailure ? { terminalFailure: executionFailure } : {}),
       };
+      if (
+        entry.activity.outcome === "succeeded" && millis(raw.time.busy) <= ended
+      ) {
+        this.#completionCandidates.set(entry.id, ended);
+      }
     }
     if (
       value.retry && value.retry.type !== "session.retry.scheduled"
@@ -1757,10 +1963,11 @@ export class OpencodeV2ServerAdapter implements Harness {
     }
     this.#execution(
       entry,
-      ended ?? value.shellEnd,
+      ended ?? (entry.parentID ? undefined : value.shellEnd),
       previousRun !== undefined && event.type !== "session.execution.started" &&
         this.#index.getMetadata(entry.id)?.status === "idle",
     );
+    this.#confirmCompletion(entry.id, client, signal);
     if (value.projects) {
       this.#queueProjects(
         [raw.location.directory, ...(previous ? [previous.directory] : [])],

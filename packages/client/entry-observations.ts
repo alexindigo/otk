@@ -1,49 +1,35 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { latestTerminal, randomID } from "@otk/protocol";
-import type {
-  EntityState,
-  IndexEntry,
-  TerminalEvidence,
-  TerminalOutcome,
-} from "@otk/protocol";
+import { randomID } from "@otk/protocol";
+import type { EntityState, IndexEntry, SettlementChange } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { decodeIndexObservation } from "./index.ts";
 
 export interface EntryChange {
   id: string;
   before?: IndexEntry;
   after?: IndexEntry;
-  completedAt?: number;
-  completedOutcome?: TerminalOutcome;
-  completedUnseen?: boolean;
-  completionOrigin?: "live" | "historical";
-  completedFailure?: TerminalEvidence["terminalFailure"];
+  /** The accepted entity owner publication; null means no current authority. */
+  entity?: EntityState | null;
+  /** Coverage admitted an existing row, not a transition to its current state. */
+  admitted?: true;
 }
 export interface EntryChanges {
   generation: string;
   revision: number;
   baseline: boolean;
   changes: readonly EntryChange[];
+  settlements?: readonly SettlementChange[];
 }
+/** Permission routing for inventory consumers of an accepted projection. */
+export const permissionRouting = (entry?: IndexEntry): {
+  keys: readonly string[];
+  fresh: boolean;
+} | undefined => entry && decodeIndexObservation(entry).native?.permissions;
 export interface AttentionProjection {
   get(id: string): IndexEntry | undefined;
-  update(ids: readonly string[], baseline?: boolean): void;
-  finished(
-    id: string,
-    time: number,
-    baseline?: boolean,
-    outcome?: TerminalOutcome,
-    unseen?: boolean,
-    evidence?: TerminalEvidence,
-  ): void;
-  /** Admission replays known state, even when it advances an older clock. */
-  admitFinished(
-    id: string,
-    time: number,
-    outcome?: TerminalOutcome,
-    unseen?: boolean,
-    evidence?: TerminalEvidence,
-  ): void;
+  update(ids: readonly string[], baseline?: boolean, admitted?: boolean): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
+  settled(values: NonNullable<EntryChanges["settlements"]>): void;
   reset(): void;
   stop(): void;
 }
@@ -52,18 +38,10 @@ export function createAttentionProjection(o: {
   entry(id: string): IndexEntry | undefined;
   ids(): readonly string[];
   entity?(id: string): EntityState | undefined;
-  completions?: boolean;
   factory?: StateFactory;
 }): AttentionProjection {
   const values = new Map<string, IndexEntry>();
-  const finishClocks = new Map<
-    string,
-    TerminalEvidence & {
-      unseen?: boolean;
-      seeded: boolean;
-      observedLive: boolean;
-    }
-  >();
+  const published = new Map<string, EntityState>();
   const listeners = new Set<(changes: EntryChanges) => void>();
   const clock = (o.factory ?? createState)({
     keys: {} as Record<string, number>,
@@ -73,18 +51,16 @@ export function createAttentionProjection(o: {
   const facts = (entry?: IndexEntry) =>
     entry && JSON.stringify([
       entry.title,
-      entry.status,
       entry.parentID,
       entry.directory,
       entry.archived,
       entry.deleted,
-      entry.attention,
-      entry.activity,
+      decodeIndexObservation(entry),
     ]);
   const update = (
     ids: readonly string[],
     baseline = false,
-    completion = false,
+    admitted = false,
   ) => {
     if (stopped) return;
     const touched = new Set(ids), rebuild = baseline || !initialized;
@@ -96,45 +72,42 @@ export function createAttentionProjection(o: {
     for (const id of touched) {
       const before = values.get(id),
         raw = o.entry(id),
-        evidence = o.entity?.(id)?.evidence;
+        previous = published.get(id),
+        entity = o.entity?.(id),
+        evidence = entity?.evidence;
+      if (entity) published.set(id, entity);
+      else published.delete(id);
       const permissions = evidence?.requests?.permissions.map(({ id }) => id) ??
         [];
+      const questions = evidence?.requests?.questions.map(({ id }) => id) ?? [];
       const after = raw && o.entity
         ? {
           ...raw,
           attention: {
-            ...raw.attention,
+            ...decodeIndexObservation(raw).diagnostic,
             permissions: permissions.length,
             questions: evidence?.questions ?? 0,
           },
           activity: {
-            ...raw.activity,
+            ...decodeIndexObservation(raw).native,
             permissions: { keys: permissions, fresh: !!evidence },
+            inputs: { keys: questions, fresh: !!evidence },
           },
         }
         : raw;
       if (after) values.set(id, after);
       else values.delete(id);
       if (
-        rebuild || completion && touched.has(id) ||
-        facts(before) !== facts(after)
+        rebuild ||
+        facts(before) !== facts(after) ||
+        JSON.stringify(previous) !== JSON.stringify(entity)
       ) {
         changes.push({
           id,
           before,
           after,
-          ...(o.completions && (
-              completion || !!after && (!before ||
-                  before.status !== "idle" && after.status === "idle")
-            )
-            ? {
-              completedAt: finishClocks.get(id)?.terminal ?? 0,
-              completedOutcome: finishClocks.get(id)?.outcome,
-              completedUnseen: finishClocks.get(id)?.unseen,
-              completionOrigin: finishClocks.get(id)?.terminalOrigin,
-              completedFailure: finishClocks.get(id)?.terminalFailure,
-            }
-            : {}),
+          ...(o.entity ? { entity: entity ?? null } : {}),
+          ...(admitted ? { admitted: true as const } : {}),
         });
       }
     }
@@ -152,51 +125,12 @@ export function createAttentionProjection(o: {
       for (const listener of listeners) listener(event);
     }
   };
-  const finished = (
-    id: string,
-    time: number,
-    baseline = false,
-    outcome?: TerminalOutcome,
-    unseen?: boolean,
-    evidence?: TerminalEvidence,
-    admitted = false,
-  ) => {
-    const previous = finishClocks.get(id);
-    if (stopped || time < (previous?.terminal ?? 0)) return;
-    const same = previous?.terminal === time;
-    const paired = evidence?.terminal === time ? evidence : undefined;
-    const seeded = baseline || admitted || same && previous.seeded;
-    // Once observed, provenance and acknowledgement belong to this terminal,
-    // not to the later frame that supplies its outcome or failure details.
-    const observedLive = same && previous.observedLive ||
-      !seeded && paired?.terminalOrigin !== "historical" &&
-        (!same || paired?.terminalOrigin === "live");
-    const value = {
-      ...latestTerminal(previous, {
-        terminal: time,
-        outcome,
-        terminalFailure: paired?.terminalFailure,
-      }),
-      terminal: time,
-      unseen: same && previous.unseen === false ? false : unseen,
-      terminalOrigin: observedLive ? "live" as const : "historical" as const,
-      seeded,
-      observedLive,
-    };
-    if (JSON.stringify(previous) === JSON.stringify(value)) return;
-    finishClocks.set(id, value);
-    update([id], false, true);
-  };
   return {
     get(id) {
       void clock.state.keys[id];
       return values.get(id);
     },
     update,
-    finished,
-    admitFinished(id, time, outcome, unseen, evidence) {
-      finished(id, time, false, outcome, unseen, evidence, true);
-    },
     subscribe(listener) {
       if (stopped) return () => {};
       listeners.add(listener);
@@ -204,16 +138,27 @@ export function createAttentionProjection(o: {
         listeners.delete(listener);
       };
     },
+    settled(settlements) {
+      if (stopped || !initialized) return;
+      const event = {
+        generation,
+        revision: ++revision,
+        baseline: false,
+        changes: [],
+        settlements,
+      };
+      for (const listener of listeners) listener(event);
+    },
     reset() {
       initialized = false;
-      finishClocks.clear();
+      published.clear();
       generation = randomID();
       revision = 0;
     },
     stop() {
       stopped = true;
       values.clear();
-      finishClocks.clear();
+      published.clear();
       listeners.clear();
       clock.update((state) => {
         state.keys = {};

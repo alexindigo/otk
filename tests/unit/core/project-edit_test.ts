@@ -32,11 +32,19 @@ test("WP9 core gates native project edits and rejects foreign targets and unsupp
     const harness = stub({
       projectEdit: {
         read: () => Promise.resolve(current),
-        update(target, patch) {
-          effects++;
-          assertEquals(target.projectID, "fixture");
-          Object.assign(current.values, patch);
-          return Promise.resolve(current);
+        prepare(target, patch) {
+          if (
+            target.projectID !== current.projectID ||
+            !Object.keys(patch).every((field) => field === "name")
+          ) {
+            return Promise.reject(new Error("Changed target"));
+          }
+          return Promise.resolve(() => {
+            effects++;
+            assertEquals(target.projectID, "fixture");
+            Object.assign(current.values, patch);
+            return Promise.resolve(current);
+          });
         },
       },
     });
@@ -60,6 +68,16 @@ test("WP9 core gates native project edits and rejects foreign targets and unsupp
     );
     assertEquals(effects, 1);
     assertEquals(current.values.name, "After");
+    assertEquals(
+      await rpc.dispatch("project.update", {
+        projectID: "fixture",
+        directory: "/fixture",
+        patch: { name: "" },
+      }),
+      null,
+    );
+    assertEquals(effects, 2);
+    assertEquals(current.values.name, "");
   } finally {
     db.close();
   }
@@ -82,18 +100,20 @@ test("superseded native project edit closes as unconfirmed without reading or di
         reads++;
         return Promise.resolve(structuredClone(current));
       },
-      update(_target, patch) {
-        Object.assign(current.values, patch);
-        if (++calls === 1) {
-          return Promise.reject(
-            new OperationFailure(
-              "unknown",
-              "native.unknown",
-              new Error("response lost"),
-            ),
-          );
-        }
-        return Promise.resolve(structuredClone(current));
+      prepare(_target, patch) {
+        return Promise.resolve(() => {
+          Object.assign(current.values, patch);
+          if (++calls === 1) {
+            return Promise.reject(
+              new OperationFailure(
+                "unknown",
+                "native.unknown",
+                new Error("response lost"),
+              ),
+            );
+          }
+          return Promise.resolve(structuredClone(current));
+        });
       },
     },
   });
@@ -158,11 +178,70 @@ test("superseded native project edit closes as unconfirmed without reading or di
     }
     assertEquals({ calls, reads, name: current.values.name }, {
       calls: 2,
-      reads: 2,
+      reads: 0,
       name: "New",
     });
   } finally {
     await requests.stop();
     db.close();
   }
+});
+
+test("project edit yields execution while awaiting native validation", async () => {
+  const db = new OtkDb(await fixture(), [], { busyms: 0 });
+  const current: ProjectEditSnapshot = {
+    projectID: "fixture",
+    directory: "/fixture",
+    fields: ["name"],
+    values: { name: "Before", icon: "", color: "", startScript: "" },
+    colors: [],
+    hints: [],
+  };
+  const readStarted = Promise.withResolvers<void>();
+  const permission = Promise.withResolvers<void>();
+  let active = false, writes = 0;
+  const harness = stub({
+    projectEdit: {
+      read() {
+        return Promise.resolve(current);
+      },
+      async prepare(_target, patch) {
+        readStarted.resolve();
+        await permission.promise;
+        return () => {
+          writes++;
+          Object.assign(current.values, patch);
+          return Promise.resolve(current);
+        };
+      },
+    },
+  });
+  const registry = new RpcRegistry(harness, db, (_owner, value) => {
+    active = value;
+  });
+  registerProjectEdit(registry, harness);
+  const pending = registry.dispatch(
+    "project.update",
+    {
+      directory: current.directory,
+      projectID: current.projectID,
+      patch: { name: "After" },
+    },
+    undefined,
+    { signal: new AbortController().signal },
+  );
+  try {
+    await readStarted.promise;
+    assertEquals(active, false, "A waiting native read is not executing work");
+    assertEquals(writes, 0);
+  } finally {
+    permission.resolve();
+    try {
+      await pending;
+    } finally {
+      db.close();
+    }
+  }
+  assertEquals(writes, 1);
+  assertEquals(current.values.name, "After");
 });

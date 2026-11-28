@@ -11,7 +11,45 @@ const types: Record<string, string> = {
   ".woff": "font/woff",
   ".json": "application/json",
 };
-async function staticFile(
+const ASSET_EXTENSIONS = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".bmp",
+  ".ico",
+  ".svg",
+  ".js",
+  ".mjs",
+  ".css",
+  ".map",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".otf",
+  ".json",
+  ".wasm",
+  ".txt",
+]);
+const NAVIGATION_DESTINATIONS = new Set([
+  "document",
+  "iframe",
+  "frame",
+  "empty",
+]);
+function notFound() {
+  return new Response("Not found", {
+    status: 404,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+export async function staticFile(
   path: string,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   try {
@@ -29,7 +67,9 @@ export async function staticResponse(
   app: {
     staticRoot: string;
     cfg?: Pick<ServiceConfig, "requests" | "connection">;
+    build?: string;
   },
+  request?: { dest?: string | null },
 ): Promise<Response> {
   if (path === "/api" || path.startsWith("/api/")) {
     return Response.json({ code: "not_found" }, { status: 404 });
@@ -39,11 +79,11 @@ export async function staticResponse(
   try {
     relative = decodeURIComponent(path.slice(1)) || "index.html";
   } catch {
-    return new Response("Not found", { status: 404 });
+    return notFound();
   }
   const safe = normalize(relative);
   if (safe.startsWith("../") || safe === ".." || safe.startsWith("/")) {
-    return new Response("Not found", { status: 404 });
+    return notFound();
   }
   const html = (bytes: Uint8Array): Response => {
     // Relative assets are rooted at the sidecar's mount, not at a fallback
@@ -51,9 +91,13 @@ export async function staticResponse(
     const depth = safe.split("/").filter(Boolean).length -
       (safe.endsWith("/") ? 0 : 1);
     const base = depth > 0 ? "../".repeat(depth) : "./";
-    const bootstrap = app.cfg
+    const facts = {
+      ...(app.cfg ? { policy: clientRequestPolicy(app.cfg) } : {}),
+      ...(app.build ? { build: app.build } : {}),
+    };
+    const bootstrap = Object.keys(facts).length
       ? `<script type="application/json" id="otk-bootstrap">${
-        JSON.stringify({ policy: clientRequestPolicy(app.cfg) })
+        JSON.stringify(facts)
       }</script>`
       : "";
     const text = new TextDecoder().decode(bytes).replace(
@@ -78,10 +122,16 @@ export async function staticResponse(
       },
     });
   }
+  if (
+    (request?.dest && !NAVIGATION_DESTINATIONS.has(request.dest)) ||
+    ASSET_EXTENSIONS.has(extname(safe).toLowerCase())
+  ) return notFound();
   const index = await staticFile(join(root, "index.html"));
   if (index !== null) return html(index);
-  return new Response(
-    await Deno.readFile(new URL("../static/index.html", import.meta.url)),
-    { headers: { "content-type": types[".html"] } },
+  const fallback = await Deno.readFile(
+    new URL("../static/index.html", import.meta.url),
   );
+  return app.build
+    ? html(fallback)
+    : new Response(fallback, { headers: { "content-type": types[".html"] } });
 }

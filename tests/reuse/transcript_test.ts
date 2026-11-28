@@ -49,7 +49,11 @@ test("public transcript consumer pages native source, resnapshots a lost baselin
       "Reusable source 0",
     ),
   );
-  const choice = transcript.interaction.disclosure("work", "generation-1");
+  const choice = transcript.interaction.disclosure(
+    "activity",
+    "run",
+    "generation-1",
+  );
   choice.set(true);
   const clock = transcript.state.clock!;
   consumer.owner.receive("consumer", {
@@ -90,4 +94,5 @@ test("public transcript consumer pages native source, resnapshots a lost baselin
   consumer.owner.setDemand(demand);
   await waitFor(() => transcript.state.messageIDs.length, (n) => n >= 20);
   assertEquals(transcript.state.continuity, "ready");
+  assertEquals(choice.value(), true);
 });

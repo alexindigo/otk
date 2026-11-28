@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
 import { EntityStates } from "../../core/index/entity-states.ts";
 import { SessionSupervision } from "../../core/index/supervision.ts";
@@ -30,9 +30,7 @@ Deno.test({
         ancestors: () => [],
         descendants: (id) => new Set([id]),
       }, () => {});
-      const inventory = () =>
-        (states.get(entityKey("session", target.id))?.evidence?.liveWork ?? [])
-          .filter((value) => value.kind === "shell");
+      const roster = () => states.get(entityKey("session", target.id))?.shells;
       let boots = 0;
       const adapter = new OpencodeV2ServerAdapter({
         serviceFile: native.serviceFile,
@@ -61,7 +59,7 @@ Deno.test({
       });
       const unrelated = native.nativeApi.session.shell({
         sessionID: other.nativeID,
-        command: "sleep 120",
+        command: "exec sleep 120",
       });
       void running.catch(() => {});
       void unrelated.catch(() => {});
@@ -76,21 +74,63 @@ Deno.test({
           undefined,
         );
         await waitFor(() =>
-          inventory().length, (count) =>
+          roster()?.count, (count) =>
           count === 1);
+        assertEquals(roster()?.state, "working");
         const owned = (await native.api.shell.list({
           location: { directory: native.directory },
         })).data.find((shell) => shell.metadata.sessionID === target.nativeID)!;
         assertEquals(
-          inventory().map((item) => [item.id, item.title, item.startedAt]),
+          roster()?.items.map((item) => [item.id, item.title, item.startedAt]),
           [[owned.id, owned.command, owned.time.started]],
         );
         const before = boots;
         native.proxy.disconnect();
         await waitFor(() => boots, (count) => count > before);
         assertEquals(entries.get(target.id)?.status, "busy");
-        await waitFor(() => inventory().length, (count) => count === 1);
-        assertEquals(inventory()[0].startedAt, owned.time.started);
+        await waitFor(() => roster()?.count, (count) => count === 1);
+        assertEquals(roster()?.state, "working");
+        assertEquals(roster()?.items[0].startedAt, owned.time.started);
+        const location = { directory: native.directory };
+        const otherShell = (await native.api.shell.list({ location })).data
+          .find((shell) => shell.metadata.sessionID === other.nativeID)!;
+        const terminate = adapter.capabilities["shell.terminate"]!;
+        await assertRejects(() =>
+          terminate.terminate(target.id, otherShell.id)
+        );
+        assertEquals(
+          (await native.api.shell.get({
+            id: otherShell.id,
+            location,
+          })).data.status,
+          "running",
+        );
+        // This exact process must exit, not just disappear from the inventory.
+        assert(otherShell.pid);
+        const runningProcess = () =>
+          new Deno.Command("ps", {
+            args: ["-p", String(otherShell.pid), "-o", "pid="],
+            signal: AbortSignal.timeout(5000),
+          }).output();
+        assertEquals((await runningProcess()).code, 0);
+        await terminate.terminate(other.id, otherShell.id);
+        await waitFor(runningProcess, (result) => result.code === 1);
+        await waitFor(
+          () => entries.get(other.id)?.status,
+          (status) => status === "idle",
+        );
+        assertEquals(roster()?.items.map((item) => item.id), [owned.id]);
+
+        // The session-wide interrupt is a separate intent.
+        const next = native.nativeApi.session.shell({
+          sessionID: other.nativeID,
+          command: "exec sleep 120",
+        });
+        void next.catch(() => {});
+        await waitFor(
+          () => entries.get(other.id)?.status,
+          (status) => status === "busy",
+        );
         await adapter.capabilities.prompt!.abort(target.id);
         // Deliberately dropping the proxy also loses the submitting HTTP reply.
         // Its uncertainty must not hide or prevent interruption of native work.
@@ -109,7 +149,7 @@ Deno.test({
           [other.nativeID],
         );
         assertEquals(entries.get(other.id)?.status, "busy");
-        assertEquals(inventory(), []);
+        assertEquals(roster(), { count: 0, items: [], state: "none" });
         assert(
           !(await native.api.message.list({ sessionID: target.nativeID })).data
             .some((message) => message.type === "assistant"),

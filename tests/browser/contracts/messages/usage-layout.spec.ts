@@ -30,7 +30,8 @@ for (const count of [3, 120] as const) {
         await expect(page.locator(trigger)).toHaveText(
           new RegExp(`^${count} model calls`),
         );
-        await expect(page.locator(".otk-composer-model-name")).toBeAttached();
+        await expect(page.locator(".otk-composer-model-name:not([inert] *)"))
+          .toBeAttached();
         await expect(
           page.getByRole("region", { name: "Transcript", exact: true }),
         ).toHaveAttribute("aria-busy", "false");
@@ -46,7 +47,20 @@ for (const count of [3, 120] as const) {
           .count();
         for (const [width, height] of [[1280, 720], [800, 600]]) {
           await page.setViewportSize({ width, height });
-          await page.locator(trigger).evaluate((element) =>
+          const usage = page.getByRole("button", {
+            name: new RegExp(`^Turn usage: ${count} model calls`),
+          });
+          await expect(usage).toBeVisible();
+          expect(
+            await usage.evaluate((element) => {
+              const button = element.getBoundingClientRect();
+              const track = element.closest(".otk-message-details")!
+                .getBoundingClientRect();
+              return button.left >= track.left && button.right <= track.right &&
+                element.scrollWidth === element.clientWidth;
+            }),
+          ).toBe(true);
+          await usage.evaluate((element) =>
             element.scrollIntoView({ block: "center" })
           );
           await page.locator(trigger).hover();
@@ -83,7 +97,7 @@ for (const count of [3, 120] as const) {
             await page.locator(".otk-usage-breakdown tbody tr").evaluateAll(
               (rows) =>
                 rows.map((row) =>
-                  Array.from(row.children).slice(2, 8).map((cell) =>
+                  Array.from(row.children).slice(1, 7).map((cell) =>
                     cell.textContent
                   )
                 ),
@@ -99,7 +113,7 @@ for (const count of [3, 120] as const) {
             ].map((value) => value.toLocaleString("en-US"))));
           expect(
             await page.locator(".otk-usage-breakdown tbody tr").evaluateAll(
-              (rows) => rows.map((row) => row.children[8].textContent),
+              (rows) => rows.map((row) => row.children[7].textContent),
             ),
           ).toEqual(Array(count).fill("$0.01"));
           const n = count * (count + 1) / 2;
@@ -169,7 +183,7 @@ for (const count of [3, 120] as const) {
           await expect(page.locator(panel)).toBeVisible();
           const pinned = () =>
             page.evaluate(() =>
-              [".otk-usage-summary", "thead th", "tfoot th"].map((selector) =>
+              [".otk-usage-summary", "thead", "tfoot"].map((selector) =>
                 document.querySelector(selector)!.getBoundingClientRect().y
               )
             );
@@ -185,7 +199,7 @@ for (const count of [3, 120] as const) {
           expect(
             await page.locator(scroll).evaluate((element) => {
               const rect = element.getBoundingClientRect();
-              return ["thead th", "tfoot th", "tbody tr:last-child"].every(
+              return ["thead", "tfoot", "tbody tr:last-child"].every(
                 (selector) => {
                   const box = element.querySelector(selector)!
                     .getBoundingClientRect();
@@ -196,7 +210,7 @@ for (const count of [3, 120] as const) {
           ).toBe(true);
           if (width === 800) {
             const columns = page.locator(
-              "tbody tr:first-child > :nth-child(-n+2)",
+              "tbody tr:first-child > .otk-usage-identity > *",
             );
             const left = await columns.evaluateAll((elements) =>
               elements.map((element) => element.getBoundingClientRect().x)
@@ -210,14 +224,21 @@ for (const count of [3, 120] as const) {
                 elements.map((element) => element.getBoundingClientRect().x)
               ),
             ).toEqual(left);
-            expect(
-              await page.locator(scroll).evaluate((element) => {
-                const rect = element.getBoundingClientRect(),
-                  cost = element.querySelector("thead th:last-child")!
-                    .getBoundingClientRect();
-                return cost.right <= rect.right && cost.left >= rect.left;
-              }),
-            ).toBe(true);
+            const chart = await page.locator(scroll).evaluate((element) => {
+              const rect = element.getBoundingClientRect(),
+                last = element.querySelector("thead th:last-child")!
+                  .getBoundingClientRect();
+              return {
+                startClearance: last.left - rect.left,
+                endClearance: rect.right - last.right,
+                x: element.scrollLeft,
+                extent: element.scrollWidth - element.clientWidth,
+              };
+            });
+            expect(chart.startClearance, JSON.stringify(chart))
+              .toBeGreaterThanOrEqual(0);
+            expect(chart.endClearance, JSON.stringify(chart))
+              .toBeGreaterThanOrEqual(0);
           }
           await page.keyboard.press("Escape");
           await expect(page.locator(panel)).toHaveCount(0);

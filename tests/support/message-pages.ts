@@ -8,6 +8,7 @@ import {
   type MessagePolicy,
 } from "@otk/protocol";
 export const fixtureMessagePolicy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 300000,
   prefetchbytes: 67108864,
   coolms: 300000,

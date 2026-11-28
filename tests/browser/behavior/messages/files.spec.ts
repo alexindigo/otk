@@ -8,10 +8,8 @@ import { readFile, stat } from "node:fs/promises";
 
 async function openDiffStyleForKeyboard(page: Page) {
   await page.locator("button[name=diffStyle]").click();
-  // The native popover can open before its toggle mounts and focuses the picker.
-  const picker = page.locator(".otk-picker-content").filter({
-    has: page.getByRole("listbox", { name: "Diff style", exact: true }),
-  });
+  // fad738b9: the listbox owns focus and the active keyboard candidate.
+  const picker = page.getByRole("listbox", { name: "Diff style", exact: true });
   await expect(picker).toBeFocused();
 }
 
@@ -103,20 +101,24 @@ test("messages.edit-write-patch-native-files-geometry", {
         )
     ),
   ).toBe(true);
-  await page.locator(".otk-session-view").evaluate((element) =>
-    (element as HTMLElement).style.setProperty("--lane-width", "1600px")
-  );
-  // Auto mode belongs to the diff's available width, not its pane or tree depth.
-  const splitViewport = await diff.evaluate((element) =>
+  // The app's Work pane has a bounded width. Widen the owning track in this
+  // geometry probe, as the transcript lane was widened before D74.
+  const panel = page.locator(".otk-right-panel");
+  const expansion = await diff.evaluate((element) =>
     Math.ceil(
-      innerWidth +
-        parseFloat(
-          getComputedStyle(element).getPropertyValue("--diff-split-min"),
-        ) -
+      parseFloat(
+        getComputedStyle(element).getPropertyValue("--diff-split-min"),
+      ) -
         element.getBoundingClientRect().width + 1,
     )
   );
-  await page.setViewportSize({ width: splitViewport, height: 800 });
+  await page.setViewportSize({ width: wideViewport + expansion, height: 800 });
+  const previousWidth = await panel.evaluate((element, extra) => {
+    const rail = element as HTMLElement;
+    const original = rail.style.width;
+    rail.style.width = `${rail.getBoundingClientRect().width + extra}px`;
+    return original;
+  }, expansion);
   await expect.poll(() =>
     diff.evaluate((element) =>
       element.getBoundingClientRect().width >=
@@ -126,11 +128,11 @@ test("messages.edit-write-patch-native-files-geometry", {
     )
   ).toBe(true);
   await expect(diff).toHaveAttribute("data-diff-style", "split");
+  await panel.evaluate((element, width) => {
+    (element as HTMLElement).style.width = width;
+  }, previousWidth);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(diff).toHaveAttribute("data-diff-style", "unified");
-  await page.locator(".otk-session-view").evaluate((element) =>
-    (element as HTMLElement).style.removeProperty("--lane-width")
-  );
   parts.push(
     await runNativeTool(state, page, session.id, "write", {
       filePath: state.directory + "/write.ts",

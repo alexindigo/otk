@@ -5,6 +5,52 @@ import { join } from "@std/path";
 import { config, ConfigError, loadServiceConfig } from "../../../core/mod.ts";
 import { cfg, defaultsPath, fixture } from "./support.ts";
 
+test("inline-image roots and limits are strictly layered", () => {
+  const load = (env: Record<string, string>) =>
+    loadServiceConfig({ defaultsPath, env }).config;
+  assertEquals(load({ OTK_IMAGES_ROOTS: "" }).images.roots, []);
+  assertEquals(load({ OTK_IMAGES_MAXBYTES: "123" }).images, {
+    roots: [
+      "{checkouts}",
+      "~/Documents/{project}",
+      "~/TemporaryFiles/{project}",
+    ],
+    maxbytes: 123,
+    maxpixels: 40_000_000,
+    concurrency: 4,
+  });
+  const invalid = [
+    "relative",
+    "~someone/docs",
+    "/x/{x}",
+    "/x/a{project}",
+    "/x/{checkouts}",
+    "/x/../foo",
+    "/x/./foo",
+    "/x//foo",
+    "/x/",
+  ];
+  const error = assertThrows(() =>
+    load({
+      OTK_IMAGES_ROOTS: invalid.join(","),
+      OTK_IMAGES_MAXBYTES: "0",
+      OTK_IMAGES_MAXPIXELS: "-1",
+      OTK_IMAGES_CONCURRENCY: "0",
+    }), ConfigError);
+  assertEquals(
+    error.problems.filter((p) => p.includes("images.roots (OTK_IMAGES_ROOTS)"))
+      .length,
+    invalid.length,
+  );
+  for (const leaf of ["maxbytes", "maxpixels", "concurrency"]) {
+    assert(
+      error.problems.some((p) =>
+        p.includes(`images.${leaf} (OTK_IMAGES_${leaf.toUpperCase()})`)
+      ),
+    );
+  }
+});
+
 test("config collects unknown, missing and wrong-type diagnostics with env names", async () => {
   const root = await fixture(), file = join(root, "bad.toml");
   await Deno.writeTextFile(file, '[server]\nport = "bad"\nextra = 1\n');

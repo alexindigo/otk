@@ -13,6 +13,9 @@ export const checkoutsMigrations: FeatureMigrations = {
   }, {
     version: 3,
     sql: new URL("./migrations/checkouts/003.sql", import.meta.url),
+  }, {
+    version: 4,
+    sql: new URL("./migrations/checkouts/004.sql", import.meta.url),
   }],
 };
 /** Durable native affiliation, not rebuildable digest data or user policy. */
@@ -38,6 +41,17 @@ export interface CheckoutAuthority {
     scope: string;
     owners: readonly string[];
   }[];
+}
+export interface CheckoutRemote {
+  repository: string;
+  remote: string | null;
+  owner?: string;
+  firstSeen: number;
+  readAt: number;
+}
+export interface CheckoutRemoteAnchor {
+  remote: string;
+  repository: string;
 }
 export class Checkouts {
   constructor(readonly db: OtkDb) {}
@@ -82,10 +96,31 @@ export class Checkouts {
       scopes: [...scopes.values()],
     };
   }
-  /** Changed complete scope sets and active sources commit with their history rows. */
+  remotes(): CheckoutRemote[] {
+    return this.db.connection.prepare(
+      "SELECT * FROM checkout_remotes ORDER BY repository",
+    ).all().map((row) => ({
+      repository: String(row.repository),
+      remote: row.remote === null ? null : String(row.remote),
+      ...(row.owner === null ? {} : { owner: String(row.owner) }),
+      firstSeen: Number(row.first_seen),
+      readAt: Number(row.read_at),
+    }));
+  }
+  anchors(): CheckoutRemoteAnchor[] {
+    return this.db.connection.prepare(
+      "SELECT * FROM checkout_remote_anchors ORDER BY remote",
+    ).all().map((row) => ({
+      remote: String(row.remote),
+      repository: String(row.repository),
+    }));
+  }
+  /** Native and Git identity evidence commit with the resulting anchors. */
   save(
     records: readonly CheckoutRecord[],
     authority?: CheckoutAuthority,
+    remotes: readonly CheckoutRemote[] = [],
+    anchors: readonly CheckoutRemoteAnchor[] = [],
   ): void {
     this.db.write(() => {
       const statement = this.db.connection.prepare(
@@ -118,6 +153,26 @@ export class Checkouts {
           remove.run(source, scope);
           for (const repo of owners) insert.run(source, scope, repo);
         }
+      }
+      if (remotes.length) {
+        const upsert = this.db.connection.prepare(
+          "INSERT INTO checkout_remotes VALUES(?,?,?,?,?) ON CONFLICT(repository) DO UPDATE SET remote=excluded.remote,owner=excluded.owner,read_at=excluded.read_at",
+        );
+        for (const r of remotes) {
+          upsert.run(
+            r.repository,
+            r.remote,
+            r.owner ?? null,
+            r.firstSeen,
+            r.readAt,
+          );
+        }
+      }
+      if (anchors.length) {
+        const upsert = this.db.connection.prepare(
+          "INSERT INTO checkout_remote_anchors VALUES(?,?) ON CONFLICT(remote) DO UPDATE SET repository=excluded.repository",
+        );
+        for (const a of anchors) upsert.run(a.remote, a.repository);
       }
     });
   }

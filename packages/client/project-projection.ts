@@ -21,9 +21,9 @@ import {
   projectDirectory,
 } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
-import { projectName } from "./project-navigation.ts";
+import { checkoutLabel, projectLabel } from "./project-names.ts";
 import { projectPlacement } from "./project-placement.ts";
-import { age } from "./format.ts";
+import { sidebarTimer } from "./sidebar-timer.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
@@ -37,7 +37,7 @@ export function createProjectProjection(o: {
   inbox?(): InboxSnapshot;
   taskActivity?(): Readonly<Record<string, InboxStatus>>;
   factory?: StateFactory;
-  membership?(directory: string, present: boolean): void;
+  labelChanged?(directory: string, label: string | undefined): void;
   /** The connection's entity states: the only source of row attention. */
   entities?(): EntityStateStore;
 }) {
@@ -81,6 +81,12 @@ export function createProjectProjection(o: {
     void clock.state.revision;
     return projectDirectory(directory, summaries, repoID);
   };
+  const facts = (directory: string) => {
+    void clock.state.keys[directory];
+    return summaries[directory];
+  };
+  const label = (directory: string) =>
+    checkoutLabel(directory, facts(directory));
   const scopes = (directory: string): readonly string[] => {
     void clock.state.keys[directory];
     const p = projects.get(directory);
@@ -128,8 +134,11 @@ export function createProjectProjection(o: {
       if (visible.has(directory) !== present) {
         if (present) visible.add(directory);
         else visible.delete(directory);
-        o.membership?.(directory, present);
       }
+      o.labelChanged?.(
+        directory,
+        present ? checkoutLabel(directory, p.summary) : undefined,
+      );
     }
     clock.update((draft) => {
       draft.revision++;
@@ -204,10 +213,27 @@ export function createProjectProjection(o: {
     }
     return p.activity;
   };
+  const projectIdentity = (directory: string, repoID?: string) => {
+    const leaf = resolve(directory, repoID), summary = facts(leaf);
+    const root = summary?.topology?.canonicalRoot;
+    const canonical = root && root !== leaf ? facts(root) : undefined;
+    const color = (canonical ?? summary)?.presentation?.color;
+    return {
+      name: canonical ? label(root!) : projectLabel(leaf, summary),
+      ...(color && { color }),
+    };
+  };
   return {
     update,
     resolve,
     scopes,
+    label(directory: string) {
+      return label(resolve(directory));
+    },
+    projectLabel(directory: string) {
+      return projectIdentity(directory).name;
+    },
+    projectIdentity,
     entry(id: string) {
       void entryClock.state.keys[id];
       return sessions.get(id)?.entry;
@@ -353,7 +379,7 @@ export function createProjectProjection(o: {
         for (const id of repoSessions.get(repo) ?? []) ids.add(id);
       }
       if (!changes || changes.baseline) {
-        for (const field of ["seen", "finishes", "supervision"] as const) {
+        for (const field of ["seen", "finishes"] as const) {
           for (
             const id of new Set([
               ...Object.keys(inbox[field] ?? {}),
@@ -372,17 +398,12 @@ export function createProjectProjection(o: {
           ...next,
           seen: { ...next.seen },
           finishes: { ...next.finishes },
-          supervision: { ...next.supervision },
         };
       } else {for (const id of ids) {
           for (const field of ["seen", "finishes"] as const) {
             if (next[field][id] === undefined) delete inbox[field][id];
             else inbox[field][id] = next[field][id];
           }
-          inbox.supervision ??= {};
-          if (next.supervision?.[id]) {
-            inbox.supervision[id] = next.supervision[id];
-          } else delete inbox.supervision[id];
         }}
       update(ids, dirty);
     },
@@ -406,14 +427,15 @@ export function createProjectProjection(o: {
       const p = projects.get(directory);
       if (!p) return undefined;
       const summary = p.summary;
+      const parent = summary?.topology?.parentDirectory;
+      const parentLabel = parent ? label(parent) : undefined;
       const summaryReady = summary !== undefined;
       // Decision 62: the project entity is the row's state; absent or stale
       // state is grey (D6).
       const store = o.entities?.(), key = entityKey("project", directory);
       const status = store ? entityState(store, key) : "none";
-      const dependencies = store && !store.isStale
-        ? store.get(key)?.dependencies
-        : undefined;
+      const entity = store && !store.isStale ? store.get(key) : undefined;
+      const dependencies = entity?.dependencies;
       const unread = store ? emphasis(store, key) : false;
       const record = p.record;
       const archived = summary?.archived === true;
@@ -426,20 +448,19 @@ export function createProjectProjection(o: {
         lifecycle: summary,
         status,
         dependencies,
+        liveWork: entity?.liveWork,
         inactive: !!record?.inactive,
         hasSessions,
       });
-      const time = inactive && record
-        ? record.inactiveAt ?? record.lastVisit
-        : now;
-      const visit = record
-        ? age(record.lastVisit, time, inactive ? "inactive" : "now")
-        : undefined;
+      const timer = sidebarTimer(status, entity?.runStartedAt, now, record);
       if (
-        !p.row || p.row.visit?.text !== visit?.text ||
-        p.row.visit?.iso !== visit?.iso ||
-        p.row.visit?.spoken !== visit?.spoken || p.row.status !== status ||
-        p.row.unread !== unread || p.row.dependencies !== dependencies
+        !p.row || p.row.timer?.kind !== timer?.kind ||
+        p.row.timer?.time.iso !== timer?.time.iso ||
+        p.row.timer?.time.spoken !== timer?.time.spoken ||
+        p.row.status !== status ||
+        p.row.section !== placement.section ||
+        p.row.unread !== unread || p.row.dependencies !== dependencies ||
+        p.row.parentLabel !== parentLabel
       ) {
         p.ids ??= [...p.members.keys()].join(" ");
         p.row = {
@@ -448,7 +469,6 @@ export function createProjectProjection(o: {
             added: false,
             inactive: false,
             lastVisit: 0,
-            order: 0,
           }),
           source: record ? "tracked" : p.summary?.hasSessions ||
               (p.summary?.sessionCount ?? p.members.size) > 0 ||
@@ -465,18 +485,13 @@ export function createProjectProjection(o: {
           unseenCount: store && !store.isStale
             ? store.get(key)?.counts.unseen ?? 0
             : null,
-          visit,
+          timer,
           sessionIDs: p.ids,
           sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
           summary: p.summary,
           topology: p.summary?.topology,
           availability: p.summary?.availability,
-          ...(p.summary?.topology?.parentDirectory
-            ? {
-              depth: 1,
-              parentLabel: projectName(p.summary.topology.parentDirectory),
-            }
-            : {}),
+          ...(parent ? { depth: 1, parentLabel } : {}),
         };
       }
       return p.row;

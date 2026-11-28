@@ -23,9 +23,6 @@
   padding: 0 var(--space-3) 0 var(--space-4);
   gap: var(--chrome-gap);
 }
-.otk-project-tabs[data-reserve-trailing=true] .otk-task-strip {
-  padding-right: var(--corner-zone);
-}
 .otk-task-list {
   flex: 1 1 0;
   height: 100%;
@@ -33,13 +30,14 @@
 }
 .otk-tab {
   flex: 1 1 0;
-  min-width: 90px;
+  min-inline-size: min(var(--row-title-min), 100%);
+  max-inline-size: 100%;
   gap: 0;
   border-radius: var(--radius-row);
 }
 .otk-tab-open {
   width: 100%;
-  --selection-padding: 0 var(--chrome-inset) 0 0;
+  --selection-padding: 0 var(--space-2) 0 0;
   height: var(--control-size);
   max-width: 100%;
   padding: 0;
@@ -59,18 +57,17 @@
   flex: none;
 }
 .otk-breadcrumb-row {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: minmax(min-content, 1fr) minmax(0, max-content);
+  container: otk-session-header / inline-size;
   min-height: var(--row-compact);
   padding: 0 var(--lane-gutter);
   color: var(--otk-fg-3);
   font-size: var(--text-ui);
 }
 .otk-task-crumbs {
-  flex: 1 1 20em;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-1);
+  grid-template-columns: minmax(0, 1fr);
 }
 .otk-new-session {
   display: inline-flex;
@@ -84,16 +81,27 @@
   font-size: var(--text-meta);
   margin-left: auto;
   gap: var(--space-3);
+  white-space: nowrap;
 }
-.otk-open-session-title {
-  display: flex;
-  align-items: center;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 30%;
-  height: var(--control-size);
-  padding: 0 var(--chrome-inset);
-  font-weight: 600;
+.otk-context-fit {
+  justify-self: end;
+  --meta-row-gap: var(--space-2);
+}
+/* Reserve room for the trail by yielding usage items as complete values. */
+@container otk-session-header (inline-size < 32em) {
+  .otk-context-meter .otk-context-bar {
+    display: none;
+  }
+}
+@container otk-session-header (inline-size < 23em) {
+  .otk-context-meter[data-tokens] .otk-usage-cost {
+    display: none;
+  }
+}
+@container otk-session-header (inline-size < 14em) {
+  .otk-context-meter {
+    display: none;
+  }
 }
 .otk-context-bar {
   display: flex;
@@ -124,9 +132,16 @@
   padding-inline: var(--lane-gutter);
 }
 .otk-session-selection {
-  gap: 0;
-  padding-inline-end: var(--chrome-inset);
+  gap: var(--space-1);
 }
-.otk-tab-open .otk-control-label {
-  flex: 1;
+.otk-tab-text {
+  display: grid;
+  grid-template-columns: minmax(min(var(--row-title-min), 100%), 1fr)
+    minmax(0, max-content);
+  align-items: center;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+.otk-tab-meta {
+  justify-self: end;
 }

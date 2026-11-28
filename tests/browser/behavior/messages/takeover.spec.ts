@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork, sessionStatus } from "../../pages/transcript.ts";
 test("messages.takeovers-retain-two-drafts-native-outcomes", {
   tag: ["@messages"],
 }, async ({ state, page }) => {
@@ -43,7 +44,7 @@ test("messages.takeovers-retain-two-drafts-native-outcomes", {
   await expect(page.locator(".otk-prompt")).toBeHidden();
   // Triage decision 5: the hidden composer keeps its Send mounted; the
   // takeover's own primary is the visible action.
-  await expect(page.locator(".otk-prompt button[type=submit]")).toBeHidden();
+  await expect(send(page)).toBeHidden();
   await expect(page.locator(".otk-permission-dock [data-primary-action]"))
     .toBeVisible();
   await openSession(state, page, other.id);
@@ -55,15 +56,12 @@ test("messages.takeovers-retain-two-drafts-native-outcomes", {
   );
   await page.locator(".otk-permission-actions .otk-primary").click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
-  await expect(page.locator(`[data-session="${a.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, a.id, "idle");
   await expect(page.locator(".otk-prompt")).toBeVisible();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Keep this session's unsent work",
   );
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await page.locator("[data-tool=bash] .otk-tool-toggle").click();
   await expect(page.locator("[data-tool=bash] .otk-tool-output")).toHaveText(
     "takeover-bytes",
@@ -100,10 +98,7 @@ test("messages.takeovers-retain-two-drafts-native-outcomes", {
     .toHaveAttribute("aria-selected", "true");
   await page.locator(".otk-question-actions .otk-primary").click();
   await expect(page.locator(".otk-question-dock")).toHaveCount(0);
-  await expect(page.locator(`[data-session="${a.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, a.id, "idle");
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Keep this session's unsent work",
   );

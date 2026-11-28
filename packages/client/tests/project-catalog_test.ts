@@ -7,7 +7,6 @@ Deno.test("catalog merges tracked, indexed and template directories once, retain
   const inbox: InboxSnapshot = {
     projects: [{
       directory: "/tracked",
-      order: 0,
       added: true,
       inactive: false,
       lastVisit: 1,
@@ -52,7 +51,7 @@ Deno.test("catalog merges tracked, indexed and template directories once, retain
     ["/zebra", "template", "none"],
     ["/alpha", "template", "none"],
   ]);
-  assertEquals(rows.find((p) => p.directory === "/alpha")?.visit, undefined);
+  assertEquals(rows.find((p) => p.directory === "/alpha")?.timer, undefined);
   assertEquals(rows.map((p) => [p.directory, p.group]), [
     ["/tracked", "discovered"],
     ["/old", "active"],
@@ -62,7 +61,6 @@ Deno.test("catalog merges tracked, indexed and template directories once, retain
   ]);
   inbox.projects.push({
     directory: "/indexed",
-    order: 1,
     added: true,
     inactive: false,
     lastVisit: 100,

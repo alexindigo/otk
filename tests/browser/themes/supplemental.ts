@@ -327,7 +327,7 @@ export async function supplemental(
         await page.evaluate(() =>
           [
             ".otk-inbox-brand svg",
-            "[data-diffs] .otk-tool-state .otk-tree-icon-art > svg",
+            "[data-diffs] .otk-tool-line .otk-tree-node-slot > svg",
             ".otk-takeover-collapse svg",
           ].map((s) => {
             const e = document.querySelector(s)!, r = e.getBoundingClientRect();

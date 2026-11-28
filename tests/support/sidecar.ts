@@ -56,7 +56,7 @@ export class SidecarTest {
         server: Omit<ServiceConfig["server"], "port">;
       }
     > = {},
-    options: { stableOrigin?: boolean } = {},
+    options: { stableOrigin?: boolean; home?: string } = {},
   ): Promise<SidecarTest> {
     return await acquire("sidecar fixture", async () => {
       const instance = new SidecarTest();
@@ -94,6 +94,10 @@ export class SidecarTest {
       }
       env.OTK_CONFIG = file;
       Object.assign(env, oc.discoveryEnv ?? {});
+      if (options.home !== undefined) {
+        await Deno.mkdir(options.home, { recursive: true, mode: 0o700 });
+        env.HOME = options.home;
+      }
       env.TMPDIR = join(oc.root, "tmp");
       // The listener announcement is an info diagnostic (not a test API).
       if (config.log.level === "warn") env.OTK_LOG_LEVEL = "info";

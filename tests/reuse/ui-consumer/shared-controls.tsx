@@ -9,6 +9,7 @@ import {
 import {
   age,
   CommandHub,
+  createDisclosures,
   createDrafts,
   createInbox,
   createNativeSources,
@@ -19,7 +20,6 @@ import {
   elapsed,
   exactCount,
   type MergedEntry,
-  NotificationHub,
   type SessionDelivery,
   type SidecarState,
 } from "@otk/client";
@@ -39,6 +39,7 @@ import {
 } from "@otk/protocol";
 import {
   ActivityIndicator,
+  attentionBadge,
   CommandProvider,
   ConnectionLight,
   createUiRegistries,
@@ -60,7 +61,6 @@ import {
   ProjectTabs,
   Prompt,
   QuestionDock,
-  registerBadgeChannel,
   registerEditTool,
   registerGenericTool,
   registerPatchTool,
@@ -615,23 +615,9 @@ export function LayoutControls(props: { onTheme(id: string): void }): Element {
 
 export function MetadataPolicy(): Element {
   const commands = new CommandHub();
-  const hub = new NotificationHub(
-    () => ({ channels: ["badge"] }),
-    async () => {},
-    () => {},
-  );
-  const release = registerBadgeChannel(hub);
-  hub.publish({
-    id: "attention",
-    kind: "permission",
-    title: "Needs attention",
-    sessionRef: { sidecar: "external", session: "tstv1-external" },
-    actions: [],
-  });
-  onCleanup(() => {
-    hub.stop();
-    release();
-  });
+  const badge = attentionBadge();
+  badge.update(1);
+  onCleanup(badge.stop);
   return (
     <CommandProvider commands={commands}>
       <main>
@@ -775,7 +761,7 @@ export function InteractionFailures(
   registerGenericTool(ui.tools);
   registerUnknownPart(ui.parts);
   registerTextPart(ui.parts);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   const [draft, setDraft] = createSignal(emptyDraft()),
     [kind, setKind] = createSignal("async");
   const reject = (source: string) => {
@@ -864,20 +850,37 @@ export function InteractionFailures(
                     id: "part",
                     label: "Extension label must not render",
                   },
-                  {
-                    kind: "tool",
-                    id: "tool",
-                    call: {
-                      tool: "consumer.unregistered",
-                      callID: "tool",
-                      status: "completed",
-                      time: {},
-                      output:
-                        "Common output survives an unregistered extension.",
-                      outputTruncated: "collision",
-                    },
-                  },
                 ],
+              }}
+              prefs={DEFAULT_PREFS}
+              permissions={[]}
+              paneWidth={736}
+              queued={false}
+              onOpenChild={() => {}}
+            />
+            {
+              /* D74: standalone native context keeps its own record fold;
+              * the assistant Work pane is not part of this public consumer. */
+            }
+            <Message
+              sidecarId="probe"
+              message={{
+                id: "tool-record",
+                sessionID: "probe",
+                role: "context",
+                time: { created: 1 },
+                parts: [{
+                  kind: "tool",
+                  id: "tool",
+                  call: {
+                    tool: "consumer.unregistered",
+                    callID: "tool",
+                    status: "completed",
+                    time: {},
+                    output: "Common output survives an unregistered extension.",
+                    outputTruncated: "collision",
+                  },
+                }],
               }}
               prefs={{ ...DEFAULT_PREFS, genericToolOutput: true }}
               permissions={[]}
@@ -1116,6 +1119,7 @@ export function SecondaryFailures(
 export default function SharedControls(
   props: { onTheme(id: string): void },
 ): Element {
+  const tree = createDisclosures({ factory: solidState });
   const registry = createPreferences(),
     commands = new CommandHub(),
     ui = createUiRegistries();
@@ -1316,6 +1320,7 @@ export default function SharedControls(
         </div>
         <div style={{ display: "flex", height: "220px" }}>
           <ProjectInbox
+            disclosure={tree}
             projects={[]}
             duplicateName={() => false}
             servers={[]}

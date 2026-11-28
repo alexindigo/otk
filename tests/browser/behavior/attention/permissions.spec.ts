@@ -7,9 +7,14 @@ import {
   openBlockedSubagents,
   restorePermissionDock,
   subagent,
+  subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  sessionStatus,
+  showSessions,
+} from "../../pages/transcript.ts";
 
 test.use({ profile: "contract-attention-native" });
 test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
@@ -43,10 +48,7 @@ test("attention.permission-typed-read-edit-rejection-keeps-real-file", {
   await dock.getByRole("button", { name: "Reject request", exact: true })
     .click();
   await expect(dock).toHaveCount(0);
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  await sessionStatus(page, session.id, "idle");
   await file(state, "README.md", "# OTK fixture\n");
   await tool(state, "read", { filePath: `${state.directory}/README.md` });
   await prompt(page, "Describe the read permission");
@@ -78,7 +80,7 @@ test("attention.permission-once-completes-native-output-and-idle", {
   expect(Math.abs(bounds.dock - bounds.surface)).toBeLessThan(.5);
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await expect(page.locator("[data-tool=bash][data-tool-status=completed]"))
     .toContainText("otk");
   await reply(page, session.id, "Permission completed");
@@ -124,7 +126,7 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   const inventory = subagents(page);
   await expect(childCrumb).toHaveCount(0);
   await openBlockedSubagents(page);
-  await expect(subagent(page, child.id).locator(".otk-status-light"))
+  await expect(subagentLamp(page, child.id))
     .toHaveAttribute("data-state", "blocked");
   await inventory.click();
   await restorePermissionDock(page);
@@ -202,7 +204,7 @@ test.describe("native helper lifecycle", () => {
     const helper = subagent(page, child.id);
     await expect(crumb).toHaveCount(0);
     await openBlockedSubagents(page);
-    await expect(helper.locator(".otk-status-light"))
+    await expect(subagentLamp(page, child.id))
       .toHaveAttribute("data-state", "blocked");
     const target = helper.locator(".otk-subagent-name");
     await expect(target).toHaveText("Live helper");
@@ -302,13 +304,13 @@ test(
     await state.queue(["Covered command completed"]);
     await prompt(page, "Use the approved echo pattern");
     await reply(page, session.id, "Covered command completed");
-    await openWorkLogs(page);
+    await openLatestWork(page);
     // Expanded earlier work can move the newer reply outside the virtual range.
     // Use the public navigation owner before inspecting that reply's work.
     await page.keyboard.press("Control+k");
     await page.locator("input[name=command-search]").fill("Jump to latest");
     await page.locator('[data-command="transcript.latest"]').click();
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await expect(
       page.locator("[data-tool-status=completed]").filter({
         hasText: "echo covered",
@@ -326,6 +328,11 @@ test(
     await expect(page.locator(".otk-permission-command")).toHaveText(
       "printf rejected",
     );
+    const pending = (await state.native<{ id: string; sessionID: string }[]>(
+      "/permission",
+    )).filter((p) => p.sessionID === session.nativeID);
+    expect(pending).toHaveLength(1);
+    const requestID = pending[0]!.id;
     await dock.locator("h2").click();
     await page.keyboard.press("3");
     const rejection = page.locator("textarea[name=rejection]"),
@@ -338,26 +345,55 @@ test(
     await page.keyboard.press("3");
     await expect(rejection).toBeVisible();
     await expect(first).toBeFocused();
-    await rejection.fill("Please use another approach");
-    page.once("dialog", (dialog) => dialog.dismiss());
+    const reason = "Please use another approach";
+    await rejection.fill(reason);
+    await showSessions(page);
+    const cdp = await page.context().newCDPSession(page);
+    const nativeDialogs: string[] = [];
+    // Observe without installing a Playwright handler that blocks the page.
+    cdp.on("Page.javascriptDialogOpening", ({ message }) => {
+      nativeDialogs.push(message);
+    });
+    await cdp.send("Page.enable");
+    const otkDialogs = page.getByRole("dialog");
     await page.locator(`[data-session="${other.id}"]`).click();
+    await expect(otkDialogs).toHaveCount(0);
+    expect(nativeDialogs).toEqual([]);
+    await expect(page).toHaveURL(new RegExp(`${other.id}$`));
+    await expect(dock).toHaveCount(0);
+
+    await page.locator(`[data-session="${session.id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${session.id}$`));
-    await expect(rejection).toHaveValue("Please use another approach");
+    await expect(page.locator(".otk-permission-command")).toHaveText(
+      "printf rejected",
+    );
+    await dock.locator("h2").click();
+    await page.keyboard.press("3");
+    await expect(rejection).toBeVisible();
+    await expect(first).toBeFocused();
+    await expect(rejection).toHaveValue(reason);
+    await expect(otkDialogs).toHaveCount(0);
+    expect(nativeDialogs).toEqual([]);
+    expect(
+      frames.sent.filter(({ frame }) => frame.method === "permission.reply"),
+    ).toHaveLength(1);
     await page.getByRole("button", { name: "Reject request", exact: true })
       .click();
     await expect(dock).toHaveCount(0);
+    await openLatestWork(page);
     await expect(page.locator("[data-tool-status=denied]")).toBeVisible();
     await expect(page.locator("[data-tool-status=denied] .otk-tool-toggle"))
       .toHaveCSS("text-decoration-line", "line-through");
+    await reply(page, session.id, "Rejection handled");
     const replies = frames.sent.filter(({ frame }) =>
       frame.method === "permission.reply"
     ).map(({ frame }) => frame.params);
     expect(replies.some((p) => p?.reply === "always")).toBe(true);
-    expect(
-      replies.some((p) =>
-        p?.reply === "reject" && p.message === "Please use another approach"
-      ),
-    ).toBe(true);
-    await reply(page, session.id, "Rejection handled");
+    expect(replies.slice(1)).toEqual([{
+      sessionID: session.id,
+      requestID,
+      reply: "reject",
+      message: reason,
+    }]);
   },
 );

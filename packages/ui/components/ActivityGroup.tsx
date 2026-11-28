@@ -3,18 +3,21 @@ import "./tools/ToolFrame.css" with { type: "text" };
 import "./ActivityGroup.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import type { ActivityGroup as Group } from "@otk/client";
-import { TreeIcon, TreeNode } from "./Tree.tsx";
+import { TreeNode } from "./Tree.tsx";
 import EntityPill from "./EntityPill.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
 import { scopedEntityFacts } from "../entity-facts.ts";
 import type { Preferences } from "@otk/protocol";
-import { retainedDisclosure } from "../features/transcript-context.tsx";
+import { transcriptDisclosureIdentity } from "../features/transcript-context.tsx";
 import { activityTimeRange } from "./activity-time.ts";
 import ChromeMeta, { metaList } from "./ChromeMeta.tsx";
 import { clockText, clockTitle } from "./Clock.tsx";
 import ContentSlot from "./ContentSlot.tsx";
-import FailureSignal from "./FailureSignal.tsx";
-import { discloseInViewport } from "./viewport.ts";
+import { ActivityIcon } from "./ChromeIcons.tsx";
+import RecordRow from "./RecordRow.tsx";
+import type { FittedAction } from "./FittedActions.tsx";
+import Disclosure, { useDisclosure } from "./Disclosure.tsx";
+import { useRecordKindsRegion } from "./RecordKinds.tsx";
 
 /** The same disclosure frame serves spans and their identical-record groups. */
 export default function ActivityGroup(props: {
@@ -24,48 +27,40 @@ export default function ActivityGroup(props: {
   body(): Element;
   breakouts?(): Element;
   label?(open: () => boolean): Element;
-  trailing?(open: () => boolean): Element;
-  meta?(primary: () => Element): Element;
+  status?(open: () => boolean): Element;
+  actions?(open: () => boolean): readonly FittedAction[];
+  meta?(): Element;
   icon?(): Element;
   collapsible?: boolean;
+  hasContent?(): boolean;
+  disclosureKind?: "revert";
   failed?: boolean;
-  wrapActions?: boolean;
 }): Element {
   const session = useOptionalSessionPorts();
-  const [open, setOpen] = retainedDisclosure(
-    "records",
-    () => props.group.category ?? "record",
-    () =>
-      props.group.silent
-        ? { ...props.prefs, expandRecords: false }
-        : props.prefs,
-    undefined,
-    undefined,
-    props.group.key,
-  );
-  let frame: HTMLElement | undefined;
-  const change = (value: boolean, event: MouseEvent | KeyboardEvent) =>
-    discloseInViewport(
-      frame,
-      value,
-      setOpen,
-      event.isTrusted && value !== open(),
-    );
-  const header = (toggleID: string) => (
-    <FailureSignal
-      as="div"
-      placement="gutter"
-      enabled={props.failed === true}
-      class={props.wrapActions
-        ? "otk-record-group-heading wraps-actions"
-        : "otk-record-group-heading"}
+  const identify = transcriptDisclosureIdentity();
+  const kind = () =>
+    props.disclosureKind ?? (props.group.silent ? "silent" : "activity");
+  const identity = () => identify({ owner: props.group.key });
+  const input = () => ({
+    category: props.group.category ?? "record" as const,
+    prefs: () => props.prefs,
+  });
+  const { open, chosen } = useDisclosure(kind, identity, input);
+  const regionId = useRecordKindsRegion();
+  const hasContent = () =>
+    props.hasContent?.() ??
+      !!(props.group.members.length || props.group.breakouts?.length);
+  const title = () =>
+    props.group.silent ? "Completion details" : props.group.title || "Details";
+  const art = () => props.icon?.() ?? <ActivityIcon />;
+  const trail = () => (
+    <RecordRow
+      intrinsic
+      failed={props.failed}
+      outgoing={props.group.direction === "outgoing"}
+      status={props.status ? () => props.status?.(open) : undefined}
+      actions={props.actions?.(open)}
     >
-      {heading(toggleID)}
-    </FailureSignal>
-  );
-  const heading = (toggleID: string) => (
-    <>
-      <TreeIcon>{props.icon?.()}</TreeIcon>
       <Show when={props.group.entity}>
         {(entity) => (
           <EntityPill
@@ -75,91 +70,77 @@ export default function ActivityGroup(props: {
           />
         )}
       </Show>
-      <Show
-        when={props.collapsible !== false}
-        fallback={
-          <span class="otk-record-group-toggle otk-control-label">
-            <ContentSlot
-              content={() => props.label?.(open) ?? props.group.title}
-            />
-          </span>
-        }
-      >
-        <button
-          id={toggleID}
-          type="button"
-          class="otk-tool-toggle otk-record-group-toggle otk-tree-control"
-          aria-expanded={open() ? "true" : "false"}
-          onClick={(event) => change(!open(), event)}
-        >
+      <Show when={props.group.child}>
+        {(child) => (
+          <EntityPill
+            label={child().label}
+            facts={scopedEntityFacts(session, child())}
+            onOpenChild={props.onOpenChild}
+          />
+        )}
+      </Show>
+      <ContentSlot content={props.meta} />
+    </RecordRow>
+  );
+  const heading = () => (
+    <Show
+      when={props.label}
+      keyed
+      fallback={
+        <>
           <Show
-            when={props.label}
-            keyed
+            when={props.group.interval}
             fallback={
-              <>
-                <Show
-                  when={props.group.interval}
-                  fallback={
-                    <span class="otk-tool-verb otk-control-label">
-                      {props.group.silent
-                        ? "Completion details"
-                        : props.group.title}
-                    </span>
-                  }
-                >
-                  <ChromeMeta class="otk-control-label">
-                    {metaList([
-                      props.group.silent
-                        ? "Completion details"
-                        : props.group.title,
-                      props.group.failureTitle,
-                    ]) || "Details"}
-                  </ChromeMeta>
-                </Show>
-                <Show when={props.group.detail}>
-                  <span
-                    class="otk-tool-brief otk-control-label"
-                    title={props.group.detail}
-                  >
-                    {props.group.detail}
-                  </span>
-                </Show>
-                <Show when={props.group.count}>
-                  <ChromeMeta class="otk-record-group-count">
-                    {props.group.count}
-                  </ChromeMeta>
-                </Show>
-                <Show when={props.group.time}>
-                  {(time) => (
-                    <ChromeMeta
-                      class="otk-record-group-time"
-                      title={activityTimeRange(time(), clockTitle)}
-                    >
-                      {activityTimeRange(time(), clockText)}
-                    </ChromeMeta>
-                  )}
-                </Show>
-              </>
+              <ChromeMeta class="otk-control-label">
+                {props.group.silent ? "Completion details" : props.group.title}
+              </ChromeMeta>
             }
           >
-            {(label) => label(open)}
+            <ChromeMeta class="otk-control-label">
+              {metaList([
+                props.group.silent ? "Completion details" : props.group.title,
+                props.group.failureTitle,
+              ]) || "Details"}
+            </ChromeMeta>
           </Show>
-        </button>
-      </Show>
-      <Show when={props.group.child}>
-        <EntityPill
-          label={props.group.child!.label}
-          facts={scopedEntityFacts(session, props.group.child!)}
-          onOpenChild={props.onOpenChild}
-        />
-      </Show>
-      {props.trailing?.(open)}
-    </>
+          <Show when={props.group.detail}>
+            <span
+              class="otk-tool-brief otk-control-label"
+              title={props.group.detail}
+            >
+              {props.group.detail}
+            </span>
+          </Show>
+          <Show when={props.group.count}>
+            <ChromeMeta class="otk-record-group-count">
+              {props.group.count}
+            </ChromeMeta>
+          </Show>
+          <Show when={props.group.time}>
+            {(time) => (
+              <ChromeMeta
+                class="otk-record-group-time"
+                title={activityTimeRange(time(), clockTitle)}
+              >
+                {activityTimeRange(time(), clockText)}
+              </ChromeMeta>
+            )}
+          </Show>
+        </>
+      }
+    >
+      {(label) => label(open)}
+    </Show>
   );
+  const breakouts = () => !!props.group.breakouts?.length;
+  const rowHeading = { class: "otk-record-group-heading" };
+  const outgoing = () => props.group.direction === "outgoing";
   return (
-    <Show when={!props.group.silent || open()}>
+    <Show
+      when={(!props.group.silent || open() || chosen()) &&
+        (hasContent() || props.collapsible === false)}
+    >
       <section
-        ref={(element) => frame = element}
         class={["otk-tool-line otk-record-group", {
           "is-interval": props.group.interval,
         }]}
@@ -171,65 +152,61 @@ export default function ActivityGroup(props: {
       >
         <Show
           when={props.group.interval || props.group.title || props.group.silent}
-          fallback={props.breakouts?.()}
+          fallback={<ContentSlot content={props.breakouts} />}
         >
-          <TreeNode
-            toggleHeader={props.collapsible !== false}
-            label={props.group.failureTitle ||
-              (props.group.silent
-                ? "Completion details"
-                : props.group.title || "Details")}
-            outgoing={props.group.direction === "outgoing"}
-            open={open()}
-            onOpen={props.collapsible === false ? undefined : change}
-            bodyVisible={props.collapsible !== false &&
-              (open() || !!props.group.breakouts?.length)}
-            header={(_connected, toggleID) =>
-              props.meta
-                ? props.meta(() => header(toggleID))
-                : header(toggleID)}
-            body={() => (
-              <Show
-                when={open() && props.collapsible !== false
-                  ? props.body
-                  : undefined}
-                keyed
-                fallback={<ContentSlot content={props.breakouts} />}
-              >
-                {(body) => body()}
-              </Show>
-            )}
-          />
+          <Show
+            when={props.collapsible !== false}
+            fallback={
+              <TreeNode
+                class="otk-activity-group"
+                heading={rowHeading}
+                outgoing={outgoing()}
+                node={art}
+                header={heading}
+                trail={trail}
+              />
+            }
+          >
+            <Disclosure
+              kind={kind()}
+              identity={identity()}
+              input={input()}
+              variant="label"
+              class="otk-tool-toggle otk-record-group-toggle"
+              label={title()}
+              labelContent={heading}
+              lead={art}
+              hasContent={hasContent}
+              regionId={props.meta ? regionId : undefined}
+              layout={({ trigger, region, open, frame }) => (
+                <TreeNode
+                  class="otk-activity-group"
+                  heading={rowHeading}
+                  ref={frame}
+                  trigger={{ variant: "span", element: trigger }}
+                  outgoing={outgoing()}
+                  bodyVisible={open() || breakouts()}
+                  trail={props.meta || props.group.entity ||
+                      props.group.child || props.actions || props.status ||
+                      props.failed
+                    ? trail
+                    : undefined}
+                  region={() => (
+                    <>
+                      {region()}
+                      <Show when={!open()}>
+                        <ContentSlot content={props.breakouts} />
+                      </Show>
+                    </>
+                  )}
+                />
+              )}
+            >
+              {() => props.body()}
+            </Disclosure>
+          </Show>
         </Show>
       </section>
     </Show>
-  );
-}
-
-/** A normal completion borrows the footer, with no standalone status label. */
-export function CompletionToggle(
-  props: { group: Group; prefs: Preferences; onReveal?(user: boolean): void },
-): Element {
-  const [open, setOpen] = retainedDisclosure(
-    "records",
-    "record",
-    () => ({ ...props.prefs, expandRecords: false }),
-    undefined,
-    undefined,
-    props.group.key,
-  );
-  return (
-    <span class="otk-record-completion">
-      <TreeNode
-        label="Completion details"
-        open={open()}
-        onOpen={(open, event) => {
-          setOpen(open);
-          if (open) props.onReveal?.(event.isTrusted);
-        }}
-        hasChildren
-        header={() => null}
-      />
-    </span>
   );
 }

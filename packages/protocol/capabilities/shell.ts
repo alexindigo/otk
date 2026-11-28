@@ -9,6 +9,13 @@ export interface ShellCapability {
 }
 export interface ShellCapabilities {
   shell: ShellCapability;
+  "shell.terminate": {
+    terminate(
+      sessionID: string,
+      shellID: string,
+      operation?: OperationContext,
+    ): Promise<void>;
+  };
 }
 export const legacyShellCapabilities: readonly (keyof ShellCapabilities)[] = [
   "shell",

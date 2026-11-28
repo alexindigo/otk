@@ -1,18 +1,17 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt {
-  --prompt-input-min-height: calc(48 * var(--otk-unit));
-  --prompt-input-max-height: calc(240 * var(--otk-unit));
-  padding-block: var(--space-3) var(--space-2);
+  padding-block: var(--composer-content-inset, var(--space-4)) var(--space-2);
   padding-inline: var(--composer-content-inset, var(--space-4));
 }
 .otk-prompt > label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+  display: block;
+  block-size: 0;
   overflow: hidden;
-  clip-path: inset(50%);
 }
 textarea.otk-prompt-input {
+  --prompt-input-min-height: calc(48 * var(--otk-unit));
+  --prompt-input-max-height: calc(240 * var(--otk-unit));
+  inline-size: 100%;
   min-height: var(--prompt-input-min-height);
   max-height: var(--prompt-input-max-height);
   line-height: var(--line-prose);
@@ -27,25 +26,35 @@ textarea.otk-prompt-input:focus-visible {
   outline: var(--prompt-input-outline, 2px solid var(--control-focus));
 }
 .otk-prompt-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: [lead] minmax(0, 1fr) [send] auto;
   align-items: center;
-  flex-wrap: nowrap;
   gap: var(--space-1);
   padding-top: var(--space-1);
 }
+.otk-prompt-interrupt {
+  grid-column: 1 / -1;
+}
 .otk-prompt-context {
-  flex: 1 1 0;
-  min-width: 0;
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  min-inline-size: 0;
   gap: var(--space-1);
   color: var(--otk-fg-2);
   font-size: var(--text-meta);
-  margin-right: auto;
 }
-.otk-prompt-actions > button {
+.otk-prompt-context > * {
+  min-inline-size: var(--control-size);
+}
+.otk-prompt-context:not(.is-in-popover) {
+  inline-size: max-content;
+}
+.otk-prompt-context:not(.is-in-popover) > * {
   flex: none;
+}
+.otk-prompt-context.is-in-popover {
+  flex-direction: column;
+  align-items: stretch;
 }
 .otk-prompt-send-slot {
   display: grid;
@@ -53,4 +62,50 @@ textarea.otk-prompt-input:focus-visible {
   flex: none;
   inline-size: var(--send-button-size);
   min-block-size: var(--send-button-size);
+}
+.otk-prompt-field {
+  display: grid;
+  grid-template-columns: [text] minmax(0, 1fr);
+  align-items: start;
+}
+.otk-prompt-field.has-corner {
+  grid-template-columns: [text] minmax(0, 1fr) [corner] var(--control-size);
+  column-gap: var(--space-2);
+}
+.otk-prompt-body {
+  grid-column: text;
+  min-inline-size: 0;
+}
+.otk-prompt-corner {
+  grid-column: corner;
+  grid-row: 1;
+  display: grid;
+}
+.otk-prompt-reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 150ms ease;
+}
+.otk-prompt-reveal > .otk-prompt-field {
+  min-block-size: 0;
+}
+.otk-prompt.is-collapsed {
+  padding-block: var(--space-2);
+}
+.otk-prompt.is-collapsed .otk-prompt-reveal {
+  grid-template-rows: 0fr;
+}
+.otk-prompt.is-collapsed .otk-prompt-field {
+  overflow: clip;
+  visibility: hidden;
+}
+.otk-prompt.is-collapsed .otk-prompt-actions {
+  padding-block-start: 0;
+}
+.otk-join-conversation {
+  white-space: nowrap;
+}
+.otk-prompt-send-slot.is-join {
+  inline-size: auto;
+  min-block-size: 0;
 }

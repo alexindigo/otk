@@ -52,6 +52,7 @@ export interface OperationState {
   seq: number;
   progress?: RequestProgress;
   error?: PublicFailure;
+  feedbackDismissed?: true;
 }
 export interface Operation<R> {
   readonly state: Readonly<OperationState>;
@@ -775,6 +776,16 @@ export class RequestTracker {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
+  dismissFeedback(state: Readonly<OperationState>): void {
+    const item = this.#pending.get(state.ref.key);
+    if (
+      state.phase !== "failed" || !state.error ||
+      item?.state.error !== state.error ||
+      item.state.phase !== "failed" || item.state.feedbackDismissed
+    ) return;
+    item.state = { ...item.state, feedbackDismissed: true };
+    this.#publish(item);
+  }
   forgetFailures(owner: string, method: string): void {
     for (const [key, item] of this.#pending) {
       if (
@@ -891,110 +902,6 @@ export interface FormIntent<T, R> {
   submit(value: T, run: (captured: T) => Promise<R>): Promise<R>;
 }
 
-export interface SubmissionIntent<T> {
-  readonly state: FormIntentState<T>;
-  subscribe(listener: () => void): () => void;
-  /** Recheck readiness inside asynchronous preparation; refusal is visible feedback. */
-  require(): void;
-  submit(
-    prepare: () => Promise<T | undefined>,
-    run: (captured: T) => Promise<void>,
-  ): Promise<void>;
-}
-/** Input preparation can finish while an admitted effect is still settling.
- * A subsequent input command gets its own preparation lifetime; another send
- * cannot replace or repeat the captured effect. */
-export function createSubmissionIntent<T>(options: {
-  capture(value: T): T;
-  presenter: FailurePresenter;
-  diagnostic?(id: string, cause: unknown): void;
-  target?(): import("@otk/protocol").FailureTarget | undefined;
-  unavailable?(): string | undefined;
-  recovery?(reason: string): string;
-  /** A refusal that cites the captured send ends when that send settles. */
-  retire?(diagnosticID: string): void;
-}): SubmissionIntent<T> {
-  const input = createFormIntent<void, { result: Promise<void> } | undefined>({
-    ...options,
-    capture: () => undefined,
-  });
-  const effect = createFormIntent<T, void>(options);
-  const waiting = new Set<string>();
-  effect.subscribe(() => {
-    if (effect.state.pending || !waiting.size) return;
-    const retired = [...waiting];
-    waiting.clear();
-    for (const id of retired) options.retire?.(id);
-  });
-  const refuse = (
-    reason: string,
-    recovery: string,
-    whileSending = false,
-  ): never => {
-    const diagnosticID = randomID();
-    if (whileSending && effect.state.pending) waiting.add(diagnosticID);
-    throw new RequestFailure({
-      code: "prompt.refused",
-      diagnosticID,
-      retry: "new-intent",
-      facts: {
-        actionLabel: "Sending prompt",
-        target: options.target?.(),
-        origin: "composer",
-        reason,
-        recovery,
-      },
-    });
-  };
-  const require = () => {
-    const reason = options.unavailable?.();
-    if (reason) {
-      refuse(
-        reason,
-        options.recovery?.(reason) ??
-          "Resolve the unavailable state, then send the retained draft",
-      );
-    }
-  };
-  return {
-    require,
-    get state() {
-      return {
-        ...effect.state,
-        pending: input.state.pending || effect.state.pending,
-        feedback: input.state.feedback ?? effect.state.feedback,
-      };
-    },
-    subscribe(listener) {
-      const first = input.subscribe(listener),
-        second = effect.subscribe(listener);
-      return () => {
-        first();
-        second();
-      };
-    },
-    submit(prepare, run) {
-      // Preparation may outlive the current send. An activation made while
-      // Sending can run an input command, but cannot acquire send eligibility
-      // merely because that captured effect settles during preparation.
-      const blocked = effect.state.pending;
-      return input.submit(undefined, async () => {
-        const value = await prepare();
-        // Undefined is an explicitly handled input command, never a refused send.
-        if (value === undefined) return;
-        if (blocked || effect.state.pending) {
-          refuse(
-            "Another message is still being sent",
-            "Wait for that send to settle, then send the retained draft",
-            true,
-          );
-        }
-        require();
-        return { result: effect.submit(value, run) };
-      }).then((admitted) => admitted?.result);
-    },
-  };
-}
 /** Form capture and duplicate admission are independent of native fields or view lifetime. */
 export function createFormIntent<T, R>(options: {
   capture(value: T): T;

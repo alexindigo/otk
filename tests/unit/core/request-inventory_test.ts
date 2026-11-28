@@ -9,6 +9,8 @@ import {
   OtkDb,
   Prefs,
   prefsMigrations,
+  programsMigrations,
+  ProgramStore,
   Projects,
   projectsMigrations,
   ProjectTemplates,
@@ -39,6 +41,7 @@ import {
 } from "../../../core/mod.ts";
 import { InboxFeature } from "../../../core/features/inbox.ts";
 import { NavigationDefault } from "../../../core/features/navigation-default.ts";
+import { InlineImages } from "../../../core/files/inline-images.ts";
 import { test } from "../../support/resources.ts";
 import { registerCatalogs } from "../../../core/features/catalogs.ts";
 import { createCatalogCodecs } from "@otk/protocol";
@@ -50,6 +53,15 @@ import { permissionMigrations, PermissionStore } from "@otk/store";
 import { cfg, fixture } from "./support.ts";
 import { registerTerminals } from "../../../core/features/terminals.ts";
 import { TerminalHost } from "../../../core/terminals/host.ts";
+
+const programMethods = [
+  "programs.create",
+  "programs.rename",
+  "programs.delete",
+  "programs.move",
+  "programs.assign",
+  "programs.auto",
+] as const;
 
 function navigation(inbox: InboxFeature): NavigationDefault {
   return new NavigationDefault({
@@ -64,6 +76,7 @@ function navigation(inbox: InboxFeature): NavigationDefault {
 async function composition() {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
+    programsMigrations,
     tasksMigrations,
     seenMigrations,
     finishesMigrations,
@@ -76,6 +89,7 @@ async function composition() {
   let now = 100;
   const stores = {
     projects: new Projects(db, () => ++now),
+    programs: new ProgramStore(db),
     tasks: new Tasks(db),
     seen: new Seen(db, () => ++now),
     finishes: new Finishes(db),
@@ -130,18 +144,23 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "tasks.close",
     "tasks.removeSession",
     "projects.inactive",
+    "projects.move",
     "projects.visit",
     "projects.templates",
+    ...programMethods,
     "prefs.set",
     "layout.patch",
     "layout.location",
     "layout.project",
+    "layout.tree",
   ];
   const prepared = [
     "tasks.create",
     "tasks.addSession",
     "tasks.sessions",
     "sessions.seen",
+    "sessions.opened",
+    "sessions.acknowledge",
     "frecency.bump",
   ];
   const reads = [
@@ -256,6 +275,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "sessionActions",
       "sessionArchive",
       "shell",
+      "shell.terminate",
       "commands",
       "history",
       "files",
@@ -324,6 +344,23 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     signal: new AbortController().signal,
   });
   registerTerminals(rpc, terminals);
+  const localFiles = new Core.LocalFiles({
+    home: terminalRoot,
+    deny: [],
+    roots: { roots: () => [terminalRoot] },
+  });
+  const images = cfg().images;
+  Core.registerLocalFiles(
+    rpc,
+    localFiles,
+    new InlineImages({
+      files: localFiles,
+      limits: images,
+      concurrency: images.concurrency,
+      directory: async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    }),
+  );
   const rows = [
     "tasks.create",
     "tasks.rename",
@@ -344,6 +381,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "session.restore",
     "session.prompt",
     "session.shell",
+    "shell.terminate",
     "session.command",
     "session.abort",
     "session.withdraw",
@@ -383,6 +421,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "layout.patch",
     "layout.location",
     "layout.project",
+    "layout.tree",
     "navigation.default",
     "inbox.get",
     "projects.list",
@@ -390,15 +429,22 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "project.settings",
     "project.update",
     "projects.inactive",
+    "projects.move",
     "projects.visit",
     "projects.scan",
     "projects.templates",
+    ...programMethods,
     "sessions.seen",
+    "sessions.opened",
+    "sessions.acknowledge",
     "sessions.finishes",
     "digests.scope",
     "terminal.list",
     "terminal.create",
     "terminal.close",
+    "file.stat",
+    "file.preview",
+    "file.images",
   ];
   try {
     assertEquals(rows.length, new Set(rows).size);
@@ -423,10 +469,10 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 32, // Retained archive pages and terminal inventory are separate reads.
-      native: 23, // Terminal create/close and Send-to-Stop each add a native policy.
-      local: 11,
-      "prepared-local": 6,
+      read: 35,
+      native: 24,
+      local: 19,
+      "prepared-local": 8,
       lease: 2,
     });
   } finally {
@@ -733,6 +779,14 @@ test("real metadata actions settle with their writes and replay original results
     await execute("projects.visit", { directory: "/p", active: true });
     await execute("projects.templates", { templates: ["/p/{project}"] });
     await execute("sessions.seen", { sessionID: "tstv1-two", terminal: 0 });
+    await execute("sessions.opened", { sessionID: "tstv1-two", opened: true });
+    assertEquals(
+      await execute("sessions.acknowledge", {
+        scope: "subtree",
+        sessionID: "tstv1-two",
+      }),
+      { sessions: [], closed: ["tstv1-two"] },
+    );
     await execute("prefs.set", { key: "showCost", value: false });
     await execute("layout.patch", { rightCollapsed: false });
     await execute("layout.location", {

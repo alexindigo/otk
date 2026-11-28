@@ -67,13 +67,16 @@ const nativeSessionEvents = new Set([
 ].map((name) => `session.${name}`));
 export const knownSessionEvent = (type: string): boolean =>
   nativeSessionEvents.has(type);
-/** Mirror stock message-updater, before the shared record classifier. A textless
- * instruction observation has no chronological native message to project. */
+/** Mirror stock message-updater before the shared record classifier.
+ * For instruction sync, null is authoritative absence, not a failed mapping. */
 export function eventMessage(
   event: V2Event,
   previous?: NativeSession,
-): NativeMessage | undefined {
+): NativeMessage | null | undefined {
   const d = event.data, id = event.id?.replace(/^evt_/, "msg_");
+  if (event.type === "session.instructions.updated" && d.text === undefined) {
+    return null;
+  }
   if (!id) return;
   const boundary = {
     id,

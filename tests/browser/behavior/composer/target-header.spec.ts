@@ -29,9 +29,9 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
   );
   const title = await target.getAttribute("title");
   expect(title).toContain(taskName);
-  const geometry = async () => {
+  const geometry = async (wrap = false) => {
     const box = await target.evaluate((label) => {
-      const row = label.parentElement!;
+      const row = label.closest(".otk-composer-activity-line")!;
       const work = row.querySelector(".otk-subagents-trigger")!;
       const l = label.getBoundingClientRect(), w = work.getBoundingClientRect();
       // Style7 finding 3: task and destination have separate label ownership.
@@ -53,6 +53,7 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
         left: l.left,
         right: l.right,
         workLeft: w.left,
+        lineGap: w.top - l.bottom,
         centerDrift: Math.abs((l.top + l.bottom - w.top - w.bottom) / 2),
         labels,
         title: label.getAttribute("title"),
@@ -61,13 +62,18 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
       };
     });
     expect(box.display).toBe("flex");
-    expect(box.right).toBeLessThanOrEqual(box.workLeft);
-    expect(box.centerDrift).toBeLessThanOrEqual(0.5);
+    if (wrap) expect(box.lineGap).toBeGreaterThanOrEqual(0);
+    else {
+      expect(box.right).toBeLessThanOrEqual(box.workLeft);
+      expect(box.centerDrift).toBeLessThanOrEqual(0.5);
+    }
     expect(box.labels).toHaveLength(2);
     for (const label of box.labels) {
       expect(label.whiteSpace).toBe("nowrap");
       expect(label.overflow).toBe("ellipsis");
-      expect(label.centerDrift).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(label.centerDrift - box.centerDrift)).toBeLessThanOrEqual(
+        0.5,
+      );
     }
     expect(box.labels[1].truncated).toBe(false);
     expect(box.title).toBe(box.text);
@@ -88,10 +94,13 @@ test("composer.task-target-header-shares-row-with-subagents-in-all-themes", {
       animations: "disabled",
     });
   }
+  // D74 / WL3: the open right panel becomes a sheet instead of constraining
+  // the conversation. Constrain the exposed conversation with the left pane.
+  await state.product("layout.patch", { leftWidth: 360, rightCollapsed: true });
   await page.setViewportSize({ width: 800, height: 800 });
-  await state.product("layout.patch", { leftWidth: 200, rightWidth: 280 });
-  await expect(page.locator(".otk-project-inbox")).toHaveCSS("width", "200px");
-  expect((await geometry()).truncated).toBe(true);
+  await expect(page.locator(".otk-project-inbox")).toHaveCSS("width", "360px");
+  await expect(page.locator(".otk-right-rail")).toBeVisible();
+  expect((await geometry(true)).truncated).toBe(true);
   await activity(state, "tstv1-urgent-child", "release");
   // Ending execution is not delivery. The finished helper remains until its
   // parent receives its result, at which point the header loses the control.

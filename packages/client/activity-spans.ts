@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Activity } from "@otk/protocol";
 import type { TranscriptReply } from "./transcript-projection.ts";
+import { workLogBookkeeping } from "./record-folds.ts";
+import { sessionBoundary } from "./boundaries.ts";
 
 export interface ActivityGroup {
   key: string;
@@ -18,6 +20,7 @@ export interface ActivityGroup {
   /** One frame between conversation messages, independent of admission state. */
   interval?: boolean;
   silent?: boolean;
+  completionOf?: string;
   breakouts?: string[];
   /** Client-owned failure wording, separate from producer summary nouns. */
   failureTitle?: string;
@@ -26,12 +29,14 @@ export interface RecordProjection {
   revision: number;
   keys: string[];
   groups: Record<string, ActivityGroup>;
+  /** Entry key (first member) to all native boundary members in order. */
+  boundaries: Record<string, string[]>;
   parents: Record<string, string[]>;
   /** Final measured child key, separate from its native/disclosure identity. */
   leaves: Record<string, string>;
   owners: Record<string, string>;
   revisions: Record<string, number>;
-  /** Successful completion facts borrow their preceding reply's footer. */
+  /** Successful completion facts belong to the preceding reply's outcome. */
   completions: Record<string, string>;
 }
 function activity(reply: TranscriptReply | undefined): Activity | undefined {
@@ -74,7 +79,7 @@ function summary(
   for (const id of ids) {
     const reply = replies[id], value = activity(reply);
     const fact = foldable(reply) && !value?.fold &&
-      value?.completion?.placement !== "footer" &&
+      workLogBookkeeping(reply.message.parts[0]) !== "completion" &&
       value?.summary;
     if (!fact) continue;
     const count = counts.get(fact.kind) ?? { ...fact, count: 0 };
@@ -89,6 +94,7 @@ const empty = (): RecordProjection => ({
   revision: 0,
   keys: [],
   groups: Object.create(null),
+  boundaries: Object.create(null),
   parents: Object.create(null),
   leaves: Object.create(null),
   owners: Object.create(null),
@@ -105,6 +111,7 @@ export function createRecordProjection(): {
   reconcile(
     ids: readonly string[],
     replies: Readonly<Record<string, TranscriptReply>>,
+    breaks?: ReadonlySet<string>,
   ): RecordProjection;
 } {
   let value = empty(), presentationRevision = 0;
@@ -119,7 +126,7 @@ export function createRecordProjection(): {
   };
   return {
     update(key, sourceRevision) {
-      if (value.owners[key] !== key) return value;
+      if (value.owners[key] !== key || value.boundaries[key]) return value;
       const next = revision(key, sourceRevision);
       if (value.revisions[key] === next) return value;
       value = {
@@ -137,7 +144,7 @@ export function createRecordProjection(): {
       assignment.clear();
       versions.clear();
     },
-    reconcile(ids, replies) {
+    reconcile(ids, replies, breaks = new Set()) {
       const next = empty();
       // The projection owns one keyspace for conversation rows and intervals.
       const occupied = new Set(ids);
@@ -150,37 +157,58 @@ export function createRecordProjection(): {
       };
       let interval: ActivityGroup | undefined, conversation: string | undefined;
       let contextEnd = 0, contextHasContent = false;
+      const boundaryEntries = new Map<string, string>();
       for (let index = 0; index < ids.length; index++) {
+        if (index > 0 && breaks.has(ids[index - 1])) {
+          interval = undefined;
+          conversation = undefined;
+        }
         const id = ids[index];
         const reply = replies[id];
-        if (reply.message.role === "context" && index >= contextEnd) {
+        const boundary = sessionBoundary(reply.message);
+        if (
+          !boundary && reply.message.role === "context" && index >= contextEnd
+        ) {
           contextEnd = index;
           contextHasContent = false;
           while (
             contextEnd < ids.length &&
-            replies[ids[contextEnd]].message.role === "context"
+            replies[ids[contextEnd]].message.role === "context" &&
+            !sessionBoundary(replies[ids[contextEnd]].message)
           ) {
             contextHasContent ||= !!replies[ids[contextEnd]].message.parts
               .length;
-            contextEnd++;
+            if (breaks.has(ids[contextEnd++])) break;
           }
         }
         // Headers alone cannot offer an activity disclosure. Once the interval
         // has content, retain every source row, including empty breakouts.
-        if (reply.message.role !== "context" || !contextHasContent) {
+        if (
+          boundary || reply.message.role !== "context" || !contextHasContent
+        ) {
           interval = undefined;
           conversation = id;
+          if (boundary) {
+            const entry = boundaryEntries.get(boundary.key);
+            if (entry !== undefined) {
+              next.boundaries[entry].push(id);
+              next.owners[id] = entry;
+              continue;
+            }
+            boundaryEntries.set(boundary.key, id);
+            next.boundaries[id] = [id];
+          } else {
+            next.revisions[id] = revision(id, reply.revision);
+          }
           next.keys.push(id);
           next.owners[id] = id;
-          next.revisions[id] = revision(id, reply.revision);
           continue;
         }
         if (!interval) {
           // Paging an older member must not replace the already minted frame.
           let assigned = assignment.get(id);
           if (!assigned) {
-            for (let n = index + 1; n < ids.length; n++) {
-              if (replies[ids[n]].message.role !== "context") break;
+            for (let n = index + 1; n < contextEnd; n++) {
               assigned = assignment.get(ids[n]);
               if (assigned) break;
             }
@@ -200,6 +228,7 @@ export function createRecordProjection(): {
           if (
             conversation && replies[conversation].message.role === "assistant"
           ) {
+            interval.completionOf = conversation;
             next.completions[conversation] = key;
           }
         }
@@ -213,7 +242,9 @@ export function createRecordProjection(): {
         next.owners[id] = interval.key;
         const safe = foldable(reply), facts = activity(reply);
         if (!safe) interval.breakouts!.push(id);
-        if (!safe || facts?.completion?.placement !== "footer") {
+        if (
+          !safe || workLogBookkeeping(reply.message.parts[0]) !== "completion"
+        ) {
           interval.silent = false;
         }
         const previous = interval.children!.at(-1);
@@ -237,6 +268,12 @@ export function createRecordProjection(): {
           });
         }
       }
+      for (const [key, members] of Object.entries(next.boundaries)) {
+        next.revisions[key] = revision(
+          key,
+          members.map((id) => [id, replies[id].revision]),
+        );
+      }
       for (const group of Object.values(next.groups)) {
         group.title = summary(group.members, replies);
         group.failureTitle = summary(group.members, replies, true);
@@ -259,8 +296,20 @@ export function createRecordProjection(): {
           group.breakouts,
           group.children,
           group.failureTitle,
+          group.completionOf,
         ]);
         next.revisions[group.key] = group.revision;
+        const previous = value.groups[group.key];
+        if (previous?.revision === group.revision) {
+          next.groups[group.key] = previous;
+        }
+      }
+      const groupKeys = Object.keys(next.groups);
+      if (
+        groupKeys.length === Object.keys(value.groups).length &&
+        groupKeys.every((key) => next.groups[key] === value.groups[key])
+      ) {
+        next.groups = value.groups;
       }
       const retained = new Set([
         ...next.keys,

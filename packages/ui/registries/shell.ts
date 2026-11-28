@@ -7,26 +7,22 @@ export interface DialogProps<T = unknown> {
   input: T;
   close(): void;
 }
-export interface DialogDefinition {
+export interface DialogDefinition<T = unknown> {
   id: string;
   size?: "form" | "standard" | "editor";
-  title?: string | ((input: unknown) => string);
+  title?: string | ((input: T) => string);
   commandId?: string;
-  dismiss?(input: unknown, close: () => void): void;
-  component(props: DialogProps): Element;
+  dismiss?(input: T, close: () => void): void;
+  /** Called exactly once when this invocation stops being the open dialog,
+   * by any path: dismiss, dialog.close, replacement by another dialog,
+   * programmatic close, host disposal. */
+  ended?(input: T): void;
+  component(props: DialogProps<T>): Element;
+  actions?(props: DialogProps<T>): Element;
 }
 export class DialogRegistry {
   #items = new Map<string, DialogDefinition>();
-  register<T = unknown>(
-    definition: {
-      id: string;
-      size?: "form" | "standard" | "editor";
-      title?: string | ((input: T) => string);
-      commandId?: string;
-      dismiss?(input: T, close: () => void): void;
-      component(props: DialogProps<T>): Element;
-    },
-  ): void {
+  register<T = unknown>(definition: DialogDefinition<T>): void {
     if (this.#items.has(definition.id)) {
       throw new Error(`Duplicate dialog: ${definition.id}`);
     }

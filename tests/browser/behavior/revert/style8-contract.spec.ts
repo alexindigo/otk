@@ -72,7 +72,7 @@ for (
         }, fail);
       };
       const position = () =>
-        group.locator(".otk-revert-label").evaluate((el) => {
+        group.locator(".otk-record-row-label").evaluate((el) => {
           const r = el.getBoundingClientRect();
           return { x: r.x, width: r.width };
         });
@@ -85,7 +85,12 @@ for (
         await expect(group.getByRole("button", { name: "Retry", exact: true }))
           .toBeInViewport();
         const failed = await position();
-        expect.soft(failed.width).toBeGreaterThanOrEqual(400);
+        // D63 / issue 2.105: the label shares the row with the actions.
+        // Its complete identity must remain available when the preview yields.
+        await expect(group.locator(".otk-revert-preview")).toHaveAttribute(
+          "title",
+          boundaryText,
+        );
         await storage(false);
         await group.getByRole("button", { name: "Retry", exact: true }).click();
         await expect(group).toHaveAttribute("data-phase", "saved");

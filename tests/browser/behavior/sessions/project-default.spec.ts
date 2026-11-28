@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { wire } from "../../fixtures/wire.ts";
 import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-sessions-default" });
@@ -32,7 +33,37 @@ test("sessions.project-memory-precedes-attention-and-defaults-are-visible", {
   await remember("tstv1-remembered-child");
   await activity(state, "tstv1-urgent-child", "freeze");
   // A cold project route and reload use the same default as a click.
-  await page.goto(projectURL);
+  // Make the collection cold too: either task membership or session rows
+  // can already prove the project has items independently of route lookup.
+  const stream = await wire(page);
+  stream.hold((frame, request) => {
+    if (frame.t === "inbox.snapshot" || frame.t === "inbox.patch") return true;
+    if (request?.method === "sessions.list") {
+      return frame.t === "request.result" || frame.t === "load.chunk";
+    }
+    return frame.t === "request.result" &&
+      request?.method === "navigation.default";
+  });
+  try {
+    await page.goto(projectURL);
+    await expect.poll(() =>
+      stream.held.filter(({ request }) =>
+        request?.method === "navigation.default"
+      ).length
+    ).toBe(1);
+    await expect.poll(() =>
+      stream.held.some(({ request }) => request?.method === "sessions.list")
+    ).toBe(true);
+    await expect.poll(() =>
+      stream.held.some(({ frame }) => frame.t === "inbox.snapshot")
+    ).toBe(true);
+    await expect(page.getByText("Loading sessions...", { exact: true }))
+      .toBeVisible();
+    await expect(page.getByText("Choose a session", { exact: true }))
+      .toHaveCount(0);
+  } finally {
+    stream.release();
+  }
   await selected("tstv1-remembered-child");
   await page.goto(projectURL);
   await page.reload();

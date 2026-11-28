@@ -14,6 +14,8 @@ import {
   PluginStore,
   Prefs,
   prefsMigrations,
+  programsMigrations,
+  ProgramStore,
   Projects,
   projectsMigrations,
   ProjectTemplates,
@@ -32,6 +34,8 @@ import {
   type FrameSource,
   frecencyOptions,
   IndexStore,
+  LocalFiles,
+  operatorConfigDirectory,
   prefsOptions,
   registerAgents,
   registerCommands,
@@ -40,6 +44,7 @@ import {
   registerFrecency,
   registerHistory,
   registerLayout,
+  registerLocalFiles,
   registerModels,
   registerPermissions,
   registerPrefs,
@@ -70,6 +75,8 @@ import type { SectionObserver } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
 import { TerminalHost } from "./core/terminals/host.ts";
 import { TerminalMux } from "./core/terminals/mux.ts";
+import { InlineImages } from "./core/files/inline-images.ts";
+import { ImageRoots } from "./core/files/image-roots.ts";
 import { terminalDataDirectory } from "./core/terminals/env.ts";
 import { registerTerminals } from "./core/features/terminals.ts";
 
@@ -100,6 +107,7 @@ export async function startApplication(
     prefsMigrations,
     frecencyMigrations,
     projectsMigrations,
+    programsMigrations,
     checkoutsMigrations,
     tasksMigrations,
     seenMigrations,
@@ -131,6 +139,7 @@ export async function startApplication(
     const inbox = new InboxFeature(
       {
         projects: new Projects(store),
+        programs: new ProgramStore(store),
         tasks: new Tasks(store),
         seen: new Seen(store),
         finishes: new Finishes(store),
@@ -247,6 +256,29 @@ export async function startApplication(
       publishRows: cfg.digest.publishrows,
     });
     registerTerminals(rpc, terminals);
+    const home = environment.HOME ?? "";
+    const files = new LocalFiles({
+      home,
+      roots: new ImageRoots({
+        templates: cfg.images.roots,
+        home,
+        identity: inbox.summaries.identity,
+      }),
+      deny: [
+        cfg.state.path,
+        operatorConfigDirectory(environment),
+        environment.OTK_CONFIG,
+      ]
+        .filter((path): path is string => !!path),
+    });
+    const inlineImages = new InlineImages({
+      files,
+      limits: cfg.images,
+      concurrency: cfg.images.concurrency,
+      directory: async (id, signal) =>
+        (await rpc.context.sessionDirectories([id], signal))[id],
+    });
+    registerLocalFiles(rpc, files, inlineImages);
     inbox.terminalDependencies(terminals.tracking);
     terminalSockets = new TerminalMux(
       terminals,
@@ -264,11 +296,14 @@ export async function startApplication(
       staticRoot,
       index,
       sources,
+      projectOrder: inbox.projectOrder,
+      programs: inbox.programs,
       diagnostics: options.diagnostics,
       diagnostic: options.diagnostic,
       signal: options.signal,
       requested: options.requested,
       terminals: terminalSockets,
+      inlineImages,
     });
     const principal = () => cfg.auth.username.toLowerCase() || "local";
     inbox.operationAttention(

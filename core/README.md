@@ -33,6 +33,12 @@ to retained presentation leaves.
 
 ## Session hierarchy
 
+EntityStates owns the task's helper roster and resolves the Finished selection
+for `sessions.acknowledge`. Subtree acknowledgement uses the same published
+session terminals and full hierarchy across checkouts. Both bulk acknowledgement
+and `sessions.seen` use the per-user `Seen` watermark; neither settles live
+inputs. A later terminal is still unseen until acknowledged in its own right.
+
 `IndexStore.hierarchy` is the single `SessionHierarchy` owner. It retains only
 demanded structural identities, not digests or transcripts. Native family
 identity survives checkout moves; ancestry is explicitly complete, unresolved or
@@ -131,6 +137,9 @@ acquisition and explicit eviction, separately from authoritative deletion. Only
 selection retains turn summaries; other leased entries carry scalar digest
 summaries. Feature-owned connection projections scope inbox tasks/marks and
 approval metadata. All projects retain their server-owned row/lamp summaries.
+The socket acknowledges an installed epoch with `view.ready` after its source
+baselines have been published. An overtaken baseline cannot acknowledge a newer
+lease. That acknowledgement is separate from first-page settlement.
 `sessions.list` supplies bounded project/query pages (20 by default, at most
 200), independently of catalog completeness. Cached rows publish through a
 request-correlated `load.chunk`; the ordinary result completes only that page's
@@ -204,13 +213,14 @@ upgrade instructions.
 ## Public discovery
 
 Served HTML extends the existing mount-relative base transform with one inert
-`otk-bootstrap` JSON value containing only `clientRequestPolicy(cfg)`. This safe
-numeric projection supplies the application's initial connection policy before
-any local or saved remote session read succeeds. It never serializes operator
-config, auth credentials or backend identity. The browser composition validates
-it and injects it into the shell; reusable client/UI packages do not read HTML
-or invent defaults. A remote's checked session and welcome replace this initial
-policy with that remote's authority. Static-only callers may omit config.
+`otk-bootstrap` JSON value containing the served `build` and
+`clientRequestPolicy(cfg)`. This safe numeric projection supplies the initial
+connection policy before any local or saved remote session read succeeds. It
+never serializes operator config, auth credentials or backend identity. The
+browser composition validates it and injects it into the shell; reusable
+client/UI packages do not read HTML or invent defaults. A remote's checked
+session and welcome replace this initial policy with that remote's authority.
+Static-only callers may omit config.
 
 The existing plain and tracked `/api/session` responses also carry `defaults`,
 an allowlisted `{ defaultPort }` projection from the shipped
@@ -219,12 +229,14 @@ Listener overrides do not change the advertised default; discovery's exact
 response and CORS stay unchanged.
 
 `GET /api/discovery` is reflectively discovered and returns only
-`{ product: "otk", protocol, version, originAllowed, signIn }`. Versions come
-from the protocol owner. `originAllowed` evaluates the request's Origin through
-the same origin predicate as normal API admission; missing and opaque (`null`)
-origins are not allowed. `signIn` describes the server requirement: `setup` for
-unconfigured auth, `login` for password/TOTP, and `none` for auth disabled. It
-does not describe or validate the caller's session.
+`{ product: "otk", protocol, version, build, originAllowed, signIn }`. Versions
+come from the protocol owner; `build` is computed once from the served index and
+shared with the HTML bootstrap, health and WebSocket handshake. `originAllowed`
+evaluates the request's Origin through the same origin predicate as normal API
+admission; missing and opaque (`null`) origins are not allowed. `signIn`
+describes the server requirement: `setup` for unconfigured auth, `login` for
+password/TOTP, and `none` for auth disabled. It does not describe or validate
+the caller's session.
 
 This metadata is public even to a refused Origin. GET and OPTIONS on this exact
 path alone use wildcard CORS without credentialed mode. Clients fetch it with

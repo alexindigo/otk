@@ -48,28 +48,33 @@ class slots or its own grid track, never a selector reaching into a child. The
 syntax-aware style-boundary check inventories native classes, state bindings and
 every DisclosureToggle caller, rather than naming a few consumers.
 DisclosureToggle's `tree` variant owns the compact box; Tree positions its slot.
-Surface likewise owns its fill/popover layout and signal variants.
+Surface likewise owns its fill/popover layout and signal variants. Containers
+own their chrome: a frame renders its heading and actions at every item count,
+including an explicit empty body. Tabs is an item collection without chrome
+slots. The terminal frame uses Surface's `panel` density, independent of the
+shells its tab strip and panels render.
 
-Project inbox rows and section headers borrow `SidebarRow`: scaled lamp/artwork
-tracks, a shrinkable single-line label and intrinsic metadata. Empty metadata
-consumes no track. Narrow rows reflow the metadata as a whole beneath the label;
-availability stays with visit metadata, not inside the shrinking name. Missing
-artwork retains its slot. `Tree` alone owns disclosure, nesting and compact
-flattening; its selected heading paints the mark outside the row highlight in
-both column and rail. The real-app geometry contract uses the removed/sidebar/
-catalog profiles at 200/298px and 100/125% text in all three themes. It measures
-painted SVGs and lamp bodies, full section names and at least 6ch of project
-names, in addition to the same shared contract on the style scene. The composer
-destination port returns task/session facts separately; the view borrows
-ChevronIcon and ChromeMeta, yielding the task name before the destination
-session. Per-kind offsets, absolute row positioning and replacement row tracks
-are rejected. Conventions are executable owner contracts, not a one-time grep
-sweep: Clock owns instants, the client duration formatter owns elapsed text,
-icon slots take components, FailurePresenter owns targets and outcome tone, and
-shared controls own their geometry. Include reject and accept fixtures so a gate
-catches the problem class without banning legitimate numeric formatting or
-intrinsic layout. Style scenes build failures through the same production
-presenters as the app.
+Projects, Sessions and their section headers pass lamps, labels and feedback to
+`TreeNode`. `Tree` owns the shared row grid and all lane paint; `--tree-indent`
+is both the lane width and the depth step. The client derives lane states from
+the row path even when other rows are unmounted. A row surface borrows both grid
+axes, so hover, focus and selection still include the lamp without owning a
+track. The selection mark remains outside that surface. `SidebarRow` owns the
+artwork slot, shrinkable single-line title and ranked whole metadata. Missing
+artwork retains its slot; availability and visit facts yield independently. The
+real-app geometry contract uses the removed/sidebar/ catalog profiles at
+200/298px and 100/125% text in all three themes. It measures painted SVGs and
+lamp bodies, full section names and at least 6ch of project names, in addition
+to the same shared contract on the style scene. The composer destination port
+returns task/session facts separately; the view borrows ChevronIcon and
+ChromeMeta, yielding the task name before the destination session. Per-kind
+offsets, absolute row positioning and replacement row tracks are rejected.
+Conventions are executable owner contracts, not a one-time grep sweep: Clock
+owns instants, the client duration formatter owns elapsed text, icon slots take
+components, FailurePresenter owns targets and outcome tone, and shared controls
+own their geometry. Include reject and accept fixtures so a gate catches the
+problem class without banning legitimate numeric formatting or intrinsic layout.
+Style scenes build failures through the same production presenters as the app.
 
 Settings owns a two-row page frame: the header stays in flow at its top and one
 `ScrollRegion` fills the remaining row. Its padded content is inside that
@@ -89,7 +94,9 @@ attributes, events and `ref` address the actual viewport. Scrollbar paint is
 `otk` by default or `hidden`; legacy `native` and `thin` inputs select OTK paint
 too. Native artwork is always hidden. The transcript retains its persisted
 default-on opt-out. Hover, drag and scrolling reveal the themed thumb; idle
-hides it. Track and drag use the same proportional geometry. Keyboard and wheel
+hides overlay thumbs. `horizontalTrack="in-flow"` gives a horizontal-only lane,
+such as a Markdown table, a visible track in a separate row only when content
+overflows. Track and drag use the same proportional geometry. Keyboard and wheel
 remain native viewport input. Layout, content and scroll-position owners stay
 with their components. Borrowed VirtualLists do not create another scrollport.
 Component CSS never redeclares scrolling or overscroll policy; the architecture
@@ -210,18 +217,17 @@ Standalone feedback retains its heading. DisclosureToggle owns a control-height
 square gutter and the shared disclosure-layout grid: headings, reasons, actions
 and Details labels share its content edge, independently of whether a signal is
 painted. Toast messages borrow that same grid and failure content borrows its
-subgrid without size containment. Record headers borrow the same content gutter;
-TreeIcon keeps its artwork and guide in the native tree-indent cell, with any
-remaining gutter in a trailing track. Error colour belongs to the shared
-FailureSignal stripe, never paragraph paint; Toast instead owns that signal at
-its surface edge. Compact callers and containers at or below 320px show the
-heading and controls, with complete reasons inside Details. The shared
-ScrollRegion bounds expanded details; target labels and diagnostic IDs truncate
-with full-value titles. FeedbackStatus normalizes text-only errors through the
-client presenter too. ConnectionBadge owns the lamp, optional label/action and
-ConnectionStatus grid on every surface. A containing title replaces its label;
-otherwise the single state line shares that label's column. Quiet connection
-copy borrows ChromeMeta.
+subgrid without size containment. Record tree feedback can borrow the artwork
+and label tracks directly. Error colour belongs to the shared FailureSignal
+stripe, never paragraph paint; Toast instead owns that signal at its surface
+edge. Compact callers and containers at or below 320px show the heading and
+controls, with complete reasons inside Details. The shared ScrollRegion bounds
+expanded details; target labels and diagnostic IDs truncate with full-value
+titles. FeedbackStatus normalizes text-only errors through the client presenter
+too. ConnectionBadge owns the lamp, optional label/action and ConnectionStatus
+grid on every surface. A containing title replaces its label; otherwise the
+single state line shares that label's column. Quiet connection copy borrows
+ChromeMeta.
 
 FailurePresenter receives the current view and suppresses that session's target
 on every inline surface; notifications and genuinely cross-session targets keep
@@ -313,6 +319,10 @@ Choose feature-owned `register*` functions in your composition root, then
 provide the collection through `UiProvider`. Registration rejects duplicate IDs;
 distinct consumers have independent collections. Register before mounting.
 Registries import no implementations.
+
+`DisclosuresProvider` mounts the client disclosure owner. The shell passes its
+live owner; standalone consumers mount the same provider at their root with one
+`createDisclosures` instance for that scene's lifetime.
 
 `tools.register(name, Component)` receives `ToolProps`: the live protocol call,
 display preferences, width, directory, waiting state and an injected child-open
@@ -454,33 +464,34 @@ retaining positive measured numbers but never presenting a provisional zero as
 Worked for 0s. Only explicit unknown evidence uses the shared unknown label.
 Reply footers also show model-call count, charged turn tokens and
 backend-reported cost after working time. Footers and opened detail bind the
-adapter's whole-turn result. The footer alone presents reply working time;
-work-log headers always say Work log and show category counts, never a second
-duration or counting cue. Entity previews and usage tables pass the same client
-timing presentation through TimeValue unchanged; Time columns request the
-presenter's bare-value form rather than stripping the fact's wording. There is
-no loaded-page turn timing fallback; missing turn evidence stays counting until
-digested; explicit unknown timing says Time unknown with the adapter's
-explanation on hover. The shared Popover's hover/focus preview reveals an
-ordered per-call table: existing tool labels or answered, full prompt Context,
-five token categories, reported cost and time. New input is the uncached part; a
-footnote explains New input + Cache read + Cache write = Context. The Total row
-sums calls' Context and retains category tokens and catalog-priced costs;
-unknown category prices show token counts only. Category pricing is provided by
-the framework-free reply usage owner, never reconstructed in the view. Display's
-persisted Show cost toggle defaults on; turning it off hides all footer/detail
-and context-meter cost figures while retaining tokens. Popover's generic wide
-size accommodates comparison tables; it continues to own native anchoring,
-available-side viewport bounds, dismissal and keyboard focus return. Hover/focus
-previews have no native title tooltip; their accessible trigger label and linked
-detail description are supplied by that same owner. Click-only controls retain
-their name tooltips. ShellPorts exposes the same framework-free usage owner to
-registered panel adapters. The Sessions adapter reads keyed index digests for
-the selected project's sessions; rows present total.cost as quiet trailing
-metadata using the shared cost formatter, including known zero. Show cost also
-hides these amounts and their accessible labels. Footers, rows and meter never
-sum transcript pages; unavailable metadata stays unknown while content remains
-usable.
+adapter's whole-turn result. The footer shows one agent fact per distinct agent.
+The Work strip above it shows action counts or the active run's elapsed time,
+not reply working time; it opens that reply's work in the right panel. The
+panel's turn header reads the same working-time presentation as the footer.
+Entity previews and usage tables pass the same client timing presentation
+through TimeValue unchanged; Time columns request the presenter's bare-value
+form rather than stripping the fact's wording. There is no loaded-page turn
+timing fallback; missing turn evidence stays counting until digested; explicit
+unknown timing says Time unknown with the adapter's explanation on hover. The
+shared Popover's hover/focus preview reveals an ordered per-call table: existing
+tool labels or answered, full prompt Context, five token categories, reported
+cost and time. New input is the uncached part; a footnote explains New input +
+Cache read + Cache write = Context. The Total row sums calls' Context and
+retains category tokens and catalog-priced costs; unknown category prices show
+token counts only. Category pricing is provided by the framework-free reply
+usage owner, never reconstructed in the view. Display's persisted Show cost
+toggle defaults on; turning it off hides all footer/detail and context-meter
+cost figures while retaining tokens. Popover's generic wide size accommodates
+comparison tables; it continues to own native anchoring, available-side viewport
+bounds, dismissal and keyboard focus return. Hover/focus previews have no native
+title tooltip; their accessible trigger label and linked detail description are
+supplied by that same owner. Click-only controls retain their name tooltips.
+ShellPorts exposes the same framework-free usage owner to registered panel
+adapters. The Sessions adapter reads keyed index digests for the selected
+project's sessions; rows present total.cost as quiet trailing metadata using the
+shared cost formatter, including known zero. Show cost also hides these amounts
+and their accessible labels. Footers, rows and meter never sum transcript pages;
+unavailable metadata stays unknown while content remains usable.
 
 `TurnUsage` receives a cheap nullable turn summary and injected
 detail/open/close ports. Its preview keeps one Model calls scroll/focus region
@@ -852,12 +863,12 @@ SessionView; Message exposes a reveal control that scrolls and focuses its own
 bubble, while the viewport suspends tail following for that explicit navigation.
 No panel reads another component's DOM or maintains a second transcript store.
 
-Sessions and Timeline use the same `ListRow` frame: shared 30px height,
-selection pointer, highlight bounds, padding and leading/label/trailing slots.
-Consumers inject content and callbacks. Timeline's trailing slot borrows the
-same persistent MessageFooter as the transcript, with no clock/action hover
-swap. Action hit targets do not move, and the label has no independent inset
-hover highlight.
+Projects, Sessions, and Timeline use `SidebarRow` for the row track, highlight,
+and inner gutters. `TreeNode` owns the selection pointer and indentation;
+Projects and Sessions both supply flat tree paths. Consumers inject content and
+callbacks. Timeline's meta slot borrows the same persistent MessageFooter as the
+transcript, with no clock/action hover swap. Action hit targets do not move, and
+the label has no independent inset hover highlight.
 
 ListRow's `--list-row-height` is also its editing control track. Primary
 leading, input and trailing slots share that track while validation prose wraps
@@ -1013,19 +1024,19 @@ keyboard intent starts another. Selection, search and membership can therefore
 change without retaining stale interactive rows, while automatic changes remain
 held during a live choice.
 
-`SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
-corner reservation, leading controls, scrolling body and optional footer. The
-shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own
-those dimensions and compact controls; corner clearance derives from the control
-size. Collapsed width belongs to the rail's CSS, never a second numeric view
-policy. Expanded width defaults and validated bounds come from protocol's
-immutable `SHELL_WIDTHS`, also consumed by ARIA, keyboard and pointer resizing.
-ProjectInbox also uses this frame when expanded. Search stays in its expanded
-vertical slot above the project lights; collapsing never moves their y
-positions. The right rail stacks available registered panel icons with vertical
-selection; activating one atomically selects and opens that panel through
-`onLayout`. Its selected content unmounts when collapsed; retained interaction
-belongs to the feature's framework-free scope owner.
+`SidebarRail` is the shared frame for both sides: one 48px rail when collapsed,
+a 52px header, leading controls, body and optional footer. The shared
+`--rail-width`, `--chrome-header-height` and `--control-size` tokens own those
+dimensions and compact controls. Header controls sit in flow. Collapsed width
+belongs to the rail's CSS, never a second numeric view policy. Expanded width
+defaults and validated bounds come from protocol's immutable `SHELL_WIDTHS`,
+also consumed by ARIA, keyboard and pointer resizing. ProjectInbox also uses
+this frame when expanded. Search stays in its expanded vertical slot above the
+project lights; collapsing never moves their y positions. The right rail stacks
+available registered panel icons with vertical selection; activating one
+atomically selects and opens that panel through `onLayout`. Its selected content
+unmounts when collapsed; retained interaction belongs to the feature's
+framework-free scope owner.
 
 `Shell({ theme, api, policy? })` binds `createShellState({api, policy?})` and
 composes the reusable three-region shell with selected UI registrations. The
@@ -1055,33 +1066,33 @@ validation/save/broadcast. No control constructs a whole-layout replacement from
 props. `ProjectTabs` consumes the public client tabs model,
 server/project-scoped task actions and injected guarded navigation. It renders
 task/phantom/preview tabs, the data-only `TaskTrail` and reported usage, using
-8px status lights. Shell-owned 28px corner toggles stay at a shared 12px offset
-across full/rail and right-open/closed layouts; each top bar reserves the corner
-zone. The 52px centre bar contains quiet task pills and injected Display
-options. `TaskTrail` renders the canonical model's ancestry only, with clickable
-titles and chevron boundaries. Shared `OverflowRow` measures matching inert
-content for full and whole-first-word/fitting-tail compact states, preserving
-every ancestor. The composer's `Subagents` control renders that model's separate
-D66 helper set once: lamps and titles left, shared duration-owner values right,
-with navigation and existing Stop admission. `LiveWork` displays shell jobs
-only. Reported usage fills the context bar against the reporting model's catalog
-context window; unknown windows show tokens without an invented denominator or
-bar. The inbox has 32px rows, hover-revealed menus, Search and a compact
-settings/keys/server footer; Sessions has 30px rows and CSS child guides. Chrome
-uses the shared selection pointer/underline, and shortcuts remain in tooltips,
-Keys and the palette. `registerTaskDialogs` contributes its name editor to the
-dialog host. Tabs have no per-tab menu; their owner-scoped commands and
-package-internal task handlers retain pin, naming, moving, adding and closing
-actions independently of presentation. Project rows own selection around their
-flowing open button and trailing cell. That cell reserves visit time and menu
-trigger in the same grid cell, revealing the trigger on hover or focus without
-shifting content or positioning it over the row. `session.preview` and
-`session.pin` are guarded command ports for the Sessions panel; preview
-replacement cannot remove required activity tabs. `ProjectSessions` consumes the
-framework-free client hierarchy and injected open/pin/create actions. The
-shell's existing navigation guard protects draft/attention input, including
-same-event slash navigation and browser history. Project-only URLs support empty
-projects. Opening or acting resets visits; a loaded viewed session records seen.
+8px status lights. Shell injects the corner controls into the panel headers,
+where they share the header centerline in either layout. The 52px centre bar
+contains quiet task pills and injected Display options. `TaskTrail` renders the
+canonical model's ancestry only, with clickable titles and chevron boundaries.
+Shared `OverflowRow` measures matching inert content for full and
+whole-first-word/fitting-tail compact states, preserving every ancestor. The
+composer's `Subagents` control renders that model's separate D66 helper set
+once: lamps and titles left, shared duration-owner values right, with navigation
+and existing Stop admission. `LiveWork` displays shell jobs only. Reported usage
+fills the context bar against the reporting model's catalog context window;
+unknown windows show tokens without an invented denominator or bar. The inbox
+has 32px rows, hover-revealed menus, Search and a compact settings/keys/server
+footer; Sessions has 30px rows and CSS child guides. Chrome uses the shared
+selection pointer/underline, and shortcuts remain in tooltips, Keys and the
+palette. `registerTaskDialogs` contributes its name editor to the dialog host.
+Tabs have no per-tab menu; their owner-scoped commands and package-internal task
+handlers retain pin, naming, moving, adding and closing actions independently of
+presentation. Project rows own selection around their flowing open button and
+trailing cell. That cell reserves visit time and menu trigger in the same grid
+cell, revealing the trigger on hover or focus without shifting content or
+positioning it over the row. `session.preview` and `session.pin` are guarded
+command ports for the Sessions panel; preview replacement cannot remove required
+activity tabs. `ProjectSessions` consumes the framework-free client hierarchy
+and injected open/pin/create actions. The shell's existing navigation guard
+protects draft/attention input, including same-event slash navigation and
+browser history. Project-only URLs support empty projects. Opening or acting
+resets visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the
@@ -1132,32 +1143,24 @@ travel and re-entry retain the preview. Keyboard focus and explicit opening
 bypass the hover delay. Reduced motion does not change either interaction
 deadline.
 
-`TreeNode` owns the Explorer-style dotted connectors, square SVG +/- junction,
-header, optional feedback track and lazy body grid. Feedback grows below the
-header instead of moving its junction away from the row's lamp. `TreeItem`
-supplies last-child and direction facts, including across virtual record
-boundaries; outgoing branches mirror that same grid. Disclosure state and
-callbacks remain in the existing interaction owner. `TreeGuide` borrows the same
-junction cells for already-expanded virtual session hierarchies, using plain
-client `treePaths` rather than mounted neighbours. No component paints a second
-nesting rail or elbow. Horizontal levels use the named 19u tree indent,
-independent of row height, with the named 9u box size and half-cell dotted
-stubs. Outgoing grids reverse their tracks and header flow, never text
-direction. `TreeIcon` owns the leading artwork slot and the downward child rail;
-callers inject their lamp or kind artwork. The child junction is aligned with
-that parent icon, not its disclosure box. TreeIcon never invents artwork: it
-renders the caller's semantic kind icon or lamp, or an empty slot when there is
-none. Body-only leaf content needs no icon or disclosure. Header and body
-factories borrow ContentSlot so record updates retain the mounted preview
-lifetime.
+`TreeNode` owns the Explorer-style lane grid for both flat and nested rows.
+Callers inject artwork, label, trigger, feedback and body content; only Tree
+positions those slots. `TreeItem` supplies nested topology, including across
+virtual record boundaries. Flat lists supply explicit client `treePaths`. The
+same client `laneStates` paints both. `--tree-indent` is both the 19-unit lane
+width and depth step. A child's junction occupies its parent's artwork lane.
+Regions are not indented; row gaps carry the active continuation lanes. Outgoing
+branches reverse tracks, not text direction. Feedback extends the lanes below
+the first line without moving its junction. Disclosure choices and callbacks
+stay in the existing interaction owner. Factories borrow ContentSlot so record
+updates retain mounted content.
 
-DisclosureToggle owns that SVG artwork, keyboard expansion and one button.
-TreeNode's toggleHeader associates its decorative junction label with the
-header's single native button. The button keeps its text and focus target;
-clicking the box activates that same control, without a hit-area overlay or a
-second tab stop. Sibling entity/navigation controls remain independent. Feedback
-resets branch and direction context. Standalone failure disclosures borrow only
-DisclosureToggle, never the tree's topology or connectors.
+`Disclosure` binds transcript and failure folds to the client disclosure owner
+by kind and identity (2.114). One native button owns the glyph, keyboard, focus
+and always-mounted ARIA region. For transcript labels, TreeNode places the
+button's box, artwork and caption on its lane subgrid; sibling actions and facts
+remain independent. Standalone folds use Disclosure's own layout, not the tree
+lanes.
 
 Project branches come from the client's server-scoped topology projection. Their
 boxes precede lamps and names. Per-project collapse intents persist in
@@ -1181,7 +1184,7 @@ rule after them. ChromeMeta owns the visit clock's exact `--text-meta` size,
 `--otk-fg-3` colour and weight 400, including inside buttons. Reply clocks,
 record summaries/counts, running-work elapsed time and project annotations use
 that same owner. Project metadata borrows SidebarRow's intrinsic metadata slot
-and reflows below the label under pressure. Counts and annotations have no
+and yields as whole facts under pressure. Counts and annotations have no
 parentheses. The hierarchy projection supplies artwork eligibility, never
 section-local depth.
 
@@ -1235,12 +1238,12 @@ selection binding and underline, separate from focus paint. Upload/remove, name
 and startup text commit through Save changes; dirty dismissal asks before
 discarding. No project auto-accept field is shown.
 
-`ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
-Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
-ListPicker, is the caller-owned trigger style slot. Chrome search/chevron icons,
-ModelLabel and SelectionContent likewise accept a caller class. Consumers style
-their supplied class/content rather than another component's private wrapper or
-descendants.
+`ProjectTabs.trailing` renders optional consumer chrome in its own flex slot
+without reading a Shell ancestor. Popover's `triggerClass`, forwarded by Menu,
+CommandMenu and ListPicker, is the caller-owned trigger style slot. Chrome
+search/chevron icons, ModelLabel and SelectionContent likewise accept a caller
+class. Consumers style their supplied class/content rather than another
+component's private wrapper or descendants.
 
 Breadcrumb folding and command-menu separators are projected from one coherent
 list snapshot into identity-bound rows. Keyed views consume those flags instead
@@ -1348,6 +1351,19 @@ stop function runs. Layers contain close-command IDs, a predicate and priority,
 with latest registration breaking ties. Composition and repeat events do not
 invoke commands.
 
+The shell enables the keyboard owner's window/tab focus recovery only with an
+open session. It leaves existing focus, overlay focus and selections alone;
+otherwise it returns to the last live text target or the mounted prompt's
+registered textarea. The composer fallback places the caret at the end without
+scrolling or modifying the draft. Views install no reactivation listeners.
+
+The keyboard's browser focus owner resolves returns and accepted navigation with
+live control references. Projects, task/session tabs, the right Sessions tree
+and the trail register their existing selection and natural focus home; changing
+selection elsewhere moves stale focus without intercepting keyboard browsing.
+Returns preserve the invoking modality. A late edit/reorder return cannot take
+focus from a newer navigation or another control.
+
 `Palette` and slash completion enumerate the injected CommandHub, with no
 per-command surface tables or opt-in flags. Slash spelling and typed invocation
 use the hub's single resolution/schema owner. Both surfaces currently omit
@@ -1396,31 +1412,33 @@ area/app actions appear once. Built-in selection outside fields, link and image
 targets require no binding.
 
 Menu owns role/menuitem semantics, roving focus with arrows/Home/End, type-ahead
-and Enter/Space activation for all consumers. Tab closes and restores origin
-focus; Popover alone owns Escape and its focus return. `CommandMenu` shares hub
-projection, registration-change subscription, invocation-time reprojection and
-owner-bound execution between pointer and visible-trigger menus. Failed actions
-use a sibling alert described by the corresponding item, outside `role=menu`,
-with an optional injected error callback for row feedback. The supplied
-`feedbackID` associates that row-owned error with its action. Pointer opening
-focuses the programmatic-only menu container, without a ring; the first arrow
-moves focus to an item. Keyboard opening focuses the first item with the shared
-focus paint. Popover carries that opening reason for both native triggers and
-its control port, including modal re-hosting. All Menu callers share one compact
-token set: 28px rows, 8px inline/4px block inset and no inter-row gap. Menu
-passes that density through Popover to Surface; command errors mount only while
-present, below the menu rather than reserving empty feedback space. Point
-anchors prefer their bottom/right quadrant at the captured pointer, flipping
-only for overflow. Popover owns point placement, viewport flipping and focus
-return through its `open(anchor, reason)` control port. A rect anchor supplies
-x/y, optional width/height (zero for a point), origin and a focus callback. One
-Popover-owned anchor box uses the same CSS position-area and native flip
-fallbacks as triggered popovers; it needs no resize listener/ResizeObserver.
-Content never measures or positions its parent. Selection Copy outside fields
-writes its captured text through the browser clipboard API. App fallback actions
-use the existing session, palette and registered display-settings command
-owners. DisplayPreferences shares one control body between the anchored Display
-menu and the registered app-level dialog.
+and Enter/Space activation for all consumers. Tab reaches an optional title
+action after the active item; Shift+Tab returns from the title action to that
+item. Leaving these stops closes and restores origin focus; Popover alone owns
+Escape and its focus return. `CommandMenu` shares hub projection,
+registration-change subscription, invocation-time reprojection and owner-bound
+execution between pointer and visible-trigger menus. Failed actions use a
+sibling alert described by the corresponding item, outside `role=menu`, with an
+optional injected error callback for row feedback. The supplied `feedbackID`
+associates that row-owned error with its action. Pointer opening focuses the
+programmatic-only menu container, without a ring; the first arrow moves focus to
+an item. Keyboard opening focuses the first item with the shared focus paint.
+Popover carries that opening reason for both native triggers and its control
+port, including modal re-hosting. All Menu callers share one compact token set:
+28px rows, 8px inline/4px block inset and no inter-row gap. Menu passes that
+density through Popover to Surface; command errors mount only while present,
+below the menu rather than reserving empty feedback space. Point anchors prefer
+their bottom/right quadrant at the captured pointer, flipping only for overflow.
+Popover owns point placement, viewport flipping and focus return through its
+`open(anchor, reason)` control port. A rect anchor supplies x/y, optional
+width/height (zero for a point), origin and a focus callback. One Popover-owned
+anchor box uses the same CSS position-area and native flip fallbacks as
+triggered popovers; it needs no resize listener/ResizeObserver. Content never
+measures or positions its parent. Selection Copy outside fields writes its
+captured text through the browser clipboard API. App fallback actions use the
+existing session, palette and registered display-settings command owners.
+DisplayPreferences shares one control body between the anchored Display menu and
+the registered app-level dialog.
 
 Display, Appearance and Notifications delegate native fields to
 PreferenceControls. Each accepts the consumer's selected preference registry;
@@ -1492,9 +1510,13 @@ interruption and the helper count. A second activation executes; row-to-row
 pointer/focus movement, Tab and dismissal disarm it. Generic Menu owns row
 transitions; CommandMenu owns confirmation state and prevents concurrent
 execution. The shell passes deletion to the shared client view-release owner.
-The guard's draft-survival input asks only when a stored draft would be lost;
-Close keeps ordinary drafts, while successful native deletion drops the family
-drafts.
+Switching sessions (including history) and Close keep per-session drafts. Only
+actions that lose input request confirmation, through the existing Dialog host.
+Successful native deletion drops the affected family drafts. Closing a deleted
+view keeps unsent text without prompting (2.159). Reopening its Sessions row
+uses the shared recovery notice (2.145): Recover shows the value as selectable
+read-only text, and the explicit discard X removes only that parked draft. A
+deleted session never mounts a sending composer.
 
 The session-action owner also contributes Fork session to session targets and
 the palette, and Fork from here to completed replies. `MessageFooter` owns the
@@ -1518,21 +1540,20 @@ behind a reply.
 
 Revert from here uses the prompt context/hover command and selected-session
 client revert owner. Root idle sessions advertise it only with `revert`; queued
-prompts and read-only helpers omit it. An in-flow confirmation under the clicked
-prompt lists the actual message identities before any native mutation.
-`RevertGroup` borrows `ActivityGroup`, RecordList, Clock and the shared failure
-presenter. It renders one boundary-anchored transcript group with the full
-retained messages, collapsed by default, and Restore. Saving and failure states
-stay in its header; failures expose the reason, Retry and Restore. Restore and
-Dismiss are absent while unavailable, rather than disabled secondary controls.
-Dismiss persists per session/boundary and leaves a muted marker with
-context-menu Restore. No revert overlay covers the transcript or composer.
-Restore requires the separately advertised `restore` capability. An
-independently advertised `revertCode` capability adds Revert code changes to the
-same prompt context menu. It uses the same owner and confirmation. Session
-targets similarly offer Archive or Unarchive only with `sessionArchive`, using
-authoritative state and the shared CommandMenu. No overlay or style is added to
-these native actions.
+prompts and helpers omit it. An in-flow confirmation under the clicked prompt
+lists the actual message identities before any native mutation. `RevertGroup`
+borrows `ActivityGroup`, RecordList, Clock and the shared failure presenter. It
+renders one boundary-anchored transcript group with the full retained messages,
+collapsed by default, and Restore. Saving and failure states stay in its header;
+failures expose the reason, Retry and Restore. Restore and Dismiss are absent
+while unavailable, rather than disabled secondary controls. Dismiss persists per
+session/boundary and leaves a muted marker with context-menu Restore. No revert
+overlay covers the transcript or composer. Restore requires the separately
+advertised `restore` capability. An independently advertised `revertCode`
+capability adds Revert code changes to the same prompt context menu. It uses the
+same owner and confirmation. Session targets similarly offer Archive or
+Unarchive only with `sessionArchive`, using authoritative state and the shared
+CommandMenu. No overlay or style is added to these native actions.
 
 The active revert offers Open copy from its own group. Dismiss hides that action
 with the rest of the header, and Restore leaves no saved-copy row in the
@@ -1719,22 +1740,27 @@ continue to measure their actual CSS boxes.
 ## Notification channels
 
 Consumers select `registerToastChannel`, `registerOsChannel`,
-`registerSoundChannel` and `registerBadgeChannel` against their injected public
-client hub. Registrations own their presentation and teardown; they import no
-application, RPC implementation or native backend. `Toasts` renders the returned
-toast model: information/done chips expire after six seconds, keyed input chips
-are active and errors sticky. Each message borrows the shared feedback binding's
-alert/status semantics and names itself with the owner's complete notification
-text. Toast's Surface body scrolls when the viewport constrains it. The stack
-shows at most three cards, newest first, and delegates its overflow row to an
-injected Sessions-opening callback. Opening that view detaches the stack so it
-cannot cover the session lamps. Each card has a square top-right close slot and
-a trailing Dismiss action. Both dismiss presentation; action buttons use
-delivery-scoped public command IDs. Permission details use the shared summary's
-compact, single-line target with the full text in its title. Session activity
-labels and stale-resume descriptions come from the client formatter. Attention
-is cleared by actual viewing/resolution, not by dismissal or command promise
-completion.
+`registerSoundChannel` against their injected public client hub. The favicon
+uses `attentionBadge` with the canonical connected-sidecar session count; it
+does not subscribe to notification delivery. Registrations own their
+presentation and teardown; they import no application, RPC implementation or
+native backend. `Toasts` renders the returned toast model: information/done
+chips expire after six seconds, keyed input chips are active and errors sticky.
+Each message borrows the shared feedback binding's alert/status semantics and
+names itself with the owner's complete notification text. Toast's Surface body
+scrolls when the viewport constrains it. The stack shows at most three cards,
+newest first, and the overflow control pages through the remaining cards.
+Opening Sessions detaches the stack so it cannot cover the session lamps. Each
+card has one square top-right dismiss control. Session notes show the same live
+lamp as the sidebar (failures use their own tone), then the project badge/name,
+task and, when distinct, session. The shared whole-item row yields lower
+priority facts without clipping; the announcement retains the full location. The
+target offers the guarded Open action, and failures retain their disclosure.
+Dismissal affects presentation only; action buttons use delivery-scoped public
+command IDs. Permission details use the shared summary's compact, single-line
+target with the full text in its title. Session activity labels and stale-resume
+descriptions come from the client formatter. Attention is cleared by actual
+viewing/resolution, not by dismissal or command promise completion.
 
 The OS channel uses secure-context browser `Notification`, tag replacement,
 silent OS presentation and a focus/default-command click handler. `request`

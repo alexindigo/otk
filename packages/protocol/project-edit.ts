@@ -18,11 +18,12 @@ export interface ProjectEditSnapshot extends ProjectEditTarget {
 }
 export interface ProjectEditCapability {
   read(directory: string, signal?: AbortSignal): Promise<ProjectEditSnapshot>;
-  update(
+  /** Validate location and writable fields once, before the request effect fence. */
+  prepare(
     target: ProjectEditTarget,
     patch: ProjectPatch,
-    operation?: OperationContext,
-  ): Promise<ProjectEditSnapshot>;
+    signal?: AbortSignal,
+  ): Promise<(operation?: OperationContext) => Promise<ProjectEditSnapshot>>;
 }
 export interface ProjectEditCapabilities {
   projectEdit: ProjectEditCapability;

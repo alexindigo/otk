@@ -31,6 +31,7 @@ Deno.test("successful idle supplies neutral footer completion without hiding fai
   }
 });
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 100000,
   coolms: 1000,

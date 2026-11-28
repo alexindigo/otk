@@ -3,6 +3,7 @@ import { createEffect, createSignal, type Element, For, Show } from "solid-js";
 import { render } from "@solidjs/web";
 import {
   CommandHub,
+  createDisclosures,
   createDrafts,
   createSessionSubmission,
   emptyDraft,
@@ -24,11 +25,13 @@ import {
   ComposerTakeovers,
   createUiRegistries,
   DialogHost,
+  DisclosuresProvider,
   DisplayMenu,
   Docks,
   LIGHT_STATES,
   type LightState,
   Message,
+  ownedCommand,
   paintVisualPreferences,
   Prompt,
   registerGenericTool,
@@ -89,9 +92,14 @@ declare module "@otk/protocol" {
 
 const themes = new ThemeRegistry();
 registerOtkThemes(themes);
-const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
+const params = new URL(location.href).searchParams;
+const theme = new ThemeEngine(
+  themes,
+  browserThemeEnvironment(),
+  params.get("theme") ?? "otk-dark",
+);
 theme.start();
-const server = new URL(location.href).searchParams.get("server");
+const server = params.get("server");
 if (server) {
   const connection = new SidecarConnection(server, {
     status() {},
@@ -256,7 +264,7 @@ function ActionToasts(): Element {
       <Toasts
         model={toast.model}
         onMore={() => {}}
-        detail={new URL(location.href).searchParams.has("tall")
+        detail={params.has("tall")
           ? (note) => (
             <div>
               <For each={Array.from({ length: 14 }, (_, i) => i + 1)}>
@@ -347,7 +355,6 @@ function ChildNavigation(): Element {
           child={false}
           activity={() => ({ unstarted: 0, running: false })}
           permissions={[]}
-          siblings={[]}
           revert={null}
         />
       </SessionProvider>
@@ -371,7 +378,7 @@ function Consumer(): Element {
   const ui = createUiRegistries(), isolated = createUiRegistries();
   registerGenericTool(ui.tools);
   registerGenericTool(isolated.tools);
-  registerToolPart(ui.parts);
+  registerToolPart(ui.parts, ui.tools);
   registerUnknownPart(ui.parts);
   ui.tools.register(
     "external-probe",
@@ -433,34 +440,50 @@ function Consumer(): Element {
   });
   ui.prompt.register({
     id: "external-transform",
-    create: (ctx) => ({
-      actions: () => (
-        <button
-          type="button"
-          data-inject
-          onClick={() =>
-            ctx.change((draft) => ({
-              ...draft,
-              input: "Injected draft",
-              agent: "external-agent",
-            }))}
-        >
-          Inject draft
-        </button>
-      ),
-      async submit(_draft, parts, selection, capture) {
-        await ctx.props.onSubmit(
-          [...parts, {
-            kind: "text",
-            text: "external transform",
-          }],
-          "normal",
-          selection,
-          capture,
-        );
-        return true;
-      },
-    }),
+    create: (ctx) => {
+      const command = "consumer.inject-draft";
+      ownedCommand(ctx, {
+        id: command,
+        title: "Inject draft",
+        category: "Prompt",
+        run: () => {
+          ctx.change((draft) => ({
+            ...draft,
+            input: "Injected draft",
+            agent: "external-agent",
+          }));
+        },
+      });
+      return {
+        action: () => ({
+          key: "inject",
+          label: () => "Inject draft",
+          icon: () => (
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M5 12h14M12 5v14" stroke="currentColor" />
+            </svg>
+          ),
+          control: ctx.commands.control(command, undefined, {
+            target: { label: "Draft" },
+            shown: () => true,
+            unshown: "The draft was not injected.",
+            recovery: "Try injecting the draft again",
+          }),
+        }),
+        async submit(_draft, parts, selection, capture) {
+          await ctx.props.onSubmit(
+            [...parts, {
+              kind: "text",
+              text: "external transform",
+            }],
+            "normal",
+            selection,
+            capture,
+          );
+          return true;
+        },
+      };
+    },
   });
   const [summary, setSummary] = createSignal("Initial result"),
     [opened, setOpened] = createSignal(""),
@@ -485,6 +508,8 @@ function Consumer(): Element {
     output: "Reusable output",
     childSessionID: "child-probe",
   });
+  // These are independent consumers presenting the same native call ID.
+  const isolatedDisclosures = createDisclosures({});
   return (
     <CommandProvider commands={commands}>
       <UiProvider registries={ui}>
@@ -719,17 +744,19 @@ function Consumer(): Element {
         </section>
       </UiProvider>
       <UiProvider registries={isolated}>
-        <section id="isolated" style={{ padding: "1rem" }}>
-          <h2>Separate consumer fallback</h2>
-          <ToolLine
-            call={call()}
-            prefs={DEFAULT_PREFS}
-            paneWidth={800}
-            genericOutput
-            waiting={false}
-            onOpenChild={setOpened}
-          />
-        </section>
+        <DisclosuresProvider owner={isolatedDisclosures}>
+          <section id="isolated" style={{ padding: "1rem" }}>
+            <h2>Separate consumer fallback</h2>
+            <ToolLine
+              call={call()}
+              prefs={DEFAULT_PREFS}
+              paneWidth={800}
+              genericOutput
+              waiting={false}
+              onOpenChild={setOpened}
+            />
+          </section>
+        </DisclosuresProvider>
       </UiProvider>
     </CommandProvider>
   );
@@ -774,35 +801,41 @@ function ScrollbarProbe(): Element {
     </>
   );
 }
+const Scene = new URL(location.href).searchParams.has("action-toasts")
+  ? ActionToasts
+  : new URL(location.href).searchParams.has("scrollbars")
+  ? ScrollbarProbe
+  : new URL(location.href).searchParams.has("source-ownership")
+  ? SourceOwnership
+  : new URL(location.href).searchParams.has("child-navigation")
+  ? ChildNavigation
+  : new URL(location.href).searchParams.has("picker-lifetime")
+  ? PickerLifetime
+  : new URL(location.href).searchParams.has("lazy-preview")
+  ? LazyPreview
+  : new URL(location.href).searchParams.has("layout-tabs")
+  ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("layout-controls")
+  ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("indicators")
+  ? () => <Indicators onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("interaction-failures")
+  ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("secondary-failures")
+  ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("error-boundaries")
+  ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("shared-controls")
+  ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
+  : new URL(location.href).searchParams.has("metadata-policy")
+  ? MetadataPolicy
+  : Consumer;
+const disclosures = createDisclosures({});
 render(
-  new URL(location.href).searchParams.has("action-toasts")
-    ? ActionToasts
-    : new URL(location.href).searchParams.has("scrollbars")
-    ? ScrollbarProbe
-    : new URL(location.href).searchParams.has("source-ownership")
-    ? SourceOwnership
-    : new URL(location.href).searchParams.has("child-navigation")
-    ? ChildNavigation
-    : new URL(location.href).searchParams.has("picker-lifetime")
-    ? PickerLifetime
-    : new URL(location.href).searchParams.has("lazy-preview")
-    ? LazyPreview
-    : new URL(location.href).searchParams.has("layout-tabs")
-    ? () => <LayoutTabs onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("layout-controls")
-    ? () => <LayoutControls onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("indicators")
-    ? () => <Indicators onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("interaction-failures")
-    ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("secondary-failures")
-    ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("error-boundaries")
-    ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("shared-controls")
-    ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
-    : new URL(location.href).searchParams.has("metadata-policy")
-    ? MetadataPolicy
-    : Consumer,
+  () => (
+    <DisclosuresProvider owner={disclosures}>
+      <Scene />
+    </DisclosuresProvider>
+  ),
   document.getElementById("app")!,
 );

@@ -2,7 +2,12 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import {
+  expandTool,
+  openLatestWork,
+  revealAcquired,
+  sessionStatus,
+} from "../../pages/transcript.ts";
 import {
   panel,
   primary,
@@ -14,6 +19,83 @@ import {
 } from "../../pages/attention.ts";
 
 test.use({ profile: "contract-attention-native" });
+test("attention.question-answer-survives-session-switch", {
+  tag: ["@attention", "@isolated"],
+}, async ({ isolatedState: state, page }, info) => {
+  const other = await seed(state, "Other session");
+  const asking = await seed(state, "Asking session");
+  let forward: (() => void) | undefined;
+  let releaseResult: (() => void) | undefined;
+  const dialogs: string[] = [];
+  page.on("dialog", async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
+  await page.routeWebSocket("**/ws", (browser) => {
+    const server = browser.connectToServer();
+    let key: string | undefined;
+    browser.onMessage((message) => {
+      const frame = JSON.parse(message.toString());
+      if (frame.t === "request" && frame.method === "question.reply") {
+        key = frame.ref.key;
+        forward = () => server.send(message);
+      } else server.send(message);
+    });
+    server.onMessage((message) => {
+      const frame = JSON.parse(message.toString());
+      if (key && frame.t === "request.result" && frame.ref.key === key) {
+        releaseResult = () => browser.send(message);
+      } else browser.send(message);
+    });
+  });
+  await openSession(state, page, other.id);
+  await openSession(state, page, asking.id);
+  await tool(state, "question", { questions: [questions[0]] });
+  await state.queue(["Answer received."]);
+  await prompt(page, "Ask for a choice");
+  const dock = page.getByRole("region", { name: "Pending question" });
+  await dock.getByRole("button", { name: /Typed/ }).click();
+  await dock.getByRole("tab", { name: "Confirm" }).click();
+  await dock.getByRole("button", { name: "Answer", exact: true }).click();
+  try {
+    await expect.poll(() => !!forward).toBe(true);
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(1);
+    await page.locator(`[data-session="${other.id}"]`).click();
+    expect(dialogs).toEqual([]);
+    await expect(page).toHaveURL(new RegExp(`${other.id}$`));
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(0);
+    await page.locator(`[data-session="${asking.id}"]`).click();
+    await expect(dock).toBeVisible();
+    await expect(dock.getByText("Typed", { exact: true })).toBeVisible();
+    await expect(dock.getByRole("button", { name: "Answer", exact: true }))
+      .toBeDisabled();
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(1);
+    if (info.project.name === "oc-2.2.6") {
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await state.product("prefs.set", { key: "theme", value: theme });
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-otk-theme",
+          theme,
+        );
+        await info.attach(`answer-pending-${theme}`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      }
+    }
+    forward!();
+    forward = undefined;
+    await expect.poll(() => !!releaseResult).toBe(true);
+    await expect(dock).toHaveCount(0);
+    await expect(page.getByText(/^Sending answer(?:\.\.\.)?$/)).toHaveCount(0);
+  } finally {
+    forward?.();
+    releaseResult?.();
+  }
+  await reply(page, asking.id, "Answer received.");
+  expect(dialogs).toEqual([]);
+});
+
 test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   tag: ["@attention", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
@@ -92,12 +174,14 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
   await page.locator(primary).click();
   await expect(page.locator(".otk-question-dock")).toHaveCount(0);
-  await openWorkLogs(page);
+  await openLatestWork(page);
   await page.locator("[data-tool=question] .otk-tool-toggle").click();
   await expect(page.locator(".otk-questions")).toContainText("Typed");
   await expect(page.locator(".otk-questions")).toContainText(
     "Tools, Custom detail",
   );
+  // The answer detail can move the WP6 reply's prose outside the reader window.
+  await revealAcquired(page, '[data-role="assistant"] .otk-text');
   await reply(page, session.id, "Answers recorded.");
   const history = await state.native<
     {
@@ -118,16 +202,20 @@ test("attention.question-keyboard-multi-custom-confirm-and-real-rejection", {
   await page.getByRole("button", { name: "Skip question", exact: true })
     .click();
   await expect(page.locator(".otk-question-dock")).toHaveCount(0);
-  await page.locator(
-    "[data-tool=question][data-tool-status=denied] .otk-tool-toggle",
-  ).click();
+  await openLatestWork(page);
+  await expandTool(page, "[data-tool=question][data-tool-status=denied]");
   await expect(page.locator("[data-tool-status=denied] .otk-questions dd"))
     .toHaveText("Dismissed");
   await expect(page.locator(".otk-prompt-actions")).not.toContainText(
     "esc again",
   );
-  await expect(page.locator(`[data-session="${session.id}"]`)).toHaveAttribute(
-    "data-status",
-    "idle",
-  );
+  // A rejected tool can interrupt V2 without advancing its durable idle clock.
+  // Join the actual native execution roster before checking its OTK projection.
+  await expect.poll(async () => {
+    const active = await state.native<Record<string, { type: string }>>(
+      "/session/status",
+    );
+    return active[session.nativeID]?.type ?? "idle";
+  }).toBe("idle");
+  await sessionStatus(page, session.id, "idle");
 });

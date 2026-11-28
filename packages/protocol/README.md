@@ -16,16 +16,17 @@ consumers retain their contract. The optional entity map and ignored entity
 operations in 4b785f13 did not require its 20-to-21 bump; 21 remains unchanged.
 
 An incompatible hello receives
-`{t:"error",code:"protocol",reason:"client-outdated",
-protocol,build}` before a
-normal WebSocket close. `build` identifies the serving OTK release
-(`SIDECAR_VERSION`). The `error`/`protocol` discriminator remains stable for
-already-open older clients. They enter their existing protocol-mismatch path
-instead of network retry. New clients retain input custody and expose
-`OTK was updated` with an application-owned Reload action. Reload checkpoints
-feature-owned unsaved state in tab-local session storage before navigation;
-storage refusal leaves the page and work intact. Restored mutation identities
-resume their original receipt, never become a new send.
+`{t:"error",code:"protocol",reason:"client-outdated",protocol,build}` before a
+normal WebSocket close; the discriminator stays stable for already-open older
+clients. `build` is the served bundle identity (a hash of `index.html`), also
+provided in the page bootstrap and welcome as `sidecar.build`. The welcome's
+`sidecar.instance` changes per process start. The connection owner compares
+them: a different build of the page's server means its code is outdated; a new
+instance with the same build is a restart. Protocol 25 lets older tabs that
+check only the protocol receive the legacy error once and Reload through their
+existing path. Reload checkpoints feature-owned unsaved state, checks that the
+server is reachable, then navigates. Refusal leaves the page and work intact.
+Restored mutation identities resume their original receipt, never a new send.
 
 `ascendingID(prefix)` owns time-ordered record identities: twelve hexadecimal
 time/counter characters followed by fourteen base62 random characters. Browser
@@ -129,8 +130,8 @@ these helpers.
 
 ## Public API
 
-Supervision optionally carries `dependencies: { running: number }` independently
-of its unchanged own-session state and native completion token. Aggregate
+An inbox session entity optionally carries a running terminal owner count in
+`dependencies`, independently of its native supervision. Aggregate
 `ProjectStatus` adds `dependencies` between working and none; scalar project
 facts carry optional checkout-based `dependencies` counts. TerminalInfo may
 include `checkout` and `ownerSessionID`; existing session-targeted terminal RPCs
@@ -199,6 +200,12 @@ token. Adapters contribute neutral `SupervisionEvidence` identities and
 inventory freshness; only the core supervision owner interprets them. Legacy
 lifecycle status is not a lamp input. `sessions.seen` requires the captured
 displayed terminal, so delayed acknowledgement cannot consume a newer finish.
+Protocol 25 adds `sessions.acknowledge`: the server captures published unseen
+terminals for a task's Finished helpers or the full session subtree across
+checkouts, then returns the acknowledged session IDs and terminals. The same
+per-user watermarks back both methods. `SessionEvidence.helper` replaces
+`awaitingDelivery`; the three helper dispositions are `running`, `needsYou`, and
+`finished`. Seen helpers leave the roster unless they are working or need input.
 
 `SupervisionEvidence.delivered` carries a proven parent receipt and exact
 covered terminal. The supervision owner's explicit `unseen` fact includes this

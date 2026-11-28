@@ -31,6 +31,7 @@ export const profiles = {
   "contract-visual-native-events": "neutral",
   "contract-menus-inbox": "neutral",
   "contract-menus-content": "neutral",
+  "contract-menus-work-reveal": "neutral",
   "contract-menus-session-actions": "neutral",
   "contract-menus-session-actions-no-history": "neutral",
   "contract-menus-context": "neutral",
@@ -47,6 +48,8 @@ export const profiles = {
   "contract-attention-remote": "v1",
   "revert-native": "v1",
   "sessions-tasks": "v1",
+  "attention-failed-helper": "v1",
+  "attention-orphaned-jobs": "v1",
   "sessions-discovery": "v1",
   "contract-sessions-inbox": "neutral",
   "contract-sessions-panel": "neutral",
@@ -96,6 +99,7 @@ export const profiles = {
   "messages-tools": "v1",
   "messages-cooling": "v1",
   "messages-files": "v1",
+  "messages-private-home": "v1",
   "messages-context": "v1",
   "messages-temperature": "v1",
   "messages-helper-pages": "v1",
@@ -171,6 +175,7 @@ export interface Commands {
   queueScript: {
     lease: string;
     chunks: string[];
+    failHelper?: true;
     reasoning?: string[];
     gate?: "held" | "stepped";
     delay?: number;
@@ -204,10 +209,12 @@ export interface Commands {
       | "history-sibling";
   };
   writeProjectFiles: { lease: string; files: Record<string, string> };
+  writeHomeFiles: { lease: string; files: Record<string, string> };
   restart: { lease: string; target: "native" | "sidecar" };
   scenario: {
     lease: string;
     action:
+      | "seed-orphaned-job"
       | "hold"
       | "release"
       | "freeze"
@@ -226,6 +233,8 @@ export interface Commands {
       | "delivery-helpers"
       | "header-shells"
       | "helper-dispositions"
+      | "helper-review"
+      | "helper-review-unseen-failure"
       | "trail-decisions"
       | "trail-delivery"
       | "trail-overflow";
@@ -290,6 +299,7 @@ export function request(value: unknown): ControlRequest {
     queueScript: [
       "lease",
       "chunks",
+      "failHelper",
       "reasoning",
       "gate",
       "delay",
@@ -303,6 +313,7 @@ export function request(value: unknown): ControlRequest {
     productRpc: ["lease", "method", "params"],
     auxiliary: ["lease", "kind"],
     writeProjectFiles: ["lease", "files"],
+    writeHomeFiles: ["lease", "files"],
     restart: ["lease", "target"],
     scenario: ["lease", "action", "sessionID", "target"],
     stop: [],
@@ -347,6 +358,11 @@ export function request(value: unknown): ControlRequest {
       text(p.identity);
       break;
     case "queueScript":
+      if (
+        p.failHelper !== undefined && (p.failHelper !== true || p.tool ||
+          p.gate !== "held" || p.target || !Array.isArray(p.chunks) ||
+          p.chunks.length)
+      ) throw new Error("Invalid failed-helper provider script");
       if (
         p.reasoning !== undefined &&
         (!Array.isArray(p.reasoning) ||
@@ -394,7 +410,11 @@ export function request(value: unknown): ControlRequest {
       text(p.path);
       if (
         !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|model|command|experimental\/tool\/ids)$/
-          .test(new URL(String(p.path), "http://fixture").pathname)
+          .test(new URL(String(p.path), "http://fixture").pathname) &&
+        !((p.method === undefined || p.method === "GET") &&
+          /^(?:\/shell|\/experimental\/job\?sessionID=ses_[a-zA-Z0-9]+)$/.test(
+            String(p.path),
+          ))
       ) {
         throw new Error("Native path outside fixture vocabulary");
       }
@@ -423,8 +443,9 @@ export function request(value: unknown): ControlRequest {
       ) throw new Error("Unknown auxiliary composition");
       break;
     case "writeProjectFiles":
+    case "writeHomeFiles":
       if (!Object.values(object(p.files)).every((s) => typeof s === "string")) {
-        throw new Error("Invalid project files");
+        throw new Error("Invalid fixture files");
       }
       break;
     case "restart":
@@ -444,6 +465,8 @@ export function request(value: unknown): ControlRequest {
           "delivery-helpers",
           "header-shells",
           "helper-dispositions",
+          "helper-review",
+          "helper-review-unseen-failure",
           "trail-decisions",
           "trail-delivery",
           "trail-overflow",
@@ -455,6 +478,7 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "hold",
+          "seed-orphaned-job",
           "release",
           "freeze",
           "thaw",

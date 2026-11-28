@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-export { createReload, type Reload, type ReloadOwner } from "./reload.ts";
+export {
+  createReload,
+  keyedReload,
+  type Reload,
+  type ReloadOwner,
+  ReloadRefused,
+} from "./reload.ts";
 export * from "./project-editor.ts";
 export * from "./record-folds.ts";
-export * from "./project-disclosure.ts";
+export * from "./disclosure.ts";
 export * from "./project-placement.ts";
+export { ActivityPresence } from "./activity-presence.ts";
+export { type WorkChoice, WorkPanel, type WorkShown } from "./work-panel.ts";
 export {
   type EntityFact,
   type EntityFacts,
@@ -12,22 +20,34 @@ export {
   type EntityIdentity,
 } from "./entity-facts.ts";
 export {
-  type ComposerLinkState,
-  composerLinkState,
   createLiveWork,
   helperClock,
   helperCountParts,
   helperCountsLabel,
   type LiveWorkOwner,
   type RunningWork,
-  runningWorkLabel,
 } from "./live-work.ts";
 export {
   releaseTerminalBoxes,
   TerminalBox,
   terminalBoxFor,
   type TerminalBoxMode,
+  terminalRunFailureOwned,
+  TERMINALS_UNAVAILABLE,
 } from "./terminal-boxes.ts";
+export {
+  eraseCount,
+  normalizeRunText,
+  runLabel,
+  runnableText,
+  TERMINAL_RUN_LABEL,
+  type TerminalRun,
+  type TerminalRunMode,
+  type TerminalRunPhase,
+  TerminalRuns,
+  type TerminalRunTarget,
+} from "./terminal-runs.ts";
+export * from "./code-blocks.ts";
 export {
   createNativeSources,
   type NativeSourceOwner,
@@ -45,6 +65,7 @@ export * from "./format.ts";
 export * from "./progress.ts";
 export * from "./paths.ts";
 export * from "./project-navigation.ts";
+export * from "./project-names.ts";
 export * from "./project-picker.ts";
 /** Framework-free OTK transport, observable state and navigation models. */
 export * from "./auth.ts";
@@ -67,11 +88,14 @@ export {
 export * from "./transcripts.ts";
 export * from "./transcript-projection.ts";
 export * from "./activity-spans.ts";
+export * from "./boundaries.ts";
 export * from "./transcript-interaction.ts";
 export * from "./tool-failure.ts";
 export * from "./message-policy.ts";
 export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";
+export * from "./server-continuity.ts";
+export * from "./server-notes.ts";
 export * from "./browser-storage.ts";
 export * from "./server-resources.ts";
 export type { ProjectProjectionRow } from "./project-projection.ts";
@@ -127,9 +151,11 @@ export * from "./navigation.ts";
 export * from "./current.ts";
 export * from "./commands.ts";
 export * from "./notifications.ts";
+export * from "./notification-presentation.ts";
 export * from "./notification-policy.ts";
 export * from "./notification-triggers.ts";
 export * from "./inbox.ts";
+export { sidebarTimer, type SidebarTiming } from "./sidebar-timer.ts";
 export * from "./tabs.ts";
 export {
   projectTabGroups,
@@ -140,6 +166,8 @@ export * from "./session-submission.ts";
 export * from "./session-actions.ts";
 export * from "./session-revert.ts";
 export * from "./session-rename.ts";
+export * from "./inline-rename.ts";
+export * from "./project-rename.ts";
 export * from "./session-title.ts";
 export * from "./input-guard.ts";
 export * from "./shell-navigation.ts";
@@ -176,7 +204,12 @@ export * from "./requests.ts";
 export * from "./failures.ts";
 export * from "./failure-features.ts";
 export * from "./http-requests.ts";
-export { createSessionTree, type SessionListRow } from "./session-tree.ts";
+export {
+  createSessionTree,
+  type SessionListRow,
+  type SessionTreeItem,
+  sessionTreeView,
+} from "./session-tree.ts";
 export * from "./forms.ts";
 export * from "./request-lifetime.ts";
 export {
@@ -185,5 +218,16 @@ export {
   projectTree,
   projectTreeKey,
 } from "./project-tree.ts";
-export { treePaths } from "./tree-paths.ts";
+export {
+  type AncestorLane,
+  type JunctionLane,
+  laneStates,
+  type NodeLane,
+  type TreeLaneStates,
+  treePaths,
+} from "./tree-paths.ts";
 export * from "./terminals.ts";
+export * from "./file-paths.ts";
+export * from "./file-facts.ts";
+export * from "./inline-images.ts";
+export * from "./collection-state.ts";

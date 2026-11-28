@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { focusControl } from "../keyboard/focus.ts";
 import "./Prompt.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
-import {
-  createEffect,
-  createSignal,
-  For,
-  onCleanup,
-  onSettled,
-  Show,
-} from "solid-js";
+import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import {
   type DraftChange,
   editDraft,
@@ -17,7 +11,11 @@ import {
 } from "./prompt/model.ts";
 import { createCompletion } from "./prompt/Completion.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
-import type { PromptContext, PromptProps } from "../registries/prompt.ts";
+import type {
+  PromptAction,
+  PromptContext,
+  PromptProps,
+} from "../registries/prompt.ts";
 import {
   commandHints,
   ownedCommand,
@@ -25,56 +23,53 @@ import {
 } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
-import { SendIcon, StopIcon } from "./ChromeIcons.tsx";
+import { MoreIcon, SendIcon, SettingsIcon, StopIcon } from "./ChromeIcons.tsx";
 import {
   actionFeedback,
-  canStop,
   composerLabel,
-  composerMode,
-  createFailurePresenter,
-  createPrimaryAction,
-  createSubmissionIntent,
+  type ComposerSource,
+  createComposerAction,
   effectiveSelection,
   type Feedback,
-  promptUnavailable,
-  sendDiagnostic,
-  stopUnavailable,
 } from "@otk/client";
-import { randomID } from "@otk/protocol";
-import ComposerNotice from "./ComposerNotice.tsx";
+import ComposerNotice, { ComposerActionNotice } from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
-import type { PromptChoices } from "../registries/prompt.ts";
 import { ModelLabel, PromptSetting, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
 import PrimaryAction from "./PrimaryAction.tsx";
 import { bindPrimaryAction } from "../state/primary-action.ts";
+import OverflowRow from "./OverflowRow.tsx";
+import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import Menu from "./surface/Menu.tsx";
+import PromptActionButton from "./PromptActionButton.tsx";
 
 const INTERRUPT_WINDOW_MS = 5000;
+const SETTINGS_KEY = "settings";
+const SETTINGS_LABEL = "Next message settings";
+const JOIN_LABEL = "Join the conversation";
+const joinAction = {
+  label: JOIN_LABEL,
+  visible: true,
+  available: true,
+  pending: false,
+} as const;
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
   const session = useSessionPorts();
-  const intent = createSubmissionIntent<PromptProps["value"]>({
-    capture: (value) => value,
-    presenter: createFailurePresenter(),
-    target: () => session.failureTarget?.(),
-    unavailable: () => unavailable(),
-    recovery: () =>
-      "Resolve the stated Send reason, then send the retained draft",
-    // Only the exact refusal still on display ends; a newer outcome stays.
-    retire: (id) => {
-      if (session?.feedback?.current()?.diagnosticID === id) {
-        session.feedback.clear();
-      } else if (feedback()?.diagnosticID === id) setFeedback(undefined);
-    },
-  });
-  const [revision, setRevision] = createSignal(0);
-  onCleanup(intent.subscribe(() => setRevision(revision() + 1)));
-  const pending = () => {
-    revision();
-    return intent.state.pending;
-  };
+  const [joined, setJoined] = createSignal(false);
+  const collapsed = () => !!props.joinRequired && !joined();
+  const editable = () => !collapsed() && !props.suspended;
+  const pending = () => primaryState().sending;
   const [feedback, setFeedback] = createSignal<Feedback>(),
+    [lastRefusal, setRefusal] = createSignal<
+      {
+        reason: string;
+        source: ComposerSource;
+      } | undefined
+    >(undefined, {
+      equals: (a, b) => a?.reason === b?.reason && a?.source === b?.source,
+    }),
     [armed, setArmed] = createSignal(false),
     [caret, setCaret] = createSignal(0);
   let active = true, input!: HTMLTextAreaElement;
@@ -85,6 +80,11 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const ports = useCommandPorts();
   const keyboard = ports.keyboard ??
     createKeyboard(ports.commands, (error) => ctx.fail(error));
+  onSettled(() =>
+    ports.keyboard?.focusHome(() =>
+      !editable() || props.value.editor ? undefined : input
+    )
+  );
   const hints = commandHints({ ...ports, keyboard });
   const submitTitle = () => {
     const newline = hints.keys("prompt.newline");
@@ -116,10 +116,13 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     change,
     caret,
     active: () => active,
+    collapsed,
     selection: () => ({ start: input.selectionStart, end: input.selectionEnd }),
-    focus: () => input.focus(),
+    focus: () => {
+      focusControl(input);
+    },
     focused: () =>
-      !props.suspended && document.activeElement === input &&
+      editable() && document.activeElement === input &&
       !props.value.editor,
     nextSelection: (draft = props.value) =>
       features.find((feature) => feature.selection)?.selection?.(draft) ??
@@ -132,10 +135,21 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       else if (active) setFeedback(actionFeedback(error));
     },
     acceptFiles: async (files) => {
-      for (const feature of features) await feature.drop?.(files);
+      if (editable()) {
+        for (const feature of features) await feature.drop?.(files);
+      }
     },
   };
   const features = useUiRegistries().prompt.create(ctx);
+  const actions = features.flatMap((feature) =>
+    feature.action ? [feature.action()] : []
+  );
+  const toolbarActions = () =>
+    actions.filter((action) => !action.needsInput || !collapsed());
+  const toolbarItems = (): { key: string; action?: PromptAction }[] => [
+    { key: SETTINGS_KEY },
+    ...toolbarActions().map((action) => ({ key: action.key, action })),
+  ];
   // Invoke synchronously so feature-owned preventDefault still precedes native
   // paste, then contain either a synchronous throw or an asynchronous rejection.
   const interact = (action: () => void | Promise<void>) => {
@@ -148,39 +162,29 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const completion = createCompletion(ctx, features);
   // The input owns its focus port. Resume only when the replacing surface has
   // released focus, preserving a reader's newer focus elsewhere in the shell.
-  createEffect(() => props.suspended, (suspended, previous) => {
-    if (previous && !suspended && document.activeElement === document.body) {
+  createEffect(editable, (ready, previous) => {
+    if (
+      previous === false && ready && document.activeElement === document.body
+    ) {
       ctx.focus();
     }
   });
-  const facts = () => ({
+  createEffect(joined, (joined) => {
+    if (joined && editable()) ctx.focus();
+  });
+  const facts = (draft: PromptProps["value"]) => ({
     active,
-    suspended: !!props.suspended,
+    suspended: !editable(),
     connected: props.connected,
     supported:
       features.map((feature) => feature.enabled?.()).find((value) =>
         value !== undefined
       ) ?? ctx.supports("prompt"),
-    content: hasDraftContent(props.value),
-    chips: props.value.chips,
+    stopSupported: ctx.supports("prompt"),
+    content: hasDraftContent(draft),
+    chips: draft.chips,
+    ...props.activity(),
   });
-  const unavailable = () => promptUnavailable(facts());
-  const composerReady = () =>
-    promptUnavailable({ ...facts(), content: true, chips: [] }) === undefined;
-  const submit = async () => {
-    intent.require();
-    session?.feedback?.clear();
-    setFeedback(undefined);
-    // Feature readiness follows this input's references, not every catalog.
-    await ctx.ready();
-    intent.require();
-    const draft = change((current) => current);
-    for (const feature of features) {
-      if (await feature.beforeSubmit?.(draft)) return;
-    }
-    intent.require();
-    return draft;
-  };
   const performSend = async (
     draft: PromptProps["value"],
     activation: string,
@@ -198,10 +202,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
     if (!handled) {
-      await send({ parts, mode: draft.mode, selection }, {
-        ...ports.commands.context(),
-        draftSend,
-      });
+      await props.onSubmit(parts, draft.mode, selection, draftSend);
     }
     for (const feature of features) {
       try {
@@ -211,85 +212,67 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }
     }
   };
-  const submitInput = async (source: "enter" | "button") => {
-    const activation = randomID();
-    sendDiagnostic("activation", { activation, state: source });
-    try {
-      await intent.submit(submit, (draft) => {
-        sendDiagnostic("admitted", { activation });
-        return performSend(draft, activation);
-      });
-    } catch (cause) {
-      sendDiagnostic("refused", { activation });
-      // Every activation route publishes through the same session-owned sink.
-      // Keyboard dispatch must not borrow a navigation/global error handler.
-      ctx.fail(cause);
-    }
-  };
-  const mode = () =>
-    composerMode({
-      ...props.activity(),
-      blank: !hasDraftContent(props.value) && !props.value.chips.length,
-    });
-  const stopReason = () =>
-    stopUnavailable({ ...facts(), supported: ctx.supports("prompt") });
-  const primary = createPrimaryAction({
-    mode,
-    label: () => composerLabel(mode()),
-    unavailable: () => mode() === "stop" ? stopReason() : unavailable(),
-    pending: () => mode() === "send" ? pending() : !!props.activity().stopping,
-    pendingReason: (mode) => mode === "stop" ? "Stopping" : "Sending",
-    run: (_input, mode) =>
-      mode === "stop"
-        ? ports.commands.run("session.interrupt").then(() => {})
-        : submitInput("button"),
+  const primary = createComposerAction({
+    facts,
+    draft: () => props.value,
+    local: (draft) => {
+      for (const feature of features) {
+        const command = feature.localCommand?.(draft);
+        if (command) return command;
+      }
+    },
+    prepare: ctx.ready,
+    send: performSend,
+    stop: props.onStop,
+    refuse: (reason, _source, recheckAs) => {
+      if (active) setRefusal({ reason, source: recheckAs });
+    },
+    begin: () => {
+      setRefusal(undefined);
+      session?.feedback?.clear();
+      setFeedback(undefined);
+    },
+  });
+  const activate = (source: ComposerSource) =>
+    primary.activate(source).catch(ctx.fail);
+  createEffect(() => props.value.input, primary.cancelEnter);
+  createEffect(() => !editable() || !!props.value.editor, (unavailable) => {
+    if (unavailable) primary.cancelEnter();
   });
   const primaryState = bindPrimaryAction(primary);
+  const refusal = () => {
+    const last = lastRefusal();
+    if (!last) return;
+    primaryState(); // The pending reservation is an external owner signal.
+    if (primary.verdict(last.source).reason === last.reason) return last.reason;
+  };
+  createEffect(refusal, (reason, previous) => {
+    props.onActivationNotice?.(reason);
+    if (!reason && previous) setRefusal(undefined);
+  });
   ownedCommand(ports, {
     id: "prompt.focus",
     title: "Focus prompt",
     category: "Prompt",
-    enabled: () => !props.suspended,
+    enabled: editable,
     run: () => ctx.focus(),
-  });
-  const send = ownedCommand(ports, {
-    id: "prompt.send",
-    title: "Send prompt",
-    category: "Prompt",
-    arguments: {
-      type: "object",
-      properties: {
-        parts: { type: "array" },
-        mode: { type: "string", enum: ["normal", "shell"] },
-        selection: { type: "object" },
-      },
-    },
-    enabled: composerReady,
-    run: (
-      context,
-      args: {
-        parts: import("@otk/protocol").PromptPart[];
-        mode: PromptProps["value"]["mode"];
-        selection: PromptChoices;
-      },
-    ) =>
-      props.onSubmit(args.parts, args.mode, args.selection, context.draftSend),
   });
   ownedCommand(ports, {
     id: "prompt.submit",
     title: "Send prompt",
     category: "Prompt",
-    // While the composer can send, Enter stays the Send key: the primary owner
-    // refuses an empty, blocked or pending draft instead of the key editing it.
-    enabled: composerReady,
-    // Input commands can prepare while a captured send is still settling.
-    // The submission intent, not this input route, admits the next effect.
-    run: () => mode() === "send" ? submitInput("enter") : undefined,
+    enabled: () => !collapsed(),
+    // Keymap owns routing, not admission: even a refused Enter is consumed.
+    run: ({ shortcut }) =>
+      shortcut?.toLowerCase() === "enter"
+        ? activate("enter")
+        : activate("shortcut"),
   });
   ownedCommand(ports, {
     id: "prompt.newline",
     title: "Insert newline",
     category: "Prompt",
+    enabled: editable,
     run: () => {
       const { start, end } = ctx.selection();
       change((current) =>
@@ -309,20 +292,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
     title: "Interrupt session",
     category: "Session",
-    enabled: () =>
-      !props.activity().stopping && stopReason() === undefined &&
-      canStop(props.activity()),
+    enabled: () => primary.verdict("interrupt").available,
     run: async (_context, args?: { confirm?: boolean }) => {
-      if (!args?.confirm) return await props.onStop();
+      if (!args?.confirm) return await activate("interrupt");
       if (Date.now() < deadline) {
         deadline = 0;
         clearTimeout(timer);
         setArmed(false);
-        try {
-          await props.onStop();
-        } catch (error) {
-          ctx.fail(error);
-        }
+        await activate("interrupt");
       } else {
         deadline = Date.now() + INTERRUPT_WINDOW_MS;
         setArmed(true);
@@ -344,9 +321,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
   });
   onSettled(() => {
+    const window = input.ownerDocument.defaultView;
+    window?.addEventListener("blur", primary.cancelEnter);
     releases.push(keyboard.onLayerClose("session.escape.reset"));
-    const focused = () =>
-      document.activeElement === input && !props.value.editor;
+    const focused = () => ctx.focused();
     releases.push(
       keyboard.keymap.bind({
         id: "prompt.newline",
@@ -379,6 +357,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     if (!ports.keyboard) releases.push(keyboard.start());
     return () => {
       active = false;
+      primary.cancelEnter();
+      window?.removeEventListener("blur", primary.cancelEnter);
       for (const release of releases) release();
       clearTimeout(timer);
     };
@@ -390,7 +370,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         area: true,
         data: undefined,
       }))}
-      class="otk-prompt"
+      class={["otk-prompt", { "is-collapsed": collapsed() }]}
       aria-label="Composer"
       aria-busy={pending() || features.some((feature) => feature.pending?.())
         ? "true"
@@ -407,109 +387,218 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           ctx.acceptFiles(Array.from(event.dataTransfer?.files || []))
         );
       }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (mode() === "send") void primary.invoke().catch(ctx.fail);
-      }}
+      onSubmit={(event) => event.preventDefault()}
     >
-      <Show when={!session?.feedback && (pending() || feedback())}>
+      <Show when={!props.onActivationNotice && refusal()}>
+        {(reason) => (
+          <ComposerNotice>
+            <ComposerActionNotice text={reason()} />
+          </ComposerNotice>
+        )}
+      </Show>
+      <Show
+        when={!refusal() && !session?.feedback && (pending() || feedback())}
+      >
         <ComposerNotice>
           <OperationFeedback
-            feedback={feedback() ??
-              { kind: "pending", text: "Sending prompt..." }}
+            feedback={feedback() ?? { kind: "pending", text: "Sending" }}
+            focusHome={ctx.focus}
           />
         </ComposerNotice>
       </Show>
       <label for="otk-prompt-input">
         {features.find((feature) => feature.label)?.label?.() ?? "Prompt"}
       </label>
-      {completion.beforeInput?.()}
-      <For each={features}>{(feature) => feature.beforeInput?.()}</For>
-      <ContentTextarea
-        class="otk-prompt-input"
-        ref={(element) => {
-          input = element;
-        }}
-        id="otk-prompt-input"
-        name="prompt"
-        placeholder={features.find((feature) => feature.placeholder)
-          ?.placeholder?.() ??
-          "Ask for a change, @ to add files, / for commands"}
-        value={props.value.input}
-        onPaste={(event) => {
-          for (const feature of features) {
-            if (feature.paste) {
-              interact(() => feature.paste!(event));
-              break;
-            }
-          }
-        }}
-        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-        onClick={(event) => setCaret(event.currentTarget.selectionStart)}
-        onInput={(event) => {
-          setCaret(event.currentTarget.selectionStart);
-          const value = event.currentTarget.value;
-          change((current) => editDraft(current, value));
-        }}
-        onKeyDown={(event) => {
-          if (completion.key?.(event)) return;
-          for (const feature of features) if (feature.key?.(event)) return;
-        }}
-      />
-      <div class="otk-prompt-actions">
-        <div class="otk-prompt-context" aria-label="Next message settings">
-          <Show
-            when={features.some((feature) => feature.settings)}
-            fallback={
-              <>
-                <PromptSetting>
-                  {selectionLabel(
-                    ctx.nextSelection().agent.value,
-                    "Default agent",
-                  )}
-                </PromptSetting>
-                <PromptSetting>
-                  <ModelLabel
-                    provider={ctx.nextSelection().model.providerName}
-                    name={ctx.nextSelection().model.name}
-                  />
-                </PromptSetting>
-              </>
-            }
-          >
-            <For each={features}>{(feature) => feature.settings?.()}</For>
+      <div class="otk-prompt-reveal" inert={collapsed()}>
+        <div
+          class={["otk-prompt-field", {
+            "has-corner": features.some((feature) => feature.corner),
+          }]}
+        >
+          <div class="otk-prompt-body">
+            {completion.beforeInput?.()}
+            <For each={features}>{(feature) => feature.beforeInput?.()}</For>
+            <ContentTextarea
+              class="otk-prompt-input"
+              ref={(element) => {
+                input = element;
+              }}
+              id="otk-prompt-input"
+              name="prompt"
+              placeholder={features.find((feature) => feature.placeholder)
+                ?.placeholder?.() ??
+                "Ask for a change, @ to add files, / for commands"}
+              value={props.value.input}
+              onPaste={(event) => {
+                for (const feature of features) {
+                  if (feature.paste) {
+                    interact(() => feature.paste!(event));
+                    break;
+                  }
+                }
+              }}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+              onClick={(event) => setCaret(event.currentTarget.selectionStart)}
+              onBlur={primary.cancelEnter}
+              onInput={(event) => {
+                primary.input(event.data);
+                setRefusal(undefined);
+                setCaret(event.currentTarget.selectionStart);
+                const value = event.currentTarget.value;
+                change((current) => editDraft(current, value));
+              }}
+              onKeyDown={(event) => {
+                if (completion.key?.(event)) return;
+                for (const feature of features) {
+                  if (feature.key?.(event)) return;
+                }
+              }}
+            />
+          </div>
+          <Show when={features.some((feature) => feature.corner)}>
+            <div class="otk-prompt-corner">
+              <For each={features}>{(feature) => feature.corner?.()}</For>
+            </div>
           </Show>
         </div>
-        <For each={features}>{(feature) => feature.actions?.()}</For>
+      </div>
+      <div class="otk-prompt-actions">
         <Show when={armed()}>
           <span
-            class="otk-control-label"
+            class="otk-control-label otk-prompt-interrupt"
             data-interrupt-confirmation="true"
             role="status"
           >
             {submitTitle()}
           </span>
         </Show>
-        <div class="otk-prompt-send-slot">
+        {(() => {
+          const settings = (form: "bar" | "popover" | "measure") => (
+            <div
+              class={["otk-prompt-context", {
+                "is-in-popover": form === "popover",
+              }]}
+              role={form === "measure" ? undefined : "group"}
+              aria-label={form === "measure" ? undefined : SETTINGS_LABEL}
+            >
+              <Show
+                when={features.some((feature) => feature.settings)}
+                fallback={
+                  <>
+                    <PromptSetting>
+                      {selectionLabel(
+                        ctx.nextSelection().agent.value,
+                        "Default agent",
+                      )}
+                    </PromptSetting>
+                    <PromptSetting>
+                      <ModelLabel
+                        provider={ctx.nextSelection().model.providerName}
+                        name={ctx.nextSelection().model.name}
+                      />
+                    </PromptSetting>
+                  </>
+                }
+              >
+                <For each={features}>
+                  {(feature) =>
+                    form === "measure"
+                      ? feature.settingsFace?.()
+                      : feature.settings?.()}
+                </For>
+              </Show>
+            </div>
+          );
+          return (
+            <OverflowRow
+              items={toolbarItems()}
+              required={[SETTINGS_KEY]}
+              grow={SETTINGS_KEY}
+              singleLine
+              scrollRequired={false}
+              measure={(item) =>
+                item.key === SETTINGS_KEY
+                  ? settings("measure")
+                  : <span class="otk-icon-button" />}
+              compactMeasure={() => <span class="otk-icon-button" />}
+              more={(keys) => {
+                let menu!: PopoverControl;
+                return (
+                  <Menu
+                    label="More actions"
+                    trigger={<MoreIcon />}
+                    triggerClass="otk-icon-button"
+                    control={(control) => menu = control}
+                  >
+                    <For
+                      each={toolbarActions().filter((action) =>
+                        keys().includes(action.key)
+                      )}
+                      keyed={(action) => action.key}
+                    >
+                      {(action) => (
+                        <PromptActionButton
+                          action={action()}
+                          form="menu"
+                          onShown={() => menu.close()}
+                        />
+                      )}
+                    </For>
+                  </Menu>
+                );
+              }}
+            >
+              {(item, compact) =>
+                item().action
+                  ? <PromptActionButton action={item().action!} form="bar" />
+                  : (
+                    <Show when={compact()} fallback={settings("bar")}>
+                      <Popover
+                        label={SETTINGS_LABEL}
+                        title={SETTINGS_LABEL}
+                        trigger={<SettingsIcon />}
+                        triggerClass="otk-icon-button"
+                        size="content"
+                      >
+                        {settings("popover")}
+                      </Popover>
+                    </Show>
+                  )}
+            </OverflowRow>
+          );
+        })()}
+        <div class={["otk-prompt-send-slot", { "is-join": collapsed() }]}>
           <PrimaryAction
-            type={primaryState().mode === "stop" ? "button" : "submit"}
-            state={primaryState()}
-            class="otk-primary otk-send-button"
-            title={primaryState().mode === "stop"
+            state={collapsed() ? joinAction : primaryState()}
+            class={collapsed()
+              ? "otk-primary otk-join-conversation"
+              : "otk-primary otk-send-button"}
+            title={collapsed()
+              ? undefined
+              : primaryState().mode === "stop"
               ? primaryState().label
               : submitTitle()}
-            description={primaryState().mode === "stop"
+            description={!collapsed() && primaryState().mode === "stop"
               ? (props.activity().unstarted
                 ? "Stop and return the message to the composer"
                 : "Stop the response")
               : undefined}
-            onInvoke={() => void primary.invoke().catch(ctx.fail)}
+            onInvoke={() => {
+              if (collapsed()) setJoined(true);
+              else void activate("button");
+            }}
           >
-            {primaryState().mode === "stop" ? <StopIcon /> : <SendIcon />}
+            {collapsed()
+              ? JOIN_LABEL
+              : primaryState().mode === "stop"
+              ? <StopIcon />
+              : <SendIcon />}
           </PrimaryAction>
         </div>
       </div>
-      <For each={features}>{(feature) => feature.overlay?.()}</For>
+      <Show when={!collapsed()}>
+        <For each={features}>{(feature) => feature.overlay?.()}</For>
+      </Show>
     </form>
   );
 }

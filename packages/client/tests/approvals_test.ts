@@ -18,6 +18,7 @@ const deferred = <T>() => {
 const welcome: ServerFrame = {
   requests: fixtureRequests(),
   messages: {
+    bridgepages: 4,
     coolms: 300000,
     recoveryconcurrency: 2,
     recoverypending: 128,
@@ -33,6 +34,8 @@ const welcome: ServerFrame = {
   protocol: 13,
   sidecar: {
     version: "test",
+    build: "test",
+    instance: "test",
     harness: { kind: "test", version: "1", url: "http://127.0.0.1" },
   },
 };

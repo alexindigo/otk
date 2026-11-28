@@ -82,9 +82,9 @@ Deno.test("failure and explicit Retry update the same transcript entry", () => {
 Deno.test("reconnect replacement preserves unresolved sends and reconciles native before acknowledgement", () => {
   const p = createTranscriptProjection();
   p.send({ intent, message: message(), phase: "pending" });
-  p.replace([message("other")]);
+  p.reset([message("other")]);
   assertEquals(p.state.replyIDs.includes(intent.key), true);
-  p.replace([{ ...message(), parts: [] }]);
+  p.reset([{ ...message(), parts: [] }]);
   assertEquals(p.state.replyIDs, [intent.key]);
   assertEquals(p.entry("msg_send")?.send?.phase, "committed");
   assertEquals(p.state.messagesByID.msg_send.parts.length, 1);
@@ -100,7 +100,7 @@ Deno.test("reconnect replacement preserves unresolved sends and reconciles nativ
 
 Deno.test("local sends retain native sequence-space placement and their own causal replies", () => {
   const p = createTranscriptProjection();
-  p.replace([{ ...message("earlier"), sourceOrder: 40 }]);
+  p.reset([{ ...message("earlier"), sourceOrder: 40 }]);
   p.send({ intent, message: message(), phase: "pending" });
   const second = { ...intent, key: "next-send" };
   p.send({ intent: second, message: message("next"), phase: "pending" });
@@ -153,7 +153,7 @@ Deno.test("cooling retains unresolved input but retires committed send bodies wi
   p.apply({ op: "message.upsert", message: message() });
   p.retain(new Set());
   assertEquals(p.state.replyIDs, []);
-  p.replace([message()]);
+  p.reset([message()]);
   assertEquals(p.state.replyIDs, ["msg_send"]);
   assertEquals(p.entry("msg_send")?.send, undefined);
 });

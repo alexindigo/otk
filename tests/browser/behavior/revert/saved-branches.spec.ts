@@ -4,6 +4,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { prompt, scrollTranscript } from "../../pages/transcript.ts";
 import { chips, messages, pendingChips, upload } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 import { contextMenu, dismiss, pick, rightClick } from "../../pages/menus.ts";
 import type { Locator, Page } from "@playwright/test";
 
@@ -44,12 +45,13 @@ async function noClippedRecovery(page: Page) {
     async () => (await visible()).every((control) => control.fits),
     { message: "All visible recovery controls fit whole after layout settles" },
   ).toBe(true);
-  const keep = row.getByRole("button", {
+  const recovery = copyRecoveryActions(page);
+  const keep = recovery.getByRole("button", {
     name: "Keep without a saved copy",
     exact: true,
   });
   if (!await keep.isVisible()) {
-    await row.getByRole("button", { name: "More actions", exact: true })
+    await recovery.getByRole("button", { name: "More actions", exact: true })
       .click();
     await expect(
       page.getByRole("menu").getByRole("menuitem", {
@@ -59,6 +61,14 @@ async function noClippedRecovery(page: Page) {
     ).toBeVisible();
     await page.keyboard.press("Escape");
   }
+}
+
+function copyRecoveryActions(page: Page) {
+  // 2.164: a folded action no longer keeps a live button in the row. The
+  // recovery row is notice content, separate from the failure's Details.
+  return page.locator(
+    ".otk-composer-notice .otk-composer-notice-content > .otk-fitted-actions",
+  );
 }
 
 test.use({
@@ -97,6 +107,10 @@ test("revert.saved-branch-survives-send-and-reload", {
     "data-status",
     "idle",
   );
+  const outcome = "[data-role=assistant] .otk-message-details > " +
+    ".otk-chrome-meta > time[title]";
+  await expect(page.locator(outcome)).toHaveAttribute("datetime", /^\d{4}-/);
+  const completedAt = (await page.locator(outcome).getAttribute("datetime"))!;
   const oldPrompt = (await messages(state, source.id)).find((m) =>
     m.info.role === "user"
   )!;
@@ -172,14 +186,9 @@ test("revert.saved-branch-survives-send-and-reload", {
   await expect(saved).toContainText("The saved earlier reply.");
   // Scoped facts may explicitly explain unknown captured timing. A saved
   // reply footer must still never borrow a live fallback or digest state.
-  // Saved replies borrow the same sole footer clock as live replies.
-  await expect(
-    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
-  )
-    .toHaveAttribute(
-      "datetime",
-      /\d{4}-/,
-    );
+  // WP6 moves the separate agent disclosure into the footer; only the
+  // persistent outcome clock must retain the live reply's captured instant.
+  await expect(saved.locator(outcome)).toHaveAttribute("datetime", completedAt);
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -212,13 +221,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   // metadata window through the saved pane, not the live transcript.
   await saved.locator(".otk-saved-messages").hover();
   await page.mouse.wheel(0, 2_000);
-  await expect(
-    saved.locator("[data-role=assistant] .otk-message-footer time[title]"),
-  )
-    .toHaveAttribute(
-      "datetime",
-      /\d{4}-/,
-    );
+  await expect(saved.locator(outcome)).toHaveAttribute("datetime", completedAt);
   await saved.locator(".otk-reply-start .otk-entity-pill").hover();
   await expect(saved.locator(".otk-entity-facts")).toContainText("This reply");
   await expect(saved).not.toContainText(
@@ -243,7 +246,7 @@ test("revert.saved-branch-survives-send-and-reload", {
   );
   await state.queue(["The earlier prompt ran again."]);
   await input.focus();
-  await expect(page.locator(".otk-send-button")).toBeEnabled();
+  await expect(send(page)).toBeEnabled();
   await input.press("Enter");
   await expect(page.locator(".otk-messages")).toContainText(
     "The earlier prompt ran again.",
@@ -297,6 +300,9 @@ test("revert.restore-retains-both-edited-drafts-across-reload", {
     .click();
   await expect(input).toHaveValue("Current edited draft");
   await page.reload();
+  await expect(page.locator(".otk-messages")).toContainText(
+    "Restored native reply.",
+  );
   await rightClick(page, ".otk-messages");
   await pick(page, "Saved conversation copies (1)");
   const saved = page.getByRole("region", {
@@ -352,7 +358,10 @@ test(
     await expect(alert).toContainText("Reverted from");
     await expect(alert).not.toContainText("Quota-protected branch");
     await expect(alert.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(alert).toContainText(plainReason);
+    await expect(alert).toContainText("Copy not saved");
+    await expect(alert).not.toContainText(plainReason);
+    await expect(alert.getByRole("button", { name: "Retry", exact: true }))
+      .toBeVisible();
     await expect(alert).not.toContainText(/localStorage|\bbytes\b|5 MB/);
     await alert.locator(".otk-record-group-toggle").click();
     await expect(alert.locator(".otk-revert-reason")).toHaveCount(0);
@@ -378,21 +387,38 @@ test(
     await expect(choice.getByRole("status")).toContainText(
       "Sending makes the revert permanent",
     );
-    await expect(alert).toHaveCount(0);
+    await expect(alert).toHaveCount(1);
+    await expect(alert).toContainText("Copy not saved");
     await expect(choice.locator(".otk-failure-target")).toHaveCount(0);
-    await expect(choice.locator(".otk-failure-reason:visible")).toHaveText(
-      plainReason + " The replacement was not sent.",
+    await expect(choice.locator(".otk-failure-summary-reason")).toHaveText(
+      "The replacement was not sent.",
     );
-    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+    await expect(alert.locator(".otk-failure-reason:visible")).toHaveText(
+      plainReason,
+    );
+    const details = choice.getByRole("button", {
+      name: "Details",
+      exact: true,
+    });
+    const instructions = choice.locator(
+      ".otk-failure-detail-body .otk-failure-recovery",
+    );
+    await expect(instructions).toHaveCount(0);
+    await details.click();
+    await expect(instructions).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
-    await failureDetails(choice);
+    await expect(choice).not.toContainText(plainReason);
+    await details.click();
     await choice.getByRole("button", { name: "Save copy", exact: true })
       .click();
-    await expect(choice.locator(".otk-failure-recovery:visible")).toHaveText(
+    await expect(choice.getByRole("button", { name: "Save copy", exact: true }))
+      .toBeEnabled();
+    await details.click();
+    await expect(instructions).toHaveText(
       "Save copy, Send anyway, or Cancel.",
     );
-    await failureDetails(choice);
+    await expect(choice).not.toContainText(plainReason);
     await expect(page.getByRole("button", { name: "Save copy", exact: true }))
       .toBeVisible();
     await expect(page.getByRole("button", { name: "Send anyway", exact: true }))
@@ -451,7 +477,7 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
   const group = page.locator(".otk-revert-group");
-  await expect(group).toContainText(plainReason);
+  await expect(group).toContainText("Copy not saved");
   await expect(group).not.toContainText("replacement was not sent");
   const input = page.locator("textarea[name=prompt]");
   await input.fill("Keep this edited replacement");
@@ -467,8 +493,9 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await expect(page.locator(".otk-composer-notice")).toContainText(
     "Saving the earlier conversation",
   );
-  await expect(page.locator(".otk-composer-notice .otk-failure-reason:visible"))
-    .toHaveText(plainReason + " The conversation was restored.");
+  await expect(
+    page.locator(".otk-composer-notice .otk-failure-summary-reason"),
+  ).toHaveText(plainReason + " The conversation was restored.");
   await expect(page.locator(".otk-composer-notice")).not.toContainText(
     "replacement was not sent",
   );
@@ -547,18 +574,21 @@ test("revert.restore-copy-failure-offers-retry-and-explicit-unsaved-choice", {
   await page.locator('[data-message-command="prompt.revert"]').click();
   await page.getByRole("button", { name: "Confirm revert", exact: true })
     .click();
-  await expect(group).toContainText(plainReason);
+  await expect(group).toContainText("Copy not saved");
   await input.fill("Keep this edited replacement");
   await page.getByRole("button", { name: "Restore conversation", exact: true })
     .click();
+  await expect(group).toHaveCount(0);
+  const restoredNotice = page.locator(".otk-composer-notice");
   await expect(
-    page.getByRole("button", {
+    restoredNotice.getByRole("button", {
       name: "Keep without a saved copy",
       exact: true,
     }),
   ).toBeVisible();
   await page.evaluate(() => Reflect.get(globalThis, "restoreCopyStorage")());
-  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await restoredNotice.getByRole("button", { name: "Retry", exact: true })
+    .click();
   await expect(
     page.getByRole("button", {
       name: "Keep without a saved copy",
@@ -677,6 +707,13 @@ test(
     const input = page.locator("textarea[name=prompt]");
     await input.fill("Keep this narrow draft");
     await page.setViewportSize({ width: 760, height: 1000 });
+    // D74 / WL3: leave the foreground sheet before using conversation actions.
+    await page.getByRole("button", {
+      name: "Back to conversation",
+      exact: true,
+    })
+      .click();
+    await expect(input).toBeEditable();
     const header = group.locator(".otk-record-group-heading");
     const fit = () =>
       header.locator(".otk-fitted-actions button:visible").evaluateAll((
@@ -713,9 +750,26 @@ test(
       "Earlier conversation retained.",
     );
     await expect(input).toHaveValue("Keep this narrow draft");
+    // D74 / WL3: a closed sheet returns the conversation's width. Shrink the
+    // exposed lane further to force the recovery action into the overflow.
+    await state.product("layout.patch", { leftWidth: 360 });
+    await page.setViewportSize({ width: 620, height: 1000 });
+    await expect(page.locator(".otk-project-inbox")).toHaveCSS(
+      "width",
+      "360px",
+    );
+    await expect(
+      copyRecoveryActions(page).getByRole("button", {
+        name: "More actions",
+        exact: true,
+      }),
+    ).toBeVisible();
     await noClippedRecovery(page);
     const notice = page.locator(".otk-composer-notice");
-    await notice.getByRole("button", { name: "More actions", exact: true })
+    await copyRecoveryActions(page).getByRole("button", {
+      name: "More actions",
+      exact: true,
+    })
       .click();
     await page.getByRole("menuitem", {
       name: "Keep without a saved copy",

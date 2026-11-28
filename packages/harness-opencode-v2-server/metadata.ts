@@ -15,7 +15,13 @@ export type NativeSession =
   & Awaited<
     ReturnType<OpenCodeClient["session"]["get"]>
   >
-  & { activity?: number; terminal?: number; terminalError?: unknown };
+  & {
+    activity?: number;
+    terminal?: number;
+    terminalError?: unknown;
+    runID?: string;
+    legacyAcknowledgement?: TerminalEvidence["legacyAcknowledgement"];
+  };
 export type SessionFacts = Pick<
   NativeSession,
   | "id"
@@ -29,6 +35,8 @@ export type SessionFacts = Pick<
   | "activity"
   | "terminal"
   | "terminalError"
+  | "runID"
+  | "legacyAcknowledgement"
   | "subpath"
 >;
 export function millis(value: unknown): number {
@@ -72,6 +80,8 @@ export function terminalFacts(
   idle: unknown,
   outcome: unknown,
   shell?: number,
+  runID?: string,
+  proof?: TerminalEvidence["legacyAcknowledgement"],
 ): TerminalEvidence {
   const end = terminalEvidence(idle, outcome);
   return latestTerminal(
@@ -80,6 +90,8 @@ export function terminalFacts(
         terminal: end,
         outcome: outcome as TerminalOutcome,
         terminalOrigin: "historical",
+        ...(runID ? { runID } : {}),
+        ...(proof !== undefined ? { legacyAcknowledgement: proof } : {}),
       }
       : undefined,
     shell ? { terminal: shell, terminalOrigin: "historical" } : undefined,
@@ -88,7 +100,15 @@ export function terminalFacts(
 /** Scalar acquisition cannot certify activity or erase live attention. */
 export function metadata(raw: SessionFacts): SessionMetadata {
   const mapped = session(raw);
-  const terminal = terminalFacts(raw.time.idle, raw.outcome, raw.terminal);
+  // A top-level user shell can contribute its own completion history. A
+  // helper terminal is the model execution covered by a parent's receipt.
+  const terminal = terminalFacts(
+    raw.time.idle,
+    raw.outcome,
+    raw.parentID ? undefined : raw.terminal,
+    raw.parentID ? raw.runID : undefined,
+    raw.parentID ? raw.legacyAcknowledgement : undefined,
+  );
   const failure =
     terminal.outcome === "failed" && terminal.terminal === millis(raw.time.idle)
       ? terminalFailure(

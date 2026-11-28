@@ -47,6 +47,18 @@ Deno.test("project branches require the same proven repository, not only a match
   };
   assertEquals(projectTree([root, child]).length, 2);
 });
+Deno.test("D84 uses the published group, not a clone's native repository ID", () => {
+  const root = row("/repo"), clone = row("/clone", "/repo");
+  root.topology!.group = clone.topology!.group = "github.com/example/repo";
+  clone.topology!.repoID = "different-native-id";
+  assertEquals(projectTree([root, clone]).map((p) => p.children.length), [1]);
+  clone.topology!.group = "github.com/example/other";
+  clone.topology!.repoID = root.topology!.repoID;
+  assertEquals(projectTree([root, clone]).map((p) => p.children.length), [
+    0,
+    0,
+  ]);
+});
 Deno.test("virtual tree paths stop at the last sibling, retaining ancestor continuations", () => {
   assertEquals(treePaths([0, 1, 2, 2, 1, 0], (value) => value), [
     [],

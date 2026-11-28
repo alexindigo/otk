@@ -28,7 +28,7 @@ test(
     // D70: the legacy helper-only task in the other checkout cannot take
     // either helper out of the human root's task.
     await expect(inventory).toHaveAccessibleName(
-      "Subagents: 1 running, 3 need you",
+      "Subagents: 3 need you, 1 running",
     );
     // D67 ancestry is independent of D66's in-task helper inventory.
     for (let n = 0; n < 4; n++) {
@@ -102,20 +102,22 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
   await expect(page).toHaveURL(new RegExp(`${nested}$`));
   await activity(state, helper, "release");
   await activity(state, nested, "release");
-  // D66: completion without delivery retains helpers, even after human seen.
+  // D76: the explicitly opened nested finish stays without an unseen lamp.
   await visibleOnScreen(crumb(root));
   await visibleOnScreen(crumb(helper));
   await visibleOnScreen(crumb(nested));
-  await crumb(root).click();
-  await inventory.click();
-  await visibleOnScreen(agent(helper));
-  await visibleOnScreen(agent(nested));
-  await viewByUrl(state, page, helper);
-  await expect(crumb(helper).locator(".otk-status-light")).toHaveAttribute(
+  await expect(crumb(nested).locator(".otk-status-light")).toHaveAttribute(
     "data-state",
     "none",
   );
   await crumb(root).click();
+  await expect(inventory).toHaveAccessibleName(
+    "Subagents: 1 finished, 1 opened",
+  );
+  await inventory.click();
+  await visibleOnScreen(agent(helper));
+  const opened = page.getByRole("group", { name: "Opened 1" });
+  await expect(opened.locator(`[data-subagent="${nested}"]`)).toBeVisible();
   for (const sessionID of [helper, nested]) {
     await state.controller.call("scenario", {
       lease: state.lease.lease,
@@ -126,6 +128,12 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
   }
   await expect(crumb(helper)).toHaveCount(0);
   await expect(crumb(nested)).toHaveCount(0);
+  // D58/D72 still retire the unopened delivered helper. D76 retains only nested.
+  await expect(inventory).toHaveAccessibleName("Subagents: 1 opened");
+  await expect(agent(helper)).toHaveCount(0);
+  await visibleOnScreen(agent(nested));
+  await page.getByRole("button", { name: "Clear finished", exact: true })
+    .click();
   await expect(inventory).toHaveCount(0);
   await page.reload();
   await visibleOnScreen(crumb(root));
@@ -143,6 +151,7 @@ test("sessions.working-inventory-ends-but-undelivered-trail-retains-helpers", {
     "none",
   );
   await crumb(root).click();
+  await expect(inventory).toHaveCount(0);
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "release",

@@ -1,119 +1,50 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type FailureValue, failureValue } from "./failure-features.ts";
+import { failureValue } from "./failure-features.ts";
+import {
+  createInlineRename,
+  type InlineRename,
+  type InlineRenameState,
+} from "./inline-rename.ts";
 import type { Selection } from "./session.ts";
-import { createState, type StateFactory } from "./state.ts";
+import type { StateFactory } from "./state.ts";
 
 export type RenameOrigin = "tab" | "chip" | "row";
 export interface RenameTarget extends Selection {
   title: string;
 }
-export interface SessionRenameState {
-  input?: string;
-  editing?: RenameTarget & { origin: RenameOrigin };
-  pending: boolean;
-  error?: FailureValue;
-}
-export interface SessionRename {
-  edit(title: string): void;
-  snapshot(): unknown;
-  restore(value: unknown): void;
-  readonly state: SessionRenameState;
+type ActiveRename = RenameTarget & { origin: RenameOrigin };
+export type SessionRenameState = InlineRenameState<ActiveRename>;
+export interface SessionRename
+  extends Omit<InlineRename<ActiveRename>, "start" | "matches"> {
   start(target: RenameTarget, origin: RenameOrigin): void;
-  cancel(): void;
-  commit(title: string): Promise<void>;
   matches(target: Selection, origin: RenameOrigin): boolean;
-  observe(): void;
 }
 
-/** Editing and request identity live here, not in tabs, rows or their inputs. */
-export function createSessionRename(options: {
+export function createSessionRename(o: {
   rename(target: Selection, title: string): Promise<unknown>;
   factory?: StateFactory;
   title?(target: Selection): string | undefined;
 }): SessionRename {
-  const store = (options.factory ?? createState)<SessionRenameState>({
-    pending: false,
-  });
-  let editing: SessionRenameState["editing"];
-  let generation = 0;
-  let pending = false;
-  let waitingTitle: string | undefined;
-  const cancel = () => {
-    generation++;
-    editing = undefined;
-    pending = false;
-    waitingTitle = undefined;
-    store.update((state) => {
-      state.editing = undefined;
-      state.error = undefined;
-      state.pending = false;
-    });
-  };
-  return {
-    state: store.state,
-    edit: (title) =>
-      store.update((state) => {
-        state.input = title;
+  const owner = createInlineRename<ActiveRename>({
+    same: (a, b) =>
+      a.origin === b.origin && a.sidecarId === b.sidecarId &&
+      a.sessionID === b.sessionID,
+    rename: o.rename,
+    current: o.title,
+    factory: o.factory,
+    failure: (error, target) =>
+      failureValue(error, {
+        action: "session.rename",
+        target: { ...target, label: target.title },
       }),
-    snapshot: () => ({ editing, input: store.state.input }),
-    restore(value) {
-      const saved = value as Pick<SessionRenameState, "editing" | "input">;
-      editing = saved.editing;
-      store.update((state) => {
-        state.editing = editing;
-        state.input = saved.input;
-      });
+  });
+  return {
+    ...owner,
+    get editing() {
+      return owner.editing;
     },
-    start(target, origin) {
-      cancel();
-      editing = { ...target, origin };
-      store.update((state) => {
-        state.editing = editing;
-        state.input = target.title;
-      });
-    },
-    cancel,
-    observe() {
-      if (
-        editing && waitingTitle !== undefined &&
-        options.title?.(editing) === waitingTitle
-      ) cancel();
-    },
-    matches(target, origin) {
-      const active = store.state.editing;
-      return !!active && active.origin === origin &&
-        active.sidecarId === target.sidecarId &&
-        active.sessionID === target.sessionID;
-    },
-    async commit(input) {
-      if (!editing || pending) return;
-      const title = input.trim();
-      if (!title || title === editing.title) {
-        cancel();
-        return;
-      }
-      const target = editing, current = generation;
-      pending = true;
-      store.update((state) => {
-        state.pending = true;
-        state.error = undefined;
-      });
-      try {
-        await options.rename(target, title);
-        if (generation !== current) return;
-        if (!options.title || options.title(target) === title) cancel();
-        else waitingTitle = title;
-      } catch (error) {
-        if (generation !== current) return;
-        pending = false;
-        store.update((state) => {
-          state.pending = false;
-          state.error = failureValue(error, {
-            action: "session.rename",
-            target: { ...target, label: target.title },
-          });
-        });
-      }
-    },
+    start: (target, origin) => owner.start({ ...target, origin }),
+    matches: (target, origin) =>
+      owner.matches({ ...target, title: "", origin }),
   };
 }

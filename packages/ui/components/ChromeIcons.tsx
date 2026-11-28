@@ -11,6 +11,24 @@ function Icon(props: { children: Element; class?: string }): Element {
     </SvgIcon>
   );
 }
+export const GapIcon = () => (
+  <Icon>
+    <g fill="currentColor" stroke="none">
+      <circle cx="12" cy="5" r="1.85" />
+      <circle cx="12" cy="12" r="1.85" />
+      <circle cx="12" cy="19" r="1.85" />
+    </g>
+  </Icon>
+);
+export const MoreIcon = () => (
+  <Icon>
+    <g fill="currentColor" stroke="none">
+      <circle cx="5" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="19" cy="12" r="1.6" />
+    </g>
+  </Icon>
+);
 export const ArrowLeftIcon = () => (
   <Icon>
     <path d="m11 18-6-6 6-6M19 12H5" />
@@ -44,6 +62,16 @@ export const TerminalIcon = () => (
     <path d="m7 9 3 3-3 3M13 15h4" />
   </Icon>
 );
+export const RobotIcon = () => (
+  <Icon>
+    <rect x="4" y="7" width="16" height="13" rx="3" />
+    <path d="M12 7V3m-2 0h4M2 12v3m20-3v3M9 16h6" />
+    <g fill="currentColor" stroke="none">
+      <circle cx="9" cy="12" r="1.25" />
+      <circle cx="15" cy="12" r="1.25" />
+    </g>
+  </Icon>
+);
 export const ExpandIcon = () => (
   <Icon>
     <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6" />
@@ -73,9 +101,9 @@ export const KeyboardIcon = () => (
     <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </Icon>
 );
-export const ChevronIcon = (props: { class?: string } = {}) => (
+export const ChevronIcon = (props: { class?: string; left?: boolean } = {}) => (
   <Icon class={props.class}>
-    <path d="m9 18 6-6-6-6" />
+    <path d={props.left ? "m15 6-6 6 6 6" : "m9 18 6-6-6-6"} />
   </Icon>
 );
 export const ChevronDownIcon = (props: { class?: string } = {}) => (
@@ -100,6 +128,12 @@ export const ActivityIcon = () => (
   <Icon>
     <circle cx="12" cy="12" r="8" />
     <path d="M12 7v5l3 2" />
+  </Icon>
+);
+export const WorkLogIcon = () => (
+  <Icon>
+    <rect x="5" y="3" width="14" height="18" rx="2" />
+    <path d="M9 8h6m-6 4h6m-6 4h6" />
   </Icon>
 );
 export const TimelineIcon = () => (
@@ -135,9 +169,26 @@ export const AttachIcon = () => (
     <path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6L15 6.5" />
   </Icon>
 );
+export const CheckIcon = () => (
+  <Icon>
+    <path d="m5 12 4 4L19 6" />
+  </Icon>
+);
+export const AlertIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8v4m0 4h.01" />
+  </Icon>
+);
 export const SendIcon = () => (
   <Icon>
     <path d="m6 11 6-6 6 6M12 19V5" />
+  </Icon>
+);
+export const CheckAllIcon = () => (
+  <Icon>
+    <path d="M18 6 7 17l-5-5" />
+    <path d="m22 10-7.5 7.5L13 16" />
   </Icon>
 );
 export const StopIcon = () => (

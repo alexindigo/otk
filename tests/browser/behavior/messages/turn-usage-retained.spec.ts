@@ -27,9 +27,15 @@ test("messages.completed-turn-usage-retained-while-next-turn-runs", {
     "data-status",
     "idle",
   );
-  const first = page.locator("[data-role=assistant]").first().locator(
-    ".otk-turn-usage, footer .otk-control-label",
-  ).first();
+  // 2.105 WP6 adds the agent label to the footer; only the usage control
+  // owns the call count (including its read-only group presentation).
+  const usageName = /^Turn usage:/;
+  const footer = page.locator("[data-role=assistant]").first().locator(
+    ".otk-message-footer",
+  );
+  const first = footer.getByRole("button", { name: usageName }).or(
+    footer.getByRole("group", { name: usageName }),
+  );
   await expect(first).toContainText("1 model call");
   const baseline = capture.received.length;
   // Record every footer text the completed turn shows from now on.

@@ -8,6 +8,8 @@ export interface ViewLease {
   pageSettled?: boolean;
   crumbs: string[];
   rows: string[];
+  /** Identities referenced by mounted transcript links, not sidebar rows. */
+  references?: string[];
   /** At most two non-presentational identities for browser history labels. */
   historyNeighbors?: string[];
   query?: string;

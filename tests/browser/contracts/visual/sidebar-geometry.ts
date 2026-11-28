@@ -63,12 +63,12 @@ export async function sidebarGeometry(page: Page, compact = false) {
       }
       return true;
     };
-    return Array.from(root.querySelectorAll(".otk-sidebar-row")).filter(visible)
-      .map((row) => {
-        const heading = row.closest(".otk-tree-heading") ??
-          row.closest(".otk-project-row")!;
+    return Array.from(root.querySelectorAll(".otk-tree-frame")).filter(visible)
+      .map((frame) => {
+        const row = frame.querySelector(".otk-sidebar-row")!;
+        const heading = frame.closest(".otk-tree-heading")!;
         const name = row.querySelector(
-          ".otk-project-name, .otk-section-row-label .otk-control-label",
+          ".otk-sidebar-title-text, .otk-section-row-label .otk-control-label",
         );
         const label = row.querySelector(".otk-sidebar-label")!;
         const style = getComputedStyle(label);
@@ -92,11 +92,11 @@ export async function sidebarGeometry(page: Page, compact = false) {
         const required = name?.closest(".otk-section-row-label")
           ? fullText
           : Math.min(sixCharacters, fullText);
-        const lamp = row.querySelector(
+        const lamp = frame.querySelector(
           ".otk-lamp-body",
         );
         const svg = heading.querySelector(
-          ":scope > .otk-tree-own .otk-disclosure-icon svg",
+          ":scope > .otk-tree-trigger-slot .otk-disclosure-icon svg",
         );
         const selection =
           heading.querySelector(".otk-sidebar-selection.is-selected") ??
@@ -146,15 +146,19 @@ export async function sidebarGeometry(page: Page, compact = false) {
         return {
           text: row.textContent,
           heading: box(heading),
+          depth: Number(
+            heading.closest("[data-tree-node]")?.getAttribute("data-depth") ??
+              0,
+          ),
           painted,
           label: box(label),
-          lampSlot: box(row.querySelector(".otk-sidebar-lamp")!),
+          lampSlot: box(frame.querySelector(".otk-tree-node-lane")!),
           iconSlot: box(row.querySelector(".otk-sidebar-icon")!),
           labelText: box(name ?? label),
           required,
           whiteSpace: style.whiteSpace,
           highlight,
-          availability: availability
+          availability: availability && visible(availability)
             ? {
               left: box(availability).x,
               right: box(availability).right,
@@ -163,103 +167,176 @@ export async function sidebarGeometry(page: Page, compact = false) {
             }
             : null,
           meta: box(row.querySelector(".otk-sidebar-meta")!),
-          hasMeta: !!row.querySelector(".otk-sidebar-meta")?.children.length,
+          hasMeta: !!row.querySelector(
+            ".otk-sidebar-meta .otk-meta-item, .otk-sidebar-control",
+          ),
+          facts: Array.from(
+            row.querySelectorAll(".otk-sidebar-meta .otk-meta-item"),
+          )
+            .filter(visible).map((item) => {
+              const clip = item.parentElement!;
+              return {
+                text: item.textContent,
+                clipping: item.scrollWidth > item.clientWidth + .5 ||
+                  box(item).x < box(clip).x - .5 ||
+                  box(item).right > box(clip).right + .5,
+              };
+            }),
           lamp: lamp && visible(lamp) ? box(lamp) : null,
         };
       });
   });
-  expect(rows.length).toBeGreaterThan(0);
+  // A single Playwright step per snapshot keeps trace recording bounded
+  // while still checking every row, pair, and tolerance in every state.
+  const violations: { contract: string; actual: unknown }[] = [];
+  const check = (pass: boolean, contract: string, actual: unknown) => {
+    if (!pass) violations.push({ contract, actual });
+  };
+  check(rows.length > 0, "rows are present", rows.length);
   const edges = new Map<number, number[]>();
+  const labelEdges = new Map<string, number>();
   const disclosures = new Map<number, number>();
   let bottom = -Infinity;
   for (const row of rows) {
-    expect.soft(row.heading.y, "adjacent real rows do not overlap vertically")
-      .toBeGreaterThanOrEqual(bottom - .5);
+    check(
+      row.heading.y >= bottom - .5,
+      "adjacent real rows do not overlap vertically",
+      { row: row.text, y: row.heading.y, bottom },
+    );
     bottom = row.heading.bottom;
     if (!compact) {
-      const current = [row.lampSlot.x, row.iconSlot.x, row.label.x],
-        previous = edges.get(row.heading.x);
+      const current = [row.lampSlot.x, row.iconSlot.x],
+        previous = edges.get(row.depth);
       if (previous) {
         current.forEach((edge, i) =>
-          expect.soft(
-            Math.abs(edge - previous[i]),
-            "same-depth lamp/artwork/label axes across every row kind",
-          ).toBeLessThanOrEqual(.5)
+          check(
+            Math.abs(edge - previous[i]) <= .5,
+            "same-depth lamp and artwork axes across every row kind",
+            { row: row.text, edge, previous: previous[i] },
+          )
         );
-      } else edges.set(row.heading.x, current);
-      expect.soft(row.labelText.w, `minimum readable label: ${row.text}`)
-        .toBeGreaterThanOrEqual(row.required - .5);
-      expect.soft(row.whiteSpace, `single-line label: ${row.text}`).toBe(
-        "nowrap",
+      } else edges.set(row.depth, current);
+      const labelKey = `${row.depth}`;
+      const labelEdge = labelEdges.get(labelKey);
+      if (labelEdge === undefined) labelEdges.set(labelKey, row.label.x);
+      else {
+        check(
+          Math.abs(row.label.x - labelEdge) <= .5,
+          "same-depth label axis regardless of artwork",
+          { row: row.text, x: row.label.x, labelEdge },
+        );
+      }
+      check(
+        Math.abs(row.label.x - row.iconSlot.right) <= .5,
+        "label starts after the artwork track",
+        { row: row.text, x: row.label.x, artworkRight: row.iconSlot.right },
+      );
+      check(
+        row.labelText.w >= row.required - .5,
+        `minimum readable label: ${row.text}`,
+        { width: row.labelText.w, required: row.required },
+      );
+      check(
+        row.whiteSpace === "nowrap",
+        `single-line label: ${row.text}`,
+        row.whiteSpace,
       );
       if (row.availability) {
-        expect.soft(
-          row.availability.left,
+        check(
+          row.availability.left >= row.availability.clipLeft - .5,
           "availability starts inside its visible slot",
-        ).toBeGreaterThanOrEqual(row.availability.clipLeft - .5);
-        expect.soft(row.availability.right, "availability never truncates")
-          .toBeLessThanOrEqual(row.availability.clipRight + .5);
+          row.availability,
+        );
+        check(
+          row.availability.right <= row.availability.clipRight + .5,
+          "availability never truncates",
+          row.availability,
+        );
+      }
+      // 2.109: metadata may yield only as whole facts; all visible facts must
+      // fit their owner's clipping box, not merely fit their own DOM box.
+      for (const fact of row.facts) {
+        check(
+          !fact.clipping,
+          `metadata never truncates: ${fact.text}`,
+          row.text,
+        );
       }
       if (!row.hasMeta) {
-        expect.soft(row.meta.w, "absent meta consumes no track")
-          .toBeLessThanOrEqual(.5);
+        check(row.meta.w <= .5, "absent meta consumes no track", {
+          row: row.text,
+          width: row.meta.w,
+        });
       }
     }
     for (let i = 0; i < row.painted.length; i++) {
       const item = row.painted[i];
-      expect.soft(item.x, "paint stays inside its heading's leading edge")
-        .toBeGreaterThanOrEqual(row.heading.x - .5);
-      expect.soft(item.right, "paint stays inside its heading's trailing edge")
-        .toBeLessThanOrEqual(row.heading.right + .5);
+      check(
+        item.x >= row.heading.x - .5,
+        "paint stays inside its heading's leading edge",
+        { item, heading: row.heading },
+      );
+      check(
+        item.right <= row.heading.right + .5,
+        "paint stays inside its heading's trailing edge",
+        { item, heading: row.heading },
+      );
       for (let j = i + 1; j < row.painted.length; j++) {
         const a = row.painted[i], b = row.painted[j];
         const overlapX = Math.min(a.right, b.right) - Math.max(a.x, b.x),
           overlapY = Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y);
-        expect.soft(
-          Math.min(overlapX, overlapY),
+        check(
+          Math.min(overlapX, overlapY) <= .5,
           `paint does not intersect: ${a.kind}/${b.kind}: ${row.text}`,
-        ).toBeLessThanOrEqual(.5);
+          { overlapX, overlapY },
+        );
       }
     }
     const mark = row.painted.find((p) => p.kind === "selection");
     if (row.highlight) {
-      expect.soft(
+      check(
         !!mark,
         "every selected row kind paints its mark, in column and rail",
-      ).toBe(true);
+        row.text,
+      );
     }
     const disclosure = row.painted.find((p) => p.kind === "disclosure");
     if (!compact && disclosure) {
-      const previous = disclosures.get(row.heading.x);
+      const previous = disclosures.get(row.depth);
       if (previous !== undefined) {
-        expect.soft(
-          Math.abs(disclosure.x - previous),
+        check(
+          Math.abs(disclosure.x - previous) <= .5,
           "repository and section disclosures share the same painted axis",
-        ).toBeLessThanOrEqual(.5);
-      } else disclosures.set(row.heading.x, disclosure.x);
+          { row: row.text, x: disclosure.x, previous },
+        );
+      } else disclosures.set(row.depth, disclosure.x);
     }
     if (disclosure && row.highlight) {
-      expect.soft(
-        disclosure.right,
+      check(
+        disclosure.right <= row.highlight.x - .5,
         "painted disclosure stays outside the selection highlight",
-      ).toBeLessThanOrEqual(row.highlight.x - .5);
+        { disclosure, highlight: row.highlight },
+      );
     }
     if (mark && row.highlight) {
-      expect.soft(
+      check(
         Math.min(
           Math.abs(mark.right - row.highlight.x),
           Math.abs(mark.x - row.highlight.x),
-        ),
+        ) > .5,
         "selection mark is outside the highlight, not on its edge",
-      ).toBeGreaterThan(.5);
+        { mark, highlight: row.highlight },
+      );
     }
   }
   if (compact) {
     const lamps = rows.flatMap((r) => r.lamp ? [r.lamp.x] : []);
-    expect.soft(
-      Math.max(...lamps) - Math.min(...lamps),
+    check(
+      Math.max(...lamps) - Math.min(...lamps) <= .5,
       "every compact lamp shares its axis, including Archived",
-    ).toBeLessThanOrEqual(.5);
+      lamps,
+    );
   }
+  expect.soft(violations, "sidebar row geometry").toEqual([]);
   return rows;
 }

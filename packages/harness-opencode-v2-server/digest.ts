@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { projectPresentation } from "./project-presentation.ts";
+import {
+  nativeProjectMetadata,
+  projectPresentation,
+} from "./project-presentation.ts";
 import { CheckoutRepositories } from "@otk/harness";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -198,9 +201,9 @@ export class OpencodeV2DigestSink implements DigestSink {
       () => this.#wait(new Promise<void>((resolve) => setTimeout(resolve, 0))),
     );
     this.readers = {
-      "supervision.delivered": ({ ids }, signal) => {
+      "supervision.delivered": ({ ids, targets }, signal) => {
         signal.throwIfAborted();
-        return Promise.resolve(this.delivered(ids));
+        return Promise.resolve(this.delivered(ids, targets));
       },
       ...this.#preparedReaders({
         ...catalogReaders(() => {
@@ -322,13 +325,16 @@ export class OpencodeV2DigestSink implements DigestSink {
       },
     };
   }
-  delivered(keys: readonly string[]): import("@otk/harness").DeliveryScalar[] {
+  delivered(
+    keys: readonly string[],
+    targets?: Record<string, { parentID: string; runID: string }>,
+  ): import("@otk/harness").DeliveryScalar[] {
     return new DeliveryIndex(
       this.storage.sql,
       "opcv2_delivery",
       (run) => this.storage.transaction(run),
       this.policy.publishrows,
-    ).facts(keys);
+    ).facts(keys, targets);
   }
   connection(value: number): void {
     if (value < this.#connection) return;
@@ -649,7 +655,19 @@ export class OpencodeV2DigestSink implements DigestSink {
           : undefined;
         if (!owner) return row;
         const { id, name, color } = projectPresentation(owner);
-        return { ...row, presentation: { id, name, color } };
+        const native = nativeProjectMetadata({ ...owner });
+        return {
+          ...row,
+          presentation: { id, name, color },
+          ...(native
+            ? {
+              nativeProject: {
+                updated: native.updated,
+                topology: native.topology,
+              },
+            }
+            : {}),
+        };
       });
       for (const row of rows) this.#projectDirectories.add(row.directory);
       projects.push(...rows);
@@ -1036,7 +1054,11 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
           this.#source =
             `sql:${native.identity}:${client.service.pid}:connection:${this.#connection}`;
         } else await this.#ensure(input.sessionID, signal, false);
-        return this.transcript.head(input.sessionID, input.cutoff);
+        return this.transcript.head(
+          input.sessionID,
+          input.cutoff,
+          input.messageID,
+        );
       },
       "opcv2.message.prefetch": async (input, signal) => {
         await this.#ensure(input.sessionID, signal);
@@ -1201,20 +1223,21 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
     const rows: SessionMetadata[] = [];
     for (const id of new Set(keys)) {
       const raw = await this.#ensure(id, signal), entry = metadata(raw);
-      const previous = this.storage.read(id);
-      if (!previous) {
-        this.storage.transaction(() =>
-          this.storage.write(entry, {
-            summary: { state: "digesting", revision: 0 },
-            turns: { upsert: {}, remove: [] },
-            deleted: null,
-          })
-        );
-      }
+      this.#seed(entry);
       rows.push(entry);
       await this.#yield(signal);
     }
     return rows;
+  }
+  #seed(entry: SessionMetadata): void {
+    if (this.storage.read(entry.id)) return;
+    this.storage.transaction(() =>
+      this.storage.write(entry, {
+        summary: { state: "digesting", revision: 0 },
+        turns: { upsert: {}, remove: [] },
+        deleted: null,
+      })
+    );
   }
   // Transcript work never enumerates the session population. V1 contributes the
   // keyed index/list provider; these compatibility ports leave it unacquired.
@@ -1849,43 +1872,27 @@ export class OpencodeV2TranscriptDigestSink implements DigestSink {
   }
   async transcriptMetadata(
     id: string,
-    _turns: readonly string[],
+    turns: readonly string[],
     signal: AbortSignal,
     cutoff?: string,
     boundary?: import("@otk/harness").DigestBoundary,
   ): Promise<TranscriptMetadata> {
-    const raw = await this.#ensure(id, signal);
-    if (boundary) {
-      if (!this.storage.read(id)) await this.hydrate([id], signal);
-      const facts = await this.transcript.facts({
-          sessionID: id,
-          messages: [boundary.messageID],
-          cutoff,
-        }, signal),
-        target = facts.contexts[boundary.messageID]?.order;
-      while (
-        this.pending(id) &&
-        (this.#scan(id)?.after_seq == null || target === undefined ||
-          this.#scan(id)!.after_seq! > target)
-      ) {
-        await this.step({
-          sessionID: id,
-          provider: this.identity,
-          updated: millis(raw.time.updated),
-          revision: 0,
-        }, {
-          rows: this.policy.batch,
-          until: performance.now() + this.policy.slicems,
-        }, signal);
-        await this.#yield(signal);
-      }
-      this.readiness.demanded?.(metadata(raw));
-    }
-    return (await this.transcript.facts({
+    const raw = await this.#ensure(id, signal, false);
+    // Native facts certify the requested page. The rebuildable usage scan's
+    // publication credits and lifetime belong to the digest scheduler, not
+    // to the read that owns the transcript cursor.
+    const { metadata: result } = await this.transcript.facts({
       sessionID: id,
-      messages: [..._turns],
+      messages: boundary ? [...turns, boundary.messageID] : [...turns],
       cutoff,
-    }, signal)).metadata;
+    }, signal);
+    signal.throwIfAborted();
+    if (boundary) {
+      const entry = metadata(raw);
+      this.#seed(entry);
+      this.readiness.demanded?.(entry);
+    }
+    return result;
   }
   async #helperStep(
     job: DigestJob,

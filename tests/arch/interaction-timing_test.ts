@@ -140,5 +140,11 @@ Deno.test("hover intent has one theme policy and reader; persistent message acti
     0,
     "D21 message actions are always visible",
   );
-  assertEquals(actions.calls("setTimeout").length, 0);
+  assertEquals(
+    actions.calls("setTimeout").map((call) =>
+      actions.text.slice(call.start!, call.end!)
+    ),
+    ["setTimeout(clear, COPY_FEEDBACK_MS)"],
+    "The only timer clears successful Copy feedback; it cannot gate controls",
+  );
 });

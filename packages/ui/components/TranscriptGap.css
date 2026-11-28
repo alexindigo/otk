@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-transcript-gap {
+  margin-block: var(--space-3);
+  block-size: var(--control-size);
+}
+
+.otk-transcript-gap-rule {
+  flex: 1;
+  min-inline-size: var(--space-6);
+  border-block-start: 1px dotted var(--otk-fg-3);
+}
+
+.otk-transcript-gap-row {
+  --tree-height: var(--control-size);
+}

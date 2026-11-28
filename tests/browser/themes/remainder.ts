@@ -290,12 +290,12 @@ export async function remainder(
               )!.getBoundingClientRect(),
               track = el.closest(".otk-sidebar-row-feedback")!
                 .getBoundingClientRect(),
-              grid = el.closest(".otk-sidebar-row-grid")!
+              frame = el.closest(".otk-sidebar-row")!
                 .getBoundingClientRect();
             // SidebarRow owns one full-width feedback track below its action.
             return track.top >= action.bottom && track.bottom <= row.bottom &&
-              Math.abs(track.left - grid.left) <= .5 &&
-              Math.abs(track.right - grid.right) <= .5 &&
+              Math.abs(track.left - frame.left) <= .5 &&
+              Math.abs(track.right - frame.right) <= .5 &&
               r.top >= track.top && r.bottom <= track.bottom &&
               r.left >= track.left && r.right <= track.right;
           },
@@ -318,13 +318,21 @@ export async function remainder(
     const replyMessage = '[data-message="reading"]';
     await revealAcquired(page, replyMessage);
     await page.locator(
-      "[data-role=assistant] .otk-reply-agent .otk-entity-pill",
+      "[data-role=assistant] [data-reply-source] .otk-entity-pill",
     ).first()
       .scrollIntoViewIfNeeded();
     await revealAcquired(page, replyMessage + " .otk-message-footer");
     await page.mouse.move(1, 1);
-    const reply = page.locator("[data-role=assistant]").first();
-    await expect(reply.locator(".otk-message-actions")).toHaveCSS(
+    const reply = page.locator(replyMessage);
+    // Code blocks now have their own actions; hover continuity is a contract
+    // of the reply's footer, not of nested block controls.
+    const footer = reply.locator(".otk-message-footer").filter({
+      has: page.locator('[data-message-command="reply.copy"]'),
+    });
+    const actions = footer.locator(".otk-message-actions");
+    // The nested source-pill clock can yield; the outcome clock owns this row.
+    const outcome = ".otk-message-details > .otk-chrome-meta > time[title]";
+    await expect(actions).toHaveCSS(
       "opacity",
       "1",
     );
@@ -332,20 +340,21 @@ export async function remainder(
     // owning flow so that exact equality measures layout, not reader position.
     const replyBounds = () => ownedBounds(reply, ".otk-message-flow");
     const fixed = await replyBounds();
-    await reply.locator(".otk-message-footer").hover();
+    await footer.hover();
+    await expect(footer.locator(outcome)).toBeVisible();
     expect(
-      await reply.locator(".otk-message-footer").evaluate((footer) => {
+      await footer.evaluate((footer, outcome) => {
         const a = footer.querySelector('[data-message-command="reply.copy"]')!
             .getBoundingClientRect(),
-          b = footer.querySelector("time[title]")!.parentElement!
+          b = footer.querySelector(outcome)!.parentElement!
             .getBoundingClientRect();
         return b.right <= a.left &&
           Math.abs(b.y + b.height / 2 - a.y - a.height / 2) < .5;
-      }),
+      }, outcome),
     ).toBe(true);
     await page.mouse.move(1, 1);
     await expect(reply).not.toHaveClass(/is-revealed/);
-    await expect(reply.locator(".otk-message-actions")).toHaveCSS(
+    await expect(actions).toHaveCSS(
       "opacity",
       "1",
     );
@@ -354,7 +363,7 @@ export async function remainder(
       await paint(theme);
       const selectors = [
         "html",
-        ".otk-project-name",
+        ".otk-sidebar-title-text",
         replyMessage + " .otk-text p",
         replyMessage + " .otk-code pre",
         ".otk-prompt textarea",
@@ -420,11 +429,10 @@ export async function remainder(
         ].forEach((key) => (el as HTMLElement).style.removeProperty(key))
       );
       expect(await read()).toEqual(baseline);
-      await revealAcquired(
-        page,
-        replyMessage + " .otk-message-footer time[title]",
-      );
-      const clock = reply.locator(".otk-message-footer time[title]").first();
+      const footerClock =
+        ".otk-message-details > .otk-chrome-meta > time[title]";
+      await revealAcquired(page, `${replyMessage} ${footerClock}`);
+      const clock = footer.locator(footerClock);
       await clock.scrollIntoViewIfNeeded();
       await page.mouse.move(1, 1);
       await expect(clock).toHaveCSS("visibility", "visible");
@@ -453,15 +461,9 @@ export async function remainder(
       expect(Math.abs(g.width - rect!.width)).toBeLessThan(.5);
       await shot(`timestamps-hover-${theme.id}`);
       for (const role of ["user", "assistant"]) {
-        await revealAcquired(
-          page,
-          (role === "user" ? promptMessage : replyMessage) +
-            " .otk-message-footer time[title]",
-        );
-        const created = page.locator(
-          `[data-role=${role}] .otk-message-footer time[title]`,
-        )
-          .first();
+        const message = role === "user" ? promptMessage : replyMessage;
+        await revealAcquired(page, `${message} ${footerClock}`);
+        const created = page.locator(`${message} ${footerClock}`);
         await created.scrollIntoViewIfNeeded();
         await created.hover();
         await expect(created).toHaveCSS("visibility", "visible");
@@ -515,9 +517,7 @@ export async function remainder(
         if (action === "hover") await control.hover();
         if (action === "leave") await page.mouse.move(1, 1);
         await expect.poll(() =>
-          reply.locator(".otk-message-footer time[title]").evaluate((el) =>
-            getComputedStyle(el).visibility === "visible"
-          )
+          clock.evaluate((el) => getComputedStyle(el).visibility === "visible")
         ).toBe(true);
         expect(await ownedBounds(fork, ".otk-message-footer")).toEqual(forkBox);
       }
@@ -803,7 +803,8 @@ export async function remainder(
           await page.keyboard.press("Escape");
         }
         await page.locator(".otk-tool-line.is-error .otk-failure-details")
-          .first().click();
+          .first().getByRole("button", { name: "Details", exact: true })
+          .click();
         await expect(
           page.locator(
             ".otk-tool-line.is-error .otk-feedback-status[role=alert]",
@@ -817,7 +818,8 @@ export async function remainder(
         await labels(page);
         await shot(`labels-error-${width}-${theme.id}`);
         await page.locator(".otk-tool-line.is-error .otk-failure-details")
-          .first().click();
+          .first().getByRole("button", { name: "Details", exact: true })
+          .click();
         await page.locator(".otk-tool-toggle").first().focus();
         await page.keyboard.press("Shift+F10");
         await expect(page.locator(":popover-open [role=menu]")).toBeVisible();

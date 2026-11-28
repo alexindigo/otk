@@ -11,6 +11,18 @@ export const seenMigrations: FeatureMigrations = {
     version: 2,
     sql:
       "ALTER TABLE session_seen ADD COLUMN terminal INTEGER NOT NULL DEFAULT 0;",
+  }, {
+    version: 3,
+    sql:
+      "ALTER TABLE session_seen ADD COLUMN opened INTEGER NOT NULL DEFAULT 0;",
+  }, {
+    version: 4,
+    sql:
+      "ALTER TABLE session_seen ADD COLUMN open_generation INTEGER NOT NULL DEFAULT 0;",
+  }, {
+    version: 5,
+    sql:
+      "CREATE TABLE session_run_seen (user TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,terminal INTEGER NOT NULL,PRIMARY KEY(user,session,run)) STRICT;",
   }],
 };
 export interface SeenChange {
@@ -18,6 +30,8 @@ export interface SeenChange {
   session: string;
   time: number;
   terminal?: number;
+  opened?: boolean;
+  runID?: string;
 }
 export class Seen extends MetadataChanges<SeenChange> {
   protected override changeKey(value: SeenChange): string {
@@ -56,26 +70,135 @@ export class Seen extends MetadataChanges<SeenChange> {
     session: string,
     terminal: number,
     tx?: StoreWrite,
+    runID?: string,
   ): number {
     if (!Number.isSafeInteger(terminal) || terminal < 0) {
       throw new TypeError("Invalid terminal token");
     }
     return this.db.write((scope) => {
+      if (runID) {
+        this.db.connection.prepare(
+          "INSERT INTO session_run_seen(user,session,run,terminal) VALUES(?,?,?,?) ON CONFLICT DO NOTHING",
+        )
+          .run(key(user), key(session), key(runID), terminal);
+        this.changed({ user, session, time: terminal, terminal, runID }, scope);
+        return terminal;
+      }
       const row = this.db.connection.prepare(
-        "INSERT INTO session_seen(user,session,time,terminal) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET terminal=MAX(terminal,excluded.terminal) RETURNING terminal",
+        "INSERT INTO session_seen(user,session,time,terminal) VALUES(?,?,0,?) ON CONFLICT(user,session) DO UPDATE SET terminal=MAX(terminal,excluded.terminal) RETURNING terminal,opened",
       ).get(key(user), key(session), terminal)!;
       const time = Number(row.terminal);
-      this.changed({ user, session, time, terminal: time }, scope);
+      this.changed({
+        user,
+        session,
+        time,
+        terminal: time,
+        opened: !!row.opened,
+      }, scope);
       return time;
     }, tx);
   }
+  /** D76: explicit retention is independent of terminal acknowledgement. */
+  setOpened(
+    user: string,
+    session: string,
+    opened: boolean,
+    tx?: StoreWrite,
+  ): void {
+    this.db.write((scope) => {
+      const row = this.db.connection.prepare(
+        "INSERT INTO session_seen(user,session,time,opened,open_generation) VALUES(?,?,0,?,1) ON CONFLICT(user,session) DO UPDATE SET opened=excluded.opened,open_generation=open_generation+1 RETURNING terminal",
+      ).get(key(user), key(session), Number(opened));
+      if (!row) return;
+      const time = Number(row.terminal);
+      this.changed({ user, session, time, terminal: time, opened }, scope);
+    }, tx);
+  }
+  /** Capture retention independently of any run acknowledgement. Legacy opens
+   * at generation zero remain real opens. An explicit re-open advances the
+   * generation even if the flag was already set. */
+  openGeneration(user: string, session: string): number | undefined {
+    const row = this.db.connection.prepare(
+      "SELECT open_generation FROM session_seen WHERE user=? AND session=? AND opened=1",
+    ).get(key(user), key(session));
+    return row ? Number(row.open_generation) : undefined;
+  }
+  releaseOpened(
+    user: string,
+    session: string,
+    generation: number,
+    tx?: StoreWrite,
+  ): boolean {
+    return this.db.write((scope) => {
+      const row = this.db.connection.prepare(
+        "UPDATE session_seen SET opened=0,open_generation=open_generation+1 WHERE user=? AND session=? AND opened=1 AND open_generation=? RETURNING terminal",
+      ).get(key(user), key(session), generation);
+      if (!row) return false;
+      const terminal = Number(row.terminal);
+      this.changed(
+        { user, session, time: terminal, terminal, opened: false },
+        scope,
+      );
+      return true;
+    }, tx);
+  }
+  acknowledgeMany(
+    user: string,
+    entries: readonly { session: string; terminal: number; runID?: string }[],
+    tx?: StoreWrite,
+  ): number[] {
+    return this.db.write(
+      (scope) =>
+        entries.map(({ session, terminal, runID }) =>
+          this.acknowledge(user, session, terminal, scope, runID)
+        ),
+      tx,
+    );
+  }
+  /** Bridge a native-proven terminal token without creating a new Seen event.
+   * A token already accounted for by any run cannot acknowledge another run. */
+  bindLegacyTerminal(
+    session: string,
+    terminal: number,
+    runID: string,
+    tx?: StoreWrite,
+  ): void {
+    if (!Number.isSafeInteger(terminal) || terminal <= 0) return;
+    const args = [key(session), terminal, key(runID)] as const;
+    const candidates = `FROM session_seen AS legacy
+      WHERE legacy.session=? AND legacy.terminal=?
+      AND NOT EXISTS (
+        SELECT 1 FROM session_run_seen AS bound
+        WHERE bound.user=legacy.user AND bound.session=legacy.session
+        AND (bound.terminal=legacy.terminal OR bound.run=?)
+      )`;
+    if (
+      !this.db.connection.prepare(`SELECT 1 ${candidates} LIMIT 1`).get(
+        ...args,
+      )
+    ) return;
+    this.db.write(() => {
+      this.db.connection.prepare(
+        `INSERT INTO session_run_seen(user,session,run,terminal)
+         SELECT legacy.user,legacy.session,?,legacy.terminal ${candidates}`,
+      ).run(args[2], ...args);
+    }, tx);
+  }
+  runTerminal(user: string, session: string, runID: string): number {
+    return Number(
+      this.db.connection.prepare(
+        "SELECT terminal FROM session_run_seen WHERE user=? AND session=? AND run=?",
+      ).get(key(user), key(session), key(runID))?.terminal ?? 0,
+    );
+  }
   tokens(): SeenChange[] {
     return this.db.connection.prepare(
-      "SELECT user,session,terminal FROM session_seen",
+      "SELECT user,session,terminal,opened FROM session_seen",
     ).all().map((row) => ({
       user: String(row.user),
       session: String(row.session),
       time: Number(row.terminal),
+      ...(row.opened ? { opened: true } : {}),
     }));
   }
   all(): { user: string; session: string; time: number }[] {

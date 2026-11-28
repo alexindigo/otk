@@ -6,13 +6,26 @@ import {
   createEntityStateStore,
   lamp,
   presentedEntity,
+  sessionComposerLink,
   taskHelpers,
 } from "../entity-state.ts";
-import type { EntityState, HelperDisposition } from "@otk/protocol";
+import type {
+  EntityState,
+  HelperDisposition,
+  TaskHelpers,
+} from "@otk/protocol";
 
-const helpers = {
+const helpers: TaskHelpers = {
   ids: ["helper"],
-  counts: { running: 0, needsYou: 0, notReturned: 1 },
+  counts: { running: 0, needsYou: 0, finished: 1 },
+  lamps: {
+    all: { state: "finished" },
+    groups: {
+      running: { state: "none" },
+      needsYou: { state: "none" },
+      finished: { state: "finished" },
+    },
+  },
 };
 const counts = { blocked: 0, finished: 1, unseen: 1, working: 0 };
 
@@ -40,7 +53,7 @@ Deno.test("helper clock selects one timestamp for the published disposition", ()
   const now = 240_000;
   assertEquals(work.helperClock(entity("running"), now)?.time.text, "1m");
   assertEquals(
-    work.helperClock(entity("notReturned"), now)?.time.spoken,
+    work.helperClock(entity("finished"), now)?.time.spoken,
     "2 minutes ago",
   );
   assertEquals(
@@ -52,77 +65,54 @@ Deno.test("helper clock selects one timestamp for the published disposition", ()
 
 Deno.test("live-work helper counts omit zero and agree with their verbs", () => {
   assertEquals(
-    work.helperCountsLabel({ running: 4, needsYou: 3, notReturned: 221 }),
-    "4 running · 3 need you · 221 not returned",
+    work.helperCountsLabel({ running: 4, needsYou: 3, finished: 221 }),
+    "3 need you, 221 finished, 4 running", // D78
   );
-  const blocked = { running: 0, needsYou: 1, notReturned: 2 };
-  assertEquals(work.helperCountsLabel(blocked), "1 needs you · 2 not returned");
+  const blocked = { running: 0, needsYou: 1, finished: 2 };
   assertEquals(
-    work.helperCountsLabel(blocked, "spoken"),
-    "1 needs you, 2 not returned",
+    work.helperCountsLabel(blocked),
+    "1 needs you, 2 finished",
   );
   assertEquals(
-    work.helperCountsLabel({ running: 0, needsYou: 0, notReturned: 0 }),
+    work.helperCountsLabel({ running: 0, needsYou: 0, finished: 0 }),
     "",
   );
 });
 
-Deno.test("composer link is absent without either pill", () => {
-  assertEquals(work.composerLinkState(undefined, 0), "none");
-});
-
-Deno.test("composer link is idle with an undelivered helper and no shells", () => {
+Deno.test("composer link and helper lamp read separate published scopes", () => {
   const store = createEntityStateStore({
     read: () => ({
       "task:root": { ...presentedEntity("task", "root", "working"), helpers },
-      "session:root": presentedEntity("session", "root", "working"),
-      "session:helper": presentedEntity("session", "helper", "finished"),
+      "session:root": {
+        ...presentedEntity("session", "root", "working"),
+        composerLink: "running",
+      },
     }),
   });
   const roster = taskHelpers(store, "task:root");
-  assertEquals(
-    lamp(store, roster!.ids.map((id) => `session:${id}`)),
-    "finished",
-  );
-  assertEquals(work.composerLinkState(roster, 0), "idle");
-});
-
-Deno.test("composer link runs when one helper works and another is blocked", () => {
-  assertEquals(
-    work.composerLinkState({
-      ids: ["working", "blocked"],
-      counts: { running: 1, needsYou: 1, notReturned: 0 },
-    }, 0),
-    "running",
-  );
-});
-
-Deno.test("composer link runs with shells alone", () => {
-  assertEquals(work.composerLinkState(undefined, 1), "running");
-});
-
-Deno.test("composer link ignores stale task evidence", () => {
-  const store = createEntityStateStore({ read: () => undefined });
+  assertEquals(lamp(roster?.lamps?.all), "finished");
+  assertEquals(sessionComposerLink(store, "root"), "running");
+  assertEquals(sessionComposerLink(store, "missing"), "none");
   store.stale(true);
-  assertEquals(
-    work.composerLinkState(
-      taskHelpers(store, "task:session/root"),
-      0,
-    ),
-    "none",
-  );
+  assertEquals(sessionComposerLink(store, "root"), "none");
 });
 
 Deno.test("live-work stop capability and admission survive presentation replacement", async () => {
   let finish!: () => void, calls = 0;
   const item = {
-    id: "helper/h",
+    id: "h",
     sessionID: "h",
     kind: "helper" as const,
     label: "Helper",
     title: "Work",
   };
-  const shell = { ...item, id: "shell/s", kind: "shell" as const };
+  const shell = { ...item, kind: "shell" as const };
+  let shellSupported = false;
+  const stopShell = (id: string) => {
+    assertEquals(id, "h");
+    calls++;
+    return Promise.resolve();
+  };
   const owner = createLiveWork({
     items: () => [item, shell],
     stopHelper: () => async (id) => {
@@ -130,15 +120,25 @@ Deno.test("live-work stop capability and admission survive presentation replacem
       calls++;
       await new Promise<void>((resolve) => finish = resolve);
     },
+    stopShell: () => shellSupported ? stopShell : undefined,
   });
-  assertEquals(owner.canStop(shell.id), false);
-  assertEquals(owner.canStop(item.id), true);
-  const first = owner.stop(item.id), second = owner.stop(item.id);
+  assertEquals(owner.canStop("shell/h"), false);
+  assertEquals(owner.canStop("helper/h"), true);
+  shellSupported = true;
+  assertEquals(owner.canStop("shell/h"), true);
+  assertEquals(owner.canStop("shell/absent"), false);
+  const first = owner.stop("helper/h"), second = owner.stop("helper/h");
   assertEquals(first, second);
   await Promise.resolve();
   assertEquals(calls, 1);
-  assertEquals(owner.stopping(item.id), true);
+  assertEquals(owner.stopping("helper/h"), true);
+  const shellStop = owner.stop("shell/h");
+  assertEquals(shellStop, owner.stop("shell/h"));
+  await shellStop;
+  assertEquals(calls, 2);
+  assertEquals(owner.stopping("helper/h"), true);
+  assertEquals(owner.stopping("shell/h"), false);
   finish();
   await first;
-  assertEquals(owner.stopping(item.id), false);
+  assertEquals(owner.stopping("helper/h"), false);
 });

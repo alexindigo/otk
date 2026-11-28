@@ -70,7 +70,7 @@ async function connectionFixture() {
     new Prefs(db, prefsOptions),
     rpc,
     fixtureMessagePolicy,
-    requests,
+    { ...requests, server: { build: "test", instance: "test" } },
   );
   const socket = {
     readyState: WebSocket.OPEN,

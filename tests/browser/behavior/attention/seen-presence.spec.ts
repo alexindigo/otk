@@ -32,7 +32,7 @@ test("attention.finish-while-away-is-seen-once-when-the-user-returns", {
     otherProject = await project(other);
   await expect.poll(() => acknowledged(viewed)).toEqual([0]);
   for (const row of [viewedProject, otherProject]) {
-    await expect(row.locator(".otk-project-name")).toHaveAttribute(
+    await expect(row.locator(".otk-sidebar-title-text")).toHaveAttribute(
       "data-unread",
       "false",
     );
@@ -42,10 +42,11 @@ test("attention.finish-while-away-is-seen-once-when-the-user-returns", {
   const restore = await hideNotifications(page);
   await activity(state, viewed, "hold");
   await activity(state, viewed, "release");
-  await expect(viewedProject.locator(".otk-project-name")).toHaveAttribute(
-    "data-unread",
-    "true",
-  );
+  await expect(viewedProject.locator(".otk-sidebar-title-text"))
+    .toHaveAttribute(
+      "data-unread",
+      "true",
+    );
   await expect(viewedProject).toHaveAttribute("data-rollup", "finished");
   const finish = (await inbox()).finishes[viewed];
   expect(finish).toBeGreaterThan(0);
@@ -55,22 +56,23 @@ test("attention.finish-while-away-is-seen-once-when-the-user-returns", {
   // Returning to the window is seeing it: one acknowledgement, same token.
   await restore();
   await expect.poll(() => acknowledged(viewed)).toEqual([0, finish]);
-  await expect(viewedProject.locator(".otk-project-name")).toHaveAttribute(
-    "data-unread",
-    "false",
-  );
+  await expect(viewedProject.locator(".otk-sidebar-title-text"))
+    .toHaveAttribute(
+      "data-unread",
+      "false",
+    );
   expect((await inbox()).seen[viewed]).toBe(finish);
 
   // A finish in a session that is not on screen stays unseen, including
   // across a later presence change.
   await activity(state, other, "hold");
   await activity(state, other, "release");
-  await expect(otherProject.locator(".otk-project-name")).toHaveAttribute(
+  await expect(otherProject.locator(".otk-sidebar-title-text")).toHaveAttribute(
     "data-unread",
     "true",
   );
   await (await hideNotifications(page))();
-  await expect(otherProject.locator(".otk-project-name")).toHaveAttribute(
+  await expect(otherProject.locator(".otk-sidebar-title-text")).toHaveAttribute(
     "data-unread",
     "true",
   );

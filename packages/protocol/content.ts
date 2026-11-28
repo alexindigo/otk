@@ -56,6 +56,12 @@ export type Block =
     rows: Inline[][][];
   }
   | { b: "rule" };
+
+/** Prompt text is literal in every transcript; never reparse it as Markdown. */
+export function promptTextBlocks(text: string): Block[] {
+  return text ? [{ b: "paragraph", inline: [{ i: "text", text }] }] : [];
+}
+
 export interface Hunk {
   oldStart: number;
   oldLines: number;
@@ -350,6 +356,9 @@ export interface Activity {
   /** Neutral live-work identity supplied by the harness, never inferred from wording. */
   work?: { kind: "shell" };
   layout: "row" | "boundary";
+  /** Records sharing a key form one session boundary (e.g. a marker and its
+   * summary). If unset, use the part ID; never infer the key from wording. */
+  boundary?: { key: string };
   direction?: "outgoing";
   category: DisclosureCategory;
   state?: ActivityState;
@@ -594,5 +603,6 @@ export interface QuestionRequest {
 }
 export function isAttentionOp(op: ContentOp): boolean {
   return isPermissionOp(op) || op.op === "question.upsert" ||
-    op.op === "question.remove";
+    op.op === "question.remove" || op.op === "form.upsert" ||
+    op.op === "form.remove";
 }

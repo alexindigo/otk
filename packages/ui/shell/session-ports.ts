@@ -11,6 +11,7 @@ import {
   type Selection,
   type ServerResources,
   type SessionActions,
+  sessionShells,
 } from "@otk/client";
 import {
   belongsToSession,
@@ -33,28 +34,43 @@ export function sessionPorts(o: {
   const target = { ...o.target }, { resources, actions, session } = o;
   const connection = resources.sidecars.connection(target.sidecarId);
   const entities = () => resources.inbox(target.sidecarId).entities;
+  const sessionKey = entityKey("session", target.sessionID);
+  const shells = () => sessionShells(entities(), sessionKey);
+  const rpc = actions.rpc(target);
   const liveWork = createLiveWork({
-    items: () =>
-      (entityLiveWork(entities(), entityKey("session", target.sessionID)) ?? [])
-        .flatMap((item) =>
-          item.kind === "execution" ? [] : [{
+    items: () => [
+      ...(entityLiveWork(entities(), sessionKey) ?? []).flatMap((item) =>
+        item.kind === "helper"
+          ? [{
             ...item,
-            id: `${item.kind}/${item.id}`,
             kind: item.kind,
-            sessionID: item.kind === "helper" ? item.id : target.sessionID,
-            ...(item.kind === "helper"
-              ? {
-                label: derivedValue(
-                  resources.entry(target.sidecarId, item.id)?.digest.last,
-                )?.agent ?? item.label,
-              }
-              : {}),
+            sessionID: item.id,
+            label: derivedValue(
+              resources.entry(target.sidecarId, item.id)?.digest.last,
+            )?.agent ?? item.label,
           }]
-        ),
+          : []
+      ),
+      ...(shells()?.items ?? []).map((item) => ({
+        ...item,
+        kind: "shell" as const,
+        sessionID: target.sessionID,
+      })),
+    ],
     stopHelper: () =>
       resources.linked(target.sidecarId) &&
         resources.declares(target.sidecarId, "prompt")
         ? (id) => actions.abort({ ...target, sessionID: id })
+        : undefined,
+    stopShell: () =>
+      resources.linked(target.sidecarId) &&
+        resources.declares(target.sidecarId, "shell.terminate")
+        ? async (shellID) => {
+          await rpc("shell.terminate", {
+            sessionID: target.sessionID,
+            shellID,
+          });
+        }
         : undefined,
   });
   return {
@@ -62,7 +78,7 @@ export function sessionPorts(o: {
       c === "history"
         ? resources.anyAdvertised(c)
         : resources.declares(target.sidecarId, c),
-    rpc: actions.rpc(target),
+    rpc,
     connectionKey: () => resources.connectionKey(target.sidecarId),
     connected: () => resources.linked(target.sidecarId),
     onToolCompleted: (listener) => session.onToolCompleted(target, listener),
@@ -70,6 +86,15 @@ export function sessionPorts(o: {
     directoryCatalog: session.directoryCatalog,
     frecencyCatalog: session.frecencyCatalog,
     approvals: resources.approvals(target.sidecarId),
+    approvalTarget: () => {
+      const family = actions.family(target);
+      const sessionID = family.rootID ?? family.sessionID;
+      return {
+        sidecarId: target.sidecarId,
+        sessionID,
+        title: resources.entry(target.sidecarId, sessionID)?.title,
+      };
+    },
     feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,
     composerTarget: () => {
@@ -91,15 +116,6 @@ export function sessionPorts(o: {
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),
     entities,
-    workEntityKey: () => {
-      const tabs = o.tabs?.(), selected = tabs?.state.selected;
-      return tabs && selected
-        ? tabs.tabEntityKey({
-          id: selected.id,
-          kind: selected.kind === "task" ? "task" : "phantom",
-        })
-        : entityKey("session", target.sessionID);
-    },
     entityFacts: (identity) =>
       entityFacts(identity, {
         entities: entities(),
@@ -111,10 +127,25 @@ export function sessionPorts(o: {
     location: (id) => actions.location(target, id),
     liveWork,
     delivery: actions.delivery(target),
-    workItems: liveWork.items,
+    shells,
     trail: () => o.tabs?.()?.trail(),
     stopHelper: (id) => actions.abort({ ...target, sessionID: id }),
+    clearFinished: (task) =>
+      resources.inbox(target.sidecarId).clearAttention({
+        scope: "helpers",
+        task,
+      }),
     requests: connection.attention,
+    questionResponse: (id) =>
+      connection.rpc.questionResponse(id, connection.attention),
+    observeQuestionResponse(listener) {
+      const operation = connection.requests.subscribe(listener);
+      const native = connection.attention.subscribe(listener);
+      return () => {
+        operation();
+        native();
+      };
+    },
     permissions: () => {
       void session.state.content;
       return connection.attention.permissions(
@@ -124,7 +155,15 @@ export function sessionPorts(o: {
       );
     },
     permissionVisible: (request) =>
-      permissionVisible(entities(), request.sessionID, request.id),
+      permissionVisible(
+        entities(),
+        request.sessionID,
+        request.id,
+        !resources.linked(target.sidecarId) &&
+          connection.attention.draft("permission", request.id)
+          ? "cached-draft"
+          : "fresh",
+      ),
     questions: () => {
       void session.state.content;
       return connection.attention.questions(

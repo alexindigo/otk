@@ -16,6 +16,16 @@ export type Launch = (
   path: string,
   options: Parameters<Client["request"]>[1],
 ) => NativeLaunch | void;
+
+/** Every successful receipt requires native admission, even without a request owner. */
+export async function awaitLaunch(
+  launch: NativeLaunch | void,
+  scoped: boolean,
+) {
+  if (!launch) return;
+  if (scoped) await Promise.all([launch.admitted, launch.settled]);
+  else await launch.admitted;
+}
 export function shell(
   client: Client,
   directory: Directory,
@@ -53,7 +63,7 @@ export function shell(
           },
         },
       );
-      if (operation && launched) await launched.settled;
+      await awaitLaunch(launched, !!operation);
       return { messageID, state: "started" };
     },
   };

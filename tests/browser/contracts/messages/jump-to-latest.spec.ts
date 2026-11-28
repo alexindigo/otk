@@ -322,26 +322,43 @@ test("messages.jump-overlay-remains-at-bottom-without-a-composer", {
     title: "Read-only child",
     parentID: root.id,
   });
+  const sibling = await state.native<{ id: string }>("/session", "POST", {
+    title: "Unread sibling",
+    parentID: root.id,
+  });
   await state.queue(["Child source.\n\n".repeat(180)]);
   await state.native(`/session/${child.id}/prompt_async`, "POST", {
     parts: [{ type: "text", text: "Inspect the child" }],
   });
   // The common opener explicitly waits for an editable root composer.
   await page.goto(`${state.url}/#/local/${child.id}`);
-  await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+  // D17: the child has a collapsed toolbar, not an editable composer.
+  await expect(page.getByRole("button", {
+    name: "Join the conversation",
+    exact: true,
+  })).toBeVisible();
+  await expect(page.locator("textarea[name=prompt]")).toBeHidden();
   const pane = page.getByRole("region", { name: "Transcript", exact: true });
   await expect(pane).toHaveAttribute("aria-busy", "false");
   await expect(pane).toContainText("Child source.");
+  // D72 removes the selected helper after it is read. Keep the footer in the
+  // layout under test with an independent unread sibling, not a seen row.
+  await expect(subagents(page)).toHaveCount(0);
+  await state.queue(["Sibling source."]);
+  await state.native(`/session/${sibling.id}/prompt_async`, "POST", {
+    parts: [{ type: "text", text: "Inspect the sibling" }],
+  });
   await expect(subagents(page)).toHaveAccessibleName(
-    "Subagents: 1 not returned",
+    "Subagents: 1 finished",
   );
   const activity = page.locator(".otk-composer-activity-slot");
   await expect(activity).toBeVisible();
   const rect = await pane.boundingBox();
   const session = await page.locator(".otk-session-view").boundingBox();
   const header = await activity.boundingBox();
+  const dock = await page.locator(".otk-composer-dock").boundingBox();
   expect(Math.abs(rect!.y + rect!.height - header!.y)).toBeLessThanOrEqual(.5);
-  expect(Math.abs(header!.y + header!.height - session!.y - session!.height))
+  expect(Math.abs(dock!.y + dock!.height - session!.y - session!.height))
     .toBeLessThanOrEqual(.5);
   await page.mouse.move(rect!.x + 8, rect!.y + rect!.height / 2);
   for (let i = 0; i < 4; i++) {

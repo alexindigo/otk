@@ -5,17 +5,11 @@ import StatusLight from "./StatusLight.tsx";
 import { ChevronDownIcon } from "./ChromeIcons.tsx";
 import { useComposer } from "../registries/composer.tsx";
 import { useOptionalSessionPorts } from "../registries/session.tsx";
-import {
-  createEntityStateStore,
-  type EntityStateStore,
-  lamp,
-} from "@otk/client";
-import { entityKey } from "@otk/protocol";
-const absent = createEntityStateStore({ read: () => undefined });
+import { type EntityStateStore, lamp } from "@otk/client";
 export default function TakeoverHeader(
   props: {
     title: string;
-    entityKey?: string;
+    entityKey: string;
     entities?: EntityStateStore;
     where?: string;
     childTitle?: string;
@@ -30,8 +24,8 @@ export default function TakeoverHeader(
     <header class="otk-takeover-header">
       <StatusLight
         state={lamp(
-          props.entities ?? session?.entities?.() ?? absent,
-          props.entityKey ?? entityKey("session", session?.sessionID() ?? ""),
+          props.entities ?? session?.entities?.(),
+          props.entityKey,
         )}
       />
       <h2 title={props.detail}>{props.title}</h2>

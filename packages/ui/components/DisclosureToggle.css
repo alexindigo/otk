@@ -1,22 +1,4 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-:root {
-  --tree-indent: calc(19 * var(--otk-unit));
-  --tree-box-size: calc(9 * var(--otk-unit));
-  --disclosure-gutter: var(--control-size);
-}
-/* One content track for standalone disclosures and their surrounding facts. */
-.otk-disclosure-layout {
-  display: grid;
-  grid-template-columns: var(--disclosure-gutter) minmax(0, 1fr);
-  column-gap: var(--space-2);
-}
-.otk-disclosure-layout > * {
-  grid-column: 2;
-}
-.otk-disclosure-layout > .otk-disclosure-layout {
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-}
 .otk-disclosure-toggle {
   display: grid;
   grid-template-columns: var(--disclosure-gutter) auto;
@@ -29,27 +11,7 @@
   text-align: start;
   color: var(--otk-fg-2);
 }
-.otk-disclosure-icon {
-  display: grid;
-  place-items: center;
-  justify-self: stretch;
-  min-block-size: var(--disclosure-gutter);
-}
-.otk-disclosure-icon svg {
-  inline-size: var(--tree-box-size);
-  block-size: var(--tree-box-size);
-  color: var(--otk-fg-3);
-  shape-rendering: crispEdges;
-  stroke-width: 1px;
-}
-.otk-disclosure-icon rect {
-  fill: none;
-  stroke: currentColor;
-}
-.otk-disclosure-icon path {
-  stroke: currentColor;
-}
-.otk-disclosure-toggle.otk-tree-toggle {
+.otk-disclosure-toggle[data-disclosure-variant=tree] {
   --disclosure-gutter: var(--tree-box-size);
   grid-template-columns: var(--disclosure-gutter);
   gap: 0;

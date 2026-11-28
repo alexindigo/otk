@@ -167,7 +167,6 @@ export default function Notices(props: { prefs: Preferences }) {
             connected
             prefs={props.prefs}
             permissions={[]}
-            siblings={[]}
             onOpenChild={() => {}}
             child={false}
             revert={null}

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   isProjectLocation,
+  isSessionTreeKind,
   type Preferences,
   projectLayoutKey,
+  treeLayoutKey,
 } from "@otk/protocol";
+import { HarnessError } from "@otk/harness";
 import type { Prefs } from "@otk/store";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { localExecution, localWrite } from "../requests/policies.ts";
@@ -77,6 +80,31 @@ export function register(
             [projectLayoutKey(value)]: value.collapsed,
           },
         }, tx);
+      }, receipt),
+  });
+  rpc.register("layout.tree", {
+    execution: localExecution(() => ({ resource: "layout" }), receipt),
+    params: (value) => {
+      if (
+        !isSessionTreeKind(value.kind) || typeof value.collapsed !== "boolean"
+      ) {
+        throw new HarnessError("params", "Expected a session tree disclosure");
+      }
+      return {
+        sidecarId: text(value, "sidecarId")!,
+        kind: value.kind,
+        id: text(value, "id")!,
+        collapsed: value.collapsed,
+      };
+    },
+    handler: (ctx, value) =>
+      localWrite(ctx, (tx) => {
+        const layout = prefs.get().shellLayout;
+        const treeCollapsed = { ...layout.treeCollapsed };
+        const key = treeLayoutKey(value);
+        if (value.collapsed) treeCollapsed[key] = true;
+        else delete treeCollapsed[key];
+        return prefs.set("shellLayout", { ...layout, treeCollapsed }, tx);
       }, receipt),
   });
   // A project-location intent merges at the same persisted layout owner. An old

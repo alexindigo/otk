@@ -4,12 +4,37 @@ export interface WorkTime {
   start?: number;
   end?: number;
 }
+/** Alternate headings can borrow the existing record body and disclosure. */
+export interface PartRowSlots {
+  label: string;
+  required?: () => boolean;
+  tone?: "danger";
+  trail?: () => Element;
+  detail?: () => Element;
+  extra?: () => Element;
+}
+/** Feature-declared facts for the Work log strip and panel (D74). */
+export interface WorkRunFacts {
+  lane?: "thinking" | "delegation";
+  label: string;
+  agent?: string;
+  failureReason?: string;
+  merge?: {
+    key: string;
+    verb: string;
+    noun: string;
+    plural: string;
+    keep?: "latest";
+  };
+  child?: string;
+}
 export interface PartPresentation {
   /** Neutral record facts supplied by the part owner for enclosing-frame folds. */
   activity?: import("@otk/protocol").Activity;
   /** Ordinary answer prose, eligible for its source's reply-start boundary. */
   prose?: boolean;
   work?: WorkTime;
+  run?: WorkRunFacts;
   /** Recorded busy/wait evidence, separate from work-log membership. */
   timing?: import("@otk/protocol").SegmentTimingEvidence;
   text?: string;
@@ -40,6 +65,7 @@ import type {
 /** Inputs passed to every tool renderer; behavior belongs to injected callbacks. */
 export interface ToolProps {
   call: ToolCall;
+  row?: PartRowSlots;
   genericOutput: boolean;
   directory?: string;
   waiting: boolean;
@@ -57,6 +83,7 @@ export interface ToolPresentation {
   summary?: string;
   changes?: { additions: number; deletions: number };
   category?: DisclosureCategory;
+  runs?: { noun: string; plural: string; keep?: "latest" };
   /** Feature-owned copy sources; the frame never dispatches concrete tools. */
   copy?: { command?: string; path?: string; paths?: string };
 }
@@ -149,6 +176,7 @@ export class ToolRegistry {
 
 /** Inputs for a message part, independent of its consumer or session model. */
 export interface PartProps {
+  row?: PartRowSlots;
   part: Part;
   prefs: Preferences;
   streaming: boolean;
@@ -172,21 +200,33 @@ export class PartRegistry {
   #fallbackPresentation?: (part: Part, prefs: Preferences) => PartPresentation;
   #presentations = new Map<
     string,
-    (part: Part, prefs: Preferences) => PartPresentation
+    (
+      part: Part,
+      prefs: Preferences,
+      context: PresentationContext,
+    ) => PartPresentation
   >();
   registerTyped<K extends keyof PartKinds>(
     kind: K,
     component: (
       props: Omit<PartProps, "part"> & { part: PartKinds[K] },
     ) => Element,
-    presentation?: (part: PartKinds[K], prefs: Preferences) => PartPresentation,
+    presentation?: (
+      part: PartKinds[K],
+      prefs: Preferences,
+      context: PresentationContext,
+    ) => PartPresentation,
   ): void {
     if (this.#typed.has(kind)) throw new Error(`Duplicate part: ${kind}`);
     this.#typed.set(kind, component as PartRenderer);
     if (presentation) {
       this.#presentations.set(
         `typed:${kind}`,
-        presentation as (part: Part, prefs: Preferences) => PartPresentation,
+        presentation as (
+          part: Part,
+          prefs: Preferences,
+          context: PresentationContext,
+        ) => PartPresentation,
       );
     }
   }
@@ -219,14 +259,18 @@ export class PartRegistry {
       ? this.#external.get(part.name)
       : this.#typed.get(part.kind)) ?? this.#fallback;
   }
-  presentation(part: Part, prefs: Preferences): PartPresentation {
+  presentation(
+    part: Part,
+    prefs: Preferences,
+    context: PresentationContext = {},
+  ): PartPresentation {
     const external = part.kind === "external";
     const registered = external
       ? this.#external.has(part.name)
       : this.#typed.has(part.kind);
     return this.#presentations.get(
       external ? `external:${part.name}` : `typed:${part.kind}`,
-    )?.(part, prefs) ??
+    )?.(part, prefs, context) ??
       (!registered ? this.#fallbackPresentation?.(part, prefs) : undefined) ??
       {};
   }

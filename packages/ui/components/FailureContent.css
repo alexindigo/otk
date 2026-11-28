@@ -13,6 +13,10 @@
   container-type: normal;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
+  column-gap: inherit;
+}
+.otk-failure-content.uses-subgrid.is-record > :not(.otk-failure-controls) {
+  grid-column: 3 / -1;
 }
 .otk-failure-content.is-intrinsic {
   container-type: normal;
@@ -24,9 +28,10 @@
 }
 .otk-failure-heading {
   display: flex;
-  align-items: baseline;
+  align-items: var(--failure-heading-align, baseline);
   gap: var(--space-2);
   min-inline-size: 0;
+  min-block-size: var(--failure-heading-size, 0);
 }
 .otk-failure-heading strong {
   flex: 0 1 auto;
@@ -66,17 +71,20 @@
   min-inline-size: 0;
 }
 .otk-failure-controls > * {
-  grid-column: 2;
-}
-.otk-failure-controls > .otk-failure-details {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
 }
 .otk-failure-details {
-  inline-size: fit-content;
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: subgrid;
+  column-gap: inherit;
   min-inline-size: 0;
 }
-.otk-failure-action,
-.otk-failure-detail-toggle {
+.otk-failure-details > * {
+  grid-column: 1 / -1;
+}
+.otk-failure-action {
   padding: 0;
   min-block-size: var(--control-size);
   text-align: start;
@@ -88,10 +96,6 @@
   padding-block: var(--space-1);
   max-block-size: min(40dvh, 20rem);
 }
-.otk-failure-detail-toggle {
-  display: flex;
-  align-items: center;
-}
 .otk-failure-diagnostic {
   display: grid;
   gap: var(--space-1);
@@ -101,13 +105,27 @@
   border: 0;
   padding: 0;
 }
-.otk-failure-reference {
+.otk-failure-content.is-reference .otk-failure-reference {
   grid-column: 1 / -1;
   justify-self: start;
   padding: 0;
   text-align: start;
   text-decoration: underline;
   font-weight: inherit;
+}
+.otk-failure-content.is-feedback {
+  container-type: normal;
+}
+.otk-failure-content.is-feedback .otk-failure-heading,
+.otk-failure-content.is-feedback .otk-failure-summary-reason {
+  display: inline;
+  color: var(--otk-fg-2);
+}
+.otk-failure-content.is-feedback .otk-failure-disclosed-reason {
+  display: block;
+}
+.otk-failure-content.is-feedback > :first-child {
+  grid-column: 1 / -1;
 }
 .otk-failure-disclosed-reason,
 .otk-failure-content.is-compact .otk-failure-main-reason {
@@ -123,10 +141,32 @@
   .otk-failure-disclosed-reason {
     display: block;
   }
-  .otk-failure-content.is-expanded .otk-failure-main-reason {
+  .otk-failure-content.shows-full-reason .otk-failure-main-reason {
     display: block;
   }
-  .otk-failure-content.is-expanded .otk-failure-disclosed-reason {
+  .otk-failure-content.shows-full-reason .otk-failure-disclosed-reason {
     display: none;
   }
+}
+
+.otk-failure-content.is-summary-only {
+  grid-template-columns: var(--disclosure-gutter) minmax(0, 1fr) auto;
+}
+.otk-failure-content.is-summary-only > .otk-failure-heading {
+  color: var(--otk-danger);
+  grid-column: 2;
+  align-self: center;
+}
+.otk-failure-content.is-summary-only .otk-failure-summary-reason {
+  color: var(--otk-fg-3);
+  min-inline-size: 0;
+}
+.otk-failure-content.is-summary-only > .otk-failure-controls {
+  grid-column: 3;
+  grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
+}
+.otk-failure-content.is-summary-only .otk-failure-action {
+  grid-column: 1;
+  padding-inline: var(--space-2);
 }

@@ -6,11 +6,11 @@ import { createMemo, For, Show } from "solid-js";
 import type { ChildRef } from "@otk/protocol";
 import type { PartProps, PartRegistry } from "../../registries/renderers.ts";
 import {
-  retainedDisclosure,
+  transcriptDisclosureIdentity,
   useContentIdentity,
 } from "../../features/transcript-context.tsx";
 import Blocks from "../Blocks.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "../Tree.tsx";
+import { TreeItem, TreeNode } from "../Tree.tsx";
 import Icon from "../Icon.tsx";
 import {
   unknownPartFailure,
@@ -29,6 +29,7 @@ import FailureContent from "../FailureContent.tsx";
 import EntityPill from "../EntityPill.tsx";
 import { useOptionalSessionPorts } from "../../registries/session.tsx";
 import { scopedEntityFacts } from "../../entity-facts.ts";
+import Disclosure, { useDisclosure } from "../Disclosure.tsx";
 
 export function UnknownPart(props: PartProps): import("solid-js").Element {
   const session = useOptionalSessionPorts();
@@ -41,19 +42,20 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       ? errorFeedback(activity()?.detail || GENERIC_FAILURE_REASON, {
         actionLabel: activity()?.title,
         target: identity,
-      })?.failure
+      }, props.part)?.failure
       : undefined;
   };
   const activity = () =>
     props.part.kind === "external" ? props.part.activity : undefined;
-  const [expanded, setExpanded] = retainedDisclosure(
-    "activity",
-    () => activity()?.fold ? "record" : activity()?.category ?? "record",
-    () => props.prefs,
-  );
-  const preview = createMemo(() =>
-    expanded() ? unknownPartPreview(props.part) : undefined
-  );
+  const identify = transcriptDisclosureIdentity();
+  const input = () => ({
+    category: activity()?.fold
+      ? "record" as const
+      : activity()?.category ?? "record" as const,
+    prefs: () => props.prefs,
+    required: props.row?.required,
+  });
+  const choice = useDisclosure("record", identify, input);
   const reference = () => unknownPartSource(props.part);
   const name = () =>
     props.part.kind === "external"
@@ -65,9 +67,14 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
     !!(props.recordTime !== undefined || activity()?.state ||
       activity()?.body?.length ||
       activity()?.parameters?.length || unknownPartHasPreview(props.part) ||
-      reference());
+      reference() || props.row?.extra);
+  const expanded = () => details() && choice.open();
+  const preview = createMemo(() =>
+    expanded() ? unknownPartPreview(props.part) : undefined
+  );
   const label = () => {
-    const title = activity()?.title ?? `Unsupported part: ${name()}`;
+    const title = props.row?.label ?? activity()?.title ??
+      `Unsupported part: ${name()}`;
     return title;
   };
   // A state already presented by the heading or a parameter is not repeated.
@@ -86,14 +93,14 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
   );
   const heading = () => (
     <>
-      <span class="otk-tool-verb otk-control-label" title={label()}>
+      <span class="otk-tool-brief otk-control-label" title={label()}>
         {label()}
       </span>
       <Show
         when={activity()?.detail && activity()?.detail !== failure()?.reason}
       >
         <span
-          class="otk-tool-brief otk-control-label otk-control-grow"
+          class="otk-tool-brief otk-control-label"
           title={activity()?.detail}
         >
           {activity()?.detail}
@@ -101,6 +108,7 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
       </Show>
     </>
   );
+  const hasSource = () => !!(preview() || reference());
   return (
     <Show
       when={!activity() ? failure() : undefined}
@@ -113,132 +121,140 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
           data-native-record={name()}
           data-activity-state={activity()?.state?.key}
         >
-          <TreeNode
-            toggleHeader={!!details()}
-            label={label()}
-            outgoing={activity()?.direction === "outgoing" ? true : undefined}
-            open={expanded()}
-            onOpen={details() ? setExpanded : undefined}
-            feedback={failure()
-              ? () => (
-                <FailureContent
-                  placement="record"
-                  failure={failure()!}
-                  time={props.failureTime}
-                />
-              )
-              : undefined}
-            header={(_connected, toggleID) => (
-              <header class="otk-tool-state otk-control-row">
-                <TreeIcon>
-                  <Show when={activity()?.icon?.name === "warning"}>
-                    <span
-                      class="otk-tool-icon"
-                      role="img"
-                      aria-label={activity()?.icon?.label ?? "Warning"}
-                    >
-                      <Icon>
-                        <path d="M12 3 2 21h20L12 3Z" />
-                        <path d="M12 9v5m0 3v.01" />
-                      </Icon>
-                    </span>
-                  </Show>
-                </TreeIcon>
-                <Show when={activity()?.entity}>
-                  {(entity) => (
-                    <EntityPill
-                      label={entity().label}
-                      facts={scopedEntityFacts(session, entity())}
-                    />
-                  )}
-                </Show>
-                <Show
-                  when={details()}
-                  fallback={
-                    <div class="otk-tool-heading otk-control-grow">
-                      {heading()}
-                    </div>
-                  }
+          <Disclosure
+            kind="record"
+            identity={identify()}
+            input={input()}
+            variant="label"
+            tone={props.row?.tone}
+            class="otk-tool-toggle"
+            lead={() => (
+              <Show when={activity()?.icon?.name === "warning"}>
+                <span
+                  class="otk-tool-icon"
+                  role="img"
+                  aria-label={activity()?.icon?.label ?? "Warning"}
                 >
-                  <button
-                    id={toggleID}
-                    type="button"
-                    class="otk-tool-toggle otk-tree-control otk-control-grow"
-                    aria-expanded={expanded() ? "true" : "false"}
-                    onClick={() => setExpanded(!expanded())}
-                  >
-                    {heading()}
-                  </button>
-                </Show>
-                <Show when={activity()?.child}>{(ref) => child(ref())}</Show>
-              </header>
+                  <Icon>
+                    <path d="M12 3 2 21h20L12 3Z" />
+                    <path d="M12 9v5m0 3v.01" />
+                  </Icon>
+                </span>
+              </Show>
             )}
-            body={details()
-              ? () => (
-                <TreeItem last>
+            label={label()}
+            accessibleLabel={label()}
+            labelContent={props.row ? undefined : heading}
+            hasContent={details}
+            layout={({ trigger, region, open, frame }) => (
+              <TreeNode
+                class="otk-tool-row"
+                heading={{ class: "otk-tool-state" }}
+                ref={frame}
+                trigger={{ variant: "span", element: trigger, hasBox: details }}
+                outgoing={activity()?.direction === "outgoing"
+                  ? true
+                  : undefined}
+                bodyVisible={open()}
+                region={region}
+                detail={props.row?.detail}
+                feedbackGutter={activity()?.direction !== "outgoing"}
+                feedback={failure()
+                  ? () => (
+                    <FailureContent
+                      placement="record"
+                      subgrid={activity()?.direction !== "outgoing"}
+                      failure={failure()!}
+                      time={props.failureTime}
+                    />
+                  )
+                  : undefined}
+                trail={props.row?.trail ??
+                  (activity()?.entity || activity()?.child
+                    ? () => (
+                      <header class="otk-tool-state otk-control-row">
+                        <Show when={activity()?.entity}>
+                          {(entity) => (
+                            <EntityPill
+                              label={entity().label}
+                              facts={scopedEntityFacts(session, entity())}
+                            />
+                          )}
+                        </Show>
+                        <Show when={activity()?.child}>
+                          {(ref) => child(ref())}
+                        </Show>
+                      </header>
+                    )
+                    : undefined)}
+              />
+            )}
+          >
+            {() => (
+              <>
+                <TreeItem last={!hasSource() && !props.row?.extra}>
                   <TreeNode
                     header={() => (
                       <div class="otk-tool-body">
                         <Show when={state()}>
                           {(value) => <p>{value()}</p>}
                         </Show>
-                        <Show
-                          when={props.recordTime !== undefined ||
-                            activity()?.parameters?.length}
+                        <dl
+                          class="otk-native-parameters"
+                          hidden={props.recordTime === undefined &&
+                            !activity()?.parameters?.length}
                         >
-                          <dl class="otk-native-parameters">
-                            <Show
-                              when={props.recordTime !== undefined}
-                            >
-                              <dt>Recorded at</dt>
-                              <dd>
-                                <Clock
-                                  at={props.recordTime!}
-                                  precise
-                                  class="otk-native-value"
-                                  data-record-time=""
-                                />
-                              </dd>
-                            </Show>
-                            <For
-                              each={activity()?.parameters}
-                              keyed={(parameter) => parameter.key}
-                            >
-                              {(parameter) => (
-                                <>
-                                  <dt>{parameter().label}</dt>
-                                  <dd>
-                                    <Show
-                                      when={parameter().entity}
-                                      fallback={
-                                        <Show
-                                          when={parameter().child}
-                                          fallback={
-                                            <span class="otk-native-value">
-                                              {parameter().value}
-                                            </span>
-                                          }
-                                        >
-                                          {(ref) => child(ref())}
-                                        </Show>
-                                      }
-                                    >
-                                      {(entity) => (
-                                        <EntityPill
-                                          label={entity().label}
-                                          facts={scopedEntityFacts(
-                                            session,
-                                            entity(),
-                                          )}
-                                        />
-                                      )}
-                                    </Show>
-                                  </dd>
-                                </>
-                              )}
-                            </For>
-                          </dl>
-                        </Show>
+                          <Show
+                            when={props.recordTime !== undefined}
+                          >
+                            <dt>Recorded at</dt>
+                            <dd>
+                              <Clock
+                                at={props.recordTime!}
+                                precise
+                                class="otk-native-value"
+                                data-record-time=""
+                              />
+                            </dd>
+                          </Show>
+                          <For
+                            each={activity()?.parameters}
+                            keyed={(parameter) => parameter.key}
+                          >
+                            {(parameter) => (
+                              <>
+                                <dt>{parameter().label}</dt>
+                                <dd>
+                                  <Show
+                                    when={parameter().entity}
+                                    fallback={
+                                      <Show
+                                        when={parameter().child}
+                                        fallback={
+                                          <span class="otk-native-value">
+                                            {parameter().value}
+                                          </span>
+                                        }
+                                      >
+                                        {(ref) => child(ref())}
+                                      </Show>
+                                    }
+                                  >
+                                    {(entity) => (
+                                      <EntityPill
+                                        label={entity().label}
+                                        facts={scopedEntityFacts(
+                                          session,
+                                          entity(),
+                                        )}
+                                      />
+                                    )}
+                                  </Show>
+                                </dd>
+                              </>
+                            )}
+                          </For>
+                        </dl>
                         <Show when={activity()?.body}>
                           {(body) => (
                             <Blocks
@@ -247,20 +263,23 @@ export function UnknownPart(props: PartProps): import("solid-js").Element {
                             />
                           )}
                         </Show>
-                        <Show when={preview() || reference()}>
-                          <NativeSource
-                            reference={reference()}
-                            preview={preview()}
-                            prefs={props.prefs}
-                          />
-                        </Show>
                       </div>
                     )}
                   />
                 </TreeItem>
-              )
-              : undefined}
-          />
+                <Show when={hasSource()}>
+                  <TreeItem last={!props.row?.extra}>
+                    <NativeSource
+                      reference={reference()}
+                      preview={preview()}
+                      prefs={props.prefs}
+                    />
+                  </TreeItem>
+                </Show>
+                {props.row?.extra?.()}
+              </>
+            )}
+          </Disclosure>
         </section>
       }
     >

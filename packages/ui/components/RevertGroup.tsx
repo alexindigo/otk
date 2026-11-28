@@ -4,7 +4,7 @@ import { createMemo, type Element, For, Show } from "solid-js";
 import {
   type ActivityGroup as Group,
   type BranchHistory,
-  errorFeedback,
+  type FailurePresentation,
   savedBranchProjection,
   type SessionRevert,
   type SessionRevertState,
@@ -12,13 +12,12 @@ import {
 import type { Message as RecordMessage, Preferences } from "@otk/protocol";
 import ActivityGroup from "./ActivityGroup.tsx";
 import Message from "./Message.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 import Clock from "./Clock.tsx";
 import { CloseIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import FailureContent from "./FailureContent.tsx";
-import { BranchCopyRecovery } from "./SavedBranches.tsx";
-import FittedActions from "./FittedActions.tsx";
+import { branchCopyRecoveryActions } from "./SavedBranches.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
 import ToolPath from "./tools/ToolPath.tsx";
@@ -54,7 +53,9 @@ export default function RevertGroup(props: {
     title?: string;
   };
   warning?: string;
-  failureVisible?: boolean;
+  failure?: FailurePresentation;
+  failureStatus?: string;
+  recoverCopy?: boolean;
   onOpenCopy?(): void;
   onOpenChild(id: string): void;
 }): Element {
@@ -65,10 +66,6 @@ export default function RevertGroup(props: {
     props.state.record?.prompt?.input.split("\n")[0] || preview(first()) ||
     boundary();
   const at = () => props.state.record?.prompt?.time ?? first()?.time.created;
-  const failure = () =>
-    props.failureVisible === false
-      ? undefined
-      : errorFeedback(props.state.error);
   const pending = () =>
     !!props.state.pending || props.state.phase === "staging" ||
     props.state.phase === "restoring";
@@ -84,18 +81,23 @@ export default function RevertGroup(props: {
       data-boundary={boundary()}
       data-phase={props.state.phase}
       data-dismissed={props.state.dismissed ? "true" : "false"}
-      role={failure() && !props.state.dismissed ? "alert" : undefined}
+      role={props.failure && !props.state.dismissed ? "alert" : undefined}
       tabindex={props.state.dismissed ? 0 : undefined}
       ref={contextTarget(() => ({ kind: "session", data: props.target }))}
     >
       <ActivityGroup
         group={props.group}
+        disclosureKind="revert"
         prefs={{ ...props.prefs, expandRecords: false }}
         collapsible={!props.state.dismissed}
-        failed={!!failure() && !props.state.dismissed}
-        wrapActions
+        hasContent={() =>
+          !!(
+            props.group.members.length || props.state.record?.files.length ||
+            props.failure || props.warning
+          )}
+        failed={props.failure?.tone === "error" && !props.state.dismissed}
         icon={RevertIcon}
-        label={(open) => (
+        label={() => (
           <span class="otk-revert-heading-content">
             <ChromeMeta class="otk-revert-label otk-control-label">
               <span>Reverted from</span>
@@ -109,18 +111,6 @@ export default function RevertGroup(props: {
                 {label()}
               </span>
             </ChromeMeta>
-            <Show
-              when={!open() && !props.state.dismissed && failure()?.failure}
-            >
-              {(value) => (
-                <ChromeMeta
-                  class="otk-control-label otk-revert-reason"
-                  title={value().reason}
-                >
-                  {value().reason}
-                </ChromeMeta>
-              )}
-            </Show>
             <Show when={!props.state.dismissed && props.warning}>
               <ChromeMeta
                 class="otk-control-label otk-revert-warning"
@@ -131,95 +121,107 @@ export default function RevertGroup(props: {
             </Show>
           </span>
         )}
-        trailing={(open) => (
+        status={() => (
           <Show when={!props.state.dismissed}>
             <Show when={pending()}>
-              <ActivityIndicator
-                small
-                label={props.state.phase === "restoring"
-                  ? "Restoring"
-                  : "Reverting"}
-              />
-            </Show>
-            <Show when={pending()}>
-              <ChromeMeta>
-                {props.state.phase === "restoring"
-                  ? "Restoring..."
-                  : "Reverting..."}
-              </ChromeMeta>
+              <MetaItem rank={1}>
+                <span class="otk-revert-progress">
+                  <ActivityIndicator
+                    small
+                    label={props.state.phase === "restoring"
+                      ? "Restoring"
+                      : "Reverting"}
+                  />
+                  <ChromeMeta>
+                    {props.state.phase === "restoring"
+                      ? "Restoring..."
+                      : "Reverting..."}
+                  </ChromeMeta>
+                </span>
+              </MetaItem>
             </Show>
             <Show when={props.state.phase === "saving"}>
-              <ActivityIndicator small label="Saving copy" />
-              <ChromeMeta>Saving copy...</ChromeMeta>
+              <MetaItem rank={2}>
+                <span class="otk-revert-progress">
+                  <ActivityIndicator small label="Saving copy" />
+                  <ChromeMeta>Saving copy...</ChromeMeta>
+                </span>
+              </MetaItem>
             </Show>
             <Show when={props.state.phase === "saved"}>
-              <ChromeMeta>Copy saved</ChromeMeta>
+              <MetaItem rank={3}>
+                <ChromeMeta>Copy saved</ChromeMeta>
+              </MetaItem>
             </Show>
-            <FittedActions
-              inline
-              items={[
-                ...(props.state.phase === "saved" && props.onOpenCopy
-                  ? [{
-                    key: "open",
-                    label: "Open copy",
-                    run: () => props.onOpenCopy?.(),
-                  }]
-                  : []),
-                ...(props.state.phase === "staged" && props.state.copyRemoved
-                  ? [{
-                    key: "save",
-                    label: "Save copy",
-                    run: () => {
-                      void props.owner?.retry();
-                    },
-                  }]
-                  : []),
-                ...(!open() && props.state.phase === "failed" &&
-                    props.state.record
-                  ? [{
-                    key: "retry",
-                    label: "Retry",
-                    run: () => {
-                      void props.owner?.retry();
-                    },
-                  }]
-                  : []),
-                ...(!pending() && props.owner
-                  ? [{
-                    key: "restore",
-                    label: "Restore",
-                    class: "otk-revert-restore",
-                    ariaLabel: "Restore conversation",
-                    run: () => {
-                      void props.owner?.restore();
-                    },
-                  }, {
-                    key: "dismiss",
-                    label: "Dismiss revert",
-                    icon: CloseIcon,
-                    title: "Dismiss revert",
-                    run: () => props.owner?.dismiss(),
-                  }]
-                  : []),
-              ]}
-            />
+            <Show when={props.failureStatus}>
+              {(status) => (
+                <MetaItem rank={4}>
+                  <ChromeMeta>{status()}</ChromeMeta>
+                </MetaItem>
+              )}
+            </Show>
           </Show>
         )}
+        actions={() =>
+          props.state.dismissed ? [] : [
+            ...(props.state.phase === "saved" && props.onOpenCopy
+              ? [{
+                key: "open",
+                label: "Open copy",
+                run: () => props.onOpenCopy?.(),
+              }]
+              : []),
+            ...(props.state.phase === "staged" && props.state.copyRemoved
+              ? [{
+                key: "save",
+                label: "Save copy",
+                run: () => {
+                  void props.owner?.retry();
+                },
+              }]
+              : []),
+            ...(props.recoverCopy && props.history
+              ? branchCopyRecoveryActions(props.history)
+              : props.state.phase === "failed" && props.state.record &&
+                  props.owner
+              ? [{
+                key: "retry",
+                label: "Retry",
+                run: () => {
+                  void props.owner?.retry();
+                },
+              }]
+              : []),
+            ...(!pending() && props.owner
+              ? [{
+                key: "restore",
+                label: "Restore",
+                class: "otk-revert-restore",
+                ariaLabel: "Restore conversation",
+                run: () => {
+                  void props.owner?.restore();
+                },
+              }, {
+                key: "dismiss",
+                label: "Dismiss revert",
+                icon: CloseIcon,
+                title: "Dismiss revert",
+                run: () => props.owner?.dismiss(),
+              }]
+              : []),
+          ]}
         body={() => (
           <TranscriptSnapshot>
             <div class="otk-revert-records">
-              <Show when={failure()?.failure}>
+              <Show when={props.failure}>
                 {(value) => (
                   <FailureContent
                     failure={value()}
                     placement="record"
-                    expanded
+                    fullReason
                     signal={false}
                   />
                 )}
-              </Show>
-              <Show when={failure()?.failure && props.history?.state.recovery}>
-                <BranchCopyRecovery owner={props.history!} />
               </Show>
               <For each={props.state.record?.files}>
                 {(file) => (

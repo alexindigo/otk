@@ -19,6 +19,7 @@ import { HttpRequests } from "./http-requests.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { browserStorage } from "./browser-storage.ts";
 import type { PublicDefaults } from "./public-defaults.ts";
+import type { ServerContinuity } from "./server-continuity.ts";
 import {
   type ConnectionOptions,
   type ConnectionState,
@@ -32,7 +33,10 @@ export interface SidecarSpec {
 }
 export interface SidecarState extends SidecarSpec {
   status: ConnectionState;
+  /** Transport has welcomed; the current view's baselines are still attaching. */
+  attaching?: true;
   harness: HarnessState;
+  continuity?: ServerContinuity;
   error?: string;
   /** Retain the owner's facts instead of reparsing the compatibility text. */
   feedback?: Feedback;
@@ -164,6 +168,12 @@ export function createSidecars(
     const connection = new SidecarConnection(
       spec.baseUrl,
       {
+        continuity(value) {
+          setState((draft) => {
+            const item = draft.list.find((item) => item.id === spec.id);
+            if (item) item.continuity = value;
+          });
+        },
         defaults(value) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);
@@ -175,6 +185,7 @@ export function createSidecars(
             const item = draft.list.find((item) => item.id === spec.id);
             if (item) {
               item.status = status;
+              delete item.attaching;
               if (status === "connected") {
                 item.connectionVersion = (item.connectionVersion ?? 0) + 1;
               }
@@ -192,6 +203,7 @@ export function createSidecars(
               const item = draft.list.find((item) => item.id === spec.id);
               if (item) {
                 item.capabilities = [...welcomeCapabilities(frame)];
+                if (frame.viewAcknowledgements) item.attaching = true;
               }
             });
           }
@@ -218,6 +230,8 @@ export function createSidecars(
           reload: options.connection?.reload,
           afterRender: options.connection?.afterRender,
           policy: options.connection?.policy,
+          retireRequestDisclosures: options.connection
+            ?.retireRequestDisclosures,
           requests: {
             sidecarId: spec.id,
             serverLabel: spec.label,

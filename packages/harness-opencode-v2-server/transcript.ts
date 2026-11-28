@@ -51,6 +51,7 @@ import {
   text,
 } from "./map.ts";
 import { mapTool } from "./tool-interpretation.ts";
+import { HelperEdges } from "./helper-edges.ts";
 import { requestFailureRecord } from "./request-failure.ts";
 import {
   nativeSource,
@@ -498,26 +499,35 @@ export class Transcript {
           ]);
           const anchor = work.anchor;
           const scan = forced || !unchanged;
-          if (scan && anchor && !points.has(anchor)) {
-            // A checkpoint only witnesses that exact head. A new head says
-            // nothing about edits to the previous anchor.
-            if (
-              JSON.stringify(work.checkpoint) === JSON.stringify(head) &&
-              anchor === head.id
-            ) {
-              if (!defer(anchor)) work.deferred.delete(anchor);
-            } else points.add(anchor);
-          }
+          if (scan && anchor) points.add(anchor);
           try {
             // In-place changes may target an older, acquired native identity.
             for (const point of points) {
-              if (!defer(point)) {
-                await publish([
-                  last?.id === point
-                    ? last
-                    : await this.reader.get(id, point, signal),
-                ]);
+              if (defer(point)) continue;
+              const checkpoint = work.checkpoint;
+              if (checkpoint?.id === point) {
+                const current = head.id === point
+                  ? head
+                  : await this.options.digest?.read("opcv2.transcript.head", {
+                    sessionID: id,
+                    cutoff,
+                    messageID: point,
+                  }, { owner: `v2-history:${id}`, priority: "user", signal });
+                if (defer(point)) continue;
+                if (
+                  current?.id === point && current.seq === checkpoint.seq &&
+                  current.updated === checkpoint.updated
+                ) {
+                  work.deferred.delete(point);
+                  work.checkpoint = undefined;
+                  continue;
+                }
               }
+              await publish([
+                last?.id === point
+                  ? last
+                  : await this.reader.get(id, point, signal),
+              ]);
             }
           } catch (error) {
             if (errorTag(error) !== "MessageNotFoundError") throw error;
@@ -597,6 +607,7 @@ export class Transcript {
     return task;
   }
   readonly requests: RequestRetention;
+  readonly helperEdges: HelperEdges;
   #executionFailures = new Map<string, Promise<Message>>();
   constructor(
     readonly options: {
@@ -645,6 +656,7 @@ export class Transcript {
     },
   ) {
     this.requests = options.requests ?? new V2RequestRetention();
+    this.helperEdges = new HelperEdges(options.diagnostic);
     if (options.agents) {
       this.colors = new AgentColors(
         options.agents,
@@ -680,11 +692,12 @@ export class Transcript {
         let witness: NativeHead | null = null;
         if (work && this.options.digest) {
           try {
-            // Capture before the body read: a later native edit must advance
-            // this witness and remain visible to history's ordinary repair.
+            // Witness the actual record, not the head (which can already be
+            // an idle boundary). A later edit invalidates this handoff.
             witness = await this.options.digest.read("opcv2.transcript.head", {
               sessionID: id,
               cutoff: this.#baselines.get(id)?.raw.revert?.messageID,
+              messageID: message,
             }, { owner: `v2-recovery:${id}`, priority: "user", signal });
           } catch (error) {
             signal.throwIfAborted();
@@ -1345,7 +1358,7 @@ export class Transcript {
     );
     if (!mapped) return;
     mapped = this.#decorateAgent(mapped, id);
-    mapped = this.#decorateHelpers(mapped);
+    mapped = this.#decorateHelpers(mapped, !settled);
     if (raw.type === "shell") {
       let known = this.#projected.get(id);
       if (!known) this.#projected.set(id, known = { shells: new Map() });
@@ -2611,6 +2624,7 @@ export class Transcript {
     this.#revertCommits.delete(id);
     this.#anchors.delete(id);
     this.#watermarks.delete(id);
+    this.helperEdges.retire(id);
     await this.requests.remove(id);
     this.release(id);
   }
@@ -2748,6 +2762,26 @@ export class Transcript {
       sid = text(d.sessionID) ?? text(record(d.form).sessionID);
     if (!sid || sid === "global") return;
     const id = ids.encode(sid);
+    // Capture execution identity before the viewer/coverage fences. A helper
+    // can start or settle while no transcript body is acquired.
+    const assistant = text(d.assistantMessageID), call = text(d.id);
+    if (assistant) {
+      if (event.type === "session.tool.progress" && call) {
+        this.helperEdges.observe(id, assistant, call, d.metadata);
+      } else if (
+        (event.type === "session.tool.success" ||
+          event.type === "session.tool.failed") && call
+      ) this.helperEdges.retire(id, assistant, call);
+      else if (
+        event.type === "session.step.ended" ||
+        event.type === "session.step.failed"
+      ) this.helperEdges.retire(id, assistant);
+    }
+    if (
+      event.type === "session.execution.succeeded" ||
+      event.type === "session.execution.failed" ||
+      event.type === "session.execution.interrupted"
+    ) this.helperEdges.retire(id);
     const coveredSeq = this.#history.get(id)?.coveredSeq;
     const covered = coveredSeq !== undefined &&
       event.durable?.aggregateID === sid && event.durable.seq <= coveredSeq &&
@@ -2930,13 +2964,13 @@ export class Transcript {
       return;
     }
     if (
-      sourceID &&
-      (event.type === "session.synthetic" ||
-        event.type === "session.instructions.updated" ||
-        event.type === "session.skill.activated")
+      event.type === "session.synthetic" ||
+      event.type === "session.instructions.updated" ||
+      event.type === "session.skill.activated"
     ) {
       const raw = eventMessage(event);
-      if (!raw) {
+      if (raw === null) return;
+      if (raw === undefined) {
         this.#repairHistory(id);
         return;
       }
@@ -3766,14 +3800,14 @@ export class Transcript {
       }
     }
   }
-  #decorateHelpers(message: Message): Message {
+  #decorateHelpers(message: Message, restoreRunning: boolean): Message {
     for (const [key, link] of this.#helperLinks) {
       if (link.parent === message.sessionID && link.message === message.id) {
         this.#helperLinks.delete(key);
       }
     }
     const parts = message.parts.map((part) =>
-      this.#helperPart(message.sessionID, message.id, part)
+      this.#helperPart(message.sessionID, message.id, part, restoreRunning)
     );
     this.#pruneHelpers();
     return { ...message, parts };
@@ -3782,15 +3816,17 @@ export class Transcript {
     parent: string,
     message: string,
     part: import("@otk/protocol").Part,
+    restoreRunning = true,
   ): import("@otk/protocol").Part {
     const key = JSON.stringify([parent, message, part.id]);
     this.#helperLinks.delete(key);
-    if (
-      part.kind !== "tool" || part.call.tool !== "task" ||
-      !part.call.childSessionID
-    ) return part;
-    const child = part.call.childSessionID,
-      progress = this.#helperSummary(child);
+    if (part.kind !== "tool" || part.call.tool !== "task") return part;
+    const child = part.call.childSessionID ??
+      (restoreRunning && part.call.status === "running"
+        ? this.helperEdges.child(parent, message, part.call.callID)
+        : undefined);
+    if (!child) return part;
+    const progress = this.#helperSummary(child);
     if (this.#subscriptions.has(parent)) {
       this.#helperLinks.set(key, {
         parent,
@@ -3805,7 +3841,7 @@ export class Transcript {
       this.#helperHints.add(child);
       this.options.requestHelper(child);
     }
-    return { ...part, call: { ...part.call, progress } };
+    return { ...part, call: { ...part.call, childSessionID: child, progress } };
   }
   #helperSummary(child: string): import("@otk/protocol").HelperSummary {
     return this.#helperProgress.get(child) ?? this.options.helper?.(child) ?? {

@@ -79,6 +79,13 @@ input is retained until reliable admission/settlement evidence; a newer edited
 draft is never cleared by the older result. Successful sends are not made to
 look unsent by later visit/location bookkeeping.
 
+Question answers and skips use the existing request tracker, keyed by the native
+request identity. The dock shows its captured answer and request status; the
+generic session notice does not publish a second copy. Native question
+retirement clears the dock even when the RPC result is still in transit. A
+confirmed result also retires the request and consumes only the submitted draft.
+Switching views detaches the presentation, not the draft or the operation.
+
 Text missed during a native stream gap appears when the part finishes;
 unfinished native HTTP parts do not expose that missing source.
 

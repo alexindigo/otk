@@ -17,6 +17,7 @@ import type { Feedback } from "./failures.ts";
 import { RequestFailure } from "./failures.ts";
 import type { PendingSend } from "./pending-send.ts";
 import { refusedSend, type SendOutcome } from "./send-outcome.ts";
+import type { ClientIntent } from "./requests.ts";
 
 /** This is an observation deadline, never a mutation timeout or permission to resend. */
 export const SEND_OBSERVATION_MS = 10_000;
@@ -31,7 +32,7 @@ export interface DeliveryReceipt {
   settled?: boolean;
 }
 export interface SendCustody {
-  admit?(messageID: string, check: () => void): void;
+  admit?(messageID: string, check: () => void, intent?: ClientIntent): void;
   outcome(value: SendOutcome): boolean | void;
 }
 export interface SessionDelivery {
@@ -43,13 +44,19 @@ export interface SessionDelivery {
   };
   subscribe(listener: () => void): () => void;
   send(
-    action: (dispatch: () => void) => Promise<SubmissionReceipt | null>,
+    action: (
+      dispatch: (intent?: ClientIntent) => void,
+    ) => Promise<SubmissionReceipt | null>,
     entry?: PendingSend,
     messageID?: string,
     custody?: SendCustody,
   ): Promise<SendOutcome>;
   /** Reattach receipt observation only; never replay the submission preparation. */
-  resume(entry: PendingSend, result?: Promise<SubmissionReceipt | null>): void;
+  resume(
+    saved: PendingSend | { messageID: string },
+    result?: Promise<SubmissionReceipt | null>,
+    custody?: SendCustody,
+  ): void;
   /** The viewport reports real visible native sources through its existing port. */
   presented(ids: readonly string[]): void;
   reload(): Promise<void>;
@@ -284,9 +291,11 @@ export function createSessionDelivery(input: {
       };
     },
     subscribe: (listener) => store.subscribe(listener),
-    resume(entry, result) {
+    resume(saved, result, custody) {
       bind();
-      if (!result && entry.dispatched === false) {
+      const entry = "message" in saved ? saved : undefined;
+      const id = "message" in saved ? saved.message.id : saved.messageID;
+      if (!result && entry?.dispatched === false) {
         transcript?.send?.({
           ...entry,
           phase: "failed",
@@ -305,20 +314,24 @@ export function createSessionDelivery(input: {
         });
         return;
       }
-      const recovered = {
-        ...entry,
-        retry: () => {
-          void owner.reload();
+      if (transcript?.projection.started(id) && committedMessage(id)) {
+        custody?.outcome({ kind: "started", messageID: id });
+        return;
+      }
+      const failure = entry?.feedback?.failure?.value;
+      void owner.send(
+        (dispatch) => {
+          dispatch();
+          return result ??
+            (failure
+              ? Promise.reject(new RequestFailure(failure))
+              : Promise.resolve(null));
         },
-      };
-      const failure = entry.feedback?.failure?.value;
-      void owner.send((dispatch) => {
-        dispatch();
-        return result ??
-          (failure
-            ? Promise.reject(new RequestFailure(failure))
-            : Promise.resolve(null));
-      }, recovered);
+        entry,
+        id,
+        custody,
+      );
+      if (!entry) void owner.reload();
     },
     async send(action, entry, messageID, custody) {
       let activated: string | undefined;
@@ -332,11 +345,18 @@ export function createSessionDelivery(input: {
         bind();
         const id = entry?.intent.key ?? randomID();
         activated = id;
-        const currentEntry = () =>
-          (entry && transcript?.projection.entry(entry.message.id)?.send) ??
-            entry!;
+        const ownedEntry = () => {
+          if (!entry) return;
+          const owned = transcript?.projection.entry(entry.message.id)?.send;
+          return owned?.intent.key === id &&
+              owned.intent.clientID === entry.intent.clientID
+            ? owned
+            : undefined;
+        };
+        const currentEntry = () => ownedEntry() ?? entry!;
+        let observeEntry: (() => void) | undefined;
         if (entry) {
-          if (committedMessage(entry.message.id)) {
+          if (!custody && committedMessage(entry.message.id)) {
             return { kind: "committed", messageID: entry.message.id };
           }
           const previous = outcomes.get(id)?.promise ??
@@ -422,13 +442,13 @@ export function createSessionDelivery(input: {
             });
           };
           publish({ ...entry, dispatched: entry.dispatched ?? false });
-          timers.set(id, clock.set(failObservation, SEND_OBSERVATION_MS));
+          observeEntry = failObservation;
         }
         void (async () => {
           let result: SubmissionReceipt | null | undefined;
           let dispatched = false;
           try {
-            result = await action(() => {
+            result = await action((intent) => {
               if (watch?.stopping) {
                 throw new Error("Send was stopped before dispatch.");
               }
@@ -438,18 +458,22 @@ export function createSessionDelivery(input: {
               if (dispatched) return;
               const identity = entry?.message.id ?? messageID;
               if (identity && custody) {
-                custody.admit?.(identity, () => void owner.reload());
+                custody.admit?.(identity, () => void owner.reload(), intent);
               }
               dispatched = true;
               if (watch) watch.dispatched = true;
               if (entry) {
                 transcript?.send?.({ ...currentEntry(), dispatched: true });
-              } else if (!timers.has(id)) {
-                timers.set(
-                  id,
-                  clock.set(() => unavailable(id), SEND_OBSERVATION_MS),
-                );
               }
+              timers.set(
+                id,
+                clock.set(
+                  ownedEntry() && observeEntry
+                    ? observeEntry
+                    : () => unavailable(id),
+                  SEND_OBSERVATION_MS,
+                ),
+              );
             });
           } catch (cause) {
             if (watch?.stopping) {
@@ -475,11 +499,12 @@ export function createSessionDelivery(input: {
             const certainty = failure?.facts?.outcome === "rejected"
               ? "definite"
               : "uncertain";
-            const retry = () => {
-              if (!entry || custody || certainty === "uncertain") {
-                void owner.reload();
-              } else entry.retry?.();
-            };
+            const { retry: submitAgain } = entry ?? {};
+            const retry = certainty === "uncertain"
+              ? () => void owner.reload()
+              : custody
+              ? undefined
+              : submitAgain;
             if (entry) {
               if (!dispatched) {
                 // The draft and preparation owner's feedback remain authoritative.
@@ -510,16 +535,15 @@ export function createSessionDelivery(input: {
                 // A definite rejection returns custody to the draft owner.
                 // Keep the failed send visible, but there is no native send to
                 // reconcile and only the recovered draft can submit again.
-                const restored = !!custody && certainty === "definite";
                 transcript?.send?.({
                   ...currentEntry(),
                   phase: "failed",
                   feedback: feedback &&
-                    (restored ? { ...feedback, action: undefined } : {
+                    (!retry ? { ...feedback, action: undefined } : {
                       ...feedback,
                       action: { label: "Retry", run: retry },
                     }),
-                  retry: restored ? undefined : retry,
+                  retry,
                 });
               }
             }
@@ -534,7 +558,7 @@ export function createSessionDelivery(input: {
                   certainty,
                   reason: failure?.facts?.reason ??
                     "The message could not be sent.",
-                  retry,
+                  ...(retry ? { retry } : {}),
                   ...(failure ? { failure } : {}),
                 }
                 : refusedSend(cause),
@@ -615,7 +639,10 @@ export function createSessionDelivery(input: {
             }
           });
           bind();
-          if (entry) {
+          if (
+            entry && ownedEntry() &&
+            (!result || result.messageID === entry.message.id)
+          ) {
             // The pending transcript entry now owns this send (2.39): it
             // commits in place or fails visibly with Retry. A commitment that
             // bind() already observed has settled the outcome first.
@@ -625,7 +652,8 @@ export function createSessionDelivery(input: {
             });
           }
           if (!store.state.receipts.some((r) => r.id === id)) return;
-          if (!transcript) {
+          if (!transcript || (entry && outcomes.has(id))) {
+            clear(id);
             unavailable(id);
             return;
           }

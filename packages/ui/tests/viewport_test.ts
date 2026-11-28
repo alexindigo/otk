@@ -2,6 +2,46 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { acquireViewport, followViewport } from "../components/viewport.ts";
 
+Deno.test("viewport rejects an ineligible row at capture, remap and navigation", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane), owner = lease.owner;
+    const retained: string[] = [];
+    const anchorable = (key: string) => key !== "gap";
+    const unregister = owner.register({
+      id: "rows",
+      depth: 1,
+      anchorable,
+      anchor: (eligible?: typeof anchorable) => ({
+        key: ["gap", "reply"].find(eligible ?? (() => true))!,
+        offset: 0,
+      }),
+      resolve: () => 400,
+      retain: ({ key }) => {
+        retained.push(key);
+        return () => {};
+      },
+    });
+    try {
+      owner.input(400);
+      for (let i = 0; i < 4; i++) flush();
+      assertEquals(retained, ["reply"]);
+      owner.remap("rows", () => ({ key: "gap", offset: 0 }));
+      const positioned = owner.navigate(() => ({
+        start: 400,
+        end: 420,
+        measured: true,
+        anchor: { id: "rows", key: "gap", start: 400 },
+      }), { intent: "user" });
+      for (let i = 0; i < 4; i++) flush();
+      await positioned;
+      assertEquals(retained, ["reply", "reply"]);
+    } finally {
+      unregister();
+      lease.release();
+    }
+  });
+});
+
 Deno.test("scrollbar input retires follow and commits proportional navigation through the position owner", async () => {
   await viewportFixture(async ({ pane, flush }) => {
     const lease = acquireViewport(pane), owner = lease.owner;
@@ -776,6 +816,33 @@ Deno.test("viewport position publications coalesce and retirement suppresses pen
         1,
         "retirement cancels the pending publication",
       );
+    } finally {
+      lease.release();
+    }
+  }, { tail: false });
+});
+
+Deno.test("sibling window measurements publish one viewport revision", async () => {
+  await viewportFixture(async ({ pane, flush }) => {
+    const lease = acquireViewport(pane);
+    try {
+      flush();
+      await Promise.resolve();
+      const measured: string[] = [];
+      const published: string[][] = [];
+      lease.owner.subscribe(() => published.push([...measured]));
+      lease.owner.measure(() => measured.push("first"));
+      const cancel = lease.owner.measure(() => measured.push("cancelled"));
+      lease.owner.measure(() => measured.push("second"));
+      cancel();
+      assertEquals(measured, []);
+      flush();
+      await Promise.resolve();
+      assertEquals(published, [["first", "second"]]);
+      lease.owner.measure(() => measured.push("retired"));
+      lease.release();
+      flush();
+      assertEquals(measured, ["first", "second"]);
     } finally {
       lease.release();
     }

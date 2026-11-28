@@ -9,6 +9,31 @@ import type {
   PermissionRequest,
   QuestionRequest,
 } from "@otk/protocol";
+
+Deno.test("notification and dock acquire the same scoped permission inventory", async () => {
+  const owner = new RequestLifetimes();
+  const entry = () => undefined;
+  const budget = { replayops: 8, replaybytes: 8192 };
+  let reads = 0;
+  const load = () => {
+    reads++;
+    return Promise.resolve([permission]);
+  };
+  const scope = permission.sessionID;
+  const background = owner.readPermissions(scope, entry, load, budget);
+  const dock = owner.readPermissions(scope, entry, load, budget);
+  assertEquals(await background, [permission]);
+  assertEquals(await dock, [permission]);
+  assertEquals(await owner.readPermissions(scope, entry, load, budget), [
+    permission,
+  ]);
+  assertEquals(reads, 1);
+  owner.resetPermissionScopes();
+  assertEquals(await owner.readPermissions(scope, entry, load, budget), [
+    permission,
+  ]);
+  assertEquals(reads, 2);
+});
 const question: QuestionRequest = {
   id: "q",
   sessionID: "child",
@@ -128,6 +153,47 @@ Deno.test("draft retention waits for a deferred framework commit", () => {
     createForm(form, undefined, owner).derive().answer.q0,
     "committed text",
   );
+});
+
+Deno.test("deleted request transfer keeps separate exact values and fences empty rows, late writes and settlement", () => {
+  const owner = new RequestLifetimes();
+  const lookup = (id: string) => ({
+    parentID: ["child", "live"].includes(id) ? "parent" : undefined,
+    deleted: ["parent", "child", "foreign"].includes(id),
+  });
+  const rows = [
+    ["exact", "parent", "  same\nvalue\n"],
+    ["descendant", "child", "  same\nvalue\n"],
+    ["empty", "parent", ""],
+    ["live", "live", "Leave the live helper alone"],
+    ["foreign", "foreign", "Leave unrelated deletion alone"],
+  ];
+  for (const [id, sessionID, value] of rows) {
+    owner.receive({
+      op: "permission.upsert",
+      request: { ...permission, id, sessionID },
+    });
+    owner.draft("permission", id, value);
+  }
+  owner.retireSessions((id) => lookup(id).deleted);
+  const settle = owner.settlement("permission", "exact");
+  owner.transferDeleted("parent", lookup, (values, release) => {
+    assertEquals(values, [rows[0][2], rows[1][2]]);
+    assertEquals(owner.draft("permission", "exact"), rows[0][2]);
+    release();
+  });
+  settle();
+  for (const id of ["exact", "descendant", "empty"]) {
+    owner.draft("permission", id, "Stale view save");
+    assertEquals(owner.draft("permission", id), undefined);
+  }
+  assertEquals(owner.get("permission", "exact")?.state, "retired");
+  assertEquals(owner.draft("permission", "live"), rows[3][2]);
+  assertEquals(owner.draft("permission", "foreign"), rows[4][2]);
+  owner.transferDeleted("parent", lookup, (values, release) => {
+    assertEquals(values, []);
+    release();
+  });
 });
 
 Deno.test("captured local settlement consumes submitted input across native delivery order without consuming newer input", () => {

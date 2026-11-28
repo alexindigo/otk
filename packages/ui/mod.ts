@@ -56,6 +56,7 @@ export { default as ListRow } from "./components/ListRow.tsx";
 export { default as RightPanel } from "./components/RightPanel.tsx";
 export { registerSessionsPanel } from "./features/sessions.tsx";
 export { registerTimelinePanel } from "./features/timeline.tsx";
+export { registerWorkPanel } from "./features/work.tsx";
 export { default as Timeline } from "./components/Timeline.tsx";
 export { registerActivityPanel } from "./features/approvals.tsx";
 export {
@@ -138,6 +139,7 @@ export { solidState } from "./state/binding.ts";
 export { selection } from "./components/selection.ts";
 export { contextTarget } from "./components/context-target.ts";
 export { default as ContextMenu } from "./components/ContextMenu.tsx";
+export { DisclosuresProvider } from "./components/Disclosure.tsx";
 export {
   type ContentIdentity,
   ContentIdentityProvider,
@@ -221,7 +223,7 @@ export {
   registerOsChannel,
 } from "./features/notify/os.ts";
 export { registerSoundChannel } from "./features/notify/sound.ts";
-export { registerBadgeChannel } from "./features/notify/badge.ts";
+export { attentionBadge } from "./features/notify/badge.ts";
 export { default as Toasts } from "./components/Toasts.tsx";
 export {
   default as NotificationSettings,
@@ -233,3 +235,4 @@ export {
   registerFormTakeover,
   registerGlobalForms,
 } from "./components/FormDock.tsx";
+export { registerFilePreviewDialog } from "./components/FilePreview.tsx";

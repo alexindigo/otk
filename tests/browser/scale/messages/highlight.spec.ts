@@ -152,13 +152,9 @@ test("messages.highlight-2000-lines-passive-latency", {
       ),
     { timeout: 30_000 },
   ).toBe(true);
-  // WP16 puts successful native completion in the reply footer, not a trailing
-  // status row. Keep the completion witness without disclosing it during paint.
-  if (state.controller.info!.version.startsWith("2.")) {
-    await expect(
-      page.locator(measuredReply + " .otk-record-completion button"),
-    ).toHaveAttribute("aria-expanded", "false");
-  }
+  // A text-only reply has no Work strip for step or completion bookkeeping.
+  await expect(page.locator(measuredReply).locator(".otk-work-strip"))
+    .toHaveCount(0);
   await expect.poll(() =>
     page.locator(".otk-messages").evaluate((root) => {
       const codes = Array.from(root.querySelectorAll(".otk-code code"))
@@ -260,12 +256,6 @@ test("messages.highlight-2000-lines-passive-latency", {
   ).toBe(true);
   assertHighlightBudget(evidence.blocks.slice(1), 20);
   assertHighlightBudget(evidence.revisions, 200);
-  if (state.controller.info!.version.startsWith("2.")) {
-    await page.locator(measuredReply + " .otk-record-completion button")
-      .click();
-    await expect(page.getByText("Execution succeeded", { exact: true }).last())
-      .toBeVisible();
-  }
   console.info(
     "Highlight measurements",
     JSON.stringify({

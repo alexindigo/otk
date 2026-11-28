@@ -1,24 +1,12 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-tool-line {
-  --tree-content-gutter: var(--disclosure-gutter);
   display: flex;
   flex-direction: column;
   color: var(--otk-fg-2);
-  margin: 0 0 var(--tool-line-gap, var(--space-1));
   font-size: var(--text-ui);
 }
-.otk-tool-toggle,
-.otk-tool-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--row-tool);
-  padding: 0;
-  color: inherit;
-  text-align: left;
-}
-.otk-tool-state {
-  flex-direction: var(--tree-heading-flow, row);
+.otk-tool-row {
+  --tree-row-gap: var(--tool-line-gap, var(--space-1));
 }
 .otk-tool-icon {
   display: flex;

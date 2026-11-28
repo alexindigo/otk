@@ -9,6 +9,7 @@ import { SessionSupervision } from "./supervision.ts";
 import { EntityStates } from "./entity-states.ts";
 import { type IdentityChange, ProjectIdentity } from "./project-identity.ts";
 import type { SessionHierarchy } from "./session-hierarchy.ts";
+import type { ProjectMetadata } from "@otk/harness";
 
 /** Scalar, keyed project owner. It never reads native APIs, digests or usage. */
 export class ProjectSummaries {
@@ -61,6 +62,8 @@ export class ProjectSummaries {
   #known = new Set<string>();
   #retained = new Set<string>();
   #seeds = new Map<string, import("@otk/harness").ProjectSeed>();
+  #projectScopes = new Map<string, Set<string>>();
+  #metadataEvents = new Map<string, number>();
   #leafSeeds = new Map<
     string,
     Map<string, import("@otk/harness").ProjectSeed>
@@ -84,17 +87,80 @@ export class ProjectSummaries {
     const change = this.identity.learn(values);
     this.#seeded = true;
     for (const value of values) {
+      const previous = this.#seeds.get(value.directory);
+      const id = value.presentation?.id;
+      if (previous?.presentation && previous.presentation.id !== id) {
+        const scopes = this.#projectScopes.get(previous.presentation.id);
+        scopes?.delete(value.directory);
+        if (!scopes?.size) this.#projectScopes.delete(previous.presentation.id);
+      }
+      if (id) {
+        const scopes = this.#projectScopes.get(id) ?? new Set<string>();
+        scopes.add(value.directory);
+        this.#projectScopes.set(id, scopes);
+      }
+      // Inventory may have started before a newer metadata event was handled.
+      const newer = previous?.presentation?.id === id &&
+        previous?.nativeProject &&
+        value.nativeProject &&
+        previous.nativeProject.topology === value.nativeProject.topology &&
+        previous.nativeProject.updated > value.nativeProject.updated;
       this.#seeds.set(value.directory, {
         ...value,
-        hasSessions: value.hasSessions ??
-          this.#seeds.get(value.directory)?.hasSessions,
+        ...(newer
+          ? {
+            presentation: previous!.presentation,
+            nativeProject: previous!.nativeProject,
+          }
+          : {}),
+        hasSessions: value.hasSessions ?? previous?.hasSessions,
       });
     }
     const affected = this.#reconcile(change, dirty);
     for (const seed of values) dirty.add(this.leaf(seed.directory));
+    this.admit?.(dirty, change.directories);
     this.#flush(dirty);
     this.retain(this.#known);
     return affected;
+  }
+  /** Replace presentation in place. Identity, population and attention do not change. */
+  metadata(project: ProjectMetadata, source: "event" | "reply"): boolean {
+    const { presentation, updated, topology } = project;
+    const id = presentation.id;
+    const scopes = this.#projectScopes.get(id);
+    if (!scopes?.size) return false;
+    const seeds = [...scopes].map((scope) => this.#seeds.get(scope)!);
+    if (seeds.some((seed) => seed.nativeProject?.topology !== topology)) {
+      return false;
+    }
+    if (source === "event") {
+      this.#metadataEvents.set(
+        id,
+        Math.max(updated, this.#metadataEvents.get(id) ?? 0),
+      );
+    }
+    const leaves = new Set<string>();
+    for (const seed of seeds) {
+      const before = seed.nativeProject!.updated;
+      if (
+        updated < before ||
+        (source === "reply" && this.#metadataEvents.get(id) === updated)
+      ) continue;
+      seed.nativeProject = { updated, topology };
+      if (
+        seed.presentation?.name === presentation.name &&
+        seed.presentation?.color === presentation.color
+      ) continue;
+      seed.presentation = presentation;
+      leaves.add(this.leaf(seed.directory));
+    }
+    for (const leaf of leaves) {
+      const direct = this.#direct.get(leaf);
+      if (direct?.presentation?.id !== id) continue;
+      this.#direct.set(leaf, { ...direct, presentation });
+      this.#publish(leaf);
+    }
+    return true;
   }
   /** Both native seeds and recorded roots revise the same shared projection. */
   #reconcile(change: IdentityChange, dirty: Set<string>): IndexMetadata[] {
@@ -185,13 +251,23 @@ export class ProjectSummaries {
     readonly identity = new ProjectIdentity(),
     readonly hierarchy?: SessionHierarchy,
     states?: EntityStates,
+    clock?: EntityStates["clock"],
+    readonly admit?: (
+      directories: Iterable<string>,
+      revised?: Iterable<string>,
+    ) => void,
   ) {
     // Standalone summaries own a private, unpublished entity-state owner.
-    this.states = states ?? new EntityStates(supervision, {
-      getMetadata: (id) => this.#sessions.get(id)?.entry,
-      ancestors: () => [],
-      descendants: (id) => new Set([id]),
-    }, () => {});
+    this.states = states ?? new EntityStates(
+      supervision,
+      {
+        getMetadata: (id) => this.#sessions.get(id)?.entry,
+        ancestors: () => [],
+        descendants: (id) => new Set([id]),
+      },
+      () => {},
+      clock,
+    );
   }
   ensure(directory: string): void {
     this.#known.add(directory);
@@ -258,6 +334,7 @@ export class ProjectSummaries {
     this.#contribute(entry, 1, directory);
     const dirty = new Set([directory, ...before ? [before.leaf] : []]);
     const affected = change.repos.size ? this.#reconcile(change, dirty) : [];
+    if (change.directories.size) this.admit?.([], change.directories);
     this.#flush(dirty);
     if (change.repos.size) this.retain(this.#known);
     return affected;
@@ -510,6 +587,7 @@ export class ProjectSummaries {
     if (
       JSON.stringify(summary) === JSON.stringify(this.values.get(directory))
     ) return;
+    if (!this.values.has(directory)) this.admit?.([directory]);
     this.values.set(directory, summary);
     this.publish(summary);
   }

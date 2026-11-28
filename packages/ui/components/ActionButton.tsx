@@ -16,9 +16,13 @@ import type { location, selection } from "./selection.ts";
 /** Availability and execution are one input; callers cannot replace the handler. */
 export default function ActionButton(props: {
   action: ActionControl;
+  /** A composite hit target may choose among the same owner's actions. */
+  hitAction?(event: MouseEvent | KeyboardEvent): ActionControl;
   class?: string;
   label?: string;
   title?: string;
+  id?: string;
+  inline?: { popup?: "dialog" | "menu"; description?: string };
   expanded?: boolean;
   href?: string;
   ref?(element: HTMLElement): void;
@@ -29,6 +33,7 @@ export default function ActionButton(props: {
   };
   pendingLabel?: string;
   busy?: boolean;
+  unoffered?: Element;
   children: Element;
   onShown?(): void;
   /** Compact surfaces can place feedback in their existing feedback region. */
@@ -52,26 +57,35 @@ export default function ActionButton(props: {
     return value.available ? undefined : value;
   };
   const busy = () => pending() || !!props.busy;
-  const disabled = () => busy() || !availability().available;
+  // Reject repeated activation without blurring the invoking control while
+  // the action opens a panel or dialog that needs to remember focus.
+  const unavailableOrBusy = () => !!props.busy || !availability().available;
+  const disabled = () => pending() || unavailableOrBusy();
   const described = () =>
     !props.onFeedback && (!!unavailable() || busy() || !!feedback());
-  const activate = (event: MouseEvent) => {
+  const activate = (event: MouseEvent | KeyboardEvent) => {
+    if (disabled()) {
+      event.preventDefault();
+      return;
+    }
     if (props.href !== undefined) {
-      if (disabled()) {
-        event.preventDefault();
-        return;
-      }
       if (
-        event.button !== 0 || event.ctrlKey || event.metaKey ||
+        !(event instanceof MouseEvent) || event.button !== 0 || event.ctrlKey ||
+        event.metaKey ||
         event.shiftKey ||
         event.altKey
       ) return;
       event.preventDefault();
     }
+    if (props.inline && event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.focus({ preventScroll: true });
+    }
     event.stopPropagation();
     setPending(true);
     setFeedback(undefined);
-    void props.action.run().then((result) => {
+    const action = props.hitAction?.(event);
+    const result = action ? action.run() : props.action.run();
+    void result.then((result) => {
       if (result.kind === "shown") props.onShown?.();
       else if (props.onFeedback) props.onFeedback(result);
       else setFeedback(result.feedback);
@@ -83,14 +97,36 @@ export default function ActionButton(props: {
     ...props.location,
     class: props.location?.class ?? props.selection?.class ?? props.class,
     onClick: activate,
+    onKeyDown: props.inline
+      ? (event: KeyboardEvent) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        if (!event.repeat) activate(event);
+      }
+      : undefined,
   }));
-  const Control = dynamic(() => props.href === undefined ? "button" : "a");
+  // Text-flow actions need a non-atomic inline box; activation stays here.
+  const Control = dynamic(() =>
+    props.inline ? "span" : props.href === undefined ? "button" : "a"
+  );
   return (
-    <Show when={!unavailable()?.hidden || busy() || !!feedback()}>
+    <Show
+      when={!unavailable()?.hidden || busy() || !!feedback()}
+      fallback={props.unoffered}
+    >
       <Control
-        type={props.href === undefined ? "button" : undefined}
+        id={props.id}
+        type={!props.inline && props.href === undefined ? "button" : undefined}
         href={props.href}
-        ref={[(element: HTMLElement) => props.ref?.(element), native.ref]}
+        role={props.inline ? "button" : undefined}
+        tabindex={props.inline ? 0 : undefined}
+        data-inline-action={props.inline ? "true" : undefined}
+        aria-haspopup={props.inline?.popup}
+        aria-description={props.inline?.description}
+        ref={(element: HTMLElement) => {
+          native.ref(element);
+          props.ref?.(element);
+        }}
         {...native.attributes}
         aria-label={props.label}
         aria-expanded={props.expanded === undefined
@@ -99,8 +135,12 @@ export default function ActionButton(props: {
           ? "true"
           : "false"}
         title={unavailable()?.reason ?? props.title}
-        disabled={props.href === undefined ? disabled() : undefined}
-        aria-disabled={props.href !== undefined && disabled()
+        disabled={!props.inline && props.href === undefined
+          ? unavailableOrBusy()
+          : undefined}
+        aria-disabled={(props.inline || props.href !== undefined ||
+            pending()) &&
+            disabled()
           ? "true"
           : undefined}
         aria-busy={busy() ? "true" : "false"}

@@ -27,7 +27,7 @@ test.describe("inbox ownership", () => {
     )!;
     // S4 (decision 62): visit age never tints the name; only the neutral
     // visit clock moves.
-    const plain = await row.locator(".otk-project-name").evaluate((e) =>
+    const plain = await row.locator(".otk-sidebar-title-text").evaluate((e) =>
       getComputedStyle(e).color
     );
     for (
@@ -37,14 +37,17 @@ test.describe("inbox ownership", () => {
         `inboxNow=${project.lastVisit + Number(hours) * 3600000};inboxTick()`,
       );
       await expect(row.locator("time")).toHaveText(String(text));
-      await expect(row.locator(".otk-project-name")).toHaveCSS("color", plain);
+      await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
+        "color",
+        plain,
+      );
     }
     await state.product("prefs.set", { key: "reducedColors", value: true });
     await expect(page.locator("html")).toHaveAttribute(
       "data-otk-reduced-colors",
       "",
     );
-    await expect(row.locator(".otk-project-name")).toHaveCSS(
+    await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
       "text-decoration-line",
       "none",
     );
@@ -84,7 +87,8 @@ test.describe("inbox ownership", () => {
     );
     await expect(row.locator("time")).toHaveText("now");
     await row.locator(".otk-project-menu > button").click();
-    await row.locator(".otk-menu-items button").click();
+    await page.getByRole("menuitem", { name: "Mark inactive", exact: true })
+      .click();
     await page.locator(".otk-inactive-toggle").click();
     await expect(row).toBeVisible();
     const paused = await row.locator("time").textContent();
@@ -152,7 +156,16 @@ test.describe("inbox ownership", () => {
         "position",
         "relative",
       );
-      await openSession(state, page, "tstv1-otk");
+      // D74: switch projects with the conversation exposed, not via a sheet.
+      await state.product("layout.patch", { rightCollapsed: true });
+      await expect(page.locator(".otk-right-rail")).toBeVisible();
+      const project = page.locator(
+        `[data-project=${
+          JSON.stringify(entries[0].directory)
+        }] .otk-project-open`,
+      );
+      await project.click();
+      await expect(page).toHaveURL(/tstv1-otk$/);
       await page.locator("textarea[name=prompt]").fill("Keep this work");
       const target = page.locator(
         `[data-project=${
@@ -161,7 +174,8 @@ test.describe("inbox ownership", () => {
       );
       await target.click();
       await expect(page).toHaveURL(/tstv1-atmosphera$/);
-      await openSession(state, page, "tstv1-otk");
+      await project.click();
+      await expect(page).toHaveURL(/tstv1-otk$/);
       await expect(page.locator("textarea[name=prompt]")).toHaveValue(
         "Keep this work",
       );
@@ -229,7 +243,9 @@ test.describe("server merge", () => {
       await expect(page.locator(".otk-project-row")).toHaveCount(8);
       await page.locator(".otk-settings .otk-view-header button").click();
       await expect(page.locator(".otk-settings")).toHaveCount(0);
-      expect(await page.locator(".otk-project-machine").allTextContents())
+      expect(
+        await page.locator(".otk-sidebar-title-qualifier").allTextContents(),
+      )
         .toEqual([
           ...Array(4).fill("This server"),
           ...Array(4).fill("Build machine"),

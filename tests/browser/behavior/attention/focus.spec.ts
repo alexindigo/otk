@@ -2,7 +2,12 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { openWorkLogs, revealAcquired } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  revealAcquired,
+  sessionStatus,
+  showSessions,
+} from "../../pages/transcript.ts";
 import {
   panel,
   primary,
@@ -95,7 +100,7 @@ test(
     await expect(page.locator(".otk-question-dock")).toHaveCount(0);
     await expect(page.locator("textarea[name=prompt]")).toBeFocused();
     await reply(page, session.id, "Answers recorded.");
-    await openWorkLogs(page);
+    await openLatestWork(page);
     await page.locator("[data-tool=question] .otk-tool-toggle").click();
     await expect(page.locator(".otk-questions")).toContainText(
       "My own details",
@@ -123,11 +128,11 @@ test(
     await page.locator(".otk-question-actions button").nth(1).click();
     await expect(page.locator(".otk-question-dock")).toHaveCount(0);
     await expect(page.locator("textarea[name=prompt]")).toBeFocused();
-    await expect(page.locator(`[data-session="${session.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await sessionStatus(page, session.id, "idle");
     await tool(state, "question", { questions: [questions[0]] });
     await prompt(page, "Ask while I use the sidebar");
     await expect(page.locator(".otk-question-dock")).toBeVisible();
+    await showSessions(page);
     const search = page.locator('.otk-project-sessions input[type="search"]');
     await search.click();
     const [pending] = await state.product("question.list", {

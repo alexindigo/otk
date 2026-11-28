@@ -309,6 +309,7 @@ Deno.test("the session entity's paired outcome reaches finish notifications befo
             terminal: 20,
             unseen: true,
             outcome: "failed",
+            terminalOrigin: "live",
           }),
         },
         { op: "finish", sessionID: "root", time: 20 },
@@ -350,6 +351,15 @@ Deno.test("finish notifications use terminal outcome before separate error obser
         },
       }],
     });
+    if (outcome === "succeeded") {
+      assertEquals(notes, []);
+      trigger.settlement("remote", entry.id, {
+        id: 20,
+        outcome,
+        live: true,
+        unseen: true,
+      });
+    }
     assertEquals(notes.map((note) => [note.title, note.kind]), [
       outcome === "failed"
         ? [

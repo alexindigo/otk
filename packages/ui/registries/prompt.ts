@@ -20,6 +20,8 @@ export interface PromptProps {
   connected: boolean;
   activity(): import("@otk/client").SessionActivity;
   suspended?: boolean;
+  /** Start with settings only; the user can join this conversation. */
+  joinRequired?: boolean;
   context?: {
     agent?: string;
     model?: import("@otk/protocol").ModelRef;
@@ -34,6 +36,8 @@ export interface PromptProps {
     capture?: DraftSendCapture,
   ): Promise<void>;
   onStop(): Promise<void>;
+  /** A joined notice stays visible when a request takes over the input. */
+  onActivationNotice?(text: string | undefined): void;
 }
 /** An input port keeps native selection/focus owned by the prompt component. */
 export interface PromptContext extends SessionPorts {
@@ -44,6 +48,8 @@ export interface PromptContext extends SessionPorts {
   mount(setup: () => void | (() => void)): void;
   props: PromptProps;
   active(): boolean;
+  /** Prompt-owned presentation and admission state. */
+  collapsed(): boolean;
   change(update: DraftChange, caret?: number): Draft;
   selection(): { start: number; end: number };
   caret(): number;
@@ -54,6 +60,16 @@ export interface PromptContext extends SessionPorts {
   acceptFiles(files: File[]): Promise<void>;
   fail(error: unknown): void;
 }
+export interface PromptAction {
+  key: string;
+  /** Hidden before the user joins, including from toolbar overflow. */
+  needsInput?: boolean;
+  label(): string;
+  icon(): Element;
+  expanded?(): boolean;
+  control: import("@otk/client").ActionControl;
+}
+
 /** Feature instances are per mounted prompt and retain their own async lifetime. */
 export interface PromptFeature {
   ready?(): Promise<void>;
@@ -63,7 +79,8 @@ export interface PromptFeature {
   key?(event: KeyboardEvent): boolean;
   paste?(event: ClipboardEvent): void | Promise<void>;
   drop?(files: File[]): void | Promise<void>;
-  beforeSubmit?(draft: Draft): boolean | Promise<boolean>;
+  /** Recognize an explicit local command without preparing a native send. */
+  localCommand?(draft: Draft): (() => Promise<void>) | undefined;
   submit?(
     draft: Draft,
     parts: PromptPart[],
@@ -77,11 +94,15 @@ export interface PromptFeature {
   ): void | Promise<void>;
   selection?(draft: Draft): PromptSelection;
   settings?(): Element;
+  /** Inert, intrinsic-width rendering of settings, with no live controls. */
+  settingsFace?(): Element;
   enabled?(): boolean | undefined;
   label?(): string;
   placeholder?(): string;
   beforeInput?(): Element;
-  actions?(): Element;
+  action?(): PromptAction;
+  /** A control in the input's top-right corner slot. */
+  corner?(): Element;
   overlay?(): Element;
 }
 export interface PromptDefinition {

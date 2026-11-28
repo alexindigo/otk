@@ -50,7 +50,10 @@ export interface ProviderReadKinds
   };
   /** Durable child/run facts only; never scans parent history or native I/O. */
   "supervision.delivered": {
-    input: { ids: string[] };
+    input: {
+      ids: string[];
+      targets?: Record<string, { parentID: string; runID: string }>;
+    };
     result: DeliveryScalar[];
     chunk: DeliveryScalar[];
   };
@@ -61,6 +64,8 @@ export interface DeliveryPage {
     delivered: import("@otk/protocol").DeliveredEvidence;
   }[];
   reset?: boolean;
+  /** Children whose indexed coverage was withdrawn by native revalidation. */
+  invalidated?: string[];
   /** Opaque, source-fenced continuation; absent means this bounded pass ended. */
   after?: string;
 }
@@ -72,6 +77,8 @@ export interface DeliveryScan {
   cursor: string;
   complete: boolean;
   updates: DeliveryScalar[];
+  /** Receipt identities whose durable native bound supersedes an older join. */
+  revalidated?: readonly string[];
 }
 export const deliveryReadCodec: ProviderReadCodec<"supervision.deliveries"> = {
   *chunks(value) {

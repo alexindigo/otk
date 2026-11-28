@@ -12,6 +12,10 @@ test("attention.failure-toast-burst-grouping-and-mixed-overflow", {
     .click();
   const failure = page.locator(".otk-toast[data-kind=error]");
   await expect(failure).toHaveCount(1);
+  await expect(page.locator("[data-note-count]")).toHaveAttribute(
+    "data-note-count",
+    "1",
+  );
   await badge(page, 0);
   await expect(failure).toContainText("22 identical failures");
   await expect(failure).toContainText("Loading permission requests failed");
@@ -68,6 +72,7 @@ test("attention.failure-toast-burst-grouping-and-mixed-overflow", {
     "data-note-count",
     "7",
   );
+  await badge(page, 2);
 });
 
 test("attention.oversized-failure-keeps-complete-reason-reachable", {
@@ -84,7 +89,9 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
     true,
   );
   await region.evaluate((el) => el.scrollTop = el.scrollHeight);
-  await expect(toast.getByRole("button", { name: "Dismiss", exact: true }))
+  await expect(
+    toast.getByRole("button", { name: "Dismiss notification", exact: true }),
+  )
     .toBeInViewport();
   expect(
     await toast.evaluate((el) => {
@@ -94,8 +101,9 @@ test("attention.oversized-failure-keeps-complete-reason-reachable", {
   ).toBe(true);
   await expect(toast).toContainText("END OF REASON");
   const geometry = await toast.evaluate((el) => {
-    const header = el.querySelector("header")!.getBoundingClientRect();
-    const actions = el.querySelector(".otk-toast-actions")!
+    const header = el.querySelector(".otk-failure-heading")!
+      .getBoundingClientRect();
+    const actions = el.querySelector(".otk-failure-details")!
       .getBoundingClientRect();
     const walker = document.createTreeWalker(
       el.querySelector(".otk-failure-detail-body")!,

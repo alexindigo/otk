@@ -34,7 +34,7 @@ const user = (id: string, created: number): Message => ({
 
 Deno.test("mixed replies keep assistant metadata separate from first and final source identity", () => {
   const p = createTranscriptProjection(), call = assistant();
-  p.replace([
+  p.reset([
     user("prompt", 1),
     context("before", 10),
     call,
@@ -88,7 +88,7 @@ Deno.test("mixed replies keep assistant metadata separate from first and final s
 
 Deno.test("mixed reply authority updates and retires only its actual assistant", () => {
   const p = createTranscriptProjection();
-  p.replace([assistant(), context("after", 40)]);
+  p.reset([assistant(), context("after", 40)]);
   p.apply({
     op: "message.upsert",
     message: { ...assistant(), agent: "review", cost: 2 },
@@ -113,7 +113,7 @@ Deno.test("mixed reply authority updates and retires only its actual assistant",
 
 Deno.test("removing the last assistant from a mixed reply retires its pending turn", () => {
   const p = createTranscriptProjection();
-  p.replace([
+  p.reset([
     user("prompt", 1),
     { ...assistant(), time: { created: 20 } },
     context("after", 40),
@@ -127,7 +127,7 @@ Deno.test("removing the last assistant from a mixed reply retires its pending tu
 
 Deno.test("mixed reply part updates retain assistant authority without visiting historical sources", () => {
   const p = createTranscriptProjection();
-  p.replace([context("before", 10), assistant(), context("after", 40)]);
+  p.reset([context("before", 10), assistant(), context("after", 40)]);
   const before = p.state.messagesByID.before,
     call = p.state.messagesByID.assistant;
   let visits = 0;

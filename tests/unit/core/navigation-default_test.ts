@@ -194,7 +194,7 @@ Deno.test("archive retains memory and explicit attention alone overrides a remem
   );
 });
 
-Deno.test("navigation urgency still chooses finished over working despite the working rollup lamp", async () => {
+Deno.test("D7/D78: navigation chooses blocked then finished over working", async () => {
   const f = fixture();
   f.states.set("tstv1-old", "working");
   f.states.set("tstv1-new", "finished");

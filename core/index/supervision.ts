@@ -1,32 +1,26 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type {
-  IndexMetadata,
-  ProjectStatus,
-  Supervision,
-  TerminalOutcome,
+import {
+  type IndexMetadata,
+  sessionTransition,
+  type Supervision,
 } from "@otk/protocol";
 
-/** A parent receiving an error is not a human acknowledging the failure.
- * Awaiting user ruling C1 (decisions-coherence section 6); do not change
- * without it. */
-export function failedHelperNeedsAck(
-  entry: Pick<IndexMetadata, "parentID">,
-  outcome: TerminalOutcome | undefined,
-): boolean {
-  return !!entry.parentID && outcome === "failed";
-}
 /** WP11's run-correlated parent receipt, independently of human acknowledgement. */
-export function deliveredTerminal(entry: IndexMetadata): number {
+function deliveredTerminal(entry: IndexMetadata, terminal: number): boolean {
   const receipt = entry.activity?.delivered;
-  return receipt && receipt.parentID === entry.parentID &&
-      receipt.receipt.length > 0 &&
-      Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0
-    ? receipt.terminal
-    : 0;
+  return !!receipt && receipt.parentID === entry.parentID &&
+    terminal === entry.activity?.terminal &&
+    receipt.receipt.length > 0 &&
+    Number.isSafeInteger(receipt.terminal) && receipt.terminal > 0 &&
+    receipt.terminal === terminal &&
+    (receipt.runID || entry.activity?.runID
+      ? !!receipt.runID && receipt.runID === entry.activity?.runID
+      : true);
 }
 /** Fresh positive evidence as the interpreter counts it; absence is zero. */
 export interface SessionInputs {
   work: boolean;
+  continuation?: boolean;
   /** Own pending permissions left after the approval policy. */
   permissions: number;
   /** Own pending questions and forms. */
@@ -38,10 +32,6 @@ export interface SessionInputs {
 export class SessionSupervision {
   #fresh = true;
   #permissions?: (id: string) => number;
-  #dependencies: (id: string) => number = () => 0;
-  dependencies(lookup: (id: string) => number): void {
-    this.#dependencies = lookup;
-  }
   freshness(fresh: boolean): void {
     this.#fresh = fresh;
   }
@@ -53,7 +43,11 @@ export class SessionSupervision {
     acknowledged: number,
     retainedTerminal = 0,
     inputs = this.inputs(entry),
-  ): Supervision {
+    operation?: "working" | "blocked",
+    opened = false,
+  ): Supervision & ReturnType<typeof sessionTransition> & {
+    nativeActive: boolean;
+  } {
     const evidence = entry.activity;
     const terminal = Math.max(retainedTerminal, evidence?.terminal ?? 0);
     const outcome = terminal === evidence?.terminal
@@ -69,60 +63,51 @@ export class SessionSupervision {
           : {}),
       }
       : {};
-    const helperFailed = failedHelperNeedsAck(entry, outcome);
-    const delivered = helperFailed ? 0 : deliveredTerminal(entry);
-    const unseen = terminal > Math.max(acknowledged, delivered);
-    if (entry.deleted) {
-      return {
-        state: "none",
-        terminal,
-        unseen: false,
-        ...detail,
-        ...(outcome ? { outcome } : {}),
-      };
-    }
-    const needsInput = inputs.questions > 0 || inputs.permissions > 0;
-    // A failed top-level run needs acknowledgement, not a successful-finish
-    // lamp (2.72). Delivered-helper treatment remains the isolated C1 rule.
-    const failedRun = unseen &&
-      (helperFailed || !entry.parentID && outcome === "failed");
-    const state = needsInput || failedRun
-      ? "needsYou"
-      : inputs.work
-      ? "working"
-      : unseen
-      ? "finishedUnseen"
-      : "none";
-    const running = this.#dependencies(entry.id);
+    // D81: the same exact receipt covers success and failure, without replacing
+    // the outcome or creating a human acknowledgement.
+    const unseen = terminal > acknowledged &&
+      !deliveredTerminal(entry, terminal);
     return {
-      state,
+      ...sessionTransition({
+        ...inputs,
+        deleted: !!entry.deleted,
+        archived: entry.archived,
+        fresh: this.#fresh && entry.activityAuthority !== "stale",
+        helper: !!entry.parentID,
+        opened,
+        operation,
+        terminal,
+        outcome,
+        unseen,
+        confirmed: evidence?.completion?.confirmed,
+      }),
+      // Durable checkout policy tracks native activity, not received OTK
+      // operations that temporarily color the same entity.
+      nativeActive: !entry.deleted &&
+        (inputs.work || inputs.permissions > 0 || inputs.questions > 0),
       terminal,
-      unseen,
       ...detail,
       ...(outcome ? { outcome } : {}),
-      ...(running ? { dependencies: { running } } : {}),
     };
   }
   inputs(entry: IndexMetadata): SessionInputs {
     const evidence = entry.activity;
-    if (!this.#fresh) return { work: false, permissions: 0, questions: 0 };
+    if (!this.#fresh || entry.activityAuthority === "stale") {
+      return { work: false, permissions: 0, questions: 0 };
+    }
     const permissions = evidence?.permissions?.fresh &&
         evidence.permissions.keys.length
       ? this.#permissions
         ? Math.max(0, this.#permissions(entry.id))
         : evidence.permissions.keys.length
       : 0;
+    const continuation = !!evidence?.completion?.continuation?.length;
     return {
-      work: !!(evidence?.work?.fresh && evidence.work.keys.length),
+      work: continuation ||
+        !!(evidence?.work?.fresh && evidence.work.keys.length),
+      ...(continuation ? { continuation } : {}),
       permissions,
       questions: evidence?.inputs?.fresh ? evidence.inputs.keys.length : 0,
     };
-  }
-  status(value: Supervision): ProjectStatus {
-    return value.state === "needsYou"
-      ? "blocked"
-      : value.state === "finishedUnseen"
-      ? "finished"
-      : value.state;
   }
 }

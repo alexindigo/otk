@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
+import { StringDecoder } from "node:string_decoder";
 import { bounded } from "./resources.ts";
 
 /** Learn the port from the owning process, not by probing a guessed address. */
@@ -11,7 +11,9 @@ export async function announcedEndpoint(
   timeout = 60_000,
 ): Promise<URL> {
   const endpoint = Promise.withResolvers<URL>();
-  const lines = createInterface({ input: child[stream]! });
+  const output = child[stream]!;
+  const decoder = new StringDecoder();
+  let pending = "";
   const exited = () =>
     endpoint.reject(
       new Error(
@@ -20,12 +22,17 @@ export async function announcedEndpoint(
     );
   child.once("close", exited);
   child.once("error", endpoint.reject);
-  lines.on("line", (line) => {
-    const address = parse(line);
-    if (!address) return;
-    const url = new URL(address);
-    if (url.port && Number(url.port) > 0) endpoint.resolve(url);
-  });
+  const data = (chunk: Parameters<StringDecoder["write"]>[0]) => {
+    const lines = (pending + decoder.write(chunk)).split("\n");
+    pending = lines.pop()!;
+    for (const line of lines) {
+      const address = parse(line.replace(/\r$/, ""));
+      if (!address) continue;
+      const url = new URL(address);
+      if (url.port && Number(url.port) > 0) endpoint.resolve(url);
+    }
+  };
+  output.on("data", data);
   try {
     if (child.exitCode !== null || child.signalCode !== null) exited();
     return await bounded(
@@ -36,7 +43,9 @@ export async function announcedEndpoint(
   } finally {
     child.off("close", exited);
     child.off("error", endpoint.reject);
-    lines.close();
+    // Only detach this observer. Closing a readline wrapper pauses the shared
+    // pipe and prevents the process log owner from seeing later diagnostics.
+    output.off("data", data);
   }
 }
 

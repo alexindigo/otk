@@ -5,13 +5,41 @@ import type { PartRegistry } from "../../registries/renderers.ts";
 import type { DialogRegistry } from "../../registries/shell.ts";
 import { ownedAction, useCommandPorts } from "../../keyboard/context.tsx";
 import ImageView from "../ImageView.tsx";
+import { FileDialogActions, FileDialogFacts } from "../FileDialogParts.tsx";
+import type { FileTarget } from "../../features/file-paths.tsx";
 import { useContentIdentity } from "../../features/transcript-context.tsx";
 export function registerImageDialog(dialogs: DialogRegistry): void {
-  dialogs.register<{ name: string; url: string }>({
+  dialogs.register<
+    {
+      name: string;
+      url: string;
+      path?: string;
+      facts?: string;
+      target?: FileTarget;
+    }
+  >({
     id: "image",
     title: (input) => input.name,
     component: (props) => (
-      <ImageView src={props.input.url} name={props.input.name} />
+      <>
+        <Show when={props.input.path}>
+          {(path) => (
+            <FileDialogFacts path={path()} facts={props.input.facts} />
+          )}
+        </Show>
+        <ImageView
+          src={props.input.url}
+          name={props.input.name}
+          credentialed={!!props.input.target?.image}
+        />
+      </>
+    ),
+    actions: (props) => (
+      <Show when={props.input.target}>
+        {(target) => (
+          <FileDialogActions target={target()} name={props.input.name} />
+        )}
+      </Show>
     ),
   });
 }

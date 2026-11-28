@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { receivedPrompt } from "../../fixtures/provider.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { seed, tool } from "../../pages/attention.ts";
 import {
   openBlockedSubagents,
   restorePermissionDock,
   subagent,
+  subagentLamp,
   subagents,
 } from "../../pages/crumbs.ts";
-import { openWorkLogs } from "../../pages/transcript.ts";
+import { openLatestWork, showSessions } from "../../pages/transcript.ts";
 
 test.use({ profile: "isolated", timezoneId: "America/Los_Angeles" });
 for (
@@ -39,9 +41,19 @@ for (
       description: "Helper permission owner probe",
     });
     await state.queue(["Helper permission owner completed"]);
+    const prompt = "Run the helper permission probe";
     await state.native(`/session/${child.id}/prompt_async`, "POST", {
-      parts: [{ type: "text", text: "Run the helper permission probe" }],
+      parts: [{ type: "text", text: prompt }],
     });
+    // Native async acceptance can precede the first provider call on a cold
+    // stack. Start the permission witness only once this prompt has arrived.
+    await expect.poll(async () => {
+      const { requests } = await state.observe<{ requests: unknown[] }>({
+        fields: ["requests"],
+      });
+      return receivedPrompt(requests, prompt);
+    }, { timeout: 30_000, message: "Provider received the helper prompt" })
+      .toBe(true);
     await expect.poll(async () =>
       (await state.native<{ sessionID: string }[]>("/permission")).some((p) =>
         p.sessionID === child.nativeID
@@ -93,7 +105,7 @@ for (
     const inventory = subagents(page);
     await openBlockedSubagents(page);
     const helper = subagent(page, child.id);
-    await expect(helper.locator(".otk-status-light")).toHaveAttribute(
+    await expect(subagentLamp(page, child.id)).toHaveAttribute(
       "data-state",
       "blocked",
     );
@@ -152,10 +164,9 @@ for (
       await expect(page.getByRole("button", { name, exact: true }))
         .toBeVisible();
     }
-    const hasComposer = view === "parent" || view === "publication";
-    await expect(page.locator(".otk-draft-kept")).toHaveCount(
-      hasComposer ? 1 : 0,
-    );
+    // D17: the takeover suspends the composer even in a child session.
+    await expect(page.locator(".otk-permission-dock .otk-draft-kept"))
+      .toHaveText("Your draft is kept");
     if (view === "direct") {
       // Permission age must not depend on unfinished session indexing.
       await expect.poll(() => {
@@ -236,20 +247,24 @@ for (
       ? "task"
       : "bash";
     if (pendingTool === "bash") {
-      await openWorkLogs(page);
+      await openLatestWork(page);
       await expect(page.locator("[data-tool=bash]")).toContainText(
         "Awaiting permission",
       );
-      await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+      await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
     // Replies go through the visible existing dock, to the asking helper.
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
     if (pendingTool === "bash") {
-      // The read-only header may still own Subagents after the request closes.
-      await expect(page.locator(".otk-composer:visible")).toHaveCount(0);
-      await expect(page.locator("textarea[name=prompt]")).toHaveCount(0);
+      // Answering a permission does not join the child's conversation.
+      await expect(page.getByRole("button", {
+        name: "Join the conversation",
+        exact: true,
+      })).toBeVisible();
+      await expect(page.locator("textarea[name=prompt]")).toBeHidden();
     }
+    await showSessions(page);
     await expect(parentRow).not.toContainText("P 1");
     await expect(childRow).not.toContainText("P 1");
     await expect.poll(async () =>
@@ -269,6 +284,7 @@ for (
         )
     ).toBe(true);
     if (pendingTool === "bash") {
+      await openLatestWork(page);
       await expect(page.locator("[data-tool=bash]")).not.toContainText(
         "Awaiting permission",
       );

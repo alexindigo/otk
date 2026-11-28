@@ -2,7 +2,11 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { revealAcquired } from "../../pages/transcript.ts";
+import {
+  openLatestWork,
+  openWork,
+  revealAcquired,
+} from "../../pages/transcript.ts";
 test.describe("V1 records", () => {
   test.use({ profile: "contract-messages-v1-notices" });
   test("messages.running-record-progress-survives-queued-prompt", {
@@ -81,13 +85,15 @@ test.describe("V1 records", () => {
     await expect(reply.getByRole("alert")).toHaveCount(2);
     for (
       const name of [
-        "Delegate failed: Subagent failed: The usage limit has been reached.",
+        "Inspect retained records failed: Subagent failed: The usage limit has been reached",
         "Running session failed: The usage limit has been reached.",
       ]
     ) {
       await expect(
         reply.getByRole("alert", { name, exact: true })
-          .locator(".otk-failure-main-reason .otk-failure-reason"),
+          .locator(
+            ".otk-failure-summary-reason, .otk-failure-main-reason .otk-failure-reason",
+          ),
       ).toContainText("The usage limit has been reached");
     }
     await revealAcquired(page, '[data-message="summary"]');
@@ -141,11 +147,14 @@ test.describe("V1 records", () => {
     const permission = page.locator('[data-message="permission:retained"]');
     const question = page.locator('[data-message="question:retained"]');
     for (
-      const [row, title] of [[permission, /Permission rejected/], [
-        question,
+      const [id, title] of [["permission:retained", /Permission rejected/], [
+        "question:retained",
         /Question cancelled/,
       ]] as const
     ) {
+      const selector = `[data-message="${id}"]`;
+      await revealAcquired(page, selector);
+      const row = page.locator(selector);
       await row.getByRole("button", { name: title }).click();
       await expect(row.getByRole("button", { name: "Source", exact: true }))
         .toHaveAttribute("aria-expanded", "false");
@@ -179,11 +188,14 @@ test.describe("V1 records", () => {
     await expect(questionSource).toHaveAttribute("aria-expanded", "true");
     await page.reload();
     for (
-      const [row, title] of [[permission, /Permission rejected/], [
-        question,
+      const [id, title] of [["permission:retained", /Permission rejected/], [
+        "question:retained",
         /Question cancelled/,
       ]] as const
     ) {
+      const selector = `[data-message="${id}"]`;
+      await revealAcquired(page, selector);
+      const row = page.locator(selector);
       await row.getByRole("button", { name: title }).click();
       await expect(row.getByRole("button", { name: "Source", exact: true }))
         .toHaveAttribute("aria-expanded", "true");
@@ -224,12 +236,7 @@ test.describe("V2 records", () => {
     await expect(compaction.locator("strong")).toHaveText("Compaction summary");
     await expect(page.locator('[data-native-record="opencode-v2/retry"]'))
       .toContainText("Retry scheduled - attempt 2");
-    const work = page.locator(".otk-work-fold");
-    for (const fold of await work.all()) {
-      if (await fold.getAttribute("aria-expanded") === "false") {
-        await fold.click();
-      }
-    }
+    await openLatestWork(page);
     await expect(
       page.locator('[data-native-record="opencode-v2/active-retry"]'),
     ).toContainText("Provider temporarily unavailable");
@@ -264,14 +271,14 @@ test.describe("V2 records", () => {
         .filter({
           has: page.locator(".otk-entity-pill", { hasText: "Junior" }),
         })
-        .filter({ has: page.locator(".otk-tool-verb", { hasText: "failed" }) });
+        .filter({ has: page.getByText("failed", { exact: true }) });
       await expect(
         failed.getByRole("button", {
           name: "Junior details",
           exact: true,
         }),
       ).toHaveText("Junior");
-      await expect(failed.locator(".otk-tool-verb")).toHaveText("failed");
+      await expect(failed.getByText("failed", { exact: true })).toBeVisible();
       await expect(failed).toHaveClass(/is-error/);
       await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible();
       await expect(
@@ -345,13 +352,14 @@ test.describe("V2 records", () => {
       await expect(
         page.locator('[data-native-record="opencode-v2/request-outcome"]'),
       ).toContainText("Question cancelled");
-      const work = page.locator(".otk-work-fold");
-      for (let i = 0; i < await work.count(); i++) {
-        if (await work.nth(i).getAttribute("aria-expanded") === "false") {
-          await work.nth(i).click();
-        }
-      }
-      const task = page.locator('[data-tool="task"]');
+      const result = page.locator('.otk-messages [data-role="assistant"]')
+        .filter({
+          has: page.getByRole("button", {
+            name: /Work log:.*Foreground result/,
+          }),
+        });
+      const work = await openWork(result);
+      const task = work.locator('[data-tool="task"]');
       await task.locator(".otk-tool-toggle").first().click();
       await expect(task.locator("strong.otk-prose-strong")).toHaveText(
         "Result",
@@ -360,12 +368,15 @@ test.describe("V2 records", () => {
       await expect(task.locator(".otk-tool-body")).not.toContainText(
         "<subagent",
       );
-      const execute = page.locator('[data-tool="external"]').filter({
+      const execute = work.locator('[data-tool="external"]').filter({
         hasText: "execute",
       });
       await expect(execute).toHaveClass(/is-error/);
       await expect(execute).toContainText("No such file: missing");
-      await execute.locator(".otk-tool-toggle").first().click();
+      const toggle = execute.locator(".otk-tool-toggle").first();
+      if (await toggle.getAttribute("aria-expanded") === "false") {
+        await toggle.click();
+      }
       await expect(execute.locator('[data-tool="external"]')).toContainText(
         "read",
       );

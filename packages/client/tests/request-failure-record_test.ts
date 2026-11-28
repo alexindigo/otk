@@ -38,7 +38,7 @@ Deno.test("failure records retain their declared turn across later prompts and r
     }],
   };
   const projection = createTranscriptProjection();
-  projection.replace([prompt, next]);
+  projection.reset([prompt, next]);
   projection.apply({ op: "message.upsert", message: failure });
   assertEquals(replyKey(failure), "reply:prompt");
   assertEquals(projection.state.repliesByID["reply:prompt"].messageIDs, [
@@ -47,7 +47,7 @@ Deno.test("failure records retain their declared turn across later prompts and r
   assertEquals(isRealPrompt(failure), false);
   const serialized = JSON.parse(JSON.stringify(projection.messages()));
   const reloaded = createTranscriptProjection();
-  reloaded.replace(serialized);
+  reloaded.reset(serialized);
   assertEquals(reloaded.state.repliesByID["reply:prompt"].messageIDs, [
     failure.id,
   ]);

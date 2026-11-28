@@ -23,6 +23,8 @@ async function sweep(
   profile: string,
   prepare: () => Promise<void>,
 ) {
+  // Exercise WP10's optional artwork track and 2.109's whole-meta fit
+  // against the real repository/discovery fixtures, not just the style scene.
   guard();
   const facts: unknown[] = [];
   await page.setViewportSize({ width: 1280, height: 860 });
@@ -182,6 +184,16 @@ test.describe("composer", () => {
     for (const [vw, scale] of [[1280, "100"], [900, "125"]] as const) {
       await page.setViewportSize({ width: vw, height: 800 });
       await state.product("prefs.set", { key: "textSize", value: scale });
+      if (vw === 900) {
+        // D74 / WL3: inspect live composer controls, not ones left inert
+        // underneath the right-panel sheet.
+        await page.getByRole("button", {
+          name: "Back to conversation",
+          exact: true,
+        })
+          .click();
+        await expect(page.locator(".otk-main")).not.toHaveAttribute("inert");
+      }
       await expect(page.locator(".otk-composer-target")).toBeVisible();
       for (const [theme, label] of THEMES) {
         await state.product("prefs.set", { key: "theme", value: theme });
@@ -222,7 +234,9 @@ test.describe("composer", () => {
           }),
         });
         const destination = page.locator(".otk-composer-target");
-        expect.soft(await destination.locator("svg").count()).toBe(1);
+        await expect.soft(destination.locator("svg")).toHaveCount(0);
+        await expect.soft(destination.locator(".otk-composer-separator"))
+          .toHaveText("·");
         const sessionLabel = destination.locator(".otk-composer-destination");
         expect.soft(await sessionLabel.allTextContents()).toEqual([
           "Execution",
@@ -235,7 +249,9 @@ test.describe("composer", () => {
             "destination session stays fully readable",
           ).toBeLessThanOrEqual(1);
         }
-        const footerLines = await page.locator(".otk-prompt-context").evaluate(
+        const footerLines = await page.locator(
+          ".otk-prompt-context:not([inert] *)",
+        ).evaluate(
           (root) => {
             const walker = document.createTreeWalker(
                 root,

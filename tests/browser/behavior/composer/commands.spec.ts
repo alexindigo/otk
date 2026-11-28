@@ -7,7 +7,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages, prompt, reply } from "../../pages/composer.ts";
-import { openRecord } from "../../pages/transcript.ts";
+import { readRecordBody } from "../../pages/transcript.ts";
 import {
   composerError,
   rejectedComposerInput,
@@ -72,11 +72,15 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
   await page.locator(".otk-skills-picker .otk-picker-option").filter({
     hasText: "canary",
   }).click();
+  // Verify the reply while following the live tail. Reading the historical
+  // skill record below can move it out of the virtualized viewport.
+  await reply(state, page, session.id, "Skill command received.");
   // NT1 keeps injected skill context visible without a user bubble. NT2: a V2
-  // skill is a plugin record whose content sits in its closed body.
+  // skill is a plugin record. Its prose needs the measured viewport after
+  // disclosure, not just a mounted header and body shell.
   if (state.controller.info!.version.startsWith("2.")) {
     const skill = '[data-native-record="opencode-v2/skill"]';
-    await openRecord(page, skill);
+    await readRecordBody(page, skill);
     await expect(page.locator(`${skill} .otk-tool-body`)).toContainText(
       "SKILL-FIXTURE content",
     );
@@ -87,7 +91,6 @@ test("composer.native-project-mcp-skill-slash-multiline-and-dirty-new", {
       }),
     ).toBeVisible();
   }
-  await reply(state, page, session.id, "Skill command received.");
   const catalog = await state.product("commands.list", {
     sessionID: session.id,
   });
@@ -182,7 +185,7 @@ for (const origin of ["keyboard", "button"] as const) {
       });
 
       // A trailing space keeps autocomplete out of Enter's path. This must
-      // reach prompt.submit and its beforeSubmit hook, not a picker shortcut.
+      // reach the composer activation owner, not a picker shortcut.
       await input.fill("/prompt.shell.enter ");
       await expect(page.locator(".otk-autocomplete")).toHaveCount(0);
       await input.press("Enter");
@@ -193,10 +196,13 @@ for (const origin of ["keyboard", "button"] as const) {
 
       await input.fill(newer);
       await expect(send).toHaveAccessibleName("Send");
-      await expectPrimaryBlocked(send, "Sending");
+      await expectPrimaryBlocked(send, "Previous message still sending");
       await input.press("Enter");
       await expect(input).toHaveValue(newer);
-      await expect(send).toHaveAttribute("aria-description", "Sending");
+      await expect(send).toHaveAttribute(
+        "aria-description",
+        "Previous message still sending",
+      );
       expect(
         await send.evaluate((node, original) => node === original, original),
       )
@@ -280,7 +286,10 @@ test.describe("long command", () => {
         .toHaveCount(0);
       // A new draft returns the control to Send without settling the command RPC.
       await expect(composerSend(page)).toHaveAccessibleName("Send");
-      await expectPrimaryBlocked(composerSend(page), "Sending");
+      await expectPrimaryBlocked(
+        composerSend(page),
+        "Previous message still sending",
+      );
       await state.release(held.gate);
       await expect(page.locator("[data-role=assistant] .otk-text")).toHaveText(
         "Long slash finished.",

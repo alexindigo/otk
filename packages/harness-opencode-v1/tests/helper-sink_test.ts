@@ -187,7 +187,8 @@ for (const api of [false, true]) {
             messages: targets,
             cursor,
           },
-          { rows: policy.batch, until: performance.now() + 8 },
+          // Measure row paging independently of when the host schedules us.
+          { rows: policy.batch, until: Infinity },
           signal,
         );
         assert(++steps < 150);
@@ -217,7 +218,10 @@ for (const api of [false, true]) {
       // Independent helper cursors no longer exhaust headers before tools.
       if (api) {
         assertEquals(apiReads, Math.ceil(messages.length / policy.batch));
-      } else assert(queries >= 12 && queries < 16);
+      } else {
+        // A full last page needs one additional query to prove exhaustion.
+        assertEquals(queries, Math.floor(600 / policy.batch) + 1);
+      }
       const retained = structuredClone(helper), beforeRepeat = publications;
       sink.invalidateHelper("opcv1-child");
       await scan();

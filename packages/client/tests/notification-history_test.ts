@@ -166,6 +166,18 @@ for (const outcome of ["succeeded", "failed"] as const) {
           value: sessionEntity("root", value("live")),
         }],
       });
+      if (outcome === "succeeded") {
+        assertEquals(notes, []);
+        f.resources.receive("local", {
+          t: "inbox.settlement",
+          generation: "late-event",
+          revision: 1,
+          values: [{
+            sessionID: "root",
+            value: { id: 10, unseen: true, live: true, outcome },
+          }],
+        });
+      }
       assertEquals(notes.map((note) => note.kind), [
         outcome === "failed" ? "error" : "done",
       ]);
@@ -192,11 +204,11 @@ for (const outcome of ["succeeded", "failed"] as const) {
     }
   });
 }
-Deno.test("live native terminal advances independently of a lagging or replaced inbox view", () => {
-  const f = shellFixture(), notes: Note[] = [];
+Deno.test("authoritative settlement alone notifies across lagging terminal and replaced row views", () => {
+  const f = shellFixture(), notes: Note[] = [], retracted: string[] = [];
   const trigger = new NotificationTriggers(
     (note) => notes.push(note),
-    () => {},
+    (id) => retracted.push(id),
   );
   f.resources.observeEntries(
     "local",
@@ -240,6 +252,21 @@ Deno.test("live native terminal advances independently of a lagging or replaced 
         },
       }],
     });
+    assertEquals(notes, []);
+    const verdict = {
+      id: 100,
+      outcome: "succeeded" as const,
+      unseen: true,
+      live: true,
+    };
+    const publish = (revision: number, value: typeof verdict | null) =>
+      f.resources.receive("local", {
+        t: "inbox.settlement",
+        generation: "lagging",
+        revision,
+        values: [{ sessionID: "root", value }],
+      });
+    publish(1, verdict);
     assertEquals(notes.map((note) => note.title), ["Session done"]);
     // View replacement may seed the same known terminal instead of delivering
     // the earlier view's live inbox patch. It must not erase or redeliver it.
@@ -266,6 +293,10 @@ Deno.test("live native terminal advances independently of a lagging or replaced 
         }),
       },
     });
+    assertEquals(notes.length, 1);
+    publish(2, null);
+    assertEquals(retracted, ["local/root"]);
+    publish(3, verdict);
     assertEquals(notes.length, 1);
   } finally {
     trigger.stop();

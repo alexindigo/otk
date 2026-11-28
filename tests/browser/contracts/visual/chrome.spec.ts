@@ -133,7 +133,7 @@ test(
     await expect(page.locator('[data-tab="tstv1-row-action-phantom"]'))
       .toBeVisible();
     const row = page.locator('[data-project$="/projects/otk"]'),
-      menu = row.locator(".otk-project-menu"),
+      menu = row.locator(".otk-sidebar-control"),
       trigger = row.locator(".otk-popover-trigger");
     await page.mouse.move(600, 500);
     await page.locator("body").evaluate(() =>
@@ -141,23 +141,23 @@ test(
     );
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("0");
-    const before = await row.locator(".otk-project-trailing").boundingBox();
+    const before = await row.locator(".otk-sidebar-meta").boundingBox();
     await row.hover();
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
     await expect.poll(() =>
-      row.locator(".otk-project-visit").evaluate((el) =>
+      row.locator(".otk-sidebar-meta-track").evaluate((el) =>
         getComputedStyle(el).opacity
       )
     ).toBe("0");
-    expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
+    expect(await row.locator(".otk-sidebar-meta").boundingBox()).toEqual(
       before,
     );
     await page.mouse.move(600, 500);
     await row.locator(".otk-project-open").focus();
     await expect.poll(() => menu.evaluate((el) => getComputedStyle(el).opacity))
       .toBe("1");
-    expect(await row.locator(".otk-project-trailing").boundingBox()).toEqual(
+    expect(await row.locator(".otk-sidebar-meta").boundingBox()).toEqual(
       before,
     );
     await page.keyboard.press("Tab");
@@ -235,7 +235,14 @@ test(
     });
     expect(tasks.filter((t) => t.name === "Created Dark")).toHaveLength(1);
     const observed = await state.observe<
-        { entries: { id: string; directory: string; title: string }[] }
+        {
+          entries: {
+            id: string;
+            directory: string;
+            title: string;
+            parentID?: string;
+          }[];
+        }
       >(),
       entries = observed.entries.filter((e) => e.directory === state.directory),
       ids = [
@@ -265,18 +272,27 @@ test(
         .evaluateAll((els) =>
           els.map((el) => el.getAttribute("data-subagent")!)
         );
-    // This fixture is a native chain ending at otk, not sibling sessions.
-    // D67 retains the entire ancestry; the D66 set independently overlaps it.
-    expect(visible).toEqual(ids);
-    expect(new Set([...visible, ...hidden]).size).toBe(ids.length);
+    // D67 follows native parent links, not task membership or index order.
+    // D66 lists active descendants independently of that ancestry.
+    const byID = new Map(entries.map((entry) => [entry.id, entry]));
+    const ancestry: string[] = [];
+    for (let current = byID.get("tstv1-otk"); current;) {
+      expect(ancestry).not.toContain(current.id);
+      ancestry.unshift(current.id);
+      current = current.parentID ? byID.get(current.parentID) : undefined;
+    }
+    expect(ancestry).toHaveLength(ids.length);
+    expect(visible).toEqual(ancestry);
+    expect(new Set([...visible, ...hidden]).size).toBe(ancestry.length);
     // The quiet open leaf stays in D67 ancestry, not in D66's active set.
-    expect(hidden).toEqual(ids.slice(1, -1));
+    // The separate Subagents menu owns its order, not the ancestry trail.
+    expect([...hidden].sort()).toEqual(ancestry.slice(1, -1).sort());
     expect(
       ids.filter((id) => !visible.includes(id)).every((id) =>
         hidden.includes(id)
       ),
     ).toBe(true);
-    const target = hidden[0];
+    const target = ancestry[1];
     await page.locator(
       `.otk-subagents [data-subagent="${target}"] .otk-subagent-name`,
     )

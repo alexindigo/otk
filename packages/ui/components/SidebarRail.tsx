@@ -12,11 +12,14 @@ export default function SidebarRail(props: {
   width?: number;
   header?: Element;
   leading?: Element;
+  /** A registered panel may already own its content's scroll boundary. */
+  body?: Element;
   footer?: Element;
   resizer?: Element;
   bodyClass?: string;
   ref?(element: HTMLElement): void;
-  children: Element;
+  viewport?(element: HTMLElement): void;
+  children?: Element;
 }): Element {
   return (
     <aside
@@ -25,13 +28,20 @@ export default function SidebarRail(props: {
       aria-label={props.label}
       data-side={props.side}
       data-collapsed={props.collapsed ? "true" : "false"}
-      style={props.collapsed ? undefined : { width: `${props.width}px` }}
+      style={props.collapsed || props.width === undefined
+        ? undefined
+        : { width: `${props.width}px` }}
     >
       <header class="otk-rail-header">{props.header}</header>
       {props.leading}
-      <ScrollRegion class={`otk-rail-body ${props.bodyClass ?? ""}`}>
-        {props.children}
-      </ScrollRegion>
+      {props.body ?? (
+        <ScrollRegion
+          ref={props.viewport}
+          class={`otk-rail-body ${props.bodyClass ?? ""}`}
+        >
+          {props.children}
+        </ScrollRegion>
+      )}
       {props.footer}
       {props.resizer}
     </aside>

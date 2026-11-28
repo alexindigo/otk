@@ -6,8 +6,11 @@ import type {
   PublicFailure,
   RequestProgress,
 } from "@otk/protocol";
+import type { Disclosures } from "./disclosure.ts";
 interface FailureContent {
   value: PublicFailure;
+  /** Client-local presentation lifetime; not a diagnostic or burst group. */
+  occurrence: string;
   action: string;
   heading: string;
   target: { label: string; href?: string };
@@ -21,6 +24,33 @@ interface FailureContent {
   generic?: boolean;
   /** A retained record owns the facts; another surface only points to it. */
   reference?: { messageID: string; label: string };
+}
+
+let failureSequence = 0;
+const occurrences = new WeakMap<object, string>();
+export function failureOccurrence(source: object): string {
+  let id = occurrences.get(source);
+  if (!id) {
+    occurrences.set(source, id = `failure-occurrence/${++failureSequence}`);
+  }
+  return id;
+}
+
+/** Snapshot/enrich the facts without starting another occurrence. */
+export function inheritFailureOccurrence<T extends object>(
+  source: object,
+  value: T,
+): T {
+  occurrences.set(value, failureOccurrence(source));
+  return value;
+}
+
+export function retireFailureOccurrence(
+  owner: Disclosures | undefined,
+  source: object,
+) {
+  const scope = occurrences.get(source);
+  if (scope) owner?.retire({ scope });
 }
 /** Outcome and visual signal cannot disagree, even for independent consumers. */
 export type FailurePresentation =
@@ -40,6 +70,8 @@ export interface Feedback {
   text: string;
   field?: string;
   action?: { label: string; run(): void };
+  /** Owner-provided intent to hide settled feedback, not undo the action. */
+  dismiss?(): void;
   failure?: FailurePresentation;
 }
 export interface FeedbackOwner {
@@ -52,8 +84,10 @@ export interface FeedbackOwner {
 export type FailurePlacement = "record" | {
   surface: "feedback" | "session" | "notification" | "record";
   view?: FailureTarget;
+  /** The live transcript projection, not a mounted DOM or a retained observation. */
+  hasRecord?(messageID: string): boolean;
 };
-function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
+export function sameView(a?: FailureTarget, b?: FailureTarget): boolean {
   return !!a?.sessionID && a.sessionID === b?.sessionID &&
     (a.sidecarId ?? "local") === (b.sidecarId ?? "local");
 }
@@ -99,7 +133,8 @@ export class FailurePresenter {
     // Public facts are a wire DTO. Snapshot its owned object levels so a
     // framework-bound feedback value cannot leak proxies into delivery ports.
     const sourceFacts = failure.facts;
-    failure = {
+    const occurrence = failureOccurrence(failure);
+    failure = inheritFailureOccurrence(failure, {
       ...failure,
       ...(sourceFacts
         ? {
@@ -114,15 +149,13 @@ export class FailurePresenter {
           },
         }
         : {}),
-    };
+    });
     const enrichment = this.#contributions.get(failure.code)?.(failure);
     const facts = failure.facts ?? {};
     const retained = placement === "record" || placement.surface === "record";
-    const reference = !retained &&
-      placement.surface !== "notification" && placement.view?.sessionID &&
-      placement.view.sessionID === facts.target?.sessionID &&
-      (placement.view.sidecarId ?? "local") ===
-        (facts.target?.sidecarId ?? "local");
+    const reference = !retained && placement.surface !== "notification" &&
+      sameView(facts.target, placement.view) && facts.record &&
+      placement.hasRecord?.(facts.record.messageID);
     const action = (facts.action && this.context.action?.(facts.action)) ||
       facts.actionLabel || "The requested action";
     const target =
@@ -154,6 +187,7 @@ export class FailurePresenter {
         ? { kind: "info", tone: "info" } as const
         : { kind: "error", tone: "error" } as const),
       value: failure,
+      occurrence,
       action,
       heading,
       target,
@@ -227,12 +261,14 @@ export class FailurePresenter {
     occupant?: Feedback,
   ): Feedback | undefined {
     const value = this.#present(failure, placement);
+    if (
+      placement !== "record" && placement.surface === "feedback" &&
+      failure.facts?.record && sameView(failure.facts.target, placement.view) &&
+      failure.facts.origin !== "composer"
+    ) return;
     if (value.failure?.reference && placement !== "record") {
       const origin = failure.facts?.origin ?? "session";
-      if (
-        placement.surface === "session" && origin === "composer" ||
-        placement.surface === "feedback" && origin !== "composer"
-      ) return;
+      if (placement.surface === "session" && origin === "composer") return;
       const held = occupant?.failure;
       if (
         placement.surface === "session" && held?.reference &&
@@ -312,14 +348,14 @@ export function contextualFailure(
   if (!context) return failure;
   const target = { ...context.target, ...failure.facts?.target };
   const label = failure.facts?.target?.label || context.target?.label;
-  return {
+  return inheritFailureOccurrence(failure, {
     ...failure,
     facts: {
       ...context,
       ...failure.facts,
       target: { ...target, ...(label ? { label } : {}) },
     },
-  };
+  });
 }
 
 /** One entry for definite failures and local exceptions; release is silent. */

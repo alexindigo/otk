@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { chmod, unlink, writeFile } from "node:fs/promises";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
@@ -51,15 +52,17 @@ for (const mode of ["prompt", "command"] as const) {
         if (fault === "missing") await unlink(path);
         else await chmod(path, 0);
         try {
-          await page.locator(".otk-prompt button[type=submit]").click();
-          await expect(page.locator(".otk-composer-notice [role=alert]"))
-            .toHaveCount(1);
-          await expect(page.locator(".otk-composer-notice [role=alert]"))
-            .toHaveText(
-              mode === "prompt"
-                ? "Not sent - see the error above"
-                : "See the error above",
-            );
+          await send(page).click();
+          const notice = page.locator(".otk-composer-notice [role=alert]");
+          await expect(notice).toHaveCount(1);
+          await expect(notice.getByRole("button", { name: "Show error" }))
+            .toBeVisible();
+          const label = notice.locator(".otk-record-row-label");
+          if (mode === "prompt") await expect(label).toContainText("Not sent.");
+          else await expect(label).not.toContainText("Not sent.");
+          await expect(label.locator(".otk-failure-heading")).toContainText(
+            "failed",
+          );
           const failure = page.getByRole("region", {
             name: "Transcript",
             exact: true,
@@ -93,7 +96,7 @@ for (const mode of ["prompt", "command"] as const) {
             await writeFile(path, "selected attachment bytes");
           } else await chmod(path, 0o600);
           await state.queue(["Every attachment received."]);
-          await page.locator(".otk-prompt button[type=submit]").click();
+          await send(page).click();
           await reply(state, page, session.id, "Every attachment received.");
           if (
             mode === "command" &&

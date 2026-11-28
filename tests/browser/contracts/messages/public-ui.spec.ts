@@ -1,24 +1,40 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 test.use({ profile: "contract-messages-public-ui" });
 
 test("messages.constrained-toasts-keep-detail-and-actions-reachable", {
   tag: ["@messages", "@contracts"],
-}, async ({ isolatedState: state, page }) => {
+}, async ({ isolatedState: state, page }, info) => {
   await page.setViewportSize({ width: 400, height: 220 });
-  await page.goto(`${state.url}/?action-toasts&tall`);
   const stack = page.getByRole("region", { name: "Notifications" });
   const toast = stack.locator('[data-note="other"]');
+  const heading = toast.getByText("Target other", { exact: true });
   const lastDetail = toast.getByText("Detail 14 for other", { exact: true });
-  const dismiss = toast.getByRole("button", { name: "Dismiss", exact: true });
-  await expect(toast.getByText("Target other", { exact: true }))
-    .toBeInViewport();
-  await lastDetail.scrollIntoViewIfNeeded();
-  await expect(lastDetail).toBeInViewport();
-  await dismiss.click();
-  await expect(toast).toHaveCount(0);
-  await expect(stack.locator('[data-note="refused"]')).toHaveCount(1);
+  const dismiss = toast.getByRole("button", {
+    name: "Dismiss notification",
+    exact: true,
+  });
+  for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+    await page.goto(`${state.url}/?action-toasts&tall&theme=${theme}`);
+    await expect(page.locator("html")).toHaveAttribute("data-otk-theme", theme);
+    await expect(heading).toBeInViewport();
+    await expect(lastDetail).not.toBeInViewport();
+    await heading.hover();
+    await page.mouse.wheel(0, 2000);
+    await expect(lastDetail).toBeInViewport();
+    await expect(heading).not.toBeInViewport();
+    await page.screenshot({
+      path: info.outputPath(`toast-constrained-${theme}.png`),
+    });
+    await toast.getByRole("button", { name: "Open session", exact: true })
+      .click();
+    await expect(page.locator("[data-toast-view]")).toHaveText("other");
+    await dismiss.click();
+    await expect(toast).toHaveCount(0);
+    await expect(stack.locator('[data-note="refused"]')).toHaveCount(1);
+  }
 });
 
 for (const scenario of ["lifetime", "source"] as const) {
@@ -243,10 +259,14 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
     "aria-label",
     "No known activity",
   );
-  await expect(page.locator("#registered .otk-tool-toggle")).toHaveCount(2);
+  // 2.114/dx-2 gives inert unknown-part leaves the same lane styling as tools.
+  const registeredTools = page.locator("#registered button.otk-tool-toggle");
+  await expect(registeredTools).toHaveCount(2);
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(0);
-  await page.locator("#registered > .otk-tool-line .otk-tool-toggle").click();
-  await page.locator("#registered .otk-message .otk-tool-toggle").click();
+  await registeredTools.and(page.locator("#registered > .otk-tool-line button"))
+    .click();
+  await registeredTools.and(page.locator("#registered .otk-message button"))
+    .click();
   await expect(page.locator("#registered [data-external-tool]")).toHaveCount(2);
   await expect(page.locator("[data-library-code] .otk-token").first())
     .toBeAttached();
@@ -280,7 +300,9 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#isolated .otk-tool-brief")).toHaveText(
     "Initial result",
   );
-  await page.locator("#isolated .otk-tool-toggle").click();
+  const isolatedTool = page.locator("#isolated button.otk-tool-toggle");
+  await expect(isolatedTool).toHaveAttribute("aria-expanded", "false");
+  await isolatedTool.click();
   await expect(page.locator("#isolated .otk-tool-body")).toBeVisible();
   await expect(page.locator("#isolated .otk-tool-output")).toHaveText(
     "Reusable output",
@@ -288,10 +310,8 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#isolated .otk-tool-body .otk-tool-summary"))
     .toHaveCount(0);
   await page.locator("[data-update]").click();
-  await expect(page.locator("#registered .otk-tool-toggle").first())
-    .toContainText("Inspect");
-  await expect(page.locator("#registered .otk-tool-toggle").first())
-    .toContainText("external target");
+  await expect(registeredTools.first()).toContainText("Inspect");
+  await expect(registeredTools.first()).toContainText("external target");
   await expect(page.locator("#registered .otk-tool-body").first())
     .toBeVisible();
   await expect.poll(() =>
@@ -310,11 +330,13 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
   await expect(page.locator("#registered")).toContainText(
     "Unsupported part: future.card",
   );
-  await page.locator("[data-inject]").click();
+  await page.getByRole("button", { name: "Inject draft" }).click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Injected draft",
   );
-  await expect(page.locator(".otk-prompt-context > span").first()).toHaveText(
+  await expect(
+    page.locator(".otk-prompt-context:not([inert] *) > span").first(),
+  ).toHaveText(
     "External-Agent",
   );
   await page.locator("textarea[name=prompt]").click();
@@ -328,7 +350,7 @@ test("messages.public-ui-external-tools-callbacks-isolation", {
     "outline-style",
     "solid",
   );
-  await page.locator(".otk-prompt button[type=submit]").click();
+  await send(page).click();
   await expect(page.locator("textarea[name=prompt]")).toHaveValue("");
   await expect.poll(() =>
     page.locator("#submitted").textContent().then((s) => JSON.parse(s!))

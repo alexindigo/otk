@@ -486,13 +486,13 @@ start collapsed with their path and reported change counts in the header.
 Display's Expand file changes by default toggle restores expanded defaults;
 helper cards start expanded. Typed tool cards show bash output,
 read/search/fetch/skill operations, file diffs and diagnostics, todos, read-only
-questions and subagent progress. Click a task to open its child; the subagent
-bar returns to the parent or cycles siblings. Child sessions are read-only. Code
-highlighting runs in a shared Shiki worker with on-demand grammars; cooling
-releases each session's source while other live content can retain the worker.
-The Display menu persists preferences in the serving sidecar's `otk.db` and
-updates other connected tabs. Reverted turns appear in the joined composer
-strip.
+questions and subagent progress. Click a task to open its child. Child sessions
+start with the composer collapsed; choose **Join the conversation** to send to
+the child. Code highlighting runs in a shared Shiki worker with on-demand
+grammars; cooling releases each session's source while other live content can
+retain the worker. The Display menu persists preferences in the serving
+sidecar's `otk.db` and updates other connected tabs. Reverted turns appear in
+the joined composer strip.
 
 Pasted or dropped images appear once as thumbnail attachment chips, separate
 from prompt text. Image-only prompts can be sent directly. Sent images render as

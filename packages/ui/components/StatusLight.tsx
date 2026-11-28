@@ -9,12 +9,14 @@ import {
 import StateShape from "./StateShape.tsx";
 const BLINK_DURATION_MS = 250;
 
-/** Inputs only: event identity changes blink once; initial mounting is silent. */
+/** Inputs only: a verdict change blinks once; initial mounting is silent. */
 export default function StatusLight(props: {
   state: LightState;
   small?: boolean;
   label?: string;
   dependencies?: number;
+  /** Explicit animation input for standalone consumers. Application callers
+   * use published verdict transitions and do not supply this input. */
   event?: string | number;
 }): import("solid-js").Element {
   const state = () => props.state;

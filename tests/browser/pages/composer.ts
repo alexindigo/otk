@@ -2,6 +2,7 @@
 import { expect, type Page } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
 import type { wire } from "../fixtures/wire.ts";
+import { send } from "./primary-action.ts";
 
 export const prompt = (page: Page) => page.locator("textarea[name=prompt]");
 export const chips = (page: Page) => page.locator(".otk-prompt-chip");
@@ -11,7 +12,9 @@ export const readyChips = (page: Page) =>
   chips(page).and(page.locator("[aria-busy=false]"));
 /** Submission readiness is separate from chip paint and native turn idle. */
 export async function sendPrompt(page: Page) {
-  await expect(page.locator(".otk-send-button:not(:disabled)")).toBeVisible();
+  await expect(send(page)).toBeVisible();
+  await expect(send(page)).toHaveAccessibleName("Send");
+  await expect(send(page)).toBeEnabled();
   await expect(prompt(page)).toBeFocused();
   await page.keyboard.press("Enter");
 }

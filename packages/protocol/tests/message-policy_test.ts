@@ -2,7 +2,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
 import { messagePolicy } from "../mod.ts";
 Deno.test("welcome message policy has no defaults or unknown fields and preserves operator values", () => {
-  const policy = {
+  const withoutBridgePages = {
     prefetchms: 300000,
     prefetchbytes: 67108864,
     coolms: 999999999,
@@ -14,11 +14,15 @@ Deno.test("welcome message policy has no defaults or unknown fields and preserve
     replaybytes: 65536,
     retryms: 321,
   };
+  const policy = { ...withoutBridgePages, bridgepages: 9 };
   assertEquals(messagePolicy(policy), policy);
   for (
     const value of [
       undefined,
       {},
+      withoutBridgePages,
+      { ...policy, bridgepages: 0 },
+      { ...policy, bridgepages: 1.5 },
       { ...policy, replayops: 0 },
       { ...policy, prefetchms: 0 },
       { ...policy, prefetchbytes: Number.MAX_SAFE_INTEGER + 1 },

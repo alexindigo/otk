@@ -23,6 +23,7 @@ export * from "./inbox.ts";
 export * from "./entity-state.ts";
 export * from "./project-placement.ts";
 export * from "./supervision.ts";
+export * from "./entity-transitions.ts";
 export * from "./messages.ts";
 export * from "./models.ts";
 export * from "./usage.ts";
@@ -48,3 +49,19 @@ export * from "./identity.ts";
 export * from "./hash.ts";
 export * from "./project-edit.ts";
 export * from "./terminals.ts";
+export * from "./local-files.ts";
+export type {
+  ProjectMove,
+  ProjectMoveTarget,
+  ProjectOrderEntry,
+  ProjectOrderFrame,
+} from "./project-order.ts";
+export {
+  OTHER_PROGRAM_ID,
+  type Program,
+  type ProgramAssign,
+  type ProgramCreate,
+  type ProgramMembership,
+  type ProgramMove,
+  type ProgramsFrame,
+} from "./programs.ts";

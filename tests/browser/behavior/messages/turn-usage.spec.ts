@@ -92,7 +92,11 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   const rows = page.locator(".otk-usage-breakdown tbody tr");
   await expect(rows).toHaveCount(3);
-  expect(await page.locator(".otk-usage-breakdown thead th").allTextContents())
+  expect(
+    await page.locator(".otk-usage-breakdown thead").getByRole(
+      "columnheader",
+    ).allTextContents(),
+  )
     .toEqual([
       "Call",
       "Activity",
@@ -106,7 +110,14 @@ test("messages.priced-native-multistep-usage-display-persistence", {
       "Time",
     ]);
   const values = await rows.evaluateAll((rows) =>
-    rows.map((row) => Array.from(row.children, (cell) => cell.textContent!))
+    rows.map((row) =>
+      Array.from(
+        row.querySelectorAll(
+          ":scope > .otk-usage-identity > *, :scope > td:not(.otk-usage-identity)",
+        ),
+        (cell) => cell.textContent!,
+      )
+    )
   );
   expect(values.map((r) => r[0])).toEqual(["1", "2", "3"]);
   expect(values.map((r) => r[1])).toEqual([
@@ -158,17 +169,15 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect(page.locator(".otk-turn-time")).toHaveText(
     `Worked for ${turnTime}`,
   );
-  await expect(page.locator(".otk-work-fold .otk-work-label").first())
-    .toHaveText(
-      "Work log",
-    );
-  // Every work fold is named; only the footer presents the turn's working time.
-  await expect(page.locator(".otk-work-fold").last()).toHaveText("Work log");
+  const strip = page.locator(".otk-work-strip");
+  await expect(strip).toContainText("Work log");
+  await expect(strip).not.toContainText(/Worked for|counting/);
   expect(
     await page.locator(".otk-turn-usage").evaluate((u) => {
       const a = u.getBoundingClientRect(),
-        r = u.previousElementSibling!.getBoundingClientRect();
-      return r.right <= a.left &&
+        r = u.closest(".otk-meta-item")!.previousElementSibling!
+          .getBoundingClientRect();
+      return r.width > 0 && r.right <= a.left &&
         Math.abs(r.y + r.height / 2 - a.y - a.height / 2) <= .5;
     }),
   ).toBe(true);
@@ -178,10 +187,10 @@ test("messages.priced-native-multistep-usage-display-persistence", {
         rows = Array.from(table.querySelectorAll("tbody tr"));
       return panel.width > 0 && panel.height > 0 && panel.left >= 0 &&
         panel.right <= innerWidth && rows.every((row) =>
-          Array.from(row.children).slice(2).every((cell, i) =>
+          Array.from(row.children).slice(1).every((cell, i) =>
             Math.abs(
               cell.getBoundingClientRect().right -
-                rows[0].children[i + 2].getBoundingClientRect().right,
+                rows[0].children[i + 1].getBoundingClientRect().right,
             ) <= .5
           )
         );
@@ -230,7 +239,13 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   ).toBe(true);
   // The popover shell opens before its complete usage snapshot installs.
   await expect.poll(() =>
-    rows.evaluateAll((rows) => rows.map((row) => row.children.length))
+    rows.evaluateAll((rows) =>
+      rows.map((row) =>
+        row.querySelectorAll(
+          ":scope > .otk-usage-identity > *, :scope > td:not(.otk-usage-identity)",
+        ).length
+      )
+    )
   ).toEqual([9, 9, 9]);
   await expect(page.locator("[data-role=assistant] .otk-message-footer")).not
     .toContainText("$");

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { expectPrimaryBlocked } from "../../pages/primary-action.ts";
+import { expectPrimaryBlocked, send } from "../../pages/primary-action.ts";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
@@ -13,7 +13,7 @@ test.describe("live hints", () => {
       await openSession(state, page, "tstv1-core");
       const lamp = page.locator('[data-crumb="tstv1-core"] .otk-status-light');
       await expect(lamp).toHaveAttribute("data-state", "none");
-      const button = page.locator(".otk-prompt button[type=submit]");
+      const button = send(page);
       const defaultTitle =
         "Send (Enter); Shift+Enter for newline; Esc twice to interrupt";
       const reboundTitle =
@@ -120,8 +120,12 @@ test.describe("live hints", () => {
     await edit.click();
     const editor = page.locator("textarea[name=editor]");
     await expect(editor).toHaveValue("Keep this prompt");
-    await expect(page.locator("dialog[open] .otk-surface-title button"))
-      .toHaveText("Close");
+    const close = page.locator("dialog[open] .otk-surface-title").getByRole(
+      "button",
+      { name: "Close Edit prompt", exact: true },
+    );
+    await expect(close.locator("svg")).toBeVisible();
+    await expect(close).toHaveText("");
     await expect(page.locator(".otk-editor p")).toHaveText(
       "Save to keep changes",
     );

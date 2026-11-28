@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { type CollectionState, collectionState } from "./collection-state.ts";
 import type { TerminalInfo } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import { type FailureValue, failureValue } from "./failure-features.ts";
@@ -71,8 +72,11 @@ export class TerminalSocket {
   #lastFrame = 0;
   #stopped = false;
   #clock: TerminalClock;
+  #releaseRecovery?: () => void;
   constructor(
-    private conn: Pick<SidecarConnection, "base" | "options">,
+    private conn:
+      & Pick<SidecarConnection, "base" | "options">
+      & Partial<Pick<SidecarConnection, "onRecovered">>,
     clock?: TerminalClock,
   ) {
     this.#clock = clock ?? {
@@ -82,6 +86,18 @@ export class TerminalSocket {
         return () => globalThis.clearTimeout(timer);
       },
     };
+    this.#releaseRecovery = conn.onRecovered?.(() => {
+      // Control and mux sockets can recover in either order. Join any mux
+      // already open/opening; retiring it here could drop live terminal input.
+      if (
+        this.#stopped || this.#socket ||
+        ![...this.#channels].some((c) => !c.blocked)
+      ) return;
+      this.#retry?.();
+      this.#retry = undefined;
+      // Reuse the currently retained attachments (same PTY IDs and sizes).
+      this.#connect();
+    });
   }
   subscribe(listener: (event: TerminalSocketEvent) => void): () => void {
     this.#listeners.add(listener);
@@ -408,6 +424,7 @@ export class TerminalSocket {
   }
   stop(): void {
     this.#stopped = true;
+    this.#releaseRecovery?.();
     this.#retry?.();
     this.#idle?.();
     this.#retire();
@@ -440,6 +457,7 @@ function liveInfo(info: TerminalInfo, change?: TerminalMeta): TerminalInfo {
 
 /** Session-owned list and four renderer leases; disposal leaves shells running. */
 export class SessionTerminals {
+  #answered = false;
   #current: SessionTerminalsState = {
     list: [],
     retained: [],
@@ -481,6 +499,9 @@ export class SessionTerminals {
     void this.#store.state.revision;
     return this.#current;
   }
+  get listState(): CollectionState {
+    return collectionState(this.#answered, this.state.list.length);
+  }
   subscribe(listener: (state: SessionTerminalsState) => void): () => void {
     return this.#store.subscribe(() => listener(this.#current));
   }
@@ -517,6 +538,7 @@ export class SessionTerminals {
         ) this.#release(id);
       }
       if (!current()) return;
+      this.#answered = true;
       this.#update((state) => {
         state.list = list.map((info) => liveInfo(info, changes.get(info.id)));
         state.disconnected = state.disconnected.filter((id) => ids.has(id));

@@ -10,9 +10,10 @@ import { AuthState } from "./auth/state.ts";
 import type { ServiceConfig } from "./config/schema.ts";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
-import type { FrameSource } from "./ws/connections.ts";
+import type { ConnectionRequests, FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
 import { bind } from "./http/server.ts";
+import { servedBuild } from "./http/served-build.ts";
 import { diagnosticsLog } from "./diagnostics-log.ts";
 import type { SectionObserver } from "./diagnostics.ts";
 import { RequestCoordinator } from "./requests/coordinator.ts";
@@ -21,6 +22,7 @@ import { clientRequestPolicy } from "./config/schema.ts";
 import { StorageFeature } from "./features/storage.ts";
 import { StorageRequests } from "./requests/storage.ts";
 import type { TerminalSockets } from "./terminals/mux.ts";
+import type { InlineImages } from "./files/inline-images.ts";
 
 export interface CoreOptions {
   cfg: ServiceConfig;
@@ -31,11 +33,14 @@ export interface CoreOptions {
   staticRoot: string;
   index?: IndexStore;
   sources?: readonly FrameSource[];
+  projectOrder?: ConnectionRequests["projectOrder"];
+  programs?: ConnectionRequests["programs"];
   diagnostics?: SectionObserver;
   diagnostic?: DiagnosticSink;
   signal?: AbortSignal;
   requested?: () => void;
   terminals?: TerminalSockets;
+  inlineImages?: InlineImages;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -66,6 +71,8 @@ function startBackend(
       index.projectAuthority(value);
     },
     projectSeeds: (values) => index.projectSeeds(values),
+    projectMetadata: (project, source) =>
+      index.projectMetadata(project, source),
     indexReset: (entries) => index.resetMetadata(entries),
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
@@ -145,6 +152,10 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   };
   options.signal?.addEventListener("abort", cancelled, { once: true });
   try {
+    const identity = {
+      build: await servedBuild(staticRoot),
+      instance: crypto.randomUUID(),
+    };
     check();
     const listener = bind(cfg, undefined, diagnostic, options.requested);
     server = listener.server;
@@ -158,11 +169,14 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       cfg.messages,
       {
         coordinator: requests,
+        server: identity,
         identity: () => cfg.auth.username.toLowerCase() || "local",
         policy: clientRequestPolicy(cfg),
         helloms: cfg.connection.helloms,
         attachments: cfg.attachments,
         requested: options.requested,
+        projectOrder: options.projectOrder,
+        programs: options.programs,
       },
       sources,
       options.diagnostics,
@@ -199,7 +213,9 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       backend,
       connections: transport,
       staticRoot,
+      ...identity,
       terminals: options.terminals,
+      inlineImages: options.inlineImages,
     });
     check();
     return {

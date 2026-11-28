@@ -20,19 +20,30 @@ test("visual.record-tree-content-gutter-preserves-both-artwork-axes", {
           .styleTest.theme(theme),
       theme,
     );
-    for (const record of await page.locator(".otk-native-record").all()) {
-      await record.locator(".otk-tool-toggle").press("ArrowRight");
+    const records = page.locator('[data-native-record="consumer/record-axis"]');
+    await expect(records).toHaveCount(2);
+    for (const record of await records.all()) {
+      const toggle = record.locator(".otk-tool-toggle");
+      await toggle.press("ArrowRight");
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
       const axes = await record.evaluate((el) => {
-        const art = el.querySelector(".otk-tree-icon-art")!
-          .getBoundingClientRect();
-        const guide = el.querySelector(".otk-tree-incoming")!
-          .getBoundingClientRect();
-        return { art: art.x + art.width / 2, guide: guide.x + guide.width / 2 };
+        // Tree lanes place spanning disclosure artwork on the node track.
+        const axis = (selector: string) => {
+          const box = el.querySelector(selector)!.getBoundingClientRect();
+          return box.x + box.width / 2;
+        };
+        return {
+          art: axis(".otk-tree-trigger > .otk-disclosure-lead"),
+          guide: axis(".otk-tree-region .otk-tree-junction"),
+          box: axis(".otk-tree-trigger > .otk-disclosure-icon"),
+          junction: axis(".otk-tool-state > .otk-tree-junction"),
+        };
       });
       expect(
         Math.abs(axes.art - axes.guide),
         `${theme} ${await record.textContent()}`,
       ).toBeLessThanOrEqual(1);
+      expect(Math.abs(axes.box - axes.junction), theme).toBeLessThanOrEqual(1);
     }
   }
 });
@@ -81,13 +92,15 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       ) => elements.filter((el) => el.scrollWidth > el.clientWidth + 1).length);
       expect(overflow).toBe(0);
       for (
-        const details of await page.locator(".otk-failure-details:visible")
+        const details of await page.locator(
+          ".otk-failure-details button:visible",
+        )
           .all()
       ) {
         const trailing = await details.evaluate((el) => {
           const text = document.createRange();
           text.selectNodeContents(
-            el.querySelector(".otk-failure-detail-toggle")!,
+            el.querySelector(".otk-disclosure-label")!,
           );
           return el.getBoundingClientRect().right -
             text.getBoundingClientRect().right;
@@ -126,12 +139,29 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
       for (const failure of await page.locator(".otk-failure-content").all()) {
         const edges = await failure.evaluate((el) =>
           Array.from(el.querySelectorAll(
-            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action, .otk-failure-detail-toggle",
+            ".otk-failure-heading, .otk-failure-main-reason, .otk-failure-action, .otk-disclosure-label",
           )).filter((node) => node.getClientRects().length).map((node) =>
             node.getBoundingClientRect().left
           )
         );
-        await expect(failure.locator("[aria-expanded]")).toHaveCount(1);
+        const disclosure = failure.getByRole("button", {
+          name: "Details",
+          exact: true,
+        });
+        if (
+          await failure.evaluate((el) => el.classList.contains("is-feedback"))
+        ) {
+          const more = failure.getByRole("button", { name: "More actions" });
+          if (await more.isVisible()) {
+            await more.click();
+            await expect(
+              page.getByRole("menuitem", { name: "Details", exact: true }),
+            )
+              .toHaveCount(0);
+            await page.keyboard.press("Escape");
+          }
+          await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+        } else await expect(failure.locator("[aria-expanded]")).toHaveCount(1);
         await expect(failure.locator(".otk-tree-node, .otk-tree-connector"))
           .toHaveCount(0);
         if (edges.length > 1) {
@@ -146,13 +176,15 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).all()
       ) {
         const edges = await record.evaluate((el) => {
-          const heading = Array.from(
-            el.querySelector(".otk-tool-state")!.children,
-          ).find((child) => !child.classList.contains("otk-tree-icon"))!;
+          // The spanning trigger includes both artwork lanes. Its caption,
+          // not the hit target's outer edge, shares the failure text track.
+          const heading = el.querySelector(
+            ".otk-tool-state > .otk-tree-trigger .otk-disclosure-label",
+          )!;
           return [
             heading,
             el.querySelector(".otk-failure-main-reason")!,
-            el.querySelector(".otk-failure-detail-toggle")!,
+            el.querySelector(".otk-failure-details .otk-disclosure-label")!,
           ].map((node) => node.getBoundingClientRect().left);
         });
         expect(
@@ -161,7 +193,9 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toBeLessThanOrEqual(1);
       }
       for (
-        const toggle of await page.locator(".otk-disclosure-toggle:visible")
+        const toggle of await page.locator(
+          ".otk-disclosure-toggle:visible, .otk-disclosure-button:visible",
+        )
           .all()
       ) {
         const gaps = await toggle.evaluate((el) => {
@@ -201,20 +235,42 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveText("The attachment could not be read");
         await expect(
           page.locator(".otk-operation-feedback .otk-composer-notice-icon"),
+        ).toHaveCount(1);
+        await expect(
+          page.locator(".otk-operation-feedback .otk-failure-signal"),
         ).toHaveCount(0);
         await expect(page.locator(".otk-toast .otk-failure-signal"))
           .toHaveCount(0);
         await expect(page.locator(".otk-toast .otk-failure-target"))
           .toHaveText("Error presentation review");
-        const toastEdges = await page.locator(
+        const plain = page.locator('.otk-toast[data-note="ordinary-review"]');
+        await expect(plain.locator(".otk-toast-lead, [data-signal]"))
+          .toHaveCount(0);
+        await expect(plain.locator(".otk-toast-title")).toHaveText(
+          "Project saved",
+        );
+        const toastOffsets = await page.locator(
           ".otk-toast-title, .otk-toast .otk-failure-heading",
         ).evaluateAll((elements) =>
-          elements.map((element) => element.getBoundingClientRect().left)
+          elements.map((element) => {
+            const row = element.closest(".otk-toast-row")!;
+            const style = getComputedStyle(row);
+            const track = element.matches(".otk-failure-heading")
+              ? parseFloat(style.gridTemplateColumns) +
+                parseFloat(style.columnGap)
+              : 0;
+            return element.getBoundingClientRect().left -
+              row.getBoundingClientRect().left - track;
+          })
         );
-        expect(toastEdges).toHaveLength(2);
-        expect(Math.max(...toastEdges) - Math.min(...toastEdges))
-          .toBeLessThanOrEqual(1);
-        const failure = page.locator(".otk-inbox-footer .otk-failure-details");
+        expect(toastOffsets).toHaveLength(2);
+        for (const offset of toastOffsets) {
+          expect(Math.abs(offset)).toBeLessThanOrEqual(1);
+        }
+        const failure = page.locator(".otk-inbox-footer").getByRole("button", {
+          name: "Details",
+          exact: true,
+        });
         const toggle = failure;
         await toggle.press("ArrowRight");
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -230,7 +286,10 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           .toHaveText("1 permission · 2 failed");
         await expect(page.locator(".otk-native-record .otk-failure-heading"))
           .toHaveCount(0);
-        await expect(page.locator(".otk-tool-brief")).toHaveCount(0);
+        // WP3 moves the native record's brief into its own heading slot.
+        // FailureContent must still not introduce a second heading/brief.
+        await expect(page.locator(".otk-failure-content .otk-tool-brief"))
+          .toHaveCount(0);
         await expect(page.locator(".otk-failure-reason:visible")).toHaveCount(
           2,
         );
@@ -302,13 +361,17 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         ).toHaveCount(1);
         await expect(page.locator(".otk-failure-time")).toHaveCount(0);
         await expect(
-          page.locator("[data-role=assistant] .otk-message-footer time[title]"),
+          page.locator(
+            "[data-role=assistant] .otk-message-footer time[title]:visible",
+          ),
         ).toHaveText([
           "1:16 AM",
           "1:23 AM",
         ]);
-        await expect(page.getByText("Time unknown", { exact: true }))
-          .toBeVisible();
+        await expect(
+          page.locator(".otk-message-footer .otk-turn-time")
+            .filter({ hasText: /^Time unknown$/ }),
+        ).toBeVisible();
       }
       if (surface === "send") {
         const pending = page.locator('[data-message="unknown"]');
@@ -331,13 +394,17 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
         }
       }
       if (surface === "icons") {
-        await expect(page.locator(".otk-tool-state .otk-tree-icon-art svg"))
+        await expect(
+          page.locator(
+            "[data-tool] > .otk-tree-node > .otk-tree-heading .otk-disclosure-lead svg",
+          ),
+        )
           .toHaveCount(6);
         await expect(page.locator(".otk-todos .otk-state-shape")).toHaveCount(
           4,
         );
         await expect(
-          page.locator(".otk-state-shape text, .otk-tree-icon-art text"),
+          page.locator(".otk-state-shape text, .otk-disclosure-lead text"),
         ).toHaveCount(0);
         await expect(
           page.getByText(
@@ -348,9 +415,11 @@ test("visual.failure-layout-shares-placement-disclosure-and-metadata", {
           .toHaveText(/Nov 20, 2026.*1:23:00\.107 AM PST/);
       }
       if (surface === "tree") {
-        const fills = await page.locator(".otk-tree-toggle rect").evaluateAll((
-          elements,
-        ) => elements.map((el) => getComputedStyle(el).fill));
+        const fills = await page.locator(
+          ".otk-tree-heading .otk-disclosure-icon rect",
+        ).evaluateAll((elements) =>
+          elements.map((el) => getComputedStyle(el).fill)
+        );
         expect(fills.length).toBeGreaterThan(0);
         expect(fills.every((fill) => fill === "none")).toBe(true);
       }

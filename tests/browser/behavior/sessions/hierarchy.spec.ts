@@ -37,7 +37,7 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
   }]);
   await expect(
     page.locator("[data-session=tstv1-nested]").locator(
-      "xpath=ancestor::*[@data-depth][1]",
+      "xpath=ancestor::*[@data-parent and @data-depth][1]",
     ),
   ).toHaveAttribute("data-depth", "2");
   for (
@@ -48,7 +48,7 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
   ) {
     await expect(
       page.locator(
-        `.otk-project-sessions .otk-session-row[data-session=${id}] .otk-session-leading .otk-status-light`,
+        `.otk-project-sessions .otk-session-row[data-session=${id}] .otk-tree-node-slot .otk-status-light`,
       ),
     )
       .toHaveAttribute("data-state", status);

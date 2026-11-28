@@ -50,7 +50,12 @@ export interface BranchHistoryState {
   pending: boolean;
   error?: FailureValue;
   choice?: { branchID: string; label: string; draft: Draft };
-  permanence?: { boundaryID: string; saving: boolean; error: FailureValue };
+  permanence?: {
+    boundaryID: string;
+    saving: boolean;
+    error: FailureValue;
+    causeID?: string;
+  };
   recovery?: { boundaryID: string; restored: boolean };
 }
 export interface BranchSendPermit {
@@ -90,6 +95,7 @@ export interface BranchHistory {
   choose(saved: boolean): void;
   delete(id: string): void;
   fail(cause: unknown): void;
+  dismissError(diagnosticID: string): void;
   subscribe(listener: () => void): () => void;
 }
 type StoredDraft = { label: string; value: Draft; defaultVariant: boolean };
@@ -248,12 +254,13 @@ export function createBranchHistory(options: {
       boundary: string;
       drafts: CaptureDrafts;
       record: RevertInfo;
+      restoring: boolean;
     }
   >();
   // Revert identity and promised draft retention outlive individual capture jobs.
   const records = new Map<
     string,
-    { record: RevertInfo; drafts: CaptureDrafts }
+    { record: RevertInfo; drafts: CaptureDrafts; restoring: boolean }
   >();
   const recoveries = new Map<
     string,
@@ -518,6 +525,7 @@ export function createBranchHistory(options: {
     signal: AbortSignal,
     drafts: CaptureDrafts,
     record: RevertInfo,
+    restoring: boolean,
   ) => {
     signal.throwIfAborted();
     if (!supportsHistory(t)) return;
@@ -532,7 +540,7 @@ export function createBranchHistory(options: {
       if (!options.storage) {
         throw fail(
           t,
-          drafts.restored
+          restoring
             ? "The earlier conversation couldn't be saved: storage is unavailable. The conversation was restored."
             : "The earlier conversation couldn't be saved: storage is unavailable.",
           "Check storage access, then Retry, or Keep without a saved copy.",
@@ -762,7 +770,7 @@ export function createBranchHistory(options: {
         turns,
         prompts,
         drafts: [],
-        pending: !drafts.restored,
+        pending: !restoring,
         bytes: 0,
       };
       retain(
@@ -780,10 +788,10 @@ export function createBranchHistory(options: {
       }
       await refreshCapture?.();
       signal.throwIfAborted();
-      save(t, branch, false, true, drafts.restored ? "restore" : undefined);
+      save(t, branch, false, true, restoring ? "restore" : undefined);
       clearRecovery(t);
       if (
-        drafts.restored?.edited && same(selected, t) &&
+        restoring && drafts.restored?.edited && same(selected, t) &&
         !sameDraft(options.drafts.current(draftKey(t)), branch.drafts[0].value)
       ) {
         store.update((s) => {
@@ -810,6 +818,7 @@ export function createBranchHistory(options: {
     boundary: string,
     record: RevertInfo,
     retained?: CaptureDrafts,
+    restoring = false,
   ): Promise<void> => {
     // Typed callers cannot omit the record; untyped view data is still checked.
     if (
@@ -832,11 +841,13 @@ export function createBranchHistory(options: {
     if (sends.has(key) && sends.get(key)!.record.boundaryID !== boundary) {
       cancelSend(t);
     }
-    if (
-      current?.boundary === boundary &&
+    const sameScope = current?.boundary === boundary &&
       JSON.stringify(current.record.messageIDs) ===
-        JSON.stringify(record.messageIDs)
-    ) return current.promise;
+        JSON.stringify(record.messageIDs);
+    // Restore retires a stage even if another client restages the same IDs.
+    // The new stage needs its own witness and a pending archive, not the
+    // previous stage's post-Restore capture. Keep the promised draft in it.
+    if (sameScope && current.restoring === restoring) return current.promise;
     current?.controller.abort();
     const controller = new AbortController();
     const atRevert = cloneDraft(options.drafts.current(key));
@@ -844,16 +855,17 @@ export function createBranchHistory(options: {
       {
         atRevert,
         original: options.drafts.reverts.get(key)?.before ?? atRevert,
+        restored: sameScope ? current.drafts.restored : undefined,
       };
-    records.set(key, { record, drafts });
+    records.set(key, { record, drafts, restoring });
     const captureRecord = record;
     const promise = Promise.resolve().then(() =>
-      capture(t, boundary, controller.signal, drafts, captureRecord)
+      capture(t, boundary, controller.signal, drafts, captureRecord, restoring)
     ).catch((cause) => {
       if (controller.signal.aborted) return;
       const error = cause instanceof RequestFailure ? cause : fail(
         t,
-        drafts.restored
+        restoring
           ? "The earlier conversation couldn't be saved. The conversation was restored."
           : "The earlier conversation couldn't be saved.",
         "Check history and storage access, then Retry, or Keep without a saved copy.",
@@ -861,7 +873,7 @@ export function createBranchHistory(options: {
       );
       recoveries.set(key, {
         boundaryID: boundary,
-        restored: !!drafts.restored,
+        restored: restoring,
       });
       publishRecovery(t);
       failures.set(key, error);
@@ -878,7 +890,14 @@ export function createBranchHistory(options: {
       controller.abort();
       if (captures.get(key)?.controller === controller) captures.delete(key);
     });
-    captures.set(key, { controller, promise, boundary, drafts, record });
+    captures.set(key, {
+      controller,
+      promise,
+      boundary,
+      drafts,
+      record,
+      restoring,
+    });
     return promise;
   };
   const reuse = (id: string, value: Draft, label: string) => {
@@ -1031,6 +1050,9 @@ export function createBranchHistory(options: {
           boundaryID: record.boundaryID,
           saving: false,
           error: sendFailure(target, cause),
+          causeID: cause instanceof RequestFailure
+            ? cause.failure.diagnosticID
+            : undefined,
         };
         sends.set(draftKey(t), { target, record, draft, choice, wait });
         publishSend(t);
@@ -1058,6 +1080,9 @@ export function createBranchHistory(options: {
           pending.choice = {
             ...pending.choice,
             error: sendFailure(pending.target, cause),
+            causeID: cause instanceof RequestFailure
+              ? cause.failure.diagnosticID
+              : undefined,
           };
         }
       } finally {
@@ -1076,6 +1101,7 @@ export function createBranchHistory(options: {
         retained.record.boundaryID,
         retained.record,
         retained.drafts,
+        retained.restoring,
       );
     },
     keepWithoutCopy() {
@@ -1151,7 +1177,7 @@ export function createBranchHistory(options: {
                 edited: transaction?.edited ??
                   !sameDraft(current, drafts.original),
               },
-            }).catch(() => {});
+            }, true).catch(() => {});
           }
           return;
         }
@@ -1200,6 +1226,14 @@ export function createBranchHistory(options: {
           target: selected &&
             { sidecarId: selected.sidecarId, sessionID: selected.sessionID },
         });
+      });
+    },
+    dismissError(diagnosticID) {
+      const error = store.state.error;
+      if (!selected || !error || error.diagnosticID !== diagnosticID) return;
+      clearFailure(selected);
+      store.update((s) => {
+        s.error = undefined;
       });
     },
     choose(saved) {

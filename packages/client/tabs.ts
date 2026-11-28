@@ -8,7 +8,7 @@ import type {
 } from "@otk/protocol";
 import {
   entityKey,
-  entityRequiresVisibility,
+  entityRetainsVisibility,
   type SessionHierarchyNode,
   taskEntityID,
 } from "@otk/protocol";
@@ -19,6 +19,7 @@ import {
   lamp,
 } from "./entity-state.ts";
 import { createStableOrder } from "./stable-order.ts";
+import { sessionTitle } from "./session-title.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { RequestOptions } from "./requests.ts";
 import {
@@ -98,6 +99,8 @@ export interface ClientTabs {
   /** Compatibility view of the trail's off-path working/blocked helpers. */
   entry(id: string): (IndexMetadata & OperationAttention) | undefined;
   taskFor(id: string): TaskRecord | undefined;
+  /** The owning task's title, including an unnamed (phantom) task. */
+  taskTitleFor(id: string): string | undefined;
   /** The same session membership used by this tab's supervision lamp. */
   belongsToTab(tabID: string, sessionID: string): boolean;
   sessionFor(taskID: string): string | undefined;
@@ -209,7 +212,7 @@ export function createTabs(
       context.filter((entry) =>
         !entry.deleted &&
         (nodes.get(entry.id)?.mandatory ||
-          !entities().isStale && entityRequiresVisibility(
+          !entities().isStale && entityRetainsVisibility(
               entities().get(entityKey("session", entry.id)),
             ))
       ).map((entry) => entry.id),
@@ -402,6 +405,19 @@ export function createTabs(
       return lookup(id);
     },
     taskFor,
+    taskTitleFor(id) {
+      const owner = grouping().owners.get(id);
+      if (owner?.kind === "task") return taskByID.get(owner.id)?.name;
+      const published = byID.get(id)?.hierarchy;
+      if (
+        published?.followParent === !!input.followParent &&
+        published.taskTitle !== undefined
+      ) {
+        return published.taskTitle;
+      }
+      if (!owner) return undefined;
+      return sessionTitle(owner.id, byID.get(owner.id)?.title);
+    },
     belongsToTab(tabID, sessionID) {
       void store.state.revision;
       return grouping().owners.get(sessionID)?.id === tabID;

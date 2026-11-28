@@ -7,15 +7,16 @@ import {
   onCleanup,
   Show,
 } from "solid-js";
-import type { Selection, TimelinePrompt } from "@otk/client";
+import type { CollectionState, Selection, TimelinePrompt } from "@otk/client";
 import { errorFeedback, type FailureValue, failureValue } from "@otk/client";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { contextTarget } from "./context-target.ts";
 import MessageFooter from "./MessageFooter.tsx";
-import ListRow from "./ListRow.tsx";
+import SidebarRow from "./SidebarRow.tsx";
 import { EmptyState } from "./View.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import VirtualList from "./VirtualList.tsx";
-import ChromeMeta from "./ChromeMeta.tsx";
+import ChromeMeta, { MetaItem } from "./ChromeMeta.tsx";
 
 function PromptRow(props: {
   prompt: TimelinePrompt;
@@ -23,32 +24,46 @@ function PromptRow(props: {
   selected: boolean;
   onReveal(): void;
 }) {
+  const ref = contextTarget(() => ({ kind: "prompt", data: props.target }));
   return (
     <li>
-      <ListRow
-        as="div"
-        ref={contextTarget(() => ({ kind: "prompt", data: props.target }))}
-        selected={props.selected}
-        class="otk-timeline-row"
-        attributes={{ "data-timeline-prompt": props.prompt.id }}
-        labelClass="otk-timeline-preview"
-        labelTitle={props.target.text}
-        actionClass="otk-timeline-reveal"
-        activate={props.onReveal}
-        trailing={
-          <MessageFooter
-            class="otk-timeline-trailing"
-            at={props.prompt.time}
-            actions={{ kind: "prompt", target: props.target }}
-          />
+      <SidebarRow
+        flat
+        frame={{
+          selected: props.selected,
+          class: "otk-timeline-row",
+          ref,
+          attributes: { "data-timeline-prompt": props.prompt.id },
+        }}
+        action={{
+          class: "otk-timeline-reveal",
+          title: props.target.text,
+          onClick: props.onReveal,
+        }}
+        label={
+          <span class="otk-timeline-preview">
+            {props.target.text || "Prompt"}
+          </span>
         }
-      >
-        {props.target.text || "Prompt"}
-        <Show when={props.prompt.queued}>
-          {" "}
-          <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
-        </Show>
-      </ListRow>
+        meta={
+          <>
+            <Show when={props.prompt.queued}>
+              <MetaItem rank={2}>
+                <ChromeMeta class="otk-timeline-queued">Queued</ChromeMeta>
+              </MetaItem>
+            </Show>
+            <MetaItem rank={1}>
+              <MessageFooter
+                whole
+                intrinsic
+                class="otk-timeline-trailing"
+                at={props.prompt.time}
+                actions={{ kind: "prompt", target: props.target }}
+              />
+            </MetaItem>
+          </>
+        }
+      />
     </li>
   );
 }
@@ -57,6 +72,7 @@ function PromptRow(props: {
 export default function Timeline(props: {
   session?: Selection;
   prompts: TimelinePrompt[];
+  state?: CollectionState;
   exhausted: boolean;
   paging: boolean;
   directory?: string;
@@ -104,10 +120,10 @@ export default function Timeline(props: {
         when={props.session}
         fallback={<EmptyState>Open a session to see its prompts.</EmptyState>}
       >
-        <Show when={!props.exhausted}>
+        <Show when={props.state === "loading" || !props.exhausted}>
           <Show
-            when={!props.paging}
-            fallback={<p class="otk-muted" role="status">Loading prompts...</p>}
+            when={props.state !== "loading" && !props.paging}
+            fallback={<ProgressStatus text="Loading prompts..." />}
           >
             <button
               type="button"
@@ -118,14 +134,14 @@ export default function Timeline(props: {
             </button>
           </Show>
         </Show>
-        <Show when={!props.prompts.length && !props.paging}>
+        <Show when={props.state === "empty" && !props.paging}>
           <EmptyState>No prompts yet.</EmptyState>
         </Show>
         <VirtualList
           keys={props.prompts.map((prompt) => prompt.id)}
           class="otk-timeline-list"
           label="Acquired prompts"
-          samples={[{ role: "prompt", class: "otk-list-row" }]}
+          samples={[{ role: "prompt", class: "otk-sidebar-row-grid" }]}
           role={() => "prompt"}
           overscan={0}
           retainExcluded={false}

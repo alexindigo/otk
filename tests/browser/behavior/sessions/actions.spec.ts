@@ -9,6 +9,7 @@ import {
   expectCompactionSummary,
   prompt,
   revealAcquired,
+  settledNativeReply,
   toolScript,
 } from "../../pages/transcript.ts";
 import { contextMenu, sessionContext } from "../../pages/sessions.ts";
@@ -29,17 +30,15 @@ interface Message {
 async function deletedDetails(page: Page, id: string, title: string) {
   const row = page.locator(`[data-session="${id}"]`);
   await expect(row).toHaveClass(/is-deleted/);
-  await expect(row).toHaveAttribute(
-    "aria-label",
-    new RegExp("^Deleted session, "),
-  );
-  // Style7 shared ListRow label slot (style7fix note; decision 3).
-  await expect(row.locator(".otk-session-title")).toHaveText(title);
-  await expect(row.locator(".otk-session-title")).toHaveCSS(
+  // Issue 2.96: SidebarRow's action owns the accessible name, not its frame.
+  const action = row.getByRole("button");
+  await expect(action).toHaveAccessibleName(/^Deleted session, /);
+  await expect(row.locator(".otk-sidebar-title-text")).toHaveText(title);
+  await expect(row.locator(".otk-sidebar-title-text")).toHaveCSS(
     "text-decoration-line",
     /line-through/,
   );
-  await row.click();
+  await action.click();
   await expect(page).toHaveURL(new RegExp(`${id}$`));
   const details = page.locator(".otk-deleted-session");
   await expect(details).toContainText(title);
@@ -225,7 +224,7 @@ test("sessions.compact-native-http-failure-one-owned-feedback", {
     title: "Compact error",
   });
   await openSession(state, page, s.id);
-  await expect(page.locator(".otk-model-picker")).toBeVisible();
+  await expect(page.locator(".otk-model-picker:not([inert] *)")).toBeVisible();
   await state.controller.call("scenario", {
     lease: state.lease.lease,
     action: "freeze",
@@ -257,6 +256,16 @@ test(
   "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork",
   { tag: ["@sessions", "@isolated"] },
   async ({ isolatedState: state, page, context }, info) => {
+    const completeTurn = async (id: string, input: string, reply: string) => {
+      await prompt(page, input);
+      // Forking consumes completed history, not the intermediate tool turn.
+      await settledNativeReply(state, id, reply);
+      await expect(page.locator(".otk-messages")).toContainText(reply);
+      await expect(page.locator(`[data-session="${id}"]`)).toHaveAttribute(
+        "data-status",
+        "idle",
+      );
+    };
     const original = await state.native<{ id: string }>("/session", "POST", {
       title: "Fork source",
     });
@@ -265,17 +274,9 @@ test(
       command: "pwd",
       description: "Read shared directory",
     }, "First grouped reply.");
-    await prompt(page, "First prompt");
-    await expect(page.locator(".otk-messages")).toContainText(
-      "First grouped reply.",
-    );
-    await expect(page.locator(`[data-session="${original.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await completeTurn(original.id, "First prompt", "First grouped reply.");
     await state.queue(["Second reply."]);
-    await prompt(page, "Second prompt");
-    await expect(page.locator(".otk-messages")).toContainText("Second reply.");
-    await expect(page.locator(`[data-session="${original.id}"]`))
-      .toHaveAttribute("data-status", "idle");
+    await completeTurn(original.id, "Second prompt", "Second reply.");
     await revealAcquired(page, "[data-role=assistant]");
     // WP2: reply identity is now the shared entity pill.
     await page.locator("[data-role=assistant] .otk-entity-pill").first()
@@ -310,13 +311,10 @@ test(
       command: "echo shared > fork-shared.txt",
       description: "Write shared file",
     }, "Shared file written.");
-    await prompt(page, "Fork writes a shared file");
-    await expect(page.locator(".otk-messages")).toContainText(
+    await completeTurn(
+      fork,
+      "Fork writes a shared file",
       "Shared file written.",
-    );
-    await expect(page.locator(`[data-session="${fork}"]`)).toHaveAttribute(
-      "data-status",
-      "idle",
     );
     await expect(page.locator(".otk-fork-note")).toHaveCount(0);
     expect(await readFile(state.directory + "/fork-shared.txt", "utf8")).toBe(
@@ -435,15 +433,24 @@ test(
       await page.keyboard.insertText(`Renamed from ${origin}`);
       await page.keyboard.press("Enter");
       await expect(editor).toHaveCount(0);
-      await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
-        .toHaveText(`Renamed from ${origin}`);
+      // Issue 2.122 closes the editor on submit, not on rename settlement.
+      // For a phantom tab, settlement also includes durable task promotion.
+      await expect(page.locator(selector).locator(".otk-rename-pending"))
+        .toHaveCount(0);
+      const label = page.locator(
+        `[data-session="${s.id}"] .otk-sidebar-title-text`,
+      );
+      await expect(label).toHaveText(`Renamed from ${origin}`);
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
         .toBe(`Renamed from ${origin}`);
       if (origin === "tab") {
-        const task =
+        const taskForSession = async () =>
           (await state.product("tasks.list", { directory: state.directory }))
-            .find((task) => task.sessions.includes(s.id))!;
-        expect(task.name).toBe("Renamed from tab");
+            .find((task) => task.sessions.includes(s.id));
+        // Native title publication precedes durable task promotion.
+        await expect.poll(async () => (await taskForSession())?.name)
+          .toBe("Renamed from tab");
+        const task = (await taskForSession())!;
         await state.release(finishing.gate);
         await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
           "data-status",
@@ -473,11 +480,13 @@ test(
     await page.locator(".otk-title-editor input").fill("Committed on blur");
     await page.locator("textarea[name=prompt]").click();
     await expect(page.locator(".otk-title-editor")).toHaveCount(0);
-    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
-      .toHaveText("Committed on blur");
+    const rowTitle = page.locator(
+      `[data-session="${s.id}"] .otk-sidebar-title-text`,
+    );
+    await expect(rowTitle.locator(".otk-rename-pending")).toHaveCount(0);
+    await expect(rowTitle).toHaveText("Committed on blur");
     await page.reload();
-    await expect(page.locator(`[data-session="${s.id}"] .otk-session-title`))
-      .toHaveText("Committed on blur");
+    await expect(rowTitle).toHaveText("Committed on blur");
   },
 );
 
@@ -566,10 +575,9 @@ test("sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal", {
   await openSession(state, page, s.id);
   await page.locator("textarea[name=prompt]").fill("Keep this unsent draft");
   const dialogs: string[] = [];
-  let accept = false;
   page.on("dialog", (d) => {
     dialogs.push(d.message());
-    void (accept ? d.accept() : d.dismiss());
+    void d.dismiss();
   });
   await sessionContext(page, `[data-tab="${s.id}"]`, "session.close");
   await expect(page).toHaveURL(/#project\//);
@@ -589,17 +597,22 @@ test("sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal", {
   await expect(item).toHaveText("Press again to delete");
   await item.click();
   await expect(page.locator(contextMenu)).toHaveCount(0);
+  const confirmation = page.getByRole("dialog", { name: "Confirm action" });
+  await expect(confirmation).toContainText("Discard your unsent input");
+  await confirmation.getByRole("button", { name: "Cancel", exact: true })
+    .click();
   expect((await state.native<{ id: string }>(`/session/${s.id}`)).id).toBe(
     s.nativeID,
   );
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
     "Keep this unsent draft",
   );
-  accept = true;
   await sessionContext(page, `[data-tab="${s.id}"]`);
   await item.click();
   await expect(item).toHaveText("Press again to delete");
   await item.click();
+  await confirmation.getByRole("button", { name: "Continue", exact: true })
+    .click();
   await expect(page.locator(`[data-tab="${s.id}"]`)).toHaveCount(0);
   await expect(page).toHaveURL(/#project\//);
   await expect(state.native(`/session/${s.id}`)).rejects.toThrow("404");
@@ -629,11 +642,10 @@ test("sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal", {
   await sessionContext(page, `[data-tab="${empty.id}"]`);
   await item.click();
   await expect(item).toHaveText("Press again to delete");
-  const before = dialogs.length;
   await item.click();
   await expect(page.locator(`[data-tab="${empty.id}"]`)).toHaveCount(0);
   await expect(page).toHaveURL(/#project\//);
-  expect(dialogs).toHaveLength(before);
+  expect(dialogs).toEqual([]);
   await expect(state.native(`/session/${empty.id}`)).rejects.toThrow("404");
   await deletedDetails(page, empty.id, "Empty draft");
 });

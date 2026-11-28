@@ -29,14 +29,23 @@
   padding-inline: var(--surface-slot-inset);
 }
 /* A slot's single child is the slot's row: it fills the slot's width. */
-.otk-surface-title > :only-child,
 .otk-surface-actions > :only-child {
   flex: 1 1 auto;
   min-width: 0;
 }
 .otk-surface-title h2 {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
+}
+.otk-surface .otk-surface-title {
+  flex-wrap: nowrap;
+}
+.otk-surface-title-action {
+  display: flex;
+  flex: none;
+  min-width: 0;
 }
 .otk-surface .otk-surface-body {
   flex: 1 1 auto;
@@ -84,14 +93,49 @@
   max-height: none;
 }
 .otk-surface[data-signal] {
-  border-left: 3px solid var(--otk-success);
+  --surface-signal: var(--danger);
+  box-shadow: inset calc(2 * var(--otk-unit)) 0 var(--surface-signal),
+    var(--overlay-shadow);
 }
-.otk-surface[data-signal=error] {
-  border-left-color: var(--danger);
-}
-.otk-surface[data-signal=attention] {
-  border-left-color: var(--otk-attention);
+.otk-surface[data-signal=info] {
+  --surface-signal: var(--otk-fg-3);
 }
 .otk-surface.has-static-children .otk-surface-body > * {
   flex-shrink: 0;
+}
+.otk-surface-lifted {
+  background: var(--otk-surface);
+  box-shadow: var(--overlay-shadow);
+  border-radius: var(--radius-row);
+}
+.otk-surface-panel {
+  --surface-content-inset: var(--space-2);
+  --surface-slot-inset: 0px;
+  padding: var(--surface-content-inset);
+  gap: var(--space-2);
+  background: var(--otk-bg-side);
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-card);
+  box-shadow: none;
+  color: var(--otk-fg);
+}
+.otk-surface-panel > .otk-surface-title {
+  padding: 0;
+  gap: var(--space-2);
+  min-block-size: var(--control-size);
+}
+.otk-surface-panel > .otk-surface-title h2 {
+  flex: none;
+  font: 600 var(--text-ui)/var(--line-ui) var(--font-ui);
+}
+.otk-surface-panel > .otk-surface-body,
+.otk-surface-panel > .otk-surface-scroll > .otk-surface-body {
+  padding: 0;
+  gap: 0;
+}
+.otk-surface-panel > .otk-surface-actions {
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  padding-block: var(--space-2) 0;
+  border-top: 1px solid var(--otk-border);
 }

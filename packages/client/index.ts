@@ -12,6 +12,20 @@ export interface MergedMetadata extends IndexMetadata {
   sidecarId: string;
   operationStatus?: import("./inbox.ts").InboxStatus;
 }
+
+/** Decode raw index facts for legacy frame readers. Application attention
+ * consumes entity publications; session diagnostics are not run verdicts. */
+export function decodeIndexObservation(entry: IndexEntry): {
+  diagnostic: IndexEntry["attention"];
+  native?: IndexEntry["activity"];
+  phase: IndexEntry["status"];
+} {
+  return {
+    diagnostic: entry.attention,
+    native: entry.activity,
+    phase: entry.status,
+  };
+}
 export function sessionKey(sidecarId: string, sessionID: string): string {
   return `${sidecarId}/${sessionID}`;
 }

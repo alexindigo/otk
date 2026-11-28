@@ -16,7 +16,8 @@ export function breadcrumbRows<T extends TaskCrumb>(
 export function commandRows(actions: readonly ContextAction[]) {
   return actions.map((action, index) => ({
     action,
-    separator: action.destructive &&
-      (index === 0 || !actions[index - 1].destructive),
+    separator: (action.destructive &&
+      (index === 0 || !actions[index - 1].destructive)) ||
+      (index > 0 && action.group !== actions[index - 1].group),
   }));
 }

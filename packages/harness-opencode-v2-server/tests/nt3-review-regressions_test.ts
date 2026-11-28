@@ -160,7 +160,7 @@ for (const phase of ["delta", "ended"] as const) {
 Deno.test("NT3 a snapshot may seed an absent active compaction and terminal-only records stay distinct", async () => {
   const f = fixture("running");
   try {
-    f.projection.replace((await f.transcript.page(sid)).items);
+    f.projection.reset((await f.transcript.page(sid)).items);
     await f.event("session.compaction.delta", 10, { text: " appended" });
     assert(
       JSON.stringify(f.projection.messages()[0]).includes(

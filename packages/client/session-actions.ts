@@ -12,7 +12,6 @@ import type { SessionActivity } from "./primary-action.ts";
 import type { CurrentClient } from "./current.ts";
 import { liveSessionInfo, sessionKey } from "./index.ts";
 import type { PromptChoices } from "./prompt-selection.ts";
-import { projectName } from "./project-navigation.ts";
 import type { ServerResources } from "./server-resources.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import {
@@ -93,7 +92,6 @@ export function createSessionActions(o: {
     & Pick<ClientSession, "state">
     & Partial<Pick<ClientSession, "transcripts">>;
   factory?: StateFactory;
-  promptBlocks?(text: string): import("@otk/protocol").Block[];
   promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   current: CurrentClient;
   revertReady?(target: Selection): Promise<void> | undefined;
@@ -529,7 +527,6 @@ export function createSessionActions(o: {
           messageID,
           target.sessionID,
           parts,
-          o.promptBlocks,
         );
         const send = async (
           captured: IntentGroup,
@@ -555,7 +552,6 @@ export function createSessionActions(o: {
                         messageID,
                         target.sessionID,
                         prepared,
-                        o.promptBlocks,
                       ).parts,
                     },
                   });
@@ -620,6 +616,8 @@ export function createSessionActions(o: {
     },
     async question(input) {
       const { selection: target, rpc } = current.context();
+      const settled = resources.sidecars.connection(target.sidecarId)
+        .attention?.settlement("question", input.requestID);
       const asking =
         session.state.content.questions.find((request) =>
           request.id === input.requestID
@@ -636,14 +634,16 @@ export function createSessionActions(o: {
       };
       await act(
         target,
-        () =>
-          input.answers
-            ? rpc.call(
+        async () => {
+          if (input.answers) {
+            await rpc.call(
               "question.reply",
               { ...input, answers: input.answers },
               options,
-            )
-            : rpc.call("question.reject", input, options),
+            );
+          } else await rpc.call("question.reject", input, options);
+          settled?.();
+        },
       );
     },
     location(target, id) {
@@ -652,7 +652,10 @@ export function createSessionActions(o: {
         (value
           ? undefined
           : taskFor(target, target.rootID ?? target.sessionID));
-      return [value && projectName(value.directory), task?.name ?? value?.title]
+      return [
+        value && resources.checkoutLabel(target.sidecarId, value.directory),
+        task?.name ?? value?.title,
+      ]
         .filter(Boolean).join(", ");
     },
     inTask(target) {

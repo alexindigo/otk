@@ -3,10 +3,19 @@ import { assert, assertEquals } from "@std/assert";
 import { FailurePresenter } from "../../packages/client/failures.ts";
 import { productionSources, Source, sourceInventory } from "./analysis.ts";
 import { nodes, property, type t } from "./syntax.ts";
-import { outOfFlow, rules, selectorAlternatives } from "./styles.ts";
+import {
+  cssTree,
+  outOfFlow,
+  rules,
+  selectorAlternatives,
+  variables,
+} from "./styles.ts";
 import { composerInTranscriptErrors } from "./composer-placement.ts";
 import { composerHeaderErrors } from "./composer-header.ts";
+import { textLayoutErrors } from "./text-layout.ts";
+import { containerChromeErrors } from "./container-chrome.ts";
 import { messageHeaderClockErrors } from "./message-clocks.ts";
+import { terminalRunErrors } from "./terminal-run.ts";
 import { foldRecords } from "../../packages/client/record-folds.ts";
 import { PreferenceRegistry } from "../../packages/protocol/prefs.ts";
 import { registerTranscriptPreferences } from "../../packages/protocol/preferences/transcript.ts";
@@ -16,6 +25,335 @@ import {
 } from "./style-boundaries.ts";
 
 const popoverCSS = "packages/ui/components/surface/Popover.css";
+
+function stopGlyphErrors(files: ReadonlyMap<string, string>): string[] {
+  return [...files].flatMap(([path, text]) => {
+    if (
+      !path.startsWith("packages/ui/") ||
+      path === "packages/ui/components/Prompt.tsx" ||
+      path === "packages/ui/components/ChromeIcons.tsx" ||
+      !text.includes("StopIcon")
+    ) return [];
+    const source = new Source(text, path);
+    return source.all.some((node) =>
+        node.type === "ImportSpecifier" &&
+          property(node.imported) === "StopIcon" ||
+        (node.type === "MemberExpression" ||
+            node.type === "OptionalMemberExpression" ||
+            node.type === "JSXMemberExpression") &&
+          property(node.property) === "StopIcon"
+      )
+      ? [
+        `${path}: the stop square belongs to the composer; use TerminateButton for individual work`,
+      ]
+      : [];
+  });
+}
+
+Deno.test("UI convention: only the composer uses the stop square", async () => {
+  const square = 'import { StopIcon as Square } from "./ChromeIcons.tsx";';
+  assertEquals(
+    stopGlyphErrors(
+      new Map([
+        ["packages/ui/components/Prompt.tsx", square],
+        ["packages/ui/components/RunningCommand.tsx", square],
+        [
+          "packages/ui/components/LiveWork.tsx",
+          'import * as Icons from "./ChromeIcons.tsx"; <Icons.StopIcon />;',
+        ],
+        [
+          "packages/ui/components/TerminateButton.tsx",
+          'import { CloseIcon } from "./ChromeIcons.tsx"; <CloseIcon />;',
+        ],
+        [
+          "packages/ui/components/Subagents.tsx",
+          'import TerminateButton from "./TerminateButton.tsx"; <TerminateButton />;',
+        ],
+      ]),
+    ).map((error) => error.split(":")[0]),
+    [
+      "packages/ui/components/RunningCommand.tsx",
+      "packages/ui/components/LiveWork.tsx",
+    ],
+  );
+  assertEquals(stopGlyphErrors(await productionSources()), []);
+});
+
+Deno.test("UI convention: one terminal run path", async () => {
+  const surface = "packages/ui/terminal/ghostty/surface.ts";
+  assertEquals(
+    terminalRunErrors(
+      new Map([
+        [
+          surface,
+          'this.core.encodePaste(text) + "\\r"; function pasteAndSubmit() {}',
+        ],
+        [
+          "packages/ui/features/terminal/Terminal.tsx",
+          "pane.renderer!.submit(); new TerminalRuns();",
+        ],
+        [
+          "packages/ui/features/code-blocks.tsx",
+          'box.runs.request("x", "submit");',
+        ],
+      ]),
+    ).length,
+    5,
+  );
+  assertEquals(
+    terminalRunErrors(
+      new Map([
+        [
+          surface,
+          'this.sendInput(() => this.core.encodePaste(text)); this.sendInput(() => "\\r");',
+        ],
+        [
+          "packages/ui/features/terminal/model.ts",
+          "function runTarget() { return { paste: (text) => pane.renderer!.paste(text) }; }",
+        ],
+        ["packages/ui/features/prompt/shell.ts", "ctx.submit(action);"],
+      ]),
+    ),
+    [],
+  );
+  assertEquals(terminalRunErrors(await productionSources()), []);
+});
+
+Deno.test("UI convention: container chrome stays off item collections", async () => {
+  const tabs = "packages/ui/components/Tabs.tsx";
+  const view = "packages/ui/Fixture.tsx";
+  const rejected = new Map([
+    [tabs, 'interface TabStripProps { "titleAction"?: () => unknown }'],
+    [
+      view,
+      `<Show when={list.length}><Tabs label="T" tabs={t()} selected={0} onSelect={f} actions={() => <B/>} /></Show>;
+      <TabStrip leading={<B/>} trailing={<B/>} header={<B/>} titleAction={<B/>} />;`,
+    ],
+  ]);
+  assertEquals(containerChromeErrors(rejected).length, 6);
+  const accepted = new Map([
+    [tabs, "interface TabStripProps { closeAction?: (id: string) => unknown }"],
+    [
+      view,
+      `<Surface title={<h2>T</h2>} titleAction={<B/>}>
+      <TabStrip tabs={t()} selected={0} onSelect={f} closeAction={close} />
+      <TabPanels tabs={t()} selected={0} />
+    </Surface>;`,
+    ],
+  ]);
+  assertEquals(containerChromeErrors(accepted), []);
+  assertEquals(containerChromeErrors(await productionSources()), []);
+});
+
+Deno.test("UI convention: container chrome is not gated on item counts", async () => {
+  const view = "packages/ui/Fixture.tsx";
+  const shell = "packages/ui/components/LiveWork.tsx";
+  const rejected = new Map([
+    [
+      shell,
+      `export default function LiveWork() {
+      return <Show when={presence.mounted}><Popover /></Show>;
+    }`,
+    ],
+    [
+      view,
+      `<Show when={helpers()?.ids.length ? helpers() : undefined}>
+      {(p) => <Menu label="S">x</Menu>}
+    </Show>;
+    <Show when={shells()?.count}><LiveWork shells={s()} /></Show>;
+    (ready && list.size > 0) && <div><Popover /></div>;
+    list?.length ? <Dialog /> : <Takeover />;`,
+    ],
+  ]);
+  assertEquals(
+    containerChromeErrors(rejected).map((error) => error.split(": ").at(-1)),
+    ["Menu", "LiveWork", "Popover", "Dialog", "Takeover"].map((name) =>
+      `${name} must not be count-gated`
+    ),
+  );
+  const accepted = new Map([[
+    view,
+    `<Surface title={<h2>T</h2>} titleAction={<A/>}>
+    <Show when={list().length} fallback={<Empty/>}>{rows}</Show>
+    <For each={rows()}>{(r) => <TerminateButton name={r().title} action={stop(r())} />}</For>
+    {list.length && <Rows />}
+  </Surface>;
+  <Show when={presence.mounted}><Menu label="S">x</Menu></Show>;`,
+  ]]);
+  assertEquals(containerChromeErrors(accepted), []);
+  assertEquals(containerChromeErrors(await productionSources()), []);
+});
+
+// Offsets may use the containing edge and spacing tokens, not other boxes'
+// dimensions. Follow custom property aliases so naming a calculation doesn't
+// make a positional relationship structural.
+function arithmeticOffsetErrors(files: ReadonlyMap<string, string>): string[] {
+  const styles = [...files].flatMap(([path, css]) =>
+    rules(css).map((rule) => ({ path, ...rule }))
+  );
+  const definitions = new Map<string, string[]>();
+  for (const { declarations } of styles) {
+    for (const [prop, value] of declarations) {
+      if (!prop.startsWith("--")) continue;
+      const values = definitions.get(prop) ?? [];
+      values.push(value);
+      definitions.set(prop, values);
+    }
+  }
+  const spacing =
+    /^(?:--otk-(?:unit|scale)|--space-\d+|--(?:overlay|popover|lane)-gutter)$/;
+  const calculated = (value: string, visited: ReadonlySet<string>): boolean => {
+    let offset = false;
+    cssTree.walk(
+      cssTree.parse(value.replace(/\s*!important$/, ""), { context: "value" }),
+      (node) => {
+        if (node.type !== "Function" || node.name.toLowerCase() !== "calc") {
+          return;
+        }
+        const expression = cssTree.generate(node);
+        let lengths = 0;
+        cssTree.walk(node, (part) => {
+          if (part.type === "Dimension") lengths++;
+          if (
+            part.type === "Percentage" || part.type === "Function" &&
+              /^anchor(?:-size)?$/.test(part.name)
+          ) offset = true;
+        });
+        if (
+          lengths > 1 ||
+          variables(expression).some(({ name }) => !spacing.test(name))
+        ) {
+          offset = true;
+        }
+      },
+    );
+    if (offset) return true;
+    return variables(value).some(({ name }) =>
+      !spacing.test(name) && !visited.has(name) &&
+      definitions.get(name)?.some((next) =>
+        calculated(next, new Set([...visited, name]))
+      )
+    );
+  };
+  return styles.flatMap(({ path, selector, declarations }) =>
+    [...declarations].filter(([prop, value]) =>
+      /^(?:top|bottom|left|right|inset(?:-(?:block|inline)(?:-(?:start|end))?)?)$/
+        .test(prop) &&
+      calculated(value, new Set())
+    ).map(([prop, value]) => `${path}: ${selector}: ${prop}: ${value}`)
+  );
+}
+
+Deno.test("UI convention: text sizes are intrinsic and scripts do not own CSS widths", async () => {
+  const css = "packages/ui/Example.css", tsx = "packages/ui/Example.tsx";
+  assertEquals(
+    textLayoutErrors(
+      new Map([
+        [
+          css,
+          ":root{--crumb-min:12ch}.some-title{min-width:min(100%,var(--crumb-min))}.some-name{width:80px}.copy{width:var(--copy)}",
+        ],
+        [
+          tsx,
+          `const style = el.style;
+      style.setProperty("--copy", el.scrollWidth + "px");
+      el.style.inlineSize = el.clientWidth + "px";
+      el.style.cssText = "color: red; min-width: 3px";
+      <span style={{ width: measured + "px" }} />;`,
+        ],
+      ]),
+    ).length,
+    6,
+  );
+  assertEquals(
+    textLayoutErrors(
+      new Map([
+        [
+          css,
+          ".some-title{min-width:0;min-inline-size:calc-size(min-content,min(size,12ch));max-width:60ch}.some-icon{width:32px}",
+        ],
+        [
+          tsx,
+          `el.style.setProperty("--accent", color); canvas.width = pixels;
+      <span style={{ color }} />;`,
+        ],
+      ]),
+    ),
+    [],
+  );
+  assertEquals(textLayoutErrors(await productionSources()), []);
+});
+
+Deno.test("UI convention: scaled pixel widths cannot hide in layout or aliases", () => {
+  const css = "packages/ui/Example.css";
+  assertEquals(
+    textLayoutErrors(
+      new Map([[
+        css,
+        `
+      :root { --otk-unit: calc(1px * var(--otk-scale)); }
+      .stack { --extent: calc(480 * var(--otk-unit)); inline-size: var(--extent); }
+      .panel { --alias: var(--extent); max-width: min(100%, var(--alias)); }
+      .extra { width: calc(var(--otk-unit) * 32.5); }
+      .row { --unit-alias: var(--otk-unit); flex-basis: calc(2 * var(--unit-alias)); }
+      .drawer { min-inline-size: calc(80 * var(--otk-unit)); }
+      .some-title { inline-size: fit-content; padding: calc(4 * var(--otk-unit)); }
+    `,
+      ]]),
+    ),
+    [
+      `${css}: .stack: inline-size: var(--extent)`,
+      `${css}: .panel: max-width: min(100%,var(--alias))`,
+      `${css}: .extra: width: calc(var(--otk-unit)*32.5)`,
+      `${css}: .row: flex-basis: calc(2*var(--unit-alias))`,
+      `${css}: .drawer: min-inline-size: calc(80*var(--otk-unit))`,
+    ],
+  );
+});
+
+Deno.test("UI convention: positional offsets do not reconstruct other boxes", async () => {
+  const productionCSS = new Map(
+    [...await productionSources()].filter(([path]) =>
+      /^(?:packages\/ui|web\/src)\/.*\.css$/.test(path)
+    ),
+  );
+  assertEquals(arithmeticOffsetErrors(productionCSS), []);
+  for (
+    const value of [
+      "calc(100% + 12px)",
+      "calc(42px - 18px / 2)",
+      "max(0px, calc(var(--dock-height) + var(--space-2)))",
+      "var(--position)",
+    ]
+  ) {
+    assertEquals(
+      arithmeticOffsetErrors(
+        new Map([
+          [
+            "tokens.css",
+            ":root{--position:var(--clearance);--clearance:calc(var(--dock-size) - 4px)}",
+          ],
+          ["stack.css", `.stack { inset-block-end: ${value} }`],
+        ]),
+      ).length,
+      1,
+      value,
+    );
+  }
+  assertEquals(
+    arithmeticOffsetErrors(
+      new Map([[
+        "example.css",
+        ".lane{display:flex;align-items:center;gap:var(--space-2)}" +
+        ".overlay{inset:0;bottom:var(--overlay-gutter);max-block-size:calc(100vh - var(--space-2))}" +
+        ".popover{top:100%;margin-top:var(--space-2)}" +
+        ".icon{inset-block-end:calc(4 * var(--otk-unit))}",
+      ]]),
+    ),
+    [],
+  );
+});
+
 function popoverPlacementErrors(path: string, text: string): string[] {
   if (!path.startsWith("packages/ui/") || !path.endsWith(".css")) return [];
   return rules(text).flatMap(({ selector, declarations }) => {
@@ -134,7 +472,14 @@ Deno.test("UI convention: breadcrumb trails use one compact overflow row", async
     (await Deno.readTextFile("packages/ui/components/OverflowRow.tsx"))
       .includes("<ScrollRegion"),
   );
-  assert(/\.otk-breadcrumb-row\s*\{[^}]*flex-wrap:\s*nowrap/.test(chrome));
+  const header =
+    rules(chrome).find((rule) => rule.selector === ".otk-breadcrumb-row")!
+      .declarations;
+  assertEquals(header.get("display"), "grid");
+  assertEquals(
+    header.get("grid-template-columns"),
+    "minmax(min-content,1fr) minmax(0,max-content)",
+  );
   assert(!component.includes("props.model.helpers"));
   const subagents = await Deno.readTextFile(
     "packages/ui/components/Subagents.tsx",
@@ -345,8 +690,8 @@ Deno.test("UI convention: folded record counts are neutral metadata, not per-kin
   const source = await Deno.readTextFile(
     "packages/ui/components/RecordKinds.tsx",
   );
-  assert(source.includes("<ChromeMeta>{fold.label}</ChromeMeta>"));
-  assert(source.includes("<DisclosureToggle"));
+  assert(source.includes('variant="meta"'));
+  assert(source.includes("<Disclosure"));
   assert(!/step-start|step-finish|opencode-v1|display:\s*none/.test(source));
   const values = foldRecords([1, 2], () => ({
     kindLabel: "fixture",
@@ -585,7 +930,7 @@ const owners: Record<Rule, string> = {
   "list-order":
     "Decision 60: list order uses saved positions or creation, never activity, recency or state",
   "sidebar-row":
-    "SidebarRow owns fixed lamp/artwork tracks and shrinkable labels; Tree owns depth; no local offsets or overlapping selection",
+    "SidebarRow owns artwork and shrinkable labels; Tree owns lamp lanes and depth; no local offsets or overlapping selection",
   "message-footer":
     "D21: MessageFooter owns persistent time/actions; message metadata is never hover-only",
 };
@@ -600,6 +945,22 @@ const containsStringType = (node: t.Node): boolean => {
 };
 const elementName = (node: t.JSXOpeningElement) =>
   node.name.type === "JSXIdentifier" ? node.name.name : "";
+
+Deno.test("UI convention: task tabs render their lamp in the shared leading slot", async () => {
+  const path = "packages/ui/components/ProjectTabs.tsx";
+  const source = new Source(await Deno.readTextFile(path), path);
+  const selection = source.all.find((node): node is t.JSXOpeningElement =>
+    node.type === "JSXOpeningElement" &&
+    elementName(node) === "SelectionContent"
+  );
+  assert(selection);
+  const leading = selection.attributes.find((attr): attr is t.JSXAttribute =>
+    attr.type === "JSXAttribute" && property(attr.name) === "leading"
+  )?.value;
+  assert(leading?.type === "JSXExpressionContainer");
+  assert(leading.expression.type === "JSXElement");
+  assertEquals(elementName(leading.expression.openingElement), "StatusLight");
+});
 
 Deno.test("UI convention: unowned compact controls retain native geometry", async () => {
   const geometry = (css: string) =>
@@ -666,22 +1027,26 @@ Deno.test("UI convention: one composer destination row uses muted nonwrapping me
     )!.declarations;
   assertEquals(row.get("display"), "flex");
   assertEquals(row.get("align-items"), "center");
-  assertEquals(row.get("justify-content"), "space-between");
+  const route =
+    css.find((rule) =>
+      rule.selector === ".otk-composer-route" && !rule.condition
+    )!.declarations;
+  assertEquals(route.get("display"), "flex");
+  assertEquals(route.get("align-items"), "center");
   const label =
     css.find((rule) => rule.selector === ".otk-composer-target")!.declarations;
-  assertEquals(label.get("min-inline-size"), "min(8ch,100%)");
+  assertEquals(label.get("min-inline-size"), "0");
+  assertEquals(label.get("display"), "grid");
   assertEquals(label.get("flex"), "0 1 auto");
   assert(
-    css.some((rule) =>
-      rule.condition.includes("@container composer-activity") &&
-      rule.declarations.get("--live-count-compact") === "flex"
+    !css.some((rule) =>
+      [...rule.declarations.keys()].some((key) =>
+        key.startsWith("--live-count-")
+      )
     ),
   );
   assert(
-    css.some((rule) =>
-      rule.condition.includes("@container composer-activity") &&
-      rule.declarations.get("--live-link-display") === "none"
-    ),
+    !css.some((rule) => rule.declarations.has("--live-link-display")),
   );
   assert(
     css.some((rule) =>
@@ -798,6 +1163,9 @@ export function conventionErrors(
       if (
         rule === "masks" &&
         /tree-(?:toggle|junction|icon-art)|disclosure/.test(selector) &&
+        // A whole interactive target may tint on hover; the glyph and its
+        // slot still cannot cover a line with paint.
+        selector !== ".otk-disclosure-button:hover" &&
         ["fill", "background", "background-color"].some((key) =>
           d.has(key) && !["none", "transparent"].includes(d.get(key)!)
         )
@@ -831,7 +1199,7 @@ export function conventionErrors(
       ) fail(selector);
       if (
         rule === "disclosure" &&
-        path !== "packages/ui/components/DisclosureToggle.css" &&
+        !/^packages\/ui\/components\/Disclosure(?:Toggle)?\.css$/.test(path) &&
         /\.otk-disclosure-[\w-]+/.test(selector)
       ) fail(selector);
       if (
@@ -906,8 +1274,10 @@ export function conventionErrors(
       ) fail("handwritten message action control");
       if (
         modulePath(imported?.module ?? "").endsWith("/MessageActions.tsx") &&
-        path !== "packages/ui/components/MessageFooter.tsx"
-      ) fail("message actions outside MessageFooter");
+        !(path === "packages/ui/components/MessageFooter.tsx" ||
+          path === "packages/ui/components/CodeBlock.tsx" &&
+            source.string(source.attr(node, "kind")) === "code")
+      ) fail("content actions outside MessageFooter or CodeBlock");
       if (
         source.string(source.attr(node, "class"))?.includes(
           "otk-message-footer",

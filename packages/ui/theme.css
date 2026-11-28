@@ -61,6 +61,7 @@
   --line-meta: var(--line-ui);
   /* Prototype's 46rem at its 16px root, independent of the 13px UI root. */
   --lane-width: calc(736 * var(--otk-unit));
+  --main-min: calc(420 * var(--otk-unit));
   --item-inset: calc(12 * var(--otk-unit));
   --panel-inset: calc(20 * var(--otk-unit));
   --pill-inset: var(--item-inset);
@@ -84,10 +85,11 @@
   --icon-compact: calc(13 * var(--otk-unit));
   --row-compact: calc(30 * var(--otk-unit));
   --row-project: calc(32 * var(--otk-unit));
+  --avatar-compact: calc(14 * var(--otk-unit));
+  --row-title-min: 12ch;
   --row-tool: calc(26 * var(--otk-unit));
   --diff-split-min: 1200px;
   --corner: calc(12 * var(--otk-unit));
-  --corner-zone: calc(var(--corner) + var(--control-size) + 8 * var(--otk-unit));
   --chrome-gap: calc(4 * var(--otk-unit));
   --hover-open-delay: 500ms;
   --hover-close-delay: 150ms;
@@ -120,6 +122,12 @@
 }
 body {
   margin: 0;
+}
+/* Expose the resolved, scaled length to the panel geometry owner. */
+@property --main-min {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
 }
 /* Semantic grouping elements carry no browser layout of their own; the
    component that uses them owns their layout. */
@@ -259,6 +267,10 @@ small {
   overflow-wrap: normal;
   flex-shrink: 0;
 }
+[data-inline-action] {
+  white-space: inherit;
+  overflow-wrap: inherit;
+}
 .otk-control-row {
   display: flex;
   align-items: center;
@@ -339,7 +351,7 @@ small {
   color: var(--otk-fg);
   box-shadow: var(--otk-selected-shadow);
 }
-:root [data-otk-selection=vertical].otk-selection-item {
+:root [data-otk-selection=vertical].otk-selection-item:not([data-otk-selection-mark=external]) {
   display: grid;
   grid-template-columns: var(--selection-inset, var(--item-inset)) minmax(0,
     1fr);
@@ -355,18 +367,15 @@ small {
   border-radius: 2px;
   background: transparent;
 }
+:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item::before {
+  content: none;
+}
 .otk-selection-content {
   display: flex;
   align-items: center;
   flex: 1;
   min-width: 0;
   gap: calc(8 * var(--otk-unit));
-}
-:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item {
-  grid-template-columns: minmax(0, 1fr);
-}
-:root [data-otk-selection=vertical][data-otk-selection-mark=external].otk-selection-item::before {
-  content: none;
 }
 :root [data-otk-selection=horizontal].otk-selection-item {
   display: grid;

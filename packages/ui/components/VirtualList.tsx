@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { focusControl } from "../keyboard/focus.ts";
 import "./VirtualList.css" with { type: "text" };
 import ScrollRegion from "./ScrollRegion.tsx";
 import ContentSlot from "./ContentSlot.tsx";
@@ -127,6 +128,7 @@ export default function VirtualList(props: {
   retainExcluded?: boolean;
   measurements?(path: string): Map<string, number>;
   measurementKey?(key: string): string;
+  anchorable?(key: string): boolean;
   revision?: unknown;
   intrinsic?: boolean;
   overscan?: number;
@@ -200,7 +202,8 @@ export default function VirtualList(props: {
   let currentKeys: readonly string[] | undefined, disposed = false;
   let positionOwner: ViewportPosition | undefined;
   const measuring = new Map<string, number>();
-  let measureFrame: number | undefined;
+  let cancelMeasurement: (() => void) | undefined;
+  let metricsDirty = false;
   let releaseParentMeasurement = parent?.hold?.();
   let releaseGeometryMeasurement: (() => void) | undefined;
   let selectingAll = false;
@@ -225,10 +228,14 @@ export default function VirtualList(props: {
     const offset = model.offset(key);
     return offset === undefined ? undefined : origin() + offset;
   };
-  const logicalAnchor = () => {
+  const anchorable = (key: string) => props.anchorable?.(key) !== false;
+  const logicalAnchor = (eligible = anchorable) => {
     const root = viewport(), bounds = root.getBoundingClientRect();
     const candidates = [...elements].flatMap(([key, element]) => {
-      if (!element.isConnected || measuring.has(key) || !model.measured(key)) {
+      if (
+        !eligible(key) || !element.isConnected || measuring.has(key) ||
+        !model.measured(key)
+      ) {
         return [];
       }
       const rect = element.getBoundingClientRect();
@@ -280,11 +287,42 @@ export default function VirtualList(props: {
   };
   const refresh = () => setVersion((v) => v + 1);
   function queueMeasurement() {
-    if (disposed || measureFrame !== undefined) return;
-    measureFrame = requestAnimationFrame(() => {
-      measureFrame = undefined;
+    // Mount can invalidate measurements before the window has joined its
+    // viewport. Keep those invalidations queued in the window; onSettled
+    // submits them to the owner instead of starting a private frame.
+    if (disposed || cancelMeasurement || !positionOwner) return;
+    const measure = () => {
+      cancelMeasurement = undefined;
       if (disposed) return;
       transaction(() => {
+        if (metricsDirty) {
+          metricsDirty = false;
+          const nextMetrics = `${
+            getComputedStyle(document.documentElement).fontSize
+          }:${viewport().clientWidth}`;
+          if (nextMetrics !== metrics) {
+            // Only a lane/font change revokes previously acquired extents.
+            if (intrinsic()) {
+              renewFootprint(
+                (currentKeys ?? []).filter((key) => model.measured(key)),
+              );
+            }
+            metrics = nextMetrics;
+            for (const [role, element] of samples) {
+              estimates.set(role, element.getBoundingClientRect().height);
+            }
+            if (currentKeys) {
+              model.update(
+                currentKeys,
+                (key) =>
+                  estimates.get(props.role?.(key) ?? "row") ?? props.estimate ??
+                    1,
+              );
+              refresh();
+            }
+            changing();
+          }
+        }
         let changed = false,
           released = false,
           pending = !ready() || !currentKeys;
@@ -328,7 +366,8 @@ export default function VirtualList(props: {
         remember();
         if (pending) queueMeasurement();
       });
-    });
+    };
+    cancelMeasurement = positionOwner.measure(measure);
   }
   function holdMeasurement(key: string): () => void {
     beginMeasurement();
@@ -480,10 +519,10 @@ export default function VirtualList(props: {
       transaction(() => {
         const previous = currentKeys;
         positionOwner?.remap(path, (anchor) => {
-          if (included.has(anchor.key)) return anchor;
+          if (included.has(anchor.key) && anchorable(anchor.key)) return anchor;
           const at = previous?.indexOf(anchor.key) ?? -1;
           const measuredNeighbor = (key: string) =>
-            included.has(key) &&
+            included.has(key) && anchorable(key) &&
             elements.get(key)?.isConnected && model.measured(key) &&
             !measuring.has(key);
           const neighbor = previous?.slice(at + 1).find((key) =>
@@ -590,7 +629,7 @@ export default function VirtualList(props: {
       records.some((record) =>
         Array.from(record.removedNodes).some((node) => node.contains(control))
       )
-    ) control.focus({ preventScroll: true });
+    ) focusControl(control, { preventScroll: true });
   };
   async function navigateKey(
     key: string,
@@ -645,9 +684,8 @@ export default function VirtualList(props: {
       id: path,
       depth: path.split("/").length,
       distance: () => Math.max(0, -(logicalAnchor()?.offset ?? -Infinity)),
-      anchor() {
-        return logicalAnchor();
-      },
+      anchorable,
+      anchor: logicalAnchor,
       resolve: (anchor) => {
         const element = elements.get(anchor.key);
         const base = element?.isConnected ? rowStart(anchor.key) : undefined;
@@ -661,44 +699,17 @@ export default function VirtualList(props: {
       remember();
     });
     observer = new ResizeObserver((entries) => {
-      selection();
-      transaction(() => {
-        const nextMetrics = `${
-          getComputedStyle(document.documentElement).fontSize
-        }:${root.clientWidth}`;
-        if (nextMetrics !== metrics) {
-          // Materialization is not layout authority. Re-measure the previously
-          // acquired footprint when its lane/font changes, never when it scrolls.
-          if (intrinsic()) {
-            renewFootprint(
-              (currentKeys ?? []).filter((key) => model.measured(key)),
-            );
-          }
-          metrics = nextMetrics;
-          for (const [role, element] of samples) {
-            estimates.set(role, element.getBoundingClientRect().height);
-          }
-          if (currentKeys) {
-            model.update(
-              currentKeys,
-              (key) =>
-                estimates.get(props.role?.(key) ?? "row") ?? props.estimate ??
-                  1,
-            );
-            refresh();
-          }
-          changing();
+      // Observers only invalidate. Publishing inside each observer would scan
+      // every sibling window once per child when a whole range mounts.
+      metricsDirty = true;
+      beginMeasurement();
+      for (const entry of entries) {
+        const key = (entry.target as HTMLElement).dataset.virtualKey;
+        if (key && elements.get(key) === entry.target) {
+          if (!measuring.has(key)) measuring.set(key, 0);
         }
-        for (const entry of entries) {
-          const key = (entry.target as HTMLElement).dataset.virtualKey;
-          if (key && elements.get(key) === entry.target) {
-            beginMeasurement();
-            if (!measuring.has(key)) measuring.set(key, 0);
-          }
-        }
-        sync();
-        queueMeasurement();
-      });
+      }
+      queueMeasurement();
     });
     observer.observe(root);
     observer.observe(container);
@@ -731,7 +742,7 @@ export default function VirtualList(props: {
             Math.abs(rowBounds.height - model.size(key)) < .01,
           anchor: { id: path, key, start: base },
         };
-      }, { intent: "user" }).finally(release);
+      }, { intent: "user", align: request.align }).finally(release);
     };
     const retain = (event: Event) => {
       const key = keyFor(event.target);
@@ -825,6 +836,8 @@ export default function VirtualList(props: {
       focusedControl = undefined;
       unregister();
       releasePosition();
+      cancelMeasurement?.();
+      cancelMeasurement = undefined;
       lease.release();
       positionOwner = undefined;
       root.removeEventListener("scroll", moved);
@@ -888,7 +901,7 @@ export default function VirtualList(props: {
   }
   onCleanup(() => {
     disposed = true;
-    if (measureFrame !== undefined) cancelAnimationFrame(measureFrame);
+    cancelMeasurement?.();
     releaseParentMeasurement?.();
     releaseGeometryMeasurement?.();
     measuring.clear();

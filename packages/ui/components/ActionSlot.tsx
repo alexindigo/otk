@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Feedback } from "@otk/client";
 import { createEffect, type Element, onSettled } from "solid-js";
 import FeedbackStatus from "./FeedbackStatus.tsx";
+import { focusControl } from "../keyboard/focus.ts";
 import "./ActionSlot.css" with { type: "text" };
 
-/** One normal-flow cell preserves the action's geometry while status owns it. */
+/** The action and its real pending label both size the same normal-flow cell. */
 export default function ActionSlot(props: {
   pending: boolean;
-  feedback?: Feedback;
+  pendingLabel: string;
+  /** While pending, only the invoked slot in a group shows its status. */
+  showStatus?: boolean;
   class?: string;
   align?: "end";
   children: Element;
@@ -15,8 +17,9 @@ export default function ActionSlot(props: {
   focusAction?(): void;
 }): Element {
   let status!: HTMLDivElement;
-  createEffect(() => props.pending, (pending, previous) => {
-    if (previous && !pending && document.activeElement === status) {
+  const showStatus = () => props.pending && (props.showStatus ?? true);
+  createEffect(showStatus, (visible, previous) => {
+    if (previous && !visible && document.activeElement === status) {
       onSettled(() => props.focusAction?.());
     }
   });
@@ -29,14 +32,13 @@ export default function ActionSlot(props: {
       <FeedbackStatus
         class="otk-action-slot-feedback"
         focusable
-        feedback={props.feedback}
+        inactive={!showStatus()}
+        feedback={{ kind: "pending", text: props.pendingLabel }}
         ref={(element) => {
           status = element;
           props.control?.({
             focus: () => {
-              if (
-                element.isConnected && element.getClientRects().length
-              ) element.focus();
+              if (showStatus()) focusControl(element, { focusVisible: false });
             },
           });
         }}

@@ -12,6 +12,7 @@ import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
 import ListPicker, {
   type ListPickerControl,
+  ListPickerFace,
   PickerStatus,
 } from "../../components/ListPicker.tsx";
 import { StarIcon } from "../../components/ChromeIcons.tsx";
@@ -38,7 +39,8 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
       let agentPicker!: ListPickerControl,
         modelPicker!: ListPickerControl,
         variantPicker: ListPickerControl | undefined;
-      const enabled = () => !ctx.props.suspended && ctx.props.connected;
+      const enabled = () =>
+        !ctx.collapsed() && !ctx.props.suspended && ctx.props.connected;
       for (
         const [id, title, delta] of [["agent.cycle", "Next agent", 1], [
           "agent.cycle.reverse",
@@ -75,17 +77,14 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
         title: "Choose variant",
         category: "Prompt",
         enabled: () =>
-          enabled() && selection().applies.variant &&
-          selection().model.variants.length > 0 && !!variantPicker,
+          enabled() && selection().variantSelectable && !!variantPicker,
         run: () => variantPicker!.open(),
       });
       ownedCommand(ctx, {
         id: "variant.cycle",
         title: "Next variant",
         category: "Prompt",
-        enabled: () =>
-          enabled() && selection().applies.variant &&
-          selection().model.variants.length > 0,
+        enabled: () => enabled() && selection().variantSelectable,
         run: owner.cycleVariant,
       });
       onSettled(() => {
@@ -152,201 +151,215 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
           </Show>
         </>
       );
+      const agentLabel = () =>
+        selectionLabel(
+          selection().agent.name ?? selection().agent.value,
+          "Default agent",
+        );
+      const agentTrigger = () => (
+        <span class="otk-composer-agent otk-picker-label">{agentLabel()}</span>
+      );
+      const modelTrigger = () => (
+        <ModelLabel
+          class="otk-picker-label"
+          provider={selection().model.providerName}
+          name={selection().model.name}
+        />
+      );
+      const variantLabel = () =>
+        selectionLabel(selection().variant.value, "Default");
+      const variantTrigger = () => (
+        <span class="otk-picker-label">{variantLabel()}</span>
+      );
+      const agentFace = {
+        class: "otk-composer-picker otk-agent-picker",
+        triggerClass: "otk-picker-trigger",
+      };
+      const modelFace = {
+        class: "otk-composer-picker otk-model-picker",
+        triggerClass: "otk-picker-trigger otk-model-trigger",
+      };
+      const variantFace = {
+        class: "otk-composer-picker otk-variant-picker",
+        triggerClass: "otk-picker-trigger",
+      };
+      const settings = (inert: boolean) => (
+        <>
+          <Show
+            when={!ctx.collapsed() && owner.state.agents.available}
+            fallback={
+              <PromptSetting applied={!!applied(selection().agent)}>
+                {agentLabel()}
+              </PromptSetting>
+            }
+          >
+            {inert
+              ? <ListPickerFace {...agentFace}>{agentTrigger()}</ListPickerFace>
+              : (
+                <ListPicker
+                  label="Choose agent"
+                  triggerLabel={`Agent: ${agentLabel()}`}
+                  {...agentFace}
+                  applied={applied(selection().agent)}
+                  triggerColor={agentColor(selection().agent.color)}
+                  trigger={agentTrigger()}
+                  groups={[{
+                    key: "agents",
+                    items: (owner.state.agents.value ?? []).map((agent) => ({
+                      key: agentIdentity(agent),
+                      value: agentIdentity(agent),
+                      label: selectionLabel(agent.name),
+                      description: agent.description,
+                      color: agentColor(agent.color),
+                    })),
+                  }]}
+                  selected={selection().agent.value}
+                  status={status(owner.state.agents, owner.refreshAgents)}
+                  loading={owner.state.agents.loading}
+                  error={owner.state.agents.error}
+                  control={(control) => {
+                    agentPicker = control;
+                  }}
+                  onOpen={() => void owner.ready()}
+                  onPick={owner.chooseAgent}
+                  focusAfterPick={ctx.focus}
+                />
+              )}
+          </Show>
+          <Show
+            when={!ctx.collapsed() && owner.state.models.available}
+            fallback={
+              <PromptSetting applied={!!applied(selection().model)}>
+                <ModelLabel
+                  provider={selection().model.providerName}
+                  name={selection().model.name}
+                />
+              </PromptSetting>
+            }
+          >
+            {inert
+              ? <ListPickerFace {...modelFace}>{modelTrigger()}</ListPickerFace>
+              : (
+                <ListPicker<ModelRef>
+                  label="Choose model"
+                  triggerLabel={`Model: ${
+                    selection().model.providerName
+                      ? `${selection().model.providerName} `
+                      : ""
+                  }${selection().model.name ?? "Default model"}`}
+                  {...modelFace}
+                  applied={applied(selection().model)}
+                  trigger={modelTrigger()}
+                  groups={owner.groups().map((group) => ({
+                    ...group,
+                    items: group.items.map((item) => ({
+                      key: item.key,
+                      value: item.ref,
+                      label: item.name,
+                      description: item.subtitle,
+                      search:
+                        `${item.providerName} ${item.ref.provider} ${item.ref.model}`,
+                      tag: item.free ? "Free" : undefined,
+                      action: {
+                        label: `${
+                          item.favourite ? "Remove" : "Add"
+                        } ${item.name} ${
+                          item.favourite ? "from" : "to"
+                        } favourites`,
+                        content: <StarIcon filled={item.favourite} />,
+                        run: () => {
+                          void owner.toggleFavourite(item.ref).catch(ctx.fail);
+                        },
+                      },
+                    })),
+                  }))}
+                  selected={owner.selectedModelKey()}
+                  search="Search models..."
+                  status={status(owner.state.models, owner.refreshModels)}
+                  loading={owner.state.models.loading}
+                  error={owner.state.models.error}
+                  header={
+                    <Show when={selection().model.unavailable}>
+                      <PickerStatus>
+                        {selection().model.providerName}/{selection().model
+                          .name} — unavailable
+                      </PickerStatus>
+                    </Show>
+                  }
+                  control={(control) => {
+                    modelPicker = control;
+                  }}
+                  onOpen={() => void owner.ready()}
+                  onPick={owner.chooseModel}
+                  focusAfterPick={ctx.focus}
+                />
+              )}
+          </Show>
+          <Show when={selection().applies.variant}>
+            <Show
+              when={!ctx.collapsed() && owner.catalogKnown() &&
+                selection().variantSelectable}
+            >
+              {inert
+                ? (
+                  <ListPickerFace {...variantFace}>
+                    {variantTrigger()}
+                  </ListPickerFace>
+                )
+                : (
+                  <ListPicker<string | undefined>
+                    label="Choose variant"
+                    triggerLabel={`Variant: ${variantLabel()}`}
+                    {...variantFace}
+                    applied={applied(selection().variant)}
+                    trigger={variantTrigger()}
+                    groups={[{
+                      key: "variants",
+                      items: [
+                        {
+                          key: "",
+                          value: undefined,
+                          label: "Default",
+                          description: applied(selection().variant)
+                            ? selectionLabel(
+                              selection().variant.value,
+                              "Default",
+                            )
+                            : undefined,
+                        },
+                        ...selection().model.variants.map((variant) => ({
+                          key: variant,
+                          value: variant,
+                          label: selectionLabel(variant),
+                        })),
+                      ],
+                    }]}
+                    selected={selection().variantChoice ?? ""}
+                    control={(control) => {
+                      variantPicker = control;
+                    }}
+                    onPick={owner.chooseVariant}
+                    focusAfterPick={ctx.focus}
+                  />
+                )}
+            </Show>
+            <Show
+              when={(ctx.collapsed() && selection().variantSelectable) ||
+                ((ctx.collapsed() || !owner.catalogKnown()) &&
+                  selection().variant.value !== undefined)}
+            >
+              <PromptSetting applied={!!applied(selection().variant)}>
+                {variantLabel()}
+              </PromptSetting>
+            </Show>
+          </Show>
+        </>
+      );
       return {
         selection,
         pending: () => owner.state.pending,
-        settings: () => (
-          <>
-            <Show
-              when={owner.state.agents.available}
-              fallback={
-                <PromptSetting applied={!!applied(selection().agent)}>
-                  {selectionLabel(
-                    selection().agent.name ?? selection().agent.value,
-                    "Default agent",
-                  )}
-                </PromptSetting>
-              }
-            >
-              <ListPicker
-                label="Choose agent"
-                triggerLabel={`Agent: ${
-                  selectionLabel(
-                    selection().agent.name ?? selection().agent.value,
-                    "Default agent",
-                  )
-                }`}
-                class="otk-composer-picker otk-agent-picker"
-                triggerClass="otk-picker-trigger"
-                applied={applied(selection().agent)}
-                triggerColor={agentColor(selection().agent.color)}
-                trigger={
-                  <>
-                    <span class="otk-composer-agent otk-picker-label">
-                      {selectionLabel(
-                        selection().agent.name ?? selection().agent.value,
-                        "Default agent",
-                      )}
-                    </span>
-                  </>
-                }
-                groups={[{
-                  key: "agents",
-                  items: (owner.state.agents.value ?? []).map((agent) => ({
-                    key: agentIdentity(agent),
-                    value: agentIdentity(agent),
-                    label: selectionLabel(agent.name),
-                    description: agent.description,
-                    color: agentColor(agent.color),
-                  })),
-                }]}
-                selected={selection().agent.value}
-                status={status(owner.state.agents, owner.refreshAgents)}
-                loading={owner.state.agents.loading}
-                error={owner.state.agents.error}
-                control={(control) => {
-                  agentPicker = control;
-                }}
-                onOpen={() => void owner.ready()}
-                onPick={owner.chooseAgent}
-                focusAfterPick={ctx.focus}
-              />
-            </Show>
-            <Show
-              when={owner.state.models.available}
-              fallback={
-                <PromptSetting applied={!!applied(selection().model)}>
-                  <ModelLabel
-                    provider={selection().model.providerName}
-                    name={selection().model.name}
-                  />
-                </PromptSetting>
-              }
-            >
-              <ListPicker<ModelRef>
-                label="Choose model"
-                triggerLabel={`Model: ${
-                  selection().model.providerName
-                    ? `${selection().model.providerName} `
-                    : ""
-                }${selection().model.name ?? "Default model"}`}
-                class="otk-composer-picker otk-model-picker"
-                triggerClass="otk-picker-trigger otk-model-trigger"
-                applied={applied(selection().model)}
-                trigger={
-                  <>
-                    <ModelLabel
-                      class="otk-picker-label"
-                      provider={selection().model.providerName}
-                      name={selection().model.name}
-                    />
-                  </>
-                }
-                groups={owner.groups().map((group) => ({
-                  ...group,
-                  items: group.items.map((item) => ({
-                    key: item.key,
-                    value: item.ref,
-                    label: item.name,
-                    description: item.subtitle,
-                    search:
-                      `${item.providerName} ${item.ref.provider} ${item.ref.model}`,
-                    tag: item.free ? "Free" : undefined,
-                    action: {
-                      label: `${
-                        item.favourite ? "Remove" : "Add"
-                      } ${item.name} ${
-                        item.favourite ? "from" : "to"
-                      } favourites`,
-                      content: <StarIcon filled={item.favourite} />,
-                      run: () => {
-                        void owner.toggleFavourite(item.ref).catch(ctx.fail);
-                      },
-                    },
-                  })),
-                }))}
-                selected={owner.selectedModelKey()}
-                search="Search models..."
-                status={status(owner.state.models, owner.refreshModels)}
-                loading={owner.state.models.loading}
-                error={owner.state.models.error}
-                header={
-                  <Show when={selection().model.unavailable}>
-                    <PickerStatus>
-                      {selection().model.providerName}/{selection().model.name}
-                      {" "}
-                      — unavailable
-                    </PickerStatus>
-                  </Show>
-                }
-                control={(control) => {
-                  modelPicker = control;
-                }}
-                onOpen={() => void owner.ready()}
-                onPick={owner.chooseModel}
-                focusAfterPick={ctx.focus}
-              />
-            </Show>
-            <Show when={selection().applies.variant}>
-              <Show
-                when={owner.catalogKnown() &&
-                  selection().model.variants.length > 0}
-              >
-                <ListPicker<string | undefined>
-                  label="Choose variant"
-                  triggerLabel={`Variant: ${
-                    selectionLabel(selection().variant.value, "Default")
-                  }`}
-                  class="otk-composer-picker otk-variant-picker"
-                  triggerClass="otk-picker-trigger"
-                  applied={applied(selection().variant)}
-                  trigger={
-                    <>
-                      <span class="otk-picker-label">
-                        {selectionLabel(selection().variant.value, "Default")}
-                      </span>
-                    </>
-                  }
-                  groups={[{
-                    key: "variants",
-                    items: [
-                      {
-                        key: "",
-                        value: undefined,
-                        label: "Default",
-                        description: applied(selection().variant)
-                          ? selectionLabel(
-                            selection().variant.value,
-                            "Default",
-                          )
-                          : undefined,
-                      },
-                      ...selection().model.variants.map((variant) => ({
-                        key: variant,
-                        value: variant,
-                        label: selectionLabel(variant),
-                      })),
-                    ],
-                  }]}
-                  selected={selection().variantChoice ?? ""}
-                  control={(control) => {
-                    variantPicker = control;
-                  }}
-                  onPick={owner.chooseVariant}
-                  focusAfterPick={ctx.focus}
-                />
-              </Show>
-              <Show
-                when={!owner.catalogKnown() &&
-                  selection().variant.value !== undefined}
-              >
-                <PromptSetting applied={!!applied(selection().variant)}>
-                  {selectionLabel(selection().variant.value!)}
-                </PromptSetting>
-              </Show>
-            </Show>
-          </>
-        ),
+        settings: () => settings(false),
+        settingsFace: () => settings(true),
       };
     },
   });

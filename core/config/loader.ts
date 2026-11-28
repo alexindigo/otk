@@ -64,6 +64,19 @@ function matches(value: unknown, type: LeafType): boolean {
   return typeof value === "number" && Number.isFinite(value) &&
     (type === "float" || Number.isSafeInteger(value));
 }
+function imageRoot(value: string): boolean {
+  if (value === "{checkouts}") return true;
+  const path = value.startsWith("~/")
+    ? value.slice(2)
+    : value.startsWith("/")
+    ? value.slice(1)
+    : undefined;
+  return path !== undefined &&
+    path.split("/").every((part) =>
+      part && part !== "." && part !== ".." &&
+      (part === "{project}" || !/[{}\\\p{Cc}]/u.test(part))
+    );
+}
 export function parseEnvValue(
   raw: string,
   type: LeafType,
@@ -118,6 +131,13 @@ export interface LoadSources {
   authState?: Tree;
   env: Record<string, string>;
 }
+export function operatorConfigDirectory(
+  env: Readonly<Record<string, string>>,
+): string | undefined {
+  const configHome = env.XDG_CONFIG_HOME ||
+    (env.HOME ? join(env.HOME, ".config") : undefined);
+  return configHome ? join(configHome, "otk") : undefined;
+}
 export function loadServiceConfig(
   sources: LoadSources,
   schema = SERVICE_SCHEMA,
@@ -145,11 +165,10 @@ export function loadServiceConfig(
       errors,
     );
   }
-  const configHome = sources.env.XDG_CONFIG_HOME ||
-    (sources.env.HOME ? join(sources.env.HOME, ".config") : undefined);
+  const configDir = operatorConfigDirectory(sources.env);
   const explicit = sources.env.OTK_CONFIG;
   const candidates = explicit !== undefined ? [explicit] : [
-    configHome ? join(configHome, "otk/otk.toml") : undefined,
+    configDir ? join(configDir, "otk.toml") : undefined,
     sources.overlayPath,
   ];
   for (const overlay of candidates) {
@@ -234,6 +253,7 @@ export function loadServiceConfig(
       "connection",
       "catalogs",
       "attachments",
+      "images",
     ] as const
   ) {
     const values = tree[section];
@@ -247,6 +267,17 @@ export function loadServiceConfig(
           `${section}.${key} (${
             envName(`${section}.${key}`)
           }): expected positive safe integer`,
+        );
+      }
+    }
+  }
+  if (isObject(tree.images) && Array.isArray(tree.images.roots)) {
+    for (const value of tree.images.roots) {
+      if (!imageRoot(value)) {
+        errors.push(
+          `images.roots (OTK_IMAGES_ROOTS): invalid root template ${
+            JSON.stringify(value)
+          }`,
         );
       }
     }

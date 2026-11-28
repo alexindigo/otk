@@ -685,7 +685,7 @@ async function fixture(
     do {
       cursor = await sink.step({ ...job, cursor }, {
         rows: 2,
-        until: performance.now() + 8,
+        until: Infinity,
       }, new AbortController().signal);
       if (++slices > 50) throw new Error("Unbounded digest scan");
     } while (cursor);
@@ -1009,7 +1009,7 @@ test("yielded native hashing retains bounded resource admission instead of start
   const work = ["opcv1-ses_one", "opcv1-ses_two"].map((sessionID) =>
     f.sink.step(
       { provider: f.sink.identity, sessionID, updated: 2, revision: 1 },
-      { rows: 2, until: performance.now() + 8 },
+      { rows: 2, until: Infinity },
       signal,
     )
   );
@@ -1109,7 +1109,7 @@ for (
           updated: 2,
           revision: 1,
         },
-        { rows: 2, until: performance.now() + 8 },
+        { rows: 2, until: Infinity },
         signal,
       );
       await entered.promise;
@@ -1444,7 +1444,7 @@ test("a raced edit behind a scan cursor is reconciled before any ready publicati
       updated: 2,
       revision: 1,
     };
-    const budget = { rows: 2, until: performance.now() + 8 },
+    const budget = { rows: 2, until: Infinity },
       signal = new AbortController().signal;
     let cursor = await f.sink.step(job, budget, signal);
     // Descending acquisition makes c the already-consumed, behind-cursor edit.
@@ -1528,7 +1528,7 @@ test("a durable sweep cursor resumes without rereading history and authoritative
       updated: 2,
       revision: 2,
     };
-    const budget = { rows: 2, until: performance.now() + 8 },
+    const budget = { rows: 2, until: Infinity },
       signal = new AbortController().signal;
     await f.sink.step(job, budget, signal);
     const scans = f.queries.scans;

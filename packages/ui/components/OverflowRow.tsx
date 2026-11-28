@@ -17,10 +17,14 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
-  /** Preserve the full measured row's intrinsic width in a wrapping action strip. */
+  /** Item that absorbs spare width without changing its intrinsic measurement. */
+  grow?: string;
+  /** Size to the items' intrinsic extent, bounded by the available space. */
   intrinsic?: boolean;
   /** Compact navigation trails fold optional items; they never grow more rows. */
   singleLine?: boolean;
+  /** Allow paging required items when even the compact row cannot fit. */
+  scrollRequired?: boolean;
   /** Ordered full -> compact-all -> aggregate fitting, never a partial trail. */
   compactMeasure?(item: T): Element;
   /** Preserve editors without replacing their live keyed control. */
@@ -30,7 +34,11 @@ export default function OverflowRow<T extends { key: string }>(props: {
   /** Readable content floor; required items reflow instead of clipping it. */
   minimumItemSize?(item: T): string;
   measure(item: T): Element;
-  children(item: () => T, compact: () => boolean): Element;
+  children(
+    item: () => T,
+    compact: () => boolean,
+    scrolling: () => boolean,
+  ): Element;
   more(keys: () => readonly string[]): Element;
 }): Element {
   let root!: HTMLDivElement, sizing!: HTMLSpanElement;
@@ -46,6 +54,11 @@ export default function OverflowRow<T extends { key: string }>(props: {
   });
   let observer: ResizeObserver | undefined;
   const [gesture, setGesture] = createSignal<ReturnType<typeof fitSnapshot>>();
+  let releaseClick: ReturnType<typeof setTimeout> | undefined;
+  const releaseGesture = () => {
+    clearTimeout(releaseClick);
+    setGesture(undefined);
+  };
   const measure = () => {
     const widths = new Map(
       [...frames].map((
@@ -53,6 +66,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
       ) => [key, element.getBoundingClientRect().width]),
     );
     for (const key of props.required) {
+      // In a progressive row only editors can exceed their measured title.
+      if (props.compactMeasure && !props.uncompacted?.includes(key)) continue;
       const current = liveFrames.get(key)?.getBoundingClientRect().width;
       // A required item may already have shrunk to make room for its optional
       // neighbours. Feeding that compressed width back into fitting lets those
@@ -79,7 +94,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
       moreWidth: sizing.getBoundingClientRect().width,
     };
     setMeasurements((old) =>
-      old.available === next.available && old.gap === next.gap &&
+      old.available === next.available &&
+        old.gap === next.gap &&
         old.moreWidth === next.moreWidth && props.items.every((item) =>
           old.widths.get(item.key) === widths.get(item.key) &&
           old.compactWidths?.get(item.key) === next.compactWidths?.get(item.key)
@@ -104,15 +120,22 @@ export default function OverflowRow<T extends { key: string }>(props: {
       if (
         event.type === "pointercancel" || !root.contains(event.target as Node)
       ) {
-        setGesture(undefined);
+        releaseGesture();
       }
     };
     document.addEventListener("pointerup", outside, true);
     document.addEventListener("pointercancel", outside, true);
-    const clicked = () => queueMicrotask(() => setGesture(undefined));
+    const clicked = () => {
+      if (!gesture()) return;
+      clearTimeout(releaseClick);
+      // Capture sees clicks even when an action stops propagation. A microtask
+      // here can refit before the native click reaches its target listener.
+      releaseClick = setTimeout(releaseGesture, 0);
+    };
     document.addEventListener("click", clicked, true);
     return () => {
       active = false;
+      clearTimeout(releaseClick);
       observer?.disconnect();
       document.removeEventListener("pointerup", outside, true);
       document.removeEventListener("pointercancel", outside, true);
@@ -120,21 +143,23 @@ export default function OverflowRow<T extends { key: string }>(props: {
     };
   });
   const fitSnapshot = () => {
-    if (props.reveal) {
-      queueMicrotask(() =>
-        liveFrames.get(props.reveal!)?.scrollIntoView({
-          inline: "nearest",
-          block: "nearest",
-        })
-      );
-    }
     const items = props.items,
       fit = fitOverflow({
         ...measurements(),
         keys: items.map((item) => item.key),
         required: props.required,
         preferred: props.preferred,
+        scrollRequired: props.scrollRequired ?? props.singleLine,
       });
+    const reveal = props.reveal;
+    if (reveal) {
+      queueMicrotask(() =>
+        liveFrames.get(reveal)?.scrollIntoView({
+          inline: fit.mode === "scroll" ? "end" : "nearest",
+          block: "nearest",
+        })
+      );
+    }
     return {
       visible: items.filter((item) => fit.visible.includes(item.key)),
       overflow: fit.overflow,
@@ -153,13 +178,20 @@ export default function OverflowRow<T extends { key: string }>(props: {
         "is-compact": snapshot().mode === "compact" ||
           snapshot().mode === "collapsed",
         "is-progressive": !!props.compactMeasure,
+        "is-paged": snapshot().mode === "scroll",
       }]}
       data-fit-mode={snapshot().mode}
       ref={(e) => root = e}
-      onPointerDown={() => setGesture(fitted())}
-      onPointerCancel={() => setGesture(undefined)}
+      onPointerDown={() => {
+        clearTimeout(releaseClick);
+        setGesture(fitted());
+      }}
     >
-      <div class="otk-overflow-measure" aria-hidden="true" inert>
+      <div
+        class="otk-overflow-measure"
+        aria-hidden="true"
+        inert
+      >
         <For each={props.items} keyed={(item) => item.key}>
           {(item) => {
             let element: HTMLElement;
@@ -210,7 +242,8 @@ export default function OverflowRow<T extends { key: string }>(props: {
         axis="x"
         frameClass="otk-overflow-lane"
         class="otk-overflow-items"
-        borrowed={!props.compactMeasure || !props.singleLine}
+        borrowed={!props.compactMeasure ||
+          !(props.scrollRequired ?? props.singleLine)}
       >
         <For each={props.items} keyed={(item) => item.key}>
           {(item) => {
@@ -227,6 +260,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
                 <div
                   class="otk-overflow-item"
                   data-overflow-key={key}
+                  data-grow={props.grow === key ? "true" : undefined}
                   data-pinned={props.required.includes(key)
                     ? "true"
                     : undefined}
@@ -253,6 +287,7 @@ export default function OverflowRow<T extends { key: string }>(props: {
                         item,
                         () => snapshot().mode === "compact" ||
                           snapshot().mode === "collapsed",
+                        () => snapshot().mode === "scroll",
                       )}
                   />
                 </div>

@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import type {
   ClientFrame,
   ContentOp,
+  FormRequest,
   Message,
   MessagePolicy,
   PermissionRequest,
@@ -132,6 +138,71 @@ const policy = {
   concurrency: 4,
 };
 
+Deno.test("work-log intent outlives step removal but not deletion of the reply", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    let seq = 0;
+    const apply = (event: ContentOp) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq: ++seq },
+        event,
+      }, true);
+    const step: Message = {
+      id: "first",
+      sessionID: "a",
+      role: "assistant",
+      replyTo: "a-079",
+      model: { provider: "test", model: "test" },
+      agent: "build",
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      time: { created: 80 },
+      parts: [],
+    };
+    apply({ op: "message.upsert", message: step });
+    apply({ op: "message.upsert", message: { ...step, id: "last" } });
+    const transcript = f.owner.get(target("a"))!;
+    const key = transcript.projection.entry(step.id)!.key;
+    const disclosure = transcript.interaction.disclosure(
+      "activity",
+      key,
+      transcript.interaction.generation(key),
+    );
+    disclosure.set(true);
+    apply({ op: "message.remove", messageID: step.id });
+    assertEquals(disclosure.value(), true);
+    apply({ op: "message.remove", messageID: "last" });
+    assertEquals(disclosure.value(), undefined);
+    apply({ op: "message.upsert", message: step });
+    disclosure.set(true);
+    assertEquals(
+      transcript.interaction.disclosure(
+        "activity",
+        key,
+        transcript.interaction.generation(key),
+      ).value(),
+      undefined,
+    );
+  } finally {
+    f.stop();
+  }
+});
+
 for (
   const replacement of [
     "same",
@@ -218,12 +289,156 @@ for (
           event: { op: "message.remove", messageID: visible.id },
         }, true);
         assertEquals(transcript.state.messagesByID[visible.id], undefined);
-      } else assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else if (replacement === "complete") {
+        assertEquals(transcript.state.messagesByID[visible.id], undefined);
+      } else {
+        assert(publications.length > 0 && publications.every(Boolean));
+        assertStrictEquals(transcript.state.messagesByID[visible.id], visible);
+      }
     } finally {
       f.stop();
     }
   });
 }
+
+Deno.test("reload retains removed-server sends without creating a transcript or blocking another server", () => {
+  const f = fixture(policy);
+  const send = {
+    intent: { clientID: "tab", key: "send" },
+    message: f.messages("a", 1)[0],
+    phase: "pending" as const,
+    dispatched: true,
+  };
+  const removed = {
+    target: { sidecarId: "removed", sessionID: "a" },
+    sends: [send],
+  };
+  try {
+    const resumed: string[] = [];
+    assertEquals(
+      f.owner.restore(
+        [removed, { target: target("a"), sends: [send] }],
+        (target) => {
+          resumed.push(target.sidecarId);
+        },
+        (id) => id === "server",
+      ),
+      1,
+    );
+    assertEquals(resumed, ["server"]);
+    assertEquals(f.owner.get(removed.target), undefined);
+    assert(
+      (f.owner.snapshot() as typeof removed[]).some(({ target }) =>
+        target.sidecarId === "removed"
+      ),
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("refetch reacquires older source after a same-version clock gap", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    const visible = a.state.messagesByID["a-060"];
+    assert(visible);
+    const messages = f.messages("a");
+    messages[60].parts = [{
+      id: "edited",
+      kind: "text",
+      synthetic: false,
+      blocks: [{ b: "paragraph", inline: [{ i: "text", text: "edited" }] }],
+    }];
+    const page = (before?: string) =>
+      fixturePage("a", messages, before, undefined, {
+        epoch: "fixture",
+        seq: 40,
+      });
+    const refetch = a.refetch();
+    replyRequest(f.connection.rpc, f.requests.shift()!, page());
+    await refetch;
+    assertStrictEquals(a.state.messagesByID["a-060"], visible);
+
+    const source = a.source("a-060", (part) => part.id);
+    const older = f.requests.shift()!;
+    assertEquals((older.params as { before?: string }).before, "fixture:70");
+    replyRequest(f.connection.rpc, older, page("fixture:70"));
+    assertEquals(await source, "edited");
+    assertEquals(a.state.messagesByID["a-060"].parts[0].id, "edited");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("refetch reads every missing page before joining a disjoint range", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    while (f.requests.length) await f.reply();
+    assert(a.state.messagesByID["a-060"]);
+    const seen: string[][] = [];
+    const release = a.subscribe((state) => seen.push([...state.messageIDs]));
+    const refetch = a.refetch();
+    await f.reply(0, 110);
+    await refetch;
+    const ids = f.messages("a", 110).map((m) => m.id);
+    assertEquals(seen.find((rows) => rows.includes("a-109")), [
+      ...ids.slice(60, 80),
+      ...ids.slice(100),
+    ]);
+    for (const before of [100, 90, 80]) {
+      assertEquals(
+        (f.requests[0]?.params as { before?: string })?.before,
+        `fixture:${before}`,
+      );
+      await f.reply(0, 110);
+    }
+    release();
+    assertEquals(a.state.messageIDs, ids.slice(60));
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("native overlap preserves the acquired frontier when the head cursor shifts", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    const work = a.refetch();
+    // Newest 75..84 overlaps 70..79 without repeating its cursor (70).
+    await f.reply(0, 85);
+    await work;
+    assertEquals(
+      a.state.messageIDs,
+      f.messages("a", 85).slice(60).map((m) => m.id),
+    );
+    assertEquals(a.state.olderCursor, "fixture:60");
+    assertEquals(f.requests.length, 0);
+  } finally {
+    f.stop();
+  }
+});
 
 for (const boundary of ["baseline", "projection"]) {
   Deno.test(`content ${boundary} exceptions preserve their reason and reacquire canonical authority`, async () => {
@@ -528,6 +743,11 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     await f.reply();
     await f.reply();
     const a = f.owner.get(target("a"))!;
+    const before = [...a.state.messageIDs];
+    const publications: string[][] = [];
+    const release = a.subscribe((state) =>
+      publications.push([...state.messageIDs])
+    );
     f.owner.receive(
       "server",
       { t: "welcome", messages: policy } as never,
@@ -548,6 +768,9 @@ Deno.test("cancelling a tail waiter retires it without cancelling canonical reco
     await f.reply();
     await shared;
     while (f.requests.length) await f.reply();
+    release();
+    assert(publications.length > 0);
+    assert(publications.every((ids) => before.every((id) => ids.includes(id))));
     assertEquals(
       a.state.messageIDs.length,
       20,
@@ -803,6 +1026,47 @@ Deno.test("warm transcripts reduce permission and question replacement before re
       [next],
       "Reselection cannot expose the previous approval target",
     );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("form publication leaves the transcript clock and live reply intact", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    while (f.requests.length) await f.reply();
+    const transcript = f.owner.get(target("a"))!;
+    const form: FormRequest = {
+      id: "form",
+      owner: { kind: "session", sessionID: "a" },
+      directory: "/a",
+      title: "Plan approval",
+      fields: [],
+    };
+    const receive = (event: ContentOp, seq?: number) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        event,
+        ...(seq === undefined ? {} : { clock: { epoch: "fixture", seq } }),
+      }, true);
+    receive({ op: "form.upsert", request: form });
+    assertEquals(transcript.state.content.forms, [form]);
+    receive({ op: "form.remove", requestID: form.id });
+    assertEquals(transcript.state.content.forms, []);
+    const message = {
+      ...f.messages("a")[79],
+      id: "a-080",
+      time: { created: 80 },
+    };
+    receive({ op: "message.upsert", message }, 1);
+    assertEquals(transcript.state.messagesByID[message.id], message);
+    assertEquals(f.requests, []);
   } finally {
     f.stop();
   }
@@ -1106,6 +1370,11 @@ Deno.test("warm live tails stay bounded, visited pages survive until cooling and
       "only visited identities plus the live tail survive",
     );
     assert(a.state.messagesByID["a-070"]);
+    assertEquals(
+      a.state.messageIDs,
+      f.messages("a", 180).slice(160).map((message) => message.id),
+      "warm custody does not join visited bodies across an evicted interval",
+    );
     f.time.advance(100);
     assertEquals(a.state.messageIDs, []);
     assertEquals(Object.keys(a.state.messagesByID), []);

@@ -62,7 +62,6 @@ Deno.test("request activity keeps the phantom visible, leaves projects to receiv
   const inbox: InboxSnapshot = {
     projects: [{
       directory: "/one",
-      order: 0,
       lastVisit: 1,
       inactive: true,
       added: true,
@@ -72,6 +71,18 @@ Deno.test("request activity keeps the phantom visible, leaves projects to receiv
     finishes: {},
     pathTemplates: [],
   };
+  resources.receive("local", {
+    t: "projects.order",
+    revision: 1,
+    projects: [{ id: "one", directories: ["/one"] }],
+  });
+  resources.receive("local", {
+    t: "programs",
+    revision: 1,
+    auto: false,
+    programs: [],
+    members: {},
+  });
   resources.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
@@ -185,13 +196,24 @@ Deno.test("a project-owned creation before any task or session ID exists leaves 
   };
   const resources = createServerResources({ index, sidecars: () => sidecars });
   resources.receive("local", {
+    t: "projects.order",
+    revision: 1,
+    projects: [{ id: "empty", directories: ["/empty"] }],
+  });
+  resources.receive("local", {
+    t: "programs",
+    revision: 1,
+    auto: false,
+    programs: [],
+    members: {},
+  });
+  resources.receive("local", {
     t: "inbox.snapshot",
     generation: "fixture",
     revision: 0,
     inbox: {
       projects: [{
         directory: "/empty",
-        order: 0,
         lastVisit: 1,
         inactive: true,
         added: true,

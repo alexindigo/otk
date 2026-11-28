@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { send } from "../pages/primary-action.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { scaleGenerations, scaleWire } from "../fixtures/scale-wire.ts";
 
 interface Watch {
   directory: string;
+  files: boolean;
   acquired: number;
   subscriptions: number;
   releases: number;
@@ -13,11 +15,12 @@ interface Watch {
   latePublications: number;
 }
 test.use({ profile: "contract-scale-files" });
+// The existing scale budget covers the costly isolated fixture as well.
+test.describe.configure({ timeout: 600_000 });
 test(
   "scale.complete-catalogs-keyed-tasks-provider",
   { tag: ["@scale"] },
   async ({ isolatedState: state, page }, info) => {
-    test.setTimeout(600_000);
     const initial = await state.observe<
       {
         counts: unknown;
@@ -119,23 +122,39 @@ test(
         /^(catalogs\.|agents\.list|models\.list|commands\.list|resources\.list|find\.files|frecency\.list)/
           .test(e.frame.method)
       );
-    const before = requests().length;
-    const audit = async (closed = false) => {
+    const audit = async (
+      live: "mention" | "passive" | "closed",
+      expectedFileWatches: number,
+    ) => {
       await expect.poll(() => {
         const accepted = scaleGenerations(frames).filter((g) => g.welcomes);
         return accepted.length > 0 &&
           accepted.every((g) =>
-            g.requests.some((r) => r.method === "catalogs.watch") &&
+            g.requests.some((r) => r.method === "catalogs.watch" && !r.files) &&
             g.requests.some((r) => r.method === "frecency.list")
           );
       }).toBe(true);
       const generations = scaleGenerations(frames),
         accepted = generations.filter((g) => g.welcomes);
+      const fileWatches =
+        accepted.flatMap((g) =>
+          g.requests.filter((r) => r.method === "catalogs.watch" && r.files)
+        ).length;
+      expect(fileWatches).toBe(expectedFileWatches);
+      // Issue 2.158: an @-mention owns observation, but has no second
+      // publication subscriber. A closed mention releases before navigation.
+      const active = (watch: Watch, watches: Watch[]) =>
+        (watch.files ? live === "mention" : live !== "closed") &&
+        watch === watches.filter((w) => w.files === watch.files).at(-1);
       await expect.poll(async () => {
         const { watches } = await state.observe<{ watches: Watch[] }>();
-        return watches.length >= accepted.length &&
-          (closed ? watches : watches.slice(0, -1)).every((w) =>
-            w.releases === 1 && w.unsubscriptions === 1 && w.aborted
+        return watches.length === accepted.length + fileWatches &&
+          watches.filter((w) => w.files).length === fileWatches &&
+          watches.every((w) =>
+            active(w, watches)
+              ? w.releases === 0 && w.unsubscriptions === 0 && !w.aborted
+              : w.releases === 1 && w.unsubscriptions === (w.files ? 0 : 1) &&
+                w.aborted
           );
       }).toBe(true);
       const { watches } = await state.observe<{ watches: Watch[] }>();
@@ -152,15 +171,22 @@ test(
           "frecency.list",
         ]);
         expect(g.requests.every((r) => allowed.has(r.method))).toBe(true);
-        for (const method of ["catalogs.watch", "frecency.list"]) {
-          expect(g.requests.filter((r) => r.method === method)).toHaveLength(1);
-        }
+        expect(
+          g.requests.filter((r) => r.method === "catalogs.watch" && !r.files),
+        )
+          .toHaveLength(1);
+        expect(g.requests.filter((r) => r.method === "frecency.list"))
+          .toHaveLength(1);
+        const observation = g.requests.filter((r) =>
+          r.method === "catalogs.watch" && r.files
+        );
+        expect(observation.length).toBeLessThanOrEqual(1);
         // Decision 34: four warm kinds, at most one consumer promotion each,
         // plus files/resources on mention. This ceiling is population-independent.
         const warm = ["models", "agents", "commands", "skills"],
           consumers = [...warm, "files", "resources", "project"], // WP9 project chip.
           demands = g.requests.filter((r) => r.method === "catalogs.demand");
-        expect(g.requests.length).toBeLessThanOrEqual(
+        expect(g.requests.filter((r) => !r.files).length).toBeLessThanOrEqual(
           2 + warm.length + consumers.length,
         );
         const intents = new Set<string>();
@@ -178,51 +204,33 @@ test(
           true,
         );
       }
-      expect(watches.length).toBeGreaterThanOrEqual(accepted.length);
       for (const w of watches) {
         expect(w.directory).toBe(state.directory);
         expect(w.acquired).toBe(1);
-        expect(w.subscriptions).toBe(1);
+        expect(w.subscriptions).toBe(w.files ? 0 : 1);
         expect(w.latePublications).toBe(0);
       }
-      for (const w of closed ? watches : watches.slice(0, -1)) {
-        expect(w.releases).toBe(1);
-        expect(w.unsubscriptions).toBe(1);
-        expect(w.aborted).toBe(true);
-      }
-      if (!closed) {
-        expect(watches.at(-1)?.releases).toBe(0);
-        expect(watches.at(-1)?.unsubscriptions).toBe(0);
-        expect(watches.at(-1)?.aborted).toBe(false);
-      }
-      samples.push({ closed, generations, watches });
+      samples.push({ live, generations, watches });
       return accepted;
     };
-    await audit();
+    await audit("mention", 1);
+    const before = requests().length;
     for (let n = 0; n < 100; n++) {
-      await fill(
-        `@candidate-${String(n).padStart(5, "0")}`,
-      );
+      await prompt.press("Backspace");
+      await prompt.press(String(n % 10));
     }
+    expect(requests()).toHaveLength(before);
     await fill("");
     await expect(autocomplete).toHaveCount(0);
     await prompt.click();
     for (let n = 0; n < 100; n++) await page.keyboard.press("Tab");
-    let generations = await audit();
-    if (generations.length === 1) {
-      await page.evaluate(
-        "remainingSockets.filter(socket=>socket.readyState===WebSocket.OPEN).forEach(socket=>socket.close())",
-      );
-      await expect.poll(() =>
-        scaleGenerations(frames).filter((g) => g.welcomes).length
-      ).toBeGreaterThanOrEqual(2);
-      await expect(page.locator(".otk-connection-light")).toHaveAttribute(
-        "data-connection-state",
-        "connected",
-      );
-      generations = await audit();
-    }
-    expect(generations.length).toBeGreaterThanOrEqual(2);
+    const beforeReconnect = await audit("passive", 1);
+    await page.evaluate(
+      "remainingSockets.filter(socket=>socket.readyState===WebSocket.OPEN).forEach(socket=>socket.close())",
+    );
+    await expect.poll(() =>
+      scaleGenerations(frames).filter((g) => g.welcomes).length
+    ).toBeGreaterThan(beforeReconnect.length);
     // Welcome restores the transport before the scoped inbox has rehydrated
     // all 251 task members. Join that baseline before checking live keyed edits;
     // retained pre-reconnect labels are not a current-generation baseline.
@@ -235,6 +243,11 @@ test(
         event.frame.t === "inbox.snapshot"
       );
     }, { timeout: 120_000 }).toBe(true);
+    await expect(page.locator(".otk-connection-light")).toHaveAttribute(
+      "data-connection-state",
+      "connected",
+    );
+    await audit("passive", 1);
     await state.product("tasks.rename", {
       id: "scale-task-0",
       name: "Current scale task",
@@ -248,15 +261,16 @@ test(
     });
     await fill("@new-after-watch");
     await expect(autocomplete).toContainText("new-after-watch.txt");
-    await audit();
-    await fill("@candidate-09999");
+    await audit("mention", 2);
+    for (const _ of "new-after-watch") await prompt.press("Backspace");
+    await page.keyboard.insertText("candidate-09999");
     await expect(autocomplete).toContainText("candidate-09999.txt");
     await page.keyboard.press("Enter");
     await expect(page.locator(".otk-prompt-chip")).toContainText(
       "candidate-09999.txt",
     );
     await state.queue(["The last complete catalog candidate arrived."]);
-    await page.locator('.otk-prompt button[type="submit"]').click();
+    await send(page).click();
     await expect(
       page.locator(".otk-text").filter({
         hasText: "The last complete catalog candidate arrived.",
@@ -297,7 +311,7 @@ test(
     const renderedTasks = await page.locator(".otk-task-list [data-tab]")
       .count();
     await page.close();
-    await audit(true);
+    await audit("closed", 2);
     await info.attach("population-control-measurements", {
       body: JSON.stringify({
         counts: initial.counts,

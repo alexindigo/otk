@@ -13,6 +13,8 @@ import {
   type Feedback,
   type FeedbackOwner,
   GENERIC_FAILURE_REASON,
+  inheritFailureOccurrence,
+  sameView,
 } from "./failures.ts";
 import type {
   FailureFacts,
@@ -28,10 +30,11 @@ import {
 } from "@otk/protocol";
 import { hashFor } from "./session.ts";
 import { sessionTitle } from "./session-title.ts";
-import { projectHash, projectName } from "./project-navigation.ts";
+import { projectHash } from "./project-navigation.ts";
+import { folderName } from "./project-names.ts";
 import type { Note } from "./notifications.ts";
 import { localFailure, RequestFailure, RequestReleased } from "./failures.ts";
-import type { RequestTracker } from "./requests.ts";
+import type { OperationState, RequestTracker } from "./requests.ts";
 import { bootstrapRequestMetadata } from "./bootstrap-request-metadata.ts";
 
 /** Shipped failure vocabulary. The reusable presenter itself has no feature list. */
@@ -48,7 +51,7 @@ export function createFailurePresenter(): FailurePresenter {
       label: target.sessionID
         ? sessionTitle(target.sessionID, target.label)
         : target.directory
-        ? target.label || projectName(target.directory)
+        ? target.label || folderName(target.directory)
         : target.label || "OTK",
       href: target.sessionID
         ? hashFor({
@@ -161,24 +164,32 @@ export function attachmentFailure(cause: unknown, name: string): FailureValue {
     ? errorFeedback(cause, facts) ?? ""
     : failureValue(cause, facts);
 }
+/** Inline input guidance is not an operation failure or a diagnostic. */
+export function validationFeedback(text: string): Feedback {
+  return { kind: "error", text };
+}
+
 /** A feature-authored validation reason or an already-owned failure value. */
 export function errorFeedback(
   value: string | Feedback | undefined,
   context?: FailureFacts,
+  occurrenceSource?: object,
 ): Feedback | undefined {
   if (!value) return;
   if (typeof value !== "string" && (value.kind !== "error" || value.failure)) {
     return value;
   }
   const text = typeof value === "string" ? value : value.text;
-  const described = shipped.describe({
+  const raw: PublicFailure = {
     code: "action.validation",
     retry: "new-intent",
     diagnosticID: typeof value === "string"
       ? "validation"
       : value.diagnosticID ?? "validation",
     facts: { ...context, reason: text },
-  });
+  };
+  const source = occurrenceSource ?? (typeof value === "string" ? raw : value);
+  const described = shipped.describe(inheritFailureOccurrence(source, raw));
   return typeof value === "string"
     ? described
     : { ...value, failure: described.failure };
@@ -232,6 +243,8 @@ export function failureNote(
       context,
     );
   const feedback = shipped.present(failure, { surface: "notification" });
+  // Delivery compares public facts. The notification itself owns occurrence.
+  const { occurrence: _occurrence, ...value } = feedback.failure!;
   const target = failure.facts?.target;
   return {
     id: failure.code.startsWith("storage.")
@@ -241,7 +254,7 @@ export function failureNote(
     dismissalKey: `failure/${feedback.failure!.count}`,
     dismissOnView: false,
     title: feedback.text,
-    detail: { kind: "failure", value: feedback.failure },
+    detail: { kind: "failure", value },
     sessionRef: target?.sessionID
       ? { sidecar: target.sidecarId ?? "local", session: target.sessionID }
       : undefined,
@@ -287,9 +300,11 @@ export function notificationFailure(
   note: Note,
 ): FailurePresentation | undefined {
   const detail = note.detail as
-    | { kind?: string; value?: FailurePresentation }
+    | { kind?: string; value?: Omit<FailurePresentation, "occurrence"> }
     | undefined;
-  if (detail?.kind === "failure") return detail.value;
+  if (detail?.kind === "failure" && detail.value) {
+    return { ...detail.value, occurrence: note.id } as FailurePresentation;
+  }
   if (note.kind !== "error") return;
   const failure = errorFeedback(note.body || GENERIC_FAILURE_REASON)!.failure!;
   // A notification title is already an outcome heading, not an action verb.
@@ -302,7 +317,7 @@ export function sessionFailure(
 ): PublicFailure | undefined {
   if (!observation && !reason) return;
   const prior = observation?.failure;
-  return {
+  const failure: PublicFailure = {
     code: prior?.code ?? "session.failure",
     retry: prior?.retry ?? "none",
     diagnosticID: prior?.diagnosticID ?? observation?.id ??
@@ -320,6 +335,7 @@ export function sessionFailure(
       status: prior?.facts?.status ?? observation?.status,
     },
   };
+  return observation ? inheritFailureOccurrence(observation, failure) : failure;
 }
 export function presentFailure(
   failure: import("@otk/protocol").PublicFailure,
@@ -361,13 +377,31 @@ export function replyErrorFeedback(
 export function composerPointer(
   failures: readonly PublicFailure[],
   view: FailureTarget | undefined,
-  local?: Feedback,
+  local: Feedback | undefined,
+  hasRecord: (messageID: string) => boolean,
 ): Feedback | undefined {
-  if (local) return local;
+  const placement = { surface: "feedback", view, hasRecord } as const;
+  if (local) {
+    const value = local.failure;
+    if (!value?.value.facts?.record) return local;
+    const shown = shipped.describe(value.value, placement);
+    return {
+      ...local,
+      text: shown.text,
+      failure: {
+        ...shown.failure!,
+        occurrence: value.occurrence,
+        count: value.count,
+        occurrences: value.occurrences,
+      },
+    };
+  }
   for (const failure of failures) {
-    if (failure.facts?.origin !== "composer") continue;
-    const shown = shipped.describe(failure, { surface: "feedback", view });
-    if (shown.failure?.reference) return shown;
+    if (
+      failure.facts?.origin !== "composer" || !failure.facts.record ||
+      !sameView(failure.facts.target, view)
+    ) continue;
+    return shipped.describe(failure, placement);
   }
   return local;
 }
@@ -375,7 +409,8 @@ export function composerPointer(
 export function sessionComposerFeedback(
   state: import("@otk/protocol").SessionErrorState | undefined,
   view: FailureTarget | undefined,
-  local?: Feedback,
+  local: Feedback | undefined,
+  hasRecord: (messageID: string) => boolean,
 ): Feedback | undefined {
   return composerPointer(
     (state?.observations ?? []).flatMap((observation) => {
@@ -390,6 +425,7 @@ export function sessionComposerFeedback(
     }),
     view,
     local,
+    hasRecord,
   );
 }
 export function placeFailure(
@@ -400,7 +436,90 @@ export function placeFailure(
   return shipped.place(failure, placement, occupant);
 }
 
+/** D74: a run has a short inline witness; the panel owns its full record. */
+export function workFailureFeedback(
+  run: { label: string; failure?: PublicFailure; failureReason?: string },
+  show: () => void,
+): Feedback {
+  const heading = `${run.label} failed`;
+  const feedback = (run.failure && placeFailure(run.failure, "record")) ??
+    errorFeedback(run.failureReason ?? heading)!;
+  const reason = feedback.failure?.reason ?? feedback.text;
+  return {
+    ...feedback,
+    text: reason === heading ? heading : `${heading}: ${reason}`,
+    failure: { ...feedback.failure!, heading },
+    action: { label: "Show in Work log", run: show },
+  };
+}
+
+/** A failed local send with a published request record keeps its identity,
+ * not a second rendering of the record. Unlinked, local-only failures still
+ * own their reason and recovery (for example, an unconfirmed send). */
+export function failedSendPresentation(feedback?: Feedback): {
+  diagnosticID?: string;
+  feedback?: Feedback;
+} {
+  return {
+    diagnosticID: feedback?.diagnosticID,
+    feedback: feedback?.failure?.value.facts?.record ? undefined : feedback,
+  };
+}
+
 /** Target-bound presentation outlives any mounted view and borrows request state. */
+export function isQuestionResponse(method: string): boolean {
+  return method === "question.reply" || method === "question.reject";
+}
+
+export function requestFeedback(
+  state: Readonly<OperationState>,
+  metadata: RequestMetadataRegistry,
+  tracker: RequestTracker,
+): Feedback | undefined {
+  const identified = (value: Feedback): Feedback => ({
+    ...value,
+    identity: state.ref.key,
+  });
+  if (state.phase === "released" || state.phase === "succeeded") return;
+  if (state.error) {
+    if (state.feedbackDismissed) return;
+    const shown = shipped.place(state.error, {
+      surface: "feedback",
+      view: state.error.facts?.target,
+    });
+    if (!shown) return;
+    return {
+      ...shown,
+      identity: state.ref.key,
+      diagnosticID: state.error.diagnosticID,
+      ...(state.phase === "failed" && !state.error.facts?.record
+        ? { dismiss: () => tracker.dismissFeedback(state) }
+        : {}),
+    };
+  }
+  if (state.connection === "authentication-required") {
+    return identified({
+      kind: "connection",
+      text: "Sign in to continue checking this action",
+    });
+  }
+  if (state.connection !== "connected") {
+    return identified(
+      shipped.connection(state.connection === "client-outdated"),
+    );
+  }
+  if (
+    state.progress && state.progress.code !== "working" &&
+    state.progress.code !== "queued"
+  ) {
+    return identified(shipped.progress(state.progress));
+  }
+  return identified({
+    kind: "pending",
+    text: metadata.get(state.method)!.pending,
+  });
+}
+
 export function createRequestFeedback(
   tracker: RequestTracker,
   owner: string,
@@ -417,52 +536,14 @@ export function createRequestFeedback(
       // result for older work. Keep it visible until its owner clears it.
       if (local) return local;
       const operations = tracker.operations(owner).filter((operation) =>
-        metadata.get(operation.state.method)?.kind === "mutation"
+        metadata.get(operation.state.method)?.kind === "mutation" &&
+        !isQuestionResponse(operation.state.method)
       );
       const operation =
         operations.findLast((operation) =>
           metadata.get(operation.state.method)?.presentation !== "bookkeeping"
         ) ?? operations.at(-1);
-      if (!operation) return local;
-      const state = operation.state;
-      const identified = (value: Feedback): Feedback => ({
-        ...value,
-        identity: state.ref.key,
-      });
-      if (state.phase === "released" || state.phase === "succeeded") {
-        return local;
-      }
-      if (state.error) {
-        const shown = shipped.place(state.error, {
-          surface: "feedback",
-          view: state.error.facts?.target,
-        });
-        if (!shown) return;
-        return {
-          ...shown,
-          identity: state.ref.key,
-          diagnosticID: state.error.diagnosticID,
-        };
-      }
-      if (state.connection === "authentication-required") {
-        return identified({
-          kind: "connection",
-          text: "Sign in to continue checking this action",
-        });
-      }
-      if (state.connection !== "connected") {
-        return identified(
-          shipped.connection(state.connection === "client-outdated"),
-        );
-      }
-      if (
-        state.progress && state.progress.code !== "working" &&
-        state.progress.code !== "queued"
-      ) return identified(shipped.progress(state.progress));
-      return identified({
-        kind: "pending",
-        text: metadata.get(state.method)!.pending,
-      });
+      return operation && requestFeedback(operation.state, metadata, tracker);
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -473,7 +554,20 @@ export function createRequestFeedback(
       };
     },
     fail(cause) {
-      local = actionFeedback(cause);
+      const feedback = actionFeedback(cause);
+      const notice = feedback &&
+          (feedback.kind === "info" || feedback.kind === "error") &&
+          !feedback.failure?.value.facts?.record
+        ? {
+          ...feedback,
+          dismiss() {
+            if (local !== notice) return;
+            local = undefined;
+            notify();
+          },
+        }
+        : feedback;
+      local = notice;
       notify();
     },
     clear() {

@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStrictEquals,
+} from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { createTranscriptProjection } from "@otk/client";
 import type { MessagePolicy } from "@otk/protocol";
@@ -20,6 +25,7 @@ import { requestFailureFacts } from "../request-failure.ts";
 
 const sessionID = "opcv2-ses_history";
 const policy: MessagePolicy = {
+  bridgepages: 4,
   prefetchms: 1000,
   prefetchbytes: 1048576,
   coolms: 1000,
@@ -168,7 +174,7 @@ Deno.test("native head is a keyed scalar witness and respects a staged boundary"
 Deno.test("native history repairs a missed compaction, prompt and reply without a live event", async () => {
   const x = fixture();
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     x.rows.push(
       {
         id: "compact",
@@ -234,7 +240,7 @@ Deno.test("initial page owns repair demand while its native boundary is still he
       "Repair must join the held boundary, not invalidate it with stream.reconcile",
     );
     gate.resolve();
-    x.projection.replace((await reading).items);
+    x.projection.reset((await reading).items);
     await x.transcript.check(sessionID);
     assertEquals(x.projection.state.messageIDs, ["before", "during-page"]);
     assertEquals(x.reads.filter((read) => read.limit === 10).length, 1);
@@ -280,7 +286,7 @@ Deno.test("completed fine recovery cannot hide a later changed native-head witne
   x.rows.splice(0, 1, reply("recovered", 1));
   let updated = 1;
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     x.transcript.options.digest = {
       read: () => Promise.resolve({ id: "recovered", seq: 1, updated }),
       release() {},
@@ -331,7 +337,7 @@ Deno.test("history revisits an omitted forward row when fine recovery releases i
     return await get(session, message, signal);
   };
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     x.rows.push(reply("omitted", 2), reply("new-head", 3));
     useHead(x, () => ({ id: "new-head", seq: 3, updated: 3 }));
     x.transcript.recovery.touch(sessionID, "omitted", "text");
@@ -354,11 +360,39 @@ Deno.test("history revisits an omitted forward row when fine recovery releases i
   }
 });
 
+Deno.test("an advancing native head reuses the exact recovered anchor", async () => {
+  const x = fixture();
+  x.rows.splice(0, 1, reply("recovered", 1));
+  try {
+    x.projection.reset((await x.transcript.page(sessionID)).items);
+    x.rows.push(reply("next", 2));
+    x.transcript.options.digest = {
+      read: (_kind: string, input: { messageID?: string }) =>
+        Promise.resolve(
+          input.messageID === "recovered"
+            ? { id: "recovered", seq: 1, updated: 1 }
+            : { id: "next", seq: 2, updated: 2 },
+        ),
+      release() {},
+    } as unknown as NonNullable<typeof x.transcript.options.digest>;
+    x.transcript.recovery.touch(sessionID, "recovered", "text");
+    x.transcript.recovery.terminal(sessionID, "recovered");
+    while (x.transcript.recovery.snapshot(sessionID).length) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    await x.transcript.check(sessionID);
+    assertEquals(x.gets, ["recovered"]);
+    assertEquals(x.projection.state.messageIDs, ["recovered", "next"]);
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
 Deno.test("history rechecks a recovered anchor edited before a newer head appears", async () => {
   const x = fixture();
   x.rows[0] = reply("anchor", 1);
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     useHead(x, () => ({
       id: x.rows.at(-1)!.id,
       seq: x.rows.length,
@@ -398,7 +432,7 @@ Deno.test("a covered inbox cancellation still retires the queued projection", as
     },
   };
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     await x.transcript.event(queued);
     assertEquals(x.projection.state.messageIDs, ["before", "msg_queued"]);
     x.rows.push(reply("new-head", 4));
@@ -427,7 +461,7 @@ Deno.test("history checkpoints cannot erase an event-owned running compaction su
     time: { created: 2 },
   });
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     await x.transcript.event({
       id: "evt_compact_start",
       type: "session.compaction.started",
@@ -486,7 +520,7 @@ Deno.test("history checkpoints use native identities when a failure has a differ
         time: { created: 2 },
       } as NativeMessage,
     );
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     assert(
       x.projection.state.messageIDs.some((id) =>
         id.startsWith("request:failure:")
@@ -506,7 +540,7 @@ Deno.test("acquired history detects and repairs a gap by itself, and stops on un
   const x = fixture(5);
   x.transcript.start();
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     x.rows.push(prompt("automatic", 2));
     const end = Date.now() + 1000;
     while (!x.projection.state.messagesByID.automatic) {
@@ -530,7 +564,7 @@ Deno.test("acquired history detects and repairs a gap by itself, and stops on un
 Deno.test("gap repair crosses bounded pages and includes unknown native messages and parts", async () => {
   const x = fixture();
   try {
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     for (let i = 0; i < 230; i++) x.rows.push(prompt(`gap-${i}`, i + 2));
     const unknown = {
       ...reply("unknown-part", 240),
@@ -568,11 +602,36 @@ Deno.test("gap repair crosses bounded pages and includes unknown native messages
     await x.transcript.stop();
   }
 });
+Deno.test("textless instruction sync leaves acquired reply identity and publication clock intact", async () => {
+  const x = fixture();
+  try {
+    x.projection.reset((await x.transcript.page(sessionID)).items);
+    await x.transcript.check(sessionID);
+    const { messageIDs, repliesByID } = x.projection.state;
+    const historical = repliesByID.before;
+    assert(historical);
+    const clock = x.transcript.replay.clock(sessionID);
+    const reads = x.reads.length;
+    await x.transcript.event({
+      type: "session.instructions.updated",
+      id: "evt_initial_instructions",
+      metadata: { instructions: { initial: true } },
+      data: { sessionID: "ses_history", delta: { codemode: "hash" } },
+    });
+    assertEquals(x.transcript.replay.clock(sessionID), clock);
+    assertEquals(x.reads.length, reads);
+    assertStrictEquals(x.projection.state.messageIDs, messageIDs);
+    assertStrictEquals(x.projection.state.repliesByID.before, historical);
+  } finally {
+    await x.transcript.stop();
+  }
+});
+
 Deno.test("unmapped native content replacement repairs the same identity without a new head", async () => {
   const x = fixture();
   try {
     x.rows.push(reply("replace", 2));
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     await x.transcript.check(sessionID);
     x.rows[1] = {
       ...reply("replace", 2),
@@ -609,7 +668,7 @@ Deno.test("failed in-place repair retains its obligation even when the native he
   const x = fixture();
   try {
     x.rows.push(reply("replace-older", 2), prompt("later", 3));
-    x.projection.replace((await x.transcript.page(sessionID)).items);
+    x.projection.reset((await x.transcript.page(sessionID)).items);
     await x.transcript.check(sessionID);
     x.rows[1] = {
       ...reply("replace-older", 2),

@@ -50,7 +50,7 @@ const theme = new ThemeEngine(
 const stopTheme = theme.start();
 const ui = createUiRegistries();
 registerTextPart(ui.parts);
-registerToolPart(ui.parts);
+registerToolPart(ui.parts, ui.tools);
 registerGenericTool(ui.tools);
 registerTaskTool(ui.tools);
 registerEditTool(ui.tools);
@@ -181,7 +181,11 @@ function Consumer() {
   const remembered = () => {
     selected();
     interactionClock();
-    return owner.get(a)?.interaction.disclosure("heap-choice", "fixture")
+    return owner.get(a)?.interaction.disclosure(
+      "record",
+      "heap-choice",
+      "fixture",
+    )
       .value() ?? false;
   };
   connection.view({
@@ -245,6 +249,7 @@ function Consumer() {
             id="heap-choice"
             onClick={() => {
               const choice = owner.get(a)!.interaction.disclosure(
+                "record",
                 "heap-choice",
                 "fixture",
               );
@@ -326,7 +331,6 @@ function Consumer() {
                   connected
                   prefs={DEFAULT_PREFS}
                   permissions={[]}
-                  siblings={[]}
                   child={false}
                   revert={null}
                   busy={false}

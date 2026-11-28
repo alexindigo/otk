@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, onCleanup } from "solid-js";
+import { entityKey } from "@otk/protocol";
 import {
   type BranchHistory,
   browserStorage,
   type ClientSession,
   connectBranchHistory,
   createCurrentClient,
+  createDisclosures,
   createDrafts,
   createForkNotes,
   createInputGuard,
   createListScopes,
+  createProjectRename,
   createReload,
   createServerResources,
   createSessionActions,
@@ -18,35 +21,61 @@ import {
   createShellNavigation,
   createTranscriptScopes,
   type CurrentClient,
+  type Disclosures,
+  type DraftRecovery,
   type Drafts,
+  type DurableStore,
   type ForkNotes,
   type InputGuard,
+  keyedReload,
   type ListInteraction,
   type ProjectSelection,
   route,
+  type Selection,
   type ServerResources,
+  SESSION_TREE_DISCLOSURES,
   type SessionActions,
   sessionKey,
   type SessionRename,
   type SessionRevert,
   type ShellNavigation,
+  type TranscriptOwner,
+  WorkPanel,
 } from "@otk/client";
+import {
+  projectLayoutKey,
+  type SessionTreeKind,
+  treeLayoutKey,
+} from "@otk/protocol";
+import { createToggles, type Toggles } from "../components/Toggles.ts";
+import { createWorkModel } from "../components/work-log.ts";
+import type { PartRegistry } from "../registries/renderers.ts";
 import { solidState } from "./binding.ts";
 import { createIndex } from "./index.ts";
 import { createSession } from "./session.ts";
 import { createSidecars } from "./sidecars.ts";
 
+export interface ShellWork {
+  panel: WorkPanel;
+  model(session: Selection): ReturnType<typeof createWorkModel> | undefined;
+  shows(session: Selection, turn: string): boolean;
+}
+
 export interface ShellState {
   reload: import("@otk/client").Reload;
-  confirmCommand(message: string): boolean;
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
+  disclosures: Disclosures;
+  work: ShellWork;
+  toggles: Toggles;
   resources: ServerResources;
   session: ClientSession;
   drafts: Drafts;
+  deletedRecoveries(target: Selection): readonly DraftRecovery[];
   branchHistory: BranchHistory;
   current: CurrentClient;
   actions: SessionActions;
   rename: SessionRename;
+  projectRename: import("@otk/client").ProjectRename;
   revert: SessionRevert;
   forkNotes: ForkNotes;
   guard: InputGuard;
@@ -57,8 +86,10 @@ export interface ShellState {
 export function createShellState(
   o: {
     api: URL;
+    parts: PartRegistry;
+    build?: string;
     policy?: import("@otk/protocol").ClientRequestPolicy;
-    promptBlocks?(text: string): import("@otk/protocol").Block[];
+    confirm(message: string): Promise<boolean>;
     promptCommitted?(message: import("@otk/protocol").UserMessage): void;
   },
 ): ShellState {
@@ -73,8 +104,10 @@ export function createShellState(
         storage,
         connection: {
           api: o.api,
+          page: { build: o.build },
           policy: o.policy,
           reload: () => reload.run(),
+          retireRequestDisclosures: (scope) => disclosures.retire({ scope }),
         },
         sessionTitle: (sidecarId, sessionID) =>
           index.get(sidecarId, sessionID)?.title,
@@ -82,7 +115,41 @@ export function createShellState(
   });
   const { sidecars, entry } = resources;
   const listScopes = createListScopes();
+  const toggles = createToggles(resources.setPreference);
+  const layout = () => toggles.state.prefs.shellLayout;
+  const expanded = (collapsed: boolean | undefined) =>
+    collapsed === undefined ? undefined : !collapsed;
+  const treeStore = (kind: SessionTreeKind): DurableStore => ({
+    read: ({ scope: sidecarId, id }) =>
+      expanded(
+        layout().treeCollapsed?.[treeLayoutKey({ sidecarId, kind, id })],
+      ),
+    save: ({ scope: sidecarId, id }, open) =>
+      resources.treeCollapse({ sidecarId, kind, id }, !open),
+  });
+  const disclosures = createDisclosures({
+    factory: solidState,
+    durable: {
+      [SESSION_TREE_DISCLOSURES.session]: treeStore("session"),
+      [SESSION_TREE_DISCLOSURES.task]: treeStore("task"),
+      [SESSION_TREE_DISCLOSURES.ungrouped]: treeStore("ungrouped"),
+      projectBranch: {
+        read: ({ scope: sidecarId, id: directory }) =>
+          expanded(
+            layout().projectCollapsed
+              ?.[projectLayoutKey({ sidecarId, directory })],
+          ),
+        save: ({ scope: sidecarId, id: directory }, open) =>
+          resources.projectCollapse({ sidecarId, directory }, !open),
+      },
+      discovered: {
+        read: () => expanded(layout().discoveredCollapsed),
+        save: (_, open) => resources.layout({ discoveredCollapsed: !open }),
+      },
+    },
+  });
   resources.observe({ removed: (id) => listScopes.remove(id) });
+  const panel = new WorkPanel(solidState);
   const session = createSession(
     (id) => sidecars.connection(id),
     entry,
@@ -100,8 +167,64 @@ export function createShellState(
         }
         : undefined,
     (id) => resources.inbox(id).entities,
+    disclosures,
+    (scope) => panel.retire(scope),
   );
+  const workModels = new WeakMap<
+    TranscriptOwner,
+    ReturnType<typeof createWorkModel>
+  >();
+  const workModel: ShellWork["model"] = (target) => {
+    // Recheck the collection when the selected session binds its body.
+    void session.state.content;
+    const transcript = session.transcripts.get(target);
+    if (!transcript) return;
+    let model = workModels.get(transcript);
+    if (!model) {
+      const prefs = () => toggles.state.prefs;
+      const context = () => ({
+        directory: entry(target.sidecarId, target.sessionID)?.directory,
+        paths: session.directoryCatalog?.state.catalog?.paths,
+      });
+      let revision = { prefs: prefs(), ...context() };
+      model = createWorkModel({
+        reply: (key) => transcript.state.repliesByID[key],
+        replyKeys: () => transcript.state.replyIDs,
+        presentation: (part) => o.parts.presentation(part, prefs(), context()),
+        presentationRevision: () => {
+          const next = { prefs: prefs(), ...context() };
+          if (
+            next.prefs !== revision.prefs ||
+            next.directory !== revision.directory ||
+            next.paths !== revision.paths
+          ) revision = next;
+          return revision;
+        },
+        now: Date.now,
+      });
+      workModels.set(transcript, model);
+    }
+    return model;
+  };
+  const work: ShellWork = {
+    panel,
+    model: workModel,
+    shows(target, turn) {
+      const { rightView, rightCollapsed } = layout();
+      const selected = session.state.selection;
+      if (
+        rightView !== "work" || rightCollapsed ||
+        selected?.sidecarId !== target.sidecarId ||
+        selected.sessionID !== target.sessionID
+      ) return false;
+      const turns = workModel(target)?.turns() ?? [];
+      return panel.shown(sessionKey(target.sidecarId, target.sessionID), turns)
+        .turn === turn;
+    },
+  };
   const drafts = createDrafts(solidState);
+  const hasServer = (id: string) =>
+    sidecars.state.list.some((server) => server.id === id);
   let tabStorage: Storage | null = null;
   try {
     tabStorage = globalThis.sessionStorage;
@@ -110,31 +233,29 @@ export function createShellState(
     key: `otk.reload.v1:${o.api.href}`,
     storage: tabStorage,
     navigate: () => globalThis.location.reload(),
+    reachable: () =>
+      fetch(new URL("health", o.api), {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      }).then((response) => response.ok, () => false),
     owners: {
       drafts,
-      connections: {
-        snapshot: () =>
-          sidecars.state.list.map(({ id }) => ({
+      connections: keyedReload({
+        ids: () => sidecars.state.list.map(({ id }) => id),
+        snapshot(id) {
+          const { attention, requests } = sidecars.connection(id);
+          return {
             id,
-            attention: sidecars.connection(id).attention.snapshot(),
-            requests: sidecars.connection(id).requests.snapshot(),
-          })),
-        restore(value) {
-          for (
-            const saved of value as {
-              id: string;
-              attention: unknown;
-              requests: unknown;
-            }[]
-          ) {
-            if (
-              !sidecars.state.list.some(({ id }) => id === saved.id)
-            ) continue;
-            sidecars.connection(saved.id).attention.restore(saved.attention);
-            sidecars.connection(saved.id).requests.restore(saved.requests);
-          }
+            attention: attention.snapshot(),
+            requests: requests.snapshot(),
+          };
         },
-      },
+        restore({ id, attention, requests }) {
+          const connection = sidecars.connection(id);
+          connection.attention.restore(attention);
+          connection.requests.restore(requests);
+        },
+      }),
     },
   });
   const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -163,7 +284,6 @@ export function createShellState(
     attachments: (parts, origin) => actions.attachments(parts, origin),
   });
   const actions = createSessionActions({
-    promptBlocks: o.promptBlocks,
     promptCommitted: o.promptCommitted,
     resources,
     session,
@@ -177,25 +297,55 @@ export function createShellState(
         action,
       ),
   });
+  const restoreSend = (
+    target: import("@otk/client").Selection,
+    saved: Parameters<ReturnType<typeof actions.delivery>["resume"]>[0],
+    intent?: import("@otk/client").ClientIntent,
+  ) => {
+    const delivery = actions.delivery(target);
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    const id = "message" in saved ? saved.message.id : saved.messageID;
+    const outcome = drafts.resumeSend(key, id, () => void delivery.reload());
+    const operation = intent && sidecars.connection(target.sidecarId).requests
+      .operations(target.sessionID)
+      .find(({ state }) =>
+        state.ref.clientID === intent.clientID && state.ref.key === intent.key
+      );
+    delivery.resume(
+      saved,
+      operation?.result as
+        | Promise<import("@otk/protocol").SubmissionReceipt | null>
+        | undefined,
+      outcome && { outcome },
+    );
+  };
   reload.register("transcripts", {
     snapshot: () => session.transcripts.snapshot(),
     restore(value) {
-      session.transcripts.restore(value, (target, send) => {
-        const operation = sidecars.connection(target.sidecarId).requests
-          .operations()
-          .find(({ state }) =>
-            state.ref.clientID === send.intent.clientID &&
-            state.ref.key === send.intent.key
-          );
-        actions.delivery(target).resume(
-          send,
-          operation?.result as
-            | Promise<import("@otk/protocol").PromptReceipt | null>
-            | undefined,
+      const unavailable = session.transcripts.restore(
+        value,
+        (target, send) => restoreSend(target, send, send.intent),
+        hasServer,
+      );
+      if (unavailable) {
+        queueMicrotask(() =>
+          navigation.fail(
+            new Error(
+              "Saved sends for removed servers are kept in this tab but cannot be checked.",
+            ),
+          )
         );
-      });
+      }
     },
   });
+  for (const { key, messageID, intent } of drafts.pendingSends()) {
+    const separator = key.indexOf("/");
+    const sidecarId = key.slice(0, separator);
+    if (separator < 0 || !hasServer(sidecarId)) continue;
+    restoreSend({ sidecarId, sessionID: key.slice(separator + 1) }, {
+      messageID,
+    }, intent);
+  }
   const rename = createSessionRename({
     rename: actions.rename,
     title: (target) =>
@@ -203,6 +353,13 @@ export function createShellState(
     factory: solidState,
   });
   reload.register("rename", rename);
+  const projectRename = createProjectRename({
+    update: (target, name) => resources.updateProject(target, { name }),
+    label: (target) =>
+      resources.checkoutLabel(target.sidecarId, target.directory),
+    factory: solidState,
+  });
+  reload.register("project-rename", projectRename);
   reload.register("server-addition", {
     snapshot: () => sidecars.state.addition,
     restore(value) {
@@ -232,6 +389,11 @@ export function createShellState(
     const target = rename.state.editing;
     return target && resources.entry(target.sidecarId, target.sessionID)?.title;
   }, () => rename.observe());
+  createEffect(() => {
+    const target = projectRename.state.editing;
+    return target &&
+      resources.checkoutLabel(target.sidecarId, target.directory);
+  }, () => projectRename.observe());
   const guard = createInputGuard({
     drafts,
     key: actions.key,
@@ -239,16 +401,22 @@ export function createShellState(
       session.state.view === "deleted" || !!actions.selectedEntry()?.deleted,
     retention: () => {
       const target = session.state.selection;
-      if (
-        !target ||
-        !(session.state.view === "deleted" || actions.selectedEntry()?.deleted)
-      ) return;
+      if (!target) return;
       return sidecars.connection(target.sidecarId).attention.retention(
         target.sessionID,
         (id) => resources.entry(target.sidecarId, id),
       );
     },
-    confirm: (message) => globalThis.confirm(message),
+    transferDeleted: (park) => {
+      const target = session.state.selection;
+      if (!target) return;
+      sidecars.connection(target.sidecarId).attention.transferDeleted(
+        target.sessionID,
+        (id) => resources.entry(target.sidecarId, id),
+        park,
+      );
+    },
+    confirm: o.confirm,
   });
   // One presence owner: navigation reads it to gate finish acknowledgement,
   // and the view effect below tracks it, so regaining presence re-observes
@@ -273,7 +441,7 @@ export function createShellState(
     session,
     factory: solidState,
     presence: () => ({ focused: focused(), visible: visible() }),
-    confirm: (message) => globalThis.confirm(message),
+    confirm: o.confirm,
   });
   const transcriptScopes = createTranscriptScopes({ resources, session });
   createEffect(() => {
@@ -308,16 +476,18 @@ export function createShellState(
     const selected = session.state.selection, data = actions.info();
     const project = selected ? undefined : navigation.state.project;
     const sidecar = selected?.sidecarId ?? project?.sidecarId;
+    const run = selected &&
+      resources.entities(selected.sidecarId).get(
+        entityKey("session", selected.sessionID),
+      );
     return {
       selected,
       directory: selected ? data?.directory : project?.directory,
       loading: session.state.loading,
       settings: navigation.state.settings,
       connected: !!sidecar && resources.connected(sidecar),
-      finish: selected
-        ? resources.inbox(selected.sidecarId).state.inbox
-          .finishes[selected.sessionID] ?? 0
-        : 0,
+      finish: run?.terminal ?? 0,
+      runID: run?.runID,
     };
   }, (value) => {
     if (value) navigation.observeView(value);
@@ -331,16 +501,23 @@ export function createShellState(
   });
   return {
     reload,
-    confirmCommand: (message: string) => globalThis.confirm(message),
     interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
+    disclosures,
+    work,
+    toggles,
     resources,
     session,
     drafts,
+    deletedRecoveries: (target) =>
+      drafts.recoveries(sessionKey(target.sidecarId, target.sessionID)).filter(
+        (recovery) => recovery.cause === "deleted-close",
+      ),
     branchHistory,
     current,
     actions,
     rename,
+    projectRename,
     revert,
     forkNotes,
     guard,

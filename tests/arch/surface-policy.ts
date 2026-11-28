@@ -13,6 +13,7 @@ export function surfaceErrors(files: ReadonlyMap<string, string>): string[] {
   }
   const owners =
     /(?:^|\/)components\/surface\/(?:Dialog|Popover|Menu|Toast|Takeover)\.tsx$/;
+  const panelOwners = /(?:^|\/)features\/terminal\/Terminal\.tsx$/;
   const overlay = graph.overlays();
   const card = (declarations: ReadonlyMap<string, string>) =>
     (declarations.has("background") || declarations.has("background-color")) &&
@@ -63,7 +64,32 @@ export function surfaceErrors(files: ReadonlyMap<string, string>): string[] {
           node.type === "ExportAllDeclaration") &&
         node.source && /(?:^|\/)Surface(?:\.tsx)?$/.test(node.source.value) &&
         !owners.test(path)
-      ) errors.push(`${path}: Surface is internal`);
+      ) {
+        const local = node.type === "ImportDeclaration" &&
+          node.specifiers.length === 1 && node.specifiers[0];
+        if (
+          !panelOwners.test(path) || !local ||
+          local.type !== "ImportDefaultSpecifier"
+        ) errors.push(`${path}: Surface is internal`);
+        else {
+          const uses = source.all.filter((entry) =>
+            entry.type === "JSXOpeningElement" &&
+            property(entry.name) === local.local.name
+          );
+          if (
+            !uses.length ||
+            uses.some((entry) =>
+              entry.type === "JSXOpeningElement" &&
+              (source.string(source.attr(entry, "density")) !== "panel" ||
+                source.string(source.attr(entry, "layout")) !== "fill")
+            )
+          ) {
+            errors.push(
+              `${path}: in-flow Surface requires panel density and fill layout`,
+            );
+          }
+        }
+      }
       if (node.type === "JSXOpeningElement") {
         const decoration =
           source.string(source.attr(node, "aria-hidden")) === "true" ||

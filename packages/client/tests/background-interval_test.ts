@@ -57,7 +57,7 @@ Deno.test("identical helper folds retain their entity and original child action"
     child: { label: "Open task", sessionID: "child" },
     state: settled,
   };
-  p.replace([record(1, facts), record(2, facts)]);
+  p.reset([record(1, facts), record(2, facts)]);
   const group = p.state.records.groups[p.state.records.keys[0]].children![0];
   assertEquals(group.count, 2);
   assertEquals(group.entity, facts.entity);
@@ -66,7 +66,7 @@ Deno.test("identical helper folds retain their entity and original child action"
 
 Deno.test("background interval survives queued admission, singleton append and helper settlement", () => {
   const p = createTranscriptProjection();
-  p.replace([prompt, record(1, { state: queued })]);
+  p.reset([prompt, record(1, { state: queued })]);
   const key = p.state.records.keys[1],
     child = p.state.records.groups[key].children![0].key;
   p.apply({
@@ -108,15 +108,16 @@ Deno.test("background interval survives queued admission, singleton append and h
   const interaction = createTranscriptInteraction();
   interaction.reveal(p.state.records.parents.r2);
   assertEquals(
-    interaction.disclosure(key, interaction.generation(key)).expanded("record"),
+    interaction.disclosure("activity", key, interaction.generation(key))
+      .expanded("record"),
     true,
   );
-  p.replace(p.messages());
+  p.reset(p.messages());
   assertEquals(p.state.records.keys, ["prompt", key]);
 });
 Deno.test("failure breakout and rejoin change child presentation, never the interval partition", () => {
   const p = createTranscriptProjection();
-  p.replace([record(1), record(2), record(3)]);
+  p.reset([record(1), record(2), record(3)]);
   const key = p.state.records.keys[0], before = p.state.records.revisions[key];
   p.apply({ op: "message.upsert", message: record(2, { tone: "error" }) });
   assertEquals(p.state.records.keys, [key]);
@@ -153,7 +154,7 @@ Deno.test("failed helpers share one summary and frame, without successful run fr
     state: settled,
     child: { sessionID: "child", label: "Open task" },
   };
-  p.replace([
+  p.reset([
     record(1, run),
     record(2, failed),
     record(3, run),
@@ -178,7 +179,7 @@ Deno.test("failed helpers share one summary and frame, without successful run fr
 });
 Deno.test("failure counts include every failed record independently of producer nouns", () => {
   const p = createTranscriptProjection();
-  p.replace([
+  p.reset([
     record(1, {
       tone: "error",
       summary: { kind: "execution", noun: "run", plural: "runs" },
@@ -211,7 +212,7 @@ Deno.test("success-only interval is silent, retains source and borrows the prece
     parts: [],
   };
   const p = createTranscriptProjection();
-  p.replace([
+  p.reset([
     reply,
     record(2, { completion: { placement: "footer" }, state: settled }),
   ]);
@@ -225,7 +226,7 @@ Deno.test("success-only interval is silent, retains source and borrows the prece
 });
 Deno.test("older page and ordinary updates preserve interval and measurement revisions", () => {
   const p = createTranscriptProjection();
-  p.replace([record(3)]);
+  p.reset([record(3)]);
   const key = p.state.records.keys[0];
   p.merge([record(1), record(2)]);
   assertEquals(p.state.records.keys, [key]);

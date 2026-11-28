@@ -20,6 +20,7 @@ import { createSessionSubmission } from "../session-submission.ts";
 function fixture(
   committed?: (message: UserMessage) => void,
   withdraw?: (id: string) => Promise<{ state: "withdrawn" }>,
+  observation: "normal" | "missing" | "no-entry" = "normal",
 ) {
   const projection = createTranscriptProjection();
   const listeners = new Set<() => void>(),
@@ -28,7 +29,7 @@ function fixture(
   const transcript = {
     projection,
     send(value: import("../pending-send.ts").PendingSend) {
-      projection.send(value);
+      if (observation !== "no-entry") projection.send(value);
       for (const listener of listeners) listener();
     },
     cancelSend(messageID: string) {
@@ -58,7 +59,7 @@ function fixture(
   const owner = createSessionDelivery({
     target: { sidecarId: "server", sessionID: "opcv2-root" },
     title: () => "Captured session",
-    transcript: () => transcript,
+    transcript: () => observation === "missing" ? undefined : transcript,
     committed,
     ...{ withdraw },
     clock: {
@@ -118,6 +119,65 @@ function fixture(
       listeners: listeners.size,
     }),
   };
+}
+
+function localSend() {
+  return {
+    intent: { clientID: "tab", key: "send" },
+    message: pendingMessage("pending-id", "opcv2-root", [
+      { kind: "text", text: "Original draft" },
+    ]),
+    phase: "pending" as const,
+  };
+}
+
+Deno.test("Send shows the originating entry during preparation without observing native delivery yet", async () => {
+  const f = fixture();
+  const held = Promise.withResolvers<void>();
+  const entry = localSend();
+  let dispatched = false;
+  const send = f.owner.send(async (dispatch) => {
+    await held.promise;
+    dispatch();
+    dispatched = true;
+    return null;
+  }, entry);
+  try {
+    assert(f.projection.entry(entry.message.id)?.send);
+    assertEquals(f.owner.state.follow, 1);
+    assertEquals(f.counts().timers, 0);
+    f.expire();
+    assertEquals(dispatched, false);
+    assertEquals(f.projection.entry(entry.message.id)?.send?.phase, "pending");
+    held.resolve();
+    assertEquals((await send).kind, "accepted");
+    assertEquals(dispatched, true);
+    assertEquals(f.counts().timers, 1);
+  } finally {
+    held.resolve();
+    f.owner.stop();
+    await send;
+  }
+});
+
+for (const observation of ["missing", "no-entry"] as const) {
+  Deno.test(`a native acceptance with ${observation} transcript ownership is uncertain`, async () => {
+    const f = fixture(undefined, undefined, observation);
+    const entry = localSend();
+    try {
+      const outcome = await f.owner.send((dispatch) => {
+        dispatch();
+        return Promise.resolve({
+          state: "accepted",
+          messageID: entry.message.id,
+        });
+      }, entry);
+      assertEquals(outcome.kind, "failed");
+      assertEquals(outcome.kind === "failed" && outcome.certainty, "uncertain");
+    } finally {
+      f.owner.stop();
+    }
+  });
 }
 
 Deno.test("Stop waits for a dispatched receipt and never guesses an unconfirmed identity", async () => {
@@ -252,7 +312,10 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
           code: "native.rejected",
           retry: "new-intent",
           diagnosticID: "restored-rejection",
-          facts: { reason: "Native refused the original send" },
+          facts: {
+            reason: "Native refused the original send",
+            outcome: "rejected",
+          },
         }),
       );
       for (let n = 0; n < 10; n++) await Promise.resolve();
@@ -272,6 +335,11 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
         restored.feedback.failure.reason,
         "Native refused the original send",
       );
+      assertEquals(
+        restored.retry,
+        undefined,
+        "do not offer Reload as a new-intent Retry",
+      );
     } else {
       assert(restored.feedback.failure.reason.includes("not been observed"));
       restored.retry?.();
@@ -287,6 +355,36 @@ for (const outcome of ["rejected", "unobserved", "preparing"] as const) {
     f.owner.stop();
   });
 }
+
+Deno.test("a restored rejection returns to draft custody without replaying the original intent", async () => {
+  const f = fixture();
+  const entry = { ...localSend(), dispatched: true };
+  const result = Promise.withResolvers<PromptReceipt | null>();
+  const seen: SendOutcome[] = [];
+  try {
+    f.projection.send(entry);
+    Reflect.apply(f.owner.resume, f.owner, [entry, result.promise, {
+      outcome(value: SendOutcome) {
+        seen.push(value);
+        return true;
+      },
+    }]);
+    result.reject(
+      new RequestFailure({
+        code: "native.rejected",
+        retry: "new-intent",
+        diagnosticID: "rejection",
+        facts: { outcome: "rejected", reason: "Refused" },
+      }),
+    );
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    assertEquals(seen.map((result) => result.kind), ["failed"]);
+    assertEquals(f.counts().reads, 0);
+    assertEquals(f.projection.entry(entry.message.id)?.send?.retry, undefined);
+  } finally {
+    f.owner.stop();
+  }
+});
 
 Deno.test("send custody sees live commitment while the dispatch promise is held", async () => {
   const f = fixture();
@@ -573,7 +671,7 @@ Deno.test("pending input is visible before acknowledgement and commits by identi
   assertEquals(f.projection.state.replyIDs, ["send-key"]);
   assertEquals(f.projection.entry("msg_local")?.send?.phase, "pending");
   assertEquals(f.owner.state.receipts[0].phase, "submitted");
-  f.projection.replace([]); // reconnect/server restart replacement
+  f.projection.reset([]); // reconnect/server restart replacement
   assertEquals(f.projection.state.replyIDs, ["send-key"]);
   f.message("msg_local");
   f.owner.presented(["msg_local"]);
@@ -627,7 +725,8 @@ Deno.test("refused submission preparation retires only its unsubmitted entry, le
 Deno.test("unacknowledged send has bounded visible failure; Retry observes without another mutation", async () => {
   const f = fixture(), acknowledgement = Promise.withResolvers<PromptReceipt>();
   let sends = 0;
-  const sending = f.owner.send(() => {
+  const sending = f.owner.send((dispatch) => {
+    dispatch();
     sends++;
     return acknowledgement.promise;
   }, {
@@ -663,7 +762,10 @@ Deno.test("unacknowledged send has bounded visible failure; Retry observes witho
 Deno.test("a local pending body cannot satisfy native admission or suppress read-only recovery", async () => {
   const f = fixture();
   const sending = f.owner.send(
-    () => Promise.resolve({ messageID: "msg_pending", state: "accepted" }),
+    (dispatch) => {
+      dispatch();
+      return Promise.resolve({ messageID: "msg_pending", state: "accepted" });
+    },
     {
       intent: { clientID: "tab", key: "send-key" },
       message: pendingMessage("msg_pending", "opcv2-root", [{

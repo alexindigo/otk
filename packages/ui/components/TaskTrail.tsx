@@ -11,13 +11,15 @@ import {
 import type { SessionContextTarget } from "../features/session-context.ts";
 import OverflowRow from "./OverflowRow.tsx";
 import StatusLight from "./StatusLight.tsx";
-import TitleEditor from "./TitleEditor.tsx";
+import TitleEditor, { TitleLabel } from "./TitleEditor.tsx";
+import { MAX_SESSION_TITLE } from "@otk/protocol";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 import { location } from "./selection.ts";
 import { contextTarget } from "./context-target.ts";
 import ActionButton from "./ActionButton.tsx";
 import { nativeAttributes } from "./native-attributes.ts";
 import { breadcrumbRows } from "./list-presentation.ts";
+import { selectionFocus } from "../keyboard/context.tsx";
 import "./TaskTrail.css" with { type: "text" };
 
 /** D67: data-only ancestry navigation. No sub-session inventory lives here. */
@@ -57,7 +59,7 @@ export default function TaskTrail(props: {
   const rows = () => breadcrumbRows(props.model.crumbs);
   const separator = (first: boolean) => (
     <Show when={!first}>
-      <span class="otk-trail-separator">
+      <span class="otk-trail-separator" aria-hidden="true">
         <ChevronIcon />
       </span>
     </Show>
@@ -82,10 +84,25 @@ export default function TaskTrail(props: {
   ) =>
     crumbContent(
       row,
-      <span class="otk-trail-title otk-crumb-title">
-        <Show when={compact()} fallback={props.title(row().id)}>
-          {compactTitle(props.title(row().id), measure)}
-        </Show>
+      <span class="otk-trail-title otk-crumb-title otk-control-label">
+        <TitleLabel
+          pending={editing(row().id)
+            ? props.rename!.state.pendingTitle
+            : undefined}
+        >
+          <Show when={compact()} fallback={props.title(row().id)}>
+            <Show
+              when={row().id === props.selected}
+              fallback={compactTitle(props.title(row().id), measure)}
+            >
+              <Show when={measure} fallback={props.title(row().id)}>
+                <span class="otk-trail-title-floor">
+                  {props.title(row().id)}
+                </span>
+              </Show>
+            </Show>
+          </Show>
+        </TitleLabel>
       </span>,
     );
   const measure = (row: TrailCrumb & { first: boolean }, compact: boolean) => {
@@ -102,6 +119,13 @@ export default function TaskTrail(props: {
   };
   return (
     <div class="otk-trail">
+      <Show when={rows().find((row) => row.id === props.selected)}>
+        {(row) => (
+          <div class="otk-trail-floor" aria-hidden="true" inert>
+            {measure(row(), true)}
+          </div>
+        )}
+      </Show>
       <OverflowRow<TrailCrumb & { key: string; first: boolean }>
         singleLine
         items={rows()}
@@ -114,8 +138,14 @@ export default function TaskTrail(props: {
         compactMeasure={(row) => measure(row, true)}
         more={() => null}
       >
-        {(row: () => TrailCrumb & { key: string; first: boolean }, compact) => {
+        {(row, compact, scrolling) => {
           const target = contextTarget(() => props.target(row().id));
+          let control: HTMLElement | undefined;
+          const bindFocus = selectionFocus(
+            "crumb",
+            () => row().id === props.selected,
+            () => control,
+          );
           const attributes = () => ({
             "data-crumb": row().id,
             "data-depth": row().depth,
@@ -127,10 +157,13 @@ export default function TaskTrail(props: {
             ...place(row()),
           }));
           return (
-            <span class="otk-trail-link">
+            <span
+              ref={bindFocus}
+              class={["otk-trail-link", { "is-paged": scrolling() }]}
+            >
               {separator(row().first)}
               <Show
-                when={editing(row().id)}
+                when={editing(row().id) && props.rename!.editing}
                 fallback={
                   <ActionButton
                     action={props.openAction(row().id)}
@@ -138,7 +171,10 @@ export default function TaskTrail(props: {
                       sidecarId: props.sidecarId,
                       sessionID: row().id,
                     })}
-                    ref={target}
+                    ref={(element) => {
+                      target(element);
+                      control = element;
+                    }}
                     location={place(row())}
                     attributes={attributes()}
                     title={props.tooltip(row().id)}
@@ -157,6 +193,8 @@ export default function TaskTrail(props: {
                   {crumbContent(
                     row,
                     <TitleEditor
+                      label="Rename session"
+                      maxLength={MAX_SESSION_TITLE}
                       owner={props.rename!}
                       feedbackID={props.feedbackID}
                     />,

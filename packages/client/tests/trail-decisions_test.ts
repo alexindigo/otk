@@ -68,7 +68,7 @@ Deno.test("D67 D66 D3 4.2 D58: ancestry and helpers use entity delivery and work
           : [],
       ),
   }, () => {});
-  // Explicit seen is not a parent delivery receipt: cont-1 must remain shown.
+  // D72: explicitly seen helpers leave the list even without parent delivery.
   for (const entry of entries) owner.session(entry, 100);
   const inbox: InboxSnapshot = {
     projects: [],
@@ -90,8 +90,8 @@ Deno.test("D67 D66 D3 4.2 D58: ancestry and helpers use entity delivery and work
     0,
   );
   assertEquals(
-    inbox.entities![entityKey("session", "cont-1")].evidence!.awaitingDelivery,
-    true,
+    inbox.entities![entityKey("session", "cont-1")].evidence!.helper,
+    undefined,
   );
   assertEquals(tabs.trail().task, "task:session/root");
   assertEquals(
@@ -101,7 +101,6 @@ Deno.test("D67 D66 D3 4.2 D58: ancestry and helpers use entity delivery and work
   assertEquals(inbox.entities![tabs.trail().task!].helpers?.ids, [
     "active",
     "nested",
-    "cont-1",
   ]);
   tabs.stop();
 });

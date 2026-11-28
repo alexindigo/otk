@@ -63,7 +63,10 @@ export default function PermissionActivity(props: {
                 <Clock at={entry().time} />
               </header>
               <p class="otk-muted">{props.title(entry().request.sessionID)}</p>
-              <PermissionSummary request={entry().request} />
+              <PermissionSummary
+                request={entry().request}
+                placement={`activity/${entry().id}`}
+              />
               <Show
                 when={entry().outcome === "failed"}
                 fallback={

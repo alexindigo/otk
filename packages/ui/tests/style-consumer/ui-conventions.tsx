@@ -6,6 +6,7 @@ import {
   elapsed,
   presentedEntity,
   presentFailure,
+  taskHelpers,
 } from "@otk/client";
 import TimeText from "../../components/TimeText.tsx";
 import {
@@ -22,7 +23,13 @@ import ToolLine from "../../components/ToolLine.tsx";
 import Todo from "../../components/Todo.tsx";
 import Clock from "../../components/Clock.tsx";
 import ChromeMeta from "../../components/ChromeMeta.tsx";
-import { TreeIcon, TreeItem, TreeNode } from "../../components/Tree.tsx";
+import { ActivityIcon } from "../../components/ChromeIcons.tsx";
+import { DisclosureIcon } from "../../components/Disclosure.tsx";
+import {
+  TreeItem,
+  TreeNode,
+  treeTriggerClass,
+} from "../../components/Tree.tsx";
 import StatusLight from "../../components/StatusLight.tsx";
 import Subagents from "../../components/Subagents.tsx";
 import { UnknownPart } from "../../components/parts/UnknownPart.tsx";
@@ -61,10 +68,10 @@ function SubagentTimes() {
       ...presentedEntity(
         "session",
         id,
-        run ? "working" : id === blocked ? "blocked" : "none",
+        run ? "working" : id === blocked ? "blocked" : "finished",
       ),
       evidence: {
-        helper: run ? "running" : id === blocked ? "needsYou" : "notReturned",
+        helper: run ? "running" : id === blocked ? "needsYou" : "finished",
         work: !!run,
         permissions: 0,
         questions: 0,
@@ -74,11 +81,29 @@ function SubagentTimes() {
       },
     }];
   }));
+  // Issue 2.152 / D81: task evidence admits the shared Subagents roster.
+  const taskID = "time-units";
+  const task = entityKey("task", taskID);
+  state[task] = {
+    ...presentedEntity("task", taskID, "blocked"),
+    helpers: {
+      ids,
+      counts: { running: running.length, needsYou: 1, finished: 1 },
+      lamps: {
+        all: { state: "blocked" },
+        groups: {
+          running: { state: "working" },
+          needsYou: { state: "blocked" },
+          finished: { state: "finished" },
+        },
+      },
+    },
+  };
   const entities = createEntityStateStore({ read: () => state });
   const owner = createLiveWork({
     items: () =>
       running.map(([id]) => ({
-        id: `helper/${id}`,
+        id,
         kind: "helper",
         label: id,
         title: id,
@@ -86,15 +111,15 @@ function SubagentTimes() {
       })),
     stopHelper: () => () => Promise.resolve(),
   });
+  let home!: HTMLElement;
   return (
-    <section class="style-panel">
+    <section class="style-panel" tabindex={-1} ref={(node) => home = node}>
       <h2>Subagents list</h2>
       <Subagents
+        focusHome={() => home.focus()}
         entities={entities}
-        helpers={{
-          ids,
-          counts: { running: running.length, needsYou: 1, notReturned: 1 },
-        }}
+        task={task}
+        helpers={taskHelpers(entities, task)}
         current={running[1][0]}
         owner={owner}
         title={(id) => id}
@@ -112,6 +137,16 @@ function SubagentTimes() {
 }
 
 /** Controlled inputs go through the same owners as app data, not copied markup. */
+function SpanTrigger(props: { label: string }) {
+  return (
+    <button type="button" class={treeTriggerClass()}>
+      <DisclosureIcon open />
+      <ActivityIcon />
+      <span class="otk-control-label">{props.label}</span>
+    </button>
+  );
+}
+
 export default function UiConventions() {
   const surface = new URL(location.href).searchParams.get("surface");
   if (surface === "subagents") return <SubagentTimes />;
@@ -127,6 +162,34 @@ export default function UiConventions() {
       registerGenericTool,
     ]
   ) register(registries.tools);
+  if (surface === "trigger-span") {
+    return (
+      <section class="error-review-run" aria-label="Tree trigger spans">
+        <For each={[false, true]} keyed={(outgoing) => String(outgoing)}>
+          {(outgoing) => (
+            <TreeNode
+              outgoing={outgoing()}
+              trigger={{
+                variant: "span",
+                element: () => <SpanTrigger label="Branch" />,
+              }}
+              trail={() => <span>Trailing fact</span>}
+              body={() => (
+                <TreeItem last>
+                  <TreeNode
+                    trigger={{
+                      variant: "span",
+                      element: () => <SpanTrigger label="Child" />,
+                    }}
+                  />
+                </TreeItem>
+              )}
+            />
+          )}
+        </For>
+      </section>
+    );
+  }
   if (surface === "record-tree") {
     return (
       <section class="error-review-run">
@@ -326,13 +389,8 @@ export default function UiConventions() {
             label="Task"
             open={open()}
             onOpen={setOpen}
-            header={() => (
-              <div class="otk-control-row">
-                <TreeIcon>
-                  <StatusLight state="working" />
-                </TreeIcon>Task
-              </div>
-            )}
+            node={() => <StatusLight state="working" />}
+            header={() => <div class="otk-control-row">Task</div>}
             body={() => (
               <For
                 each={["First session", "Last session"]}
@@ -345,14 +403,9 @@ export default function UiConventions() {
                       open={open()}
                       onOpen={setOpen}
                       hasChildren
-                      header={() => (
-                        <div class="otk-control-row">
-                          <TreeIcon>
-                            <StatusLight state="none" />
-                          </TreeIcon>
-                          {label()}
-                        </div>
-                      )}
+                      node={() => <StatusLight state="none" />}
+                      header={() => <div class="otk-control-row">{label()}
+                      </div>}
                     />
                   </TreeItem>
                 )}

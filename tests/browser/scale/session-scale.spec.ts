@@ -220,7 +220,7 @@ test(
       const scoped=entries.filter(e=>e.directory===${
       JSON.stringify(selected.directory)
     }),snapshot={at,ready:scoped.every(e=>e.digest.state==='ready'),count:entries.length,ids:entries.map(e=>e.id),unready:scoped.filter(e=>e.digest.state!=='ready').slice(0,20).map(e=>({id:e.id,state:e.digest.state,revision:e.digest.revision}))};scale.snapshots.push(snapshot);
-      const paint=()=>{const rows=[...document.querySelectorAll('.otk-session-row')],v=document.querySelector('${viewport}'),chosen=document.querySelector('[data-session="${selected.id}"]'),boxes=rows.map(r=>r.getBoundingClientRect()),bound=v?Math.ceil(v.clientHeight/Math.min(...boxes.map(r=>r.height)))+12:0;const valid=rows.length>0&&rows.length<=bound&&v&&chosen?.getAttribute('aria-current')==='page'&&rows.every((row,i)=>boxes[i].width>0&&boxes[i].height>0&&row.querySelector('.otk-status-light')&&titles.has(row.querySelector('.otk-session-title')?.textContent));if(valid)scale.paints.push({snapshot,at:performance.now(),elapsed:performance.now()-at,rows:rows.length,bound});else requestAnimationFrame(paint)};requestAnimationFrame(paint);});}
+      const paint=()=>{const rows=[...document.querySelectorAll('.otk-session-row')],v=document.querySelector('${viewport}'),chosen=document.querySelector('[data-session="${selected.id}"]'),boxes=rows.map(r=>r.getBoundingClientRect()),bound=v?Math.ceil(v.clientHeight/Math.min(...boxes.map(r=>r.height)))+12:0;const valid=rows.length>0&&rows.length<=bound&&v&&chosen?.getAttribute('aria-current')==='page'&&rows.every((row,i)=>boxes[i].width>0&&boxes[i].height>0&&row.querySelector('.otk-status-light')&&titles.has(row.querySelector('.otk-sidebar-title-text')?.textContent));if(valid)scale.paints.push({snapshot,at:performance.now(),elapsed:performance.now()-at,rows:rows.length,bound});else requestAnimationFrame(paint)};requestAnimationFrame(paint);});}
       send(data){const f=JSON.parse(data);if(f.t==='request')scale.calls.push({at:performance.now(),wall:Date.now(),...f,id:f.ref.key});if(f.t==='request.release')scale.cancels.push(...f.refs.map(ref=>({at:performance.now(),id:ref.key,ref})));super.send(data);}
     };
   })()`);
@@ -584,11 +584,13 @@ test(
       await page.reload();
       // Navigation may still emit old-document requests before closing its
       // socket. The new hello, not the host's reload call, starts this phase.
-      const backgroundEnd = frames.findIndex((event, index) =>
-        index >= reloadStart && event.direction === "sent" &&
-        event.frame.t === "hello"
-      );
-      expect(backgroundEnd).toBeGreaterThanOrEqual(reloadStart);
+      const newHello = () =>
+        frames.findIndex((event, index) =>
+          index >= reloadStart && event.direction === "sent" &&
+          event.frame.t === "hello"
+        );
+      await expect.poll(newHello).toBeGreaterThanOrEqual(reloadStart);
+      const backgroundEnd = newHello();
       await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
         "data-collapsed",
         "true",
@@ -597,7 +599,7 @@ test(
       await expect(page.locator(".otk-project-sessions")).toHaveCount(0);
       await light(page, `${project} .otk-status-light[data-state=blocked]`);
       // The compact rail exposes the attention lamp, not the hidden name cell.
-      await page.locator(`${project} .otk-project-attention`).click();
+      await page.locator(`${project} .otk-sidebar-lamp-action`).click();
       // Decision 7: blocked attention precedes the exact remembered working session.
       await expect(page).toHaveURL(new RegExp(`/${blocked.id}$`));
       await expect(page.locator(".otk-permission-dock")).toBeVisible();
@@ -782,9 +784,12 @@ test(
       ).toHaveText(warmState.expectedCosts[last.id]);
       observations.window = await windowBound();
       await page.evaluate(
-        `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"]');pinnedScale.focus()`,
+        `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"] .otk-session-open');pinnedScale.focus()`,
       );
-      await expect(page.locator(`[data-session="${last.id}"]`)).toBeFocused();
+      await expect(
+        page.locator(`[data-session="${last.id}"] .otk-session-open`),
+      )
+        .toBeFocused();
       await page.evaluate(framesAhead);
       await wheel(-100000);
       await expect.poll(() =>
@@ -853,7 +858,7 @@ test(
       await page.keyboard.press("Enter");
       await expect(page.locator(".otk-title-editor")).toHaveCount(0);
       await expect(
-        page.locator(`[data-session="${last.id}"] .otk-session-title`),
+        page.locator(`[data-session="${last.id}"] .otk-sidebar-title-text`),
       )
         .toHaveText(last.title + " renamed");
       const renamed = await state.product("session.get", {
@@ -878,7 +883,7 @@ test(
         ).toBe(width);
         await page.evaluate(framesAhead);
         const geometry = await page.evaluate(
-          `({aligned:[...document.querySelectorAll('.otk-session-row')].every(row=>{const a=row.querySelector('.otk-status-light').getBoundingClientRect(),b=row.querySelector('.otk-session-title').getBoundingClientRect();return Math.abs(a.y+a.height/2-b.y-b.height/2)<=1}),nowrap:[...document.querySelectorAll('.otk-session-row .otk-session-title')].every(e=>getComputedStyle(e).whiteSpace==='nowrap'),gaps:(()=>{const c=document.querySelector('.otk-panel-new-session').getBoundingClientRect(),i=document.querySelector('.otk-panel-new-session svg').getBoundingClientRect();return [i.left-c.left,c.right-i.right,i.top-c.top,c.bottom-i.bottom]})()})`,
+          `({aligned:[...document.querySelectorAll('.otk-session-row')].every(row=>{const a=row.querySelector('.otk-status-light').getBoundingClientRect(),b=row.querySelector('.otk-sidebar-title-text').getBoundingClientRect();return Math.abs(a.y+a.height/2-b.y-b.height/2)<=1}),nowrap:[...document.querySelectorAll('.otk-session-row .otk-sidebar-title-text')].every(e=>getComputedStyle(e).whiteSpace==='nowrap'),gaps:(()=>{const c=document.querySelector('.otk-panel-new-session').getBoundingClientRect(),i=document.querySelector('.otk-panel-new-session svg').getBoundingClientRect();return [i.left-c.left,c.right-i.right,i.top-c.top,c.bottom-i.bottom]})()})`,
         ) as { aligned: boolean; nowrap: boolean; gaps: number[] };
         expect(geometry.aligned && geometry.nowrap).toBe(true);
         expect(Math.max(...geometry.gaps) - Math.min(...geometry.gaps))

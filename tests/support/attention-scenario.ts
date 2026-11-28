@@ -2,7 +2,10 @@
 import { knownDerived } from "@otk/protocol";
 import { join } from "@std/path";
 import type { PermissionRequest } from "@otk/protocol";
-import { coreBackendFixture } from "./core-backend.ts";
+import {
+  coreBackendFixture,
+  publishFixturePermissions,
+} from "./core-backend.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
 import { nativeFixture } from "./native-fixture.ts";
@@ -63,12 +66,7 @@ export async function attentionScenario(profile: Profile) {
     })
     : await inboxBrowserFixture(root);
   function publish(requestID?: string) {
-    const entry = f.app.index.get(id)!;
-    f.app.index.upsertMetadata({
-      ...entry,
-      status: pending.length ? "busy" : "idle",
-      attention: { ...entry.attention, permissions: pending.length },
-    });
+    publishFixturePermissions(f.app, id, pending);
     if (requestID) {
       f.app.connections.content(id, {
         op: "permission.remove",

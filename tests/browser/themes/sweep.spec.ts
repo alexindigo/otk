@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
 import type { CDPSession, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { expect } from "../fixtures/evidence.ts";
@@ -14,6 +15,7 @@ import { supplemental } from "./supplemental.ts";
 import { capture, restoreViewport } from "./capture.ts";
 import { stripGeometry } from "../pages/task-strip.ts";
 import { assertCrumbCoverage } from "../pages/crumbs.ts";
+import { cssLength } from "../pages/css-length.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -71,10 +73,10 @@ async function layout(
     "data-collapsed",
     String(left),
   );
-  await expect(page.locator(".otk-right-panel")).toHaveJSProperty(
-    "hidden",
-    right,
-  );
+  const panel = page.locator('aside.otk-sidebar-rail[data-side="right"]');
+  await expect(panel).toHaveCount(1);
+  await expect(panel).toHaveAttribute("data-collapsed", String(right));
+  await expect(panel).toBeVisible();
   await settled(page);
 }
 async function centers(page: Page, selector: string, a: string, b: string) {
@@ -93,14 +95,16 @@ async function centers(page: Page, selector: string, a: string, b: string) {
 async function marks(
   page: Page,
   cdp: CDPSession,
-  selector: string,
-  minimum: number,
+  targets: readonly string[],
 ) {
+  for (const target of targets) {
+    await expect(page.locator(target)).toBeVisible();
+  }
   const items = await selectionGeometry({
     send: (method, params = {}) =>
       cdp.send(method as Parameters<CDPSession["send"]>[0], params),
-  }, selector);
-  expect(items.length).toBeGreaterThanOrEqual(minimum);
+  }, targets.join(","));
+  expect(items).toHaveLength(targets.length);
   for (const item of items) {
     expect(item.shift).toBe(0);
     expect(item.position).toBe("static");
@@ -154,6 +158,7 @@ test(
           automaticID: string;
         };
         entries: { id: string; directory: string }[];
+        lists: { entries: IndexEntry[]; inbox: InboxSnapshot };
         content: { sessionID: string };
       }
     >();
@@ -260,7 +265,7 @@ test(
           await test.step("deleted/" + theme.id, async () => {
             await paint(theme);
             const contrast = await page.locator(
-              `[data-session="${facts.native.sessionID}"] .otk-session-title`,
+              `[data-session="${facts.native.sessionID}"] .otk-sidebar-title-text`,
             ).evaluate((title) => {
               const css = getComputedStyle(document.documentElement),
                 canvas = document.createElement("canvas");
@@ -468,14 +473,24 @@ test(
                         .toBeLessThanOrEqual(.5)
                     )
                   );
-                  const ys = await page.locator(
-                    ".otk-project-row[data-inactive=false] .otk-status-light,.otk-inbox-search",
-                  ).evaluateAll((els) =>
-                    els.map((el) => {
-                      const r = el.getBoundingClientRect();
-                      return r.y + r.height / 2;
-                    })
-                  );
+                  const ys = await page.locator(".otk-project-inbox")
+                    .evaluate((inbox) => {
+                      const centre = (el: Element) => {
+                        const r = el.getBoundingClientRect();
+                        return r.y + r.height / 2;
+                      };
+                      // D71 stacks history ahead of the search control in the
+                      // narrow rail. That moves the section, not its row grid.
+                      const origin = centre(
+                        inbox.querySelector(".otk-inbox-search")!,
+                      );
+                      return Array.from(
+                        inbox.querySelectorAll(
+                          ".otk-project-row[data-inactive=false] .otk-status-light",
+                        ),
+                        (lamp) => centre(lamp) - origin,
+                      );
+                    });
                   lights ??= ys;
                   expect(ys).toEqual(lights);
                   expect(
@@ -525,7 +540,9 @@ test(
                     ).toBe(true);
                   }
                   if (!left) {
-                    const labels = await page.locator(".otk-project-name-line")
+                    const labels = await page.locator(
+                      ".otk-project-row .otk-sidebar-label",
+                    )
                       .evaluateAll((els) =>
                         els.map((el) => el.getBoundingClientRect().left)
                       );
@@ -580,12 +597,19 @@ test(
                       return opacity;
                     }),
                   ).toBe(1);
-                  await marks(
-                    page,
-                    cdp,
-                    "[data-otk-selection].is-selected",
-                    right ? 3 : 5,
-                  );
+                  // The selected session is marked in the Sessions panel,
+                  // not a second time in its ancestry trail or closed menu.
+                  const activeMark = "[data-otk-selection].is-selected";
+                  await marks(page, cdp, [
+                    `.otk-project-row[data-project$="/projects/otk"]${activeMark}`,
+                    `[data-tab="${task.id}"][data-open-session="tstv1-child"]${activeMark}`,
+                    `${
+                      right ? ".otk-right-rail" : ".otk-panel-icons"
+                    } [data-panel-view="sessions"]${activeMark}`,
+                    ...(right ? [] : [
+                      `.otk-project-sessions [data-session="tstv1-child"]${activeMark}`,
+                    ]),
+                  ]);
                   expect(
                     await page.evaluate(() =>
                       !!document.querySelector(
@@ -650,10 +674,7 @@ test(
                   r(".otk-corner-left").height,
                   r(".otk-display-trigger").width,
                   r(".otk-server-status").height,
-                  parseFloat(
-                    getComputedStyle(document.querySelector(".otk-task-strip")!)
-                      .paddingRight,
-                  ),
+                  r(".otk-corner-left").top + r(".otk-corner-left").height / 2,
                   r(".otk-corner-left").x,
                   innerWidth - r(".otk-corner-right").right,
                 ];
@@ -668,7 +689,7 @@ test(
               28,
               28,
               28,
-              48,
+              26,
               12,
               12,
             ]);
@@ -688,7 +709,7 @@ test(
               36,
               36,
               36,
-              56,
+              34,
               12,
               12,
             ]);
@@ -711,9 +732,11 @@ test(
                 el,
               ) => [
                 el.getBoundingClientRect().height,
-                parseFloat(getComputedStyle(el).paddingRight),
+                document.querySelector(".otk-corner-right")!
+                  .getBoundingClientRect().left -
+                el.getBoundingClientRect().right,
               ]),
-            ).toEqual([68, 56]);
+            ).toEqual([68, 8]);
             await page.locator("html").evaluate((el) =>
               ["--rail-width", "--chrome-header-height", "--control-size"]
                 .forEach((k) => (el as HTMLElement).style.removeProperty(k))
@@ -784,16 +807,14 @@ test(
           .toBeVisible();
         expect((await page.locator(".otk-task-strip").boundingBox())!.height)
           .toBe(52);
-        expect(
-          (await page.locator(".otk-project-row").first().boundingBox())!
-            .height,
-        ).toBe(32);
-        expect(
-          (await page.locator(".otk-session-row").first().boundingBox())!
-            .height,
-        ).toBe(30);
+        for (const kind of ["project", "session"]) {
+          const row = page.locator(`.otk-${kind}-row`).first();
+          expect((await row.boundingBox())!.height).toBe(
+            await cssLength(row, "--row-project"),
+          );
+        }
         await expect(
-          page.locator(".otk-session-branch, .otk-tree-guide").first(),
+          page.locator(".otk-session-tree .otk-tree-junction").first(),
         ).toHaveText(
           "",
         );
@@ -817,7 +838,7 @@ test(
         const hover = page.locator('[data-project$="/projects/atmosphera"]');
         await hover.hover();
         await expect.poll(() =>
-          hover.locator(".otk-project-menu").evaluate((el) =>
+          hover.locator(".otk-sidebar-control").evaluate((el) =>
             getComputedStyle(el).opacity
           )
         ).toBe("1");
@@ -869,7 +890,7 @@ test(
               page,
               ".otk-session-row",
               ".otk-status-light",
-              ".otk-session-title",
+              ".otk-sidebar-title-text",
             );
             for (const width of [280, 480]) {
               await state.product("layout.patch", { rightWidth: width });
@@ -881,17 +902,17 @@ test(
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-list-row-leading",
-                ".otk-list-row-label",
+                ".otk-tree-node-lane",
+                ".otk-sidebar-label",
               );
               await centers(
                 page,
                 ".otk-session-row",
-                ".otk-list-row-leading",
-                ".otk-list-row-trailing",
+                ".otk-tree-node-lane",
+                ".otk-sidebar-meta",
               );
               expect(
-                await page.locator(".otk-session-row .otk-session-title")
+                await page.locator(".otk-session-row .otk-sidebar-title-text")
                   .evaluateAll((els) =>
                     els.every((el) =>
                       getComputedStyle(el).whiteSpace === "nowrap"
@@ -952,7 +973,7 @@ test(
               exact: true,
             }).fill("Retained editor");
             await page.keyboard.press("Enter");
-            await expect(page.locator(".otk-list-row-feedback [role=alert]"))
+            await expect(page.locator(".otk-sidebar-row-feedback [role=alert]"))
               .toBeVisible();
             await centers(
               page,
@@ -964,7 +985,7 @@ test(
               page,
               ".otk-session-row.is-editing",
               "input",
-              ".otk-list-row-trailing",
+              ".otk-sidebar-meta",
             );
             expect(
               await page.locator(".otk-project-session-tree").evaluate((el) =>
@@ -977,7 +998,7 @@ test(
               page,
               ".otk-project-row:has(time)",
               ".otk-status-light",
-              ".otk-project-name-line",
+              ".otk-sidebar-label",
             );
             await centers(
               page,
@@ -986,10 +1007,10 @@ test(
               "time",
             );
             const row = page.locator('[data-project$="/projects/otk"]'),
-              menu = row.locator(".otk-project-menu");
+              menu = row.locator(".otk-sidebar-control");
             const geometry = () =>
               row.evaluate((row) => {
-                const cell = row.querySelector(".otk-project-trailing")!,
+                const cell = row.querySelector(".otk-sidebar-meta")!,
                   time = cell.querySelector("time")!,
                   trigger = cell.querySelector(".otk-popover-trigger")!,
                   r = cell.getBoundingClientRect(),
@@ -1030,7 +1051,7 @@ test(
               menu.evaluate((el) => getComputedStyle(el).opacity)
             ).toBe("1");
             await expect.poll(() =>
-              row.locator(".otk-project-visit").evaluate((el) =>
+              row.locator(".otk-sidebar-meta-track").evaluate((el) =>
                 getComputedStyle(el).opacity
               )
             ).toBe("0");
@@ -1047,13 +1068,9 @@ test(
             expect(await geometry()).toEqual(before);
             await page.goto(state.url + "/#/local/tstv1-otk");
             await layout(state, page, false, false);
-            const session = await page.locator('[data-session="tstv1-otk"]')
-              .evaluate((el) => {
-                const r = el.getBoundingClientRect(),
-                  t = el.querySelector(".otk-session-title")!
-                    .getBoundingClientRect();
-                return { left: r.left, text: t.left, height: r.height };
-              });
+            const sessionHeight = await page.locator(
+              '[data-session="tstv1-otk"]',
+            ).evaluate((el) => el.getBoundingClientRect().height);
             await page.locator("[data-panel-view=timeline]").click();
             await expect(page.locator("[data-timeline-prompt]")).toHaveCount(3);
             const first = page.locator('[data-timeline-prompt="prompt-0"]');
@@ -1062,9 +1079,13 @@ test(
                 const r = el.getBoundingClientRect(),
                   t = el.querySelector(".otk-timeline-preview")!
                     .getBoundingClientRect();
-                return { left: r.left, text: t.left, height: r.height };
+                return { gutter: t.left - r.left, height: r.height };
               }),
-            ).toEqual(session);
+            ).toEqual({
+              // Timeline is flat: keep row padding without the session tree slots.
+              gutter: await cssLength(first, "--space-2"),
+              height: sessionHeight,
+            });
             const actions = () =>
               first.locator("[data-message-command]").evaluateAll((els) =>
                 els.map((el) => {
@@ -1127,7 +1148,8 @@ test(
                     mobile: false,
                   });
                   await settled(page);
-                  const g = await page.locator(".otk-breadcrumb-row").evaluate(
+                  const crumbRow = page.locator(".otk-breadcrumb-row");
+                  const g = await crumbRow.evaluate(
                     (row) => {
                       const r = row.getBoundingClientRect(),
                         chips = Array.from(
@@ -1138,12 +1160,16 @@ test(
                         ),
                         meter = row.querySelector("output")!
                           .getBoundingClientRect(),
-                        lane = row.querySelector(".otk-overflow-items")!
-                          .getBoundingClientRect(),
+                        lane = row.querySelector(".otk-overflow-items")!,
+                        items = lane.getBoundingClientRect(),
                         action = document.querySelector(".otk-new-session")!
                           .getBoundingClientRect();
                       return {
                         height: r.height,
+                        controlsHeight: items.height,
+                        paged: lane.closest(".otk-overflow-row")!.classList
+                          .contains("is-paged"),
+                        trackBelowControls: r.bottom - items.bottom,
                         centres: chips.map((el) => {
                           const b = el.getBoundingClientRect();
                           return b.y + b.height / 2;
@@ -1153,8 +1179,9 @@ test(
                         ),
                         menus:
                           row.querySelectorAll(".otk-folded-crumbs").length,
-                        bounds: lane.right <= meter.left + 1 &&
-                          lane.right <= action.left + 1 && chips.every((el) => {
+                        bounds: items.right <= meter.left + 1 &&
+                          items.right <= action.left + 1 &&
+                          chips.every((el) => {
                             const b = el.getBoundingClientRect(),
                               label = el.querySelector(".otk-crumb-title")!,
                               first = el.querySelector(".otk-trail-first")
@@ -1173,7 +1200,19 @@ test(
                       };
                     },
                   );
-                  expect(g.height).toBeLessThanOrEqual(32);
+                  // D67's paged trail keeps the same single control line and
+                  // reserves a separate, in-flow horizontal scroll track.
+                  expect(g.controlsHeight).toBeLessThanOrEqual(32);
+                  if (g.paged) {
+                    const [track, gap] = await Promise.all([
+                      cssLength(crumbRow, "--space-2"),
+                      cssLength(crumbRow, "--space-1"),
+                    ]);
+                    expect(g.trackBelowControls).toBe(track + gap);
+                    expect(g.height).toBeLessThanOrEqual(32 + track + gap);
+                  } else {
+                    expect(g.height).toBeLessThanOrEqual(32);
+                  }
                   expect(g.selected && g.bounds).toBe(true);
                   expect(Math.max(...g.centres) - Math.min(...g.centres))
                     .toBeLessThanOrEqual(1);
@@ -1186,9 +1225,12 @@ test(
             await page.setViewportSize({ width: 1280, height: 900 });
             await page.setViewportSize({ width: 800, height: 800 });
             await settled(page);
-            await page.locator(".otk-subagents > button").click();
+            await page.getByRole("button", { name: /^Subagents:/ }).click();
+            const inventoryRows = page.locator(
+              ".otk-subagents .otk-subagent-row[data-subagent]",
+            );
             await expect(
-              page.locator(".otk-subagents [data-subagent]").first(),
+              inventoryRows.first(),
             ).toBeVisible();
             const shown = await page.locator("[data-crumb]").evaluateAll((
               els,
@@ -1197,18 +1239,16 @@ test(
                 el.getAttribute("data-crumb")!
               )
             );
-            const omitted = await page.locator(
-              ".otk-subagents [data-subagent]",
-            ).evaluateAll((els) =>
+            const omitted = await inventoryRows.evaluateAll((els) =>
               els.map((el) => el.getAttribute("data-subagent")!)
             );
             assertCrumbCoverage(
               ids,
               shown,
-              omitted,
-              // The active fixture family includes the selected helper and
-              // its existing child as well as the synthetic working ancestors.
-              [...ids.slice(1), "tstv1-child"],
+              omitted.sort(),
+              // D67 checks coverage here, not ancestry order in a menu that
+              // groups sessions by disposition. A duplicate still fails.
+              [...ids.slice(1), "tstv1-child"].sort(),
             );
             await shot(`more-${theme.id}-800`);
             await page.keyboard.press("Escape");
@@ -1236,19 +1276,19 @@ test(
             await page.evaluate(
               "styleTest.reserve(false);styleTest.collapse(false)",
             );
-            const padding = () =>
-              page.locator(".otk-task-strip").evaluate((el) =>
-                getComputedStyle(el).paddingRight
-              );
-            const normal = await padding();
+            const width = async () =>
+              (await page.locator(".otk-task-list").boundingBox())!.width;
+            const normal = await width();
             await page.evaluate(
               "document.body.className='otk-app';document.body.dataset.rightCollapsed='true'",
             );
-            expect(await padding()).toBe(normal);
+            expect(await width()).toBe(normal);
             await page.evaluate(
               "document.body.className='';styleTest.reserve(true)",
             );
-            await expect.poll(padding).not.toBe(normal);
+            await expect(page.getByRole("button", { name: "Trailing action" }))
+              .toBeVisible();
+            await expect.poll(width).toBeLessThan(normal);
             await page.evaluate("styleTest.collapse(true)");
             await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
               "data-collapsed",
@@ -1278,17 +1318,22 @@ test(
           "data-ready",
           "true",
         );
-        const members = Array.from({ length: 10 }, (_, i) => `session-${i}`);
+        const members = facts.lists.entries.map(({ id }) => id);
         for (const theme of manifest.themes) {
           await test.step(theme.id, async () => {
             await paint(theme);
             await page.setViewportSize({ width: 600, height: 800 });
             await page.evaluate(
-              `styleTest.lists(${
-                JSON.stringify(members)
-              },'session-9','session-7')`,
+              `styleTest.lists(...${
+                JSON.stringify([
+                  members,
+                  members[9],
+                  members[7],
+                  facts.lists,
+                ])
+              })`,
             );
-            const edit = page.locator('[data-crumb="session-7"] input');
+            const edit = page.locator(`[data-crumb="${members[7]}"] input`);
             await expect(edit).toHaveValue("session-7");
             await expect(edit).toBeFocused();
             const visible = () =>
@@ -1298,8 +1343,8 @@ test(
                 )
               );
             const shown = await visible();
-            expect(shown).toContain("session-9");
-            expect(shown).toContain("session-7");
+            expect(shown).toContain(members[9]);
+            expect(shown).toContain(members[7]);
             expect(shown).toEqual(members);
             expect(
               await edit.evaluate((el) => {
@@ -1326,7 +1371,7 @@ test(
               expect(Math.abs(actionAfter![key] - actionBefore![key]))
                 .toBeLessThanOrEqual(1);
             }
-            const more = page.locator(".otk-subagents > button"),
+            const more = page.getByRole("button", { name: /^Subagents:/ }),
               before = await more.boundingBox();
             await more.click();
             await expect(
@@ -1338,7 +1383,9 @@ test(
                 1,
               );
             }
-            const omitted = await page.locator("[data-subagent]")
+            const omitted = await page.locator(
+              ".otk-subagents .otk-subagent-row[data-subagent]",
+            )
               .evaluateAll((els) =>
                 els.map((el) => el.getAttribute("data-subagent")!)
               );

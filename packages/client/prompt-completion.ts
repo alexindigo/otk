@@ -21,6 +21,7 @@ export interface PromptCompletion {
 }
 export interface PromptSource {
   revision?(): unknown;
+  retain?(): (() => void) | undefined;
   trigger(input: string, caret: number): PromptCompletion | undefined;
   options(
     token: PromptCompletion,
@@ -66,6 +67,8 @@ export function createPromptCompletion(config: {
   let alive = true, generation = 0, choice = 0;
   let controller: AbortController | undefined;
   let completion: { token: PromptCompletion; source: PromptSource } | undefined;
+  let release: (() => void) | undefined;
+  let previous: CompletionInput | undefined, dismissed = false;
   let options: CompletionOption[] = [];
   const state: PromptCompletionState = {
     get token() {
@@ -94,6 +97,8 @@ export function createPromptCompletion(config: {
     controller = undefined;
     generation++;
     completion = undefined;
+    release?.();
+    release = undefined;
     options = [];
     choice = 0;
     publish();
@@ -103,9 +108,14 @@ export function createPromptCompletion(config: {
     subscribe: (listener) => store.subscribe(() => listener(state)),
     async update(input) {
       if (!alive) return;
+      if (
+        previous?.input !== input.input || previous.caret !== input.caret ||
+        previous.mode !== input.mode || previous.connected !== input.connected
+      ) dismissed = false;
+      previous = input;
       let found: typeof completion;
       if (
-        input.connected && input.mode === "normal" &&
+        !dismissed && input.connected && input.mode === "normal" &&
         !input.chips.some((chip) =>
           chip.start !== undefined && chip.end !== undefined &&
           input.caret >= chip.start && input.caret <= chip.end
@@ -122,6 +132,10 @@ export function createPromptCompletion(config: {
       const revision = ++generation;
       controller?.abort();
       controller = new AbortController();
+      if (completion?.source !== found?.source) {
+        release?.();
+        release = found?.source.retain?.();
+      }
       completion = found;
       options = [];
       choice = 0;
@@ -140,7 +154,10 @@ export function createPromptCompletion(config: {
       }
     },
     clear() {
-      if (alive) reset();
+      if (alive) {
+        dismissed = true;
+        reset();
+      }
     },
     move(delta) {
       if (!alive || !state.visible) return;

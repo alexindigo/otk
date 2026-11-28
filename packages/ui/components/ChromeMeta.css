@@ -42,7 +42,7 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: var(--space-4);
+  gap: var(--meta-row-gap, var(--space-4));
   min-inline-size: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -54,6 +54,34 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
+.otk-meta-row.fits-whole-items > * {
+  flex: none;
+  inline-size: max-content;
+}
+.otk-meta-row.fits-whole-items > [hidden] {
+  display: none;
+}
+.otk-meta-row.has-intrinsic {
+  inline-size: var(--meta-intrinsic, auto);
+  max-inline-size: 100%;
+}
+.otk-meta-item {
+  display: inline-flex;
+  align-items: center;
+}
+.otk-meta-compact,
+.otk-meta-item.is-compact:not([data-meta-compact]) > .otk-meta-full {
+  display: none;
+}
+.otk-meta-item.is-compact > .otk-meta-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.otk-meta-compact > svg {
+  inline-size: var(--icon-compact);
+  block-size: var(--icon-compact);
+}
 .otk-meta-fit {
   grid-area: 1 / 1;
   display: flex;
@@ -63,10 +91,17 @@
   flex-direction: var(--tree-heading-flow, row);
 }
 .otk-meta-primary {
+  --meta-primary-floor: calc-size(min-content, min(size, 6ch));
   flex: 0 1 auto;
-  min-inline-size: 6ch;
+  min-inline-size: 0;
+  min-inline-size: var(--meta-primary-floor);
   max-inline-size: 100%;
   overflow: hidden;
+}
+.otk-meta-primary.is-measuring-minimum {
+  flex: none;
+  inline-size: 0;
+  inline-size: var(--meta-primary-floor);
 }
 .otk-meta-control {
   flex: none;
@@ -83,4 +118,8 @@
   visibility: hidden;
   display: flex;
   pointer-events: none;
+}
+.otk-meta-item.is-compact[data-meta-compact] {
+  --meta-label-full: none;
+  --meta-label-compact: inline;
 }

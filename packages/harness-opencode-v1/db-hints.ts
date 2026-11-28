@@ -11,13 +11,22 @@ export function terminalToken(info: Info): number {
     ? info.time.completed ?? (info.error ? info.time.created : 0)
     : 0;
 }
+const terminalClock =
+  "CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) ELSE json_extract(m.data,'$.time.completed') END";
+const terminalRows = (session: string) =>
+  `FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown')))`;
+const latest = (session: string, expression: string) =>
+  `(SELECT ${expression} ${
+    terminalRows(session)
+  } ORDER BY m.time_created DESC,m.id DESC LIMIT 1)`;
 export const terminalProjection = (session = "session") =>
-  `(SELECT CASE WHEN json_extract(m.data,'$.error') IS NOT NULL THEN coalesce(json_extract(m.data,'$.time.completed'),m.time_created) ELSE json_extract(m.data,'$.time.completed') END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown'))) ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal`;
+  `${latest(session, terminalClock)} AS terminal`;
 export function terminalFacts(info: Info): TerminalEvidence {
   const terminal = terminalToken(info);
   return terminal
     ? {
       terminal,
+      runID: info.id,
       outcome: info.error
         ? info.error.name === "MessageAbortedError" ? "interrupted" : "failed"
         : "succeeded",
@@ -25,7 +34,12 @@ export function terminalFacts(info: Info): TerminalEvidence {
     : {};
 }
 const outcomeProjection = (session: string) =>
-  `(SELECT CASE WHEN json_extract(m.data,'$.error.name')='MessageAbortedError' THEN 'interrupted' WHEN json_extract(m.data,'$.error') IS NOT NULL THEN 'failed' ELSE 'succeeded' END FROM message m WHERE m.session_id=${session}.id AND json_valid(m.data) AND json_extract(m.data,'$.role')='assistant' AND (json_extract(m.data,'$.error') IS NOT NULL OR (json_extract(m.data,'$.time.completed')>0 AND coalesce(json_extract(m.data,'$.finish'),'') NOT IN ('tool-calls','unknown'))) ORDER BY m.time_created DESC,m.id DESC LIMIT 1) AS terminal_outcome`;
+  `${
+    latest(
+      session,
+      "CASE WHEN json_extract(m.data,'$.error.name')='MessageAbortedError' THEN 'interrupted' WHEN json_extract(m.data,'$.error') IS NOT NULL THEN 'failed' ELSE 'succeeded' END",
+    )
+  } AS terminal_outcome`;
 
 export function nativeMetadata(row: Record<string, unknown>): SessionMetadata {
   return {
@@ -70,13 +84,27 @@ export function terminalSessions(
   limit: number,
 ): SessionMetadata[] {
   return db.prepare(
-    `SELECT * FROM (SELECT ${sessionProjection(db)},${
-      outcomeProjection("s")
-    } FROM session s WHERE s.id>?) WHERE terminal>0 ORDER BY id LIMIT ?`,
+    `SELECT selected.*, (SELECT count(*) FROM (SELECT 1 ${
+      terminalRows("selected")
+    }
+       AND (${terminalClock})=selected.terminal LIMIT 2)) AS terminal_matches
+     FROM (SELECT ${sessionProjection(db)},${outcomeProjection("s")},${
+      latest("s", "m.id")
+    } AS run_id FROM session s WHERE s.id>? AND ${
+      latest("s", terminalClock)
+    }>0 ORDER BY s.id LIMIT ?) selected`,
   ).all(after ? ids.decode(after) : "", limit).map((row) => ({
     ...nativeMetadata(row),
     activity: {
       terminal: Number(row.terminal),
+      ...(typeof row.run_id === "string" && row.run_id
+        ? {
+          runID: row.run_id,
+          legacyAcknowledgement: Number(row.terminal_matches) === 1
+            ? { terminal: Number(row.terminal), runID: row.run_id }
+            : null,
+        }
+        : {}),
       outcome: row.terminal_outcome as import("@otk/protocol").TerminalOutcome,
       terminalOrigin: "historical",
     },

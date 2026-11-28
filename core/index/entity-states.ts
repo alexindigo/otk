@@ -1,27 +1,26 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  aggregateTransition,
   archiveEntityID,
-  type BlockedCause,
+  type ComposerLinkState,
   type EntityCounts,
   entityKey,
   type EntityState,
+  HELPER_LAMP_ORDER,
+  HELPER_LAMP_STATE,
   type HelperDisposition,
   type IndexMetadata,
   projectPlacement,
   type ProjectStatus,
   type ProjectSummary,
   rollupStatus,
+  type RunningShells,
   type SessionEvidence,
-  type Supervision,
+  shellTransition,
   taskEntityID,
   type TaskHelpers,
 } from "@otk/protocol";
-import {
-  deliveredTerminal,
-  failedHelperNeedsAck,
-  type SessionInputs,
-  type SessionSupervision,
-} from "./supervision.ts";
+import type { SessionInputs, SessionSupervision } from "./supervision.ts";
 
 const PERMISSION_GRACE_MS = 500;
 
@@ -30,6 +29,7 @@ interface EntityClock {
   set(run: () => void, delay: number): unknown;
   clear(timer: unknown): void;
 }
+type PermissionWake = { at: number; timer?: unknown };
 const systemClock: EntityClock = {
   now: () => performance.now(),
   set: (run, delay) => setTimeout(run, delay),
@@ -61,6 +61,7 @@ interface Tally {
   dependencies: number;
   graced: number;
   requests: Map<string, number>;
+  runStarts: Map<number, number>;
 }
 interface Listing {
   tasks: Map<string, number>;
@@ -72,6 +73,7 @@ interface Contribution {
   dependencies: number;
   graced: number;
   requests: readonly string[];
+  runStartedAt?: number;
 }
 function tally(): Tally {
   return {
@@ -79,6 +81,7 @@ function tally(): Tally {
     dependencies: 0,
     graced: 0,
     requests: new Map(),
+    runStarts: new Map(),
   };
 }
 function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
@@ -96,6 +99,16 @@ function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
     if (next) target.requests.set(id, next);
     else target.requests.delete(id);
   }
+  const starts = "runStarts" in value
+    ? value.runStarts
+    : value.runStartedAt === undefined
+    ? []
+    : [[value.runStartedAt, 1] as const];
+  for (const [at, count] of starts) {
+    const next = (target.runStarts.get(at) ?? 0) + sign * count;
+    if (next) target.runStarts.set(at, next);
+    else target.runStarts.delete(at);
+  }
 }
 
 /** Decision 62: the one per-user state of every entity, updated from signals.
@@ -104,7 +117,12 @@ function add(target: Tally, value: Contribution | Tally, sign: 1 | -1): void {
 export class EntityStates {
   #permissions = new Map<
     string,
-    { due: Map<string, number>; timer?: unknown }
+    {
+      due: Map<string, number>;
+      through: number;
+      wake?: PermissionWake;
+      refresh: () => void;
+    }
   >();
   #states = new Map<string, EntityState>();
   /** Own counts of each live session, for its ancestors' descendant evidence. */
@@ -118,11 +136,15 @@ export class EntityStates {
   #checkoutOf = new Map<string, string>();
   #listed = new Map<string, Listing>();
   #projectListings = new Map<string, Listing>();
+  #programListings = new Map<string, Listing>();
+  #programProjects = new Map<string, readonly string[]>();
+  #programOf = new Map<string, string>();
   #archiveListings = new Map<string, Listing>();
   #viewsOf = new Map<string, Set<Listing>>();
   #listingRevision = 0;
   #forms = new Map<string, number>();
   #checkoutDependencies = new Map<string, number>();
+  #terminalOwners: (id: string) => number = () => 0;
   #leaves = new Map<string, readonly string[]>();
   #projectsOf = new Map<string, Set<string>>();
   #placement = new Map<
@@ -151,9 +173,31 @@ export class EntityStates {
     ) => void,
     readonly clock: EntityClock = systemClock,
     readonly onPermissionDeadline?: (id: string) => void,
+    readonly openedByUser: (id: string) => boolean = () => false,
   ) {}
   get(key: string): EntityState | undefined {
     return this.#states.get(key);
+  }
+  /** Selected composer scope: borrow the own work and the assigned task roster.
+   * No sibling enumeration or fanout to every session when a helper changes. */
+  composerLink(id: string): ComposerLinkState {
+    const session = this.get(entityKey("session", id));
+    if (!session) return "none";
+    const task = this.#taskOf.get(id);
+    const helpers = task
+      ? this.get(entityKey("task", task))?.helpers
+      : undefined;
+    if (
+      session.evidence?.nativeRun || session.evidence?.continuation ||
+      session.shells?.state === "working" ||
+      helpers?.counts.running
+    ) {
+      return "running";
+    }
+    return helpers?.ids.length ? "idle" : "none";
+  }
+  terminalOwners(count: (id: string) => number): void {
+    this.#terminalOwners = count;
   }
   /** The live keyed map, copied by snapshot assembly like the other maps. */
   values(): Map<string, EntityState> {
@@ -162,7 +206,8 @@ export class EntityStates {
   /** A new user generation starts without transitions from the previous one. */
   reset(): void {
     for (const lifetime of this.#permissions.values()) {
-      this.clock.clear(lifetime.timer);
+      this.clock.clear(lifetime.wake?.timer);
+      lifetime.wake = undefined;
     }
     this.#states.clear();
     this.#own.clear();
@@ -171,6 +216,9 @@ export class EntityStates {
     // ProjectSummaries retains structural placements across user generations.
     this.#listed.clear();
     this.#projectListings.clear();
+    this.#programListings.clear();
+    this.#programProjects.clear();
+    this.#programOf.clear();
     this.#archiveListings.clear();
     this.#viewsOf.clear();
     this.#listingRevision++;
@@ -191,7 +239,7 @@ export class EntityStates {
   }
   close(): void {
     for (const lifetime of this.#permissions.values()) {
-      this.clock.clear(lifetime.timer);
+      this.clock.clear(lifetime.wake?.timer);
     }
     this.#permissions.clear();
   }
@@ -202,18 +250,21 @@ export class EntityStates {
     refresh: () => void,
   ): string[] {
     const previous = this.#permissions.get(entry.id);
-    if (previous?.timer !== undefined) this.clock.clear(previous.timer);
+    const wake = previous?.wake;
     if (entry.deleted) {
+      this.clock.clear(wake?.timer);
       this.#permissions.delete(entry.id);
       return [];
     }
     const input = entry.activity?.permissions;
     if (!input?.fresh) {
       // Native source loss is not settlement. A fresh snapshot reconciles IDs.
-      if (previous) previous.timer = undefined;
+      this.clock.clear(wake?.timer);
+      if (previous) previous.wake = undefined;
       return [];
     }
     if (!input.keys.length) {
+      this.clock.clear(wake?.timer);
       this.#permissions.delete(entry.id);
       return [];
     }
@@ -224,19 +275,38 @@ export class EntityStates {
       ) => [id, previous?.due.get(id) ?? now + PERMISSION_GRACE_MS]),
     );
     const active: string[] = [];
+    const through = previous?.through ?? -Infinity;
     let next = Infinity;
     if (count > 0) {
       for (const [id, at] of due) {
-        if (at <= now) active.push(id);
+        if (at <= through) active.push(id);
         else next = Math.min(next, at);
       }
     }
-    const lifetime: { due: Map<string, number>; timer?: unknown } = { due };
+    // Only the deadline callback releases the grace. A summary refresh can
+    // arrive after the deadline but before its callback; reading the clock
+    // there would publish a lamp before Inbox reconciles persisted policy.
+    const retainWake = wake?.at === next;
+    const lifetime = {
+      due,
+      through,
+      wake: retainWake ? wake : undefined,
+      refresh,
+    };
     this.#permissions.set(entry.id, lifetime);
-    if (Number.isFinite(next)) {
-      lifetime.timer = this.clock.set(() => {
-        if (this.#permissions.get(entry.id) === lifetime) refresh();
-      }, next - now);
+    if (!retainWake) {
+      this.clock.clear(wake?.timer);
+      if (Number.isFinite(next)) {
+        const pending: PermissionWake = { at: next };
+        lifetime.wake = pending;
+        pending.timer = this.clock.set(() => {
+          const current = this.#permissions.get(entry.id);
+          if (current?.wake !== pending) return;
+          current.wake = undefined;
+          current.through = Math.max(pending.at, this.clock.now());
+          current.refresh();
+        }, Math.max(0, next - now));
+      }
     }
     return active.slice(0, count);
   }
@@ -314,11 +384,12 @@ export class EntityStates {
   project(directory: string, checkouts: readonly string[]): EntityState {
     const previous = this.#leaves.get(directory) ?? [];
     const next = [...new Set(checkouts.length ? checkouts : [directory])];
-    const listing = this.#listing(this.#projectListings, directory);
     for (const leaf of previous) {
       if (next.includes(leaf)) continue;
       this.#projectsOf.get(leaf)?.delete(directory);
-      for (const task of this.listed(leaf)) this.#include(listing, task, -1);
+      for (const task of this.listed(leaf)) {
+        this.#includeProject(directory, task, -1);
+      }
     }
     this.#leaves.set(directory, next);
     for (const leaf of next) {
@@ -326,12 +397,51 @@ export class EntityStates {
       const projects = this.#projectsOf.get(leaf) ?? new Set<string>();
       projects.add(directory);
       this.#projectsOf.set(leaf, projects);
-      for (const task of this.listed(leaf)) this.#include(listing, task, 1);
+      for (const task of this.listed(leaf)) {
+        this.#includeProject(directory, task, 1);
+      }
     }
     const upserts: EntityState[] = [];
     this.#project(directory, upserts);
     if (upserts.length) this.publish(upserts, []);
     return this.#states.get(entityKey("project", directory))!;
+  }
+  /** Reconcile only the membership supplied by ProjectPrograms, not sidebar rows. */
+  programs(groups: ReadonlyMap<string, readonly string[]>): void {
+    const previous = this.#programProjects;
+    this.#programProjects = new Map(groups);
+    const next = new Map<string, string>();
+    for (const [id, projects] of groups) {
+      for (const project of projects) next.set(project, id);
+    }
+    const dirty = new Set<string>();
+    const change = (project: string, id: string, sign: 1 | -1) => {
+      const listing = this.#listing(this.#programListings, id);
+      for (
+        const task of this.#projectListings.get(project)?.tasks.keys() ?? []
+      ) {
+        this.#include(listing, task, sign);
+      }
+      dirty.add(id);
+    };
+    for (const [project, id] of this.#programOf) {
+      if (next.get(project) !== id) change(project, id, -1);
+    }
+    for (const [project, id] of next) {
+      if (this.#programOf.get(project) !== id) change(project, id, 1);
+    }
+    this.#programOf = next;
+    const upserts: EntityState[] = [], removals: string[] = [];
+    for (const id of previous.keys()) {
+      if (groups.has(id)) continue;
+      this.#programListings.delete(id);
+      const key = entityKey("program", id);
+      if (this.#states.delete(key)) removals.push(key);
+    }
+    for (const id of groups.keys()) {
+      if (!previous.has(id) || dirty.has(id)) this.#program(id, upserts);
+    }
+    if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** A directory is no longer summarized: its aggregates are gone. */
   placement(
@@ -365,14 +475,20 @@ export class EntityStates {
     }
     const listing = this.#projectListings.get(directory);
     if (listing) {
+      const program = this.#programOf.get(directory);
       for (const id of listing.tasks.keys()) {
         this.#viewsOf.get(id)?.delete(listing);
+        if (program) {
+          this.#include(this.#listing(this.#programListings, program), id, -1);
+        }
       }
       this.#projectListings.delete(directory);
     }
     this.#leaves.delete(directory);
     this.#forms.delete(directory);
     this.#checkoutDependencies.delete(directory);
+    const program = this.#programOf.get(directory);
+    if (program) this.#program(program, upserts);
     if (upserts.length || removals.length) this.publish(upserts, removals);
   }
   /** Interpret one session, publish its state and its ancestors' descendant
@@ -381,18 +497,22 @@ export class EntityStates {
     entry: IndexMetadata,
     acknowledged: number,
     retainedTerminal = 0,
-  ): Supervision {
+  ): ReturnType<SessionSupervision["session"]> {
     const native = this.supervision.inputs(entry);
     const permissions = this.#permissionKeys(entry, native.permissions, () => {
       if (this.onPermissionDeadline) this.onPermissionDeadline(entry.id);
       else this.session(entry, acknowledged, retainedTerminal);
     });
     const inputs = { ...native, permissions: permissions.length };
+    const operation = this.#operations.get(entry.id);
+    const opened = this.openedByUser(entry.id);
     const verdict = this.supervision.session(
       entry,
       acknowledged,
       retainedTerminal,
       inputs,
+      operation,
+      opened,
     );
     const upserts: EntityState[] = [], removals: string[] = [];
     const contribution = this.#contribution(entry.id);
@@ -410,8 +530,7 @@ export class EntityStates {
       this.#retire(entry.id, removals);
       this.#ancestors(entry.id, upserts);
     } else {
-      const operation = this.#operations.get(entry.id);
-      const state = rollupStatus(this.supervision.status(verdict), operation);
+      const state = verdict.status;
       const counts = own(state, verdict.unseen === true);
       this.#own.set(entry.id, counts);
       const value = this.#session(
@@ -422,6 +541,7 @@ export class EntityStates {
         inputs,
         permissions,
         operation,
+        opened,
       );
       if (value.cause === "permission") {
         this.#graced.set(
@@ -487,12 +607,14 @@ export class EntityStates {
   }
   #contribution(id: string): Contribution {
     const counts = this.#own.get(id);
+    const session = this.#states.get(entityKey("session", id));
+    const run = session?.evidence?.nativeRun ? session.evidence.run : undefined;
     return {
       counts: counts ? { ...counts } : own("none", false),
-      dependencies: this.#states.get(entityKey("session", id))?.dependencies ??
-        0,
+      dependencies: session?.dependencies ?? 0,
       graced: this.#graced.has(id) ? 1 : 0,
       requests: this.#graced.get(id) ?? [],
+      runStartedAt: run?.endedAt === undefined ? run?.startedAt : undefined,
     };
   }
   /** Move the existing contribution before applying any change in its value. */
@@ -632,11 +754,22 @@ export class EntityStates {
     else leaves.delete(checkout);
     this.#checkoutsOf.set(task, leaves);
     for (const project of this.#projectsOf.get(checkout) ?? []) {
-      this.#include(this.#listing(this.#projectListings, project), task, sign);
+      this.#includeProject(project, task, sign);
     }
     const archive = this.#archiveOf.get(checkout);
     if (archive) {
       this.#include(this.#listing(this.#archiveListings, archive), task, sign);
+    }
+  }
+  #includeProject(directory: string, task: string, sign: 1 | -1): void {
+    const changed = this.#include(
+      this.#listing(this.#projectListings, directory),
+      task,
+      sign,
+    );
+    const program = this.#programOf.get(directory);
+    if (changed && program) {
+      this.#include(this.#listing(this.#programListings, program), task, sign);
     }
   }
   #checkout(directory: string, upserts: EntityState[]): void {
@@ -654,23 +787,51 @@ export class EntityStates {
       this.#project(project, upserts);
     }
   }
-  #project(directory: string, upserts: EntityState[]): void {
+  #locations(leaves: Iterable<string>) {
     let forms = 0;
     let dependencies = 0;
     const operations: ("working" | "blocked")[] = [];
-    for (const leaf of this.#leaves.get(directory) ?? [directory]) {
+    for (const leaf of leaves) {
       forms += this.#forms.get(leaf) ?? 0;
       dependencies += this.#checkoutDependencies.get(leaf) ?? 0;
       const operation = this.#checkoutOperations.get(leaf);
       if (operation) operations.push(operation);
     }
-    const operation = rollupStatus(...operations);
+    const state = rollupStatus(...operations);
+    const operation = state === "blocked" || state === "working"
+      ? state
+      : undefined;
+    return { forms, operation, dependencies };
+  }
+  #project(directory: string, upserts: EntityState[]): void {
+    const { forms, operation, dependencies } = this.#locations(
+      this.#leaves.get(directory) ?? [directory],
+    );
     const value = this.#aggregate(
       "project",
       directory,
       this.#listing(this.#projectListings, directory).sum,
       forms,
-      operation === "none" ? undefined : operation as "working" | "blocked",
+      operation,
+      dependencies,
+    );
+    if (this.#set(value)) upserts.push(value);
+    const program = this.#programOf.get(directory);
+    if (program) this.#program(program, upserts);
+  }
+  #program(id: string, upserts: EntityState[]): void {
+    const leaves = new Set(
+      this.#programProjects.get(id)!.flatMap((directory) =>
+        this.#leaves.get(directory) ?? [directory]
+      ),
+    );
+    const { forms, operation, dependencies } = this.#locations(leaves);
+    const value = this.#aggregate(
+      "program",
+      id,
+      this.#listing(this.#programListings, id).sum,
+      forms,
+      operation,
       dependencies,
     );
     if (this.#set(value)) upserts.push(value);
@@ -686,6 +847,7 @@ export class EntityStates {
             lifecycle: facts,
             status: state?.state ?? "none",
             dependencies: state?.dependencies,
+            liveWork: state?.liveWork,
             inactive: false,
             hasSessions: false,
           }).section === "archived"
@@ -728,7 +890,7 @@ export class EntityStates {
       if (this.#set(value)) upserts.push(value);
     }
   }
-  /** Decision 57 over members: blocked > working > finished > none. */
+  /** D78: members and local evidence feed the same aggregate lamp order. */
   #aggregate(
     kind: EntityState["kind"],
     id: string,
@@ -738,21 +900,18 @@ export class EntityStates {
     dependencies = members.dependencies,
   ): EntityState {
     const { counts } = members;
-    const state = rollupStatus(
-      counts.blocked || forms ? "blocked" : undefined,
+    const { state, cause, liveWork } = aggregateTransition({
+      counts,
+      forms,
+      dependencies,
       operation,
-      counts.working ? "working" : undefined,
-      counts.finished ? "finished" : undefined,
-      dependencies ? "dependencies" : undefined,
-    );
-    const cause: BlockedCause | undefined = state !== "blocked"
-      ? undefined
-      : !counts.blocked
-      ? forms ? "form" : "operation"
-      : !forms && operation !== "blocked" && members.graced === counts.blocked
-      ? "permission"
-      : undefined;
+      graced: members.graced,
+    });
     const before = this.#states.get(entityKey(kind, id));
+    let runStartedAt = Infinity;
+    for (const at of members.runStarts.keys()) {
+      runStartedAt = Math.min(runStartedAt, at);
+    }
     return {
       kind,
       id,
@@ -765,6 +924,8 @@ export class EntityStates {
         : before.previous,
       counts: { ...counts },
       ...(dependencies ? { dependencies } : {}),
+      ...(liveWork ? { liveWork: true } : {}),
+      ...(Number.isFinite(runStartedAt) ? { runStartedAt } : {}),
       ...(cause === "permission"
         ? {
           requests: [...members.requests.keys()].sort().map((id) => ({ id })),
@@ -773,7 +934,7 @@ export class EntityStates {
     };
   }
   #retire(id: string, removals: string[]): void {
-    this.clock.clear(this.#permissions.get(id)?.timer);
+    this.clock.clear(this.#permissions.get(id)?.wake?.timer);
     this.#permissions.delete(id);
     this.#own.delete(id);
     this.#parents.delete(id);
@@ -791,7 +952,8 @@ export class EntityStates {
     const groups: Record<HelperDisposition, EntityState[]> = {
       running: [],
       needsYou: [],
-      notReturned: [],
+      finished: [],
+      opened: [],
     };
     for (const id of members) {
       const state = this.#states.get(entityKey("session", id));
@@ -804,21 +966,61 @@ export class EntityStates {
       (this.family.getMetadata(a.id)?.timeCreated ?? Infinity) -
         (this.family.getMetadata(b.id)?.timeCreated ?? Infinity) ||
       a.id.localeCompare(b.id);
-    const { running, needsYou, notReturned } = groups;
+    const { running, needsYou, finished, opened } = groups;
+    const lamps: NonNullable<TaskHelpers["lamps"]>["groups"] = {
+      running: { state: running.length ? HELPER_LAMP_STATE.running : "none" },
+      needsYou: {
+        state: needsYou.length ? HELPER_LAMP_STATE.needsYou : "none",
+      },
+      finished: {
+        state: finished.length ? HELPER_LAMP_STATE.finished : "none",
+      },
+      ...(opened.length ? { opened: { state: HELPER_LAMP_STATE.opened } } : {}),
+    };
     return {
       counts: {
         running: running.length,
         needsYou: needsYou.length,
-        notReturned: notReturned.length,
+        finished: finished.length,
+        ...(opened.length ? { opened: opened.length } : {}),
       },
-      ids: [
-        ...running.sort(active),
-        ...needsYou.sort(active),
-        ...notReturned.sort((a, b) =>
-          (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
-        ),
-      ].map((value) => value.id),
+      lamps: {
+        all: {
+          state: rollupStatus(
+            lamps.running.state,
+            lamps.needsYou.state,
+            lamps.finished.state,
+          ),
+        },
+        groups: lamps,
+      },
+      ids: HELPER_LAMP_ORDER.flatMap((kind) =>
+        groups[kind].sort(
+          kind === "finished"
+            ? (a, b) =>
+              (b.terminal ?? 0) - (a.terminal ?? 0) || a.id.localeCompare(b.id)
+            : kind === "opened"
+            ? (a, b) => a.id.localeCompare(b.id)
+            : active,
+        ).map(({ id }) => id)
+      ),
     };
+  }
+  /** Undefined means the task is unknown; an empty roster is a valid no-op. */
+  finishedHelpers(task: string): string[] | undefined {
+    const value = this.get(entityKey("task", task));
+    return value &&
+      (value.helpers?.ids ?? []).filter((id) => {
+        const disposition = this.get(entityKey("session", id))?.evidence
+          ?.helper;
+        return disposition === "finished" || disposition === "opened";
+      });
+  }
+  /** The full family, not the checkout's view of it (D70). */
+  subtree(id: string): string[] {
+    return [...new Set([id, ...this.family.descendants(id)])].filter((id) =>
+      !this.family.getMetadata(id)?.deleted
+    );
   }
   #chain(id: string, upserts: EntityState[]): void {
     this.#refresh(id, upserts);
@@ -888,34 +1090,26 @@ export class EntityStates {
   }
   #session(
     entry: IndexMetadata,
-    verdict: Supervision,
+    verdict: ReturnType<SessionSupervision["session"]>,
     state: ProjectStatus,
     counts: EntityCounts,
     inputs: SessionInputs,
     permissionIDs: readonly string[],
-    operation?: "working" | "blocked",
+    operation: "working" | "blocked" | undefined,
+    opened: boolean,
   ): EntityState {
     const activity = entry.activity;
-    const cause: BlockedCause | undefined = state !== "blocked"
-      ? undefined
-      // Immediate causes win over the graced one: grace applies only when a
-      // permission is the sole reason.
-      : inputs.questions > 0
-      ? "question"
-      : operation === "blocked"
-      ? "operation"
-      : failedHelperNeedsAck(entry, verdict.outcome) && verdict.unseen
-      ? "failedHelper"
-      : verdict.outcome === "failed" && verdict.unseen
-      ? "failure"
-      : inputs.permissions > 0
-      ? "permission"
-      : undefined;
-    const items = inputs.work
+    const { cause, helper } = verdict;
+    const items = inputs.work && activity?.work?.fresh
       ? (activity?.work?.items ?? []).filter((item) =>
         activity?.work?.keys.includes(item.id)
       )
       : [];
+    const shells: RunningShells["items"] = items.flatMap((item) => {
+      if (item.kind !== "shell") return [];
+      const { kind: _kind, ...shell } = item;
+      return [shell];
+    });
     const before = this.#states.get(entityKey("session", entry.id));
     const starts = items.flatMap((item) =>
       item.kind === "execution" && item.startedAt !== undefined
@@ -923,25 +1117,14 @@ export class EntityStates {
         : []
     );
     const previousRun = before?.evidence?.run;
-    const startedAt = starts.length
-      ? Math.min(...starts)
-      : inputs.work && previousRun?.endedAt !== undefined
-      ? undefined
+    const startedAt = inputs.work
+      ? starts.length ? Math.min(...starts) : undefined
       : previousRun?.startedAt;
     const helpers = this.#helpers(entry.id);
-    const awaitingDelivery = !!entry.parentID &&
-      verdict.terminal > deliveredTerminal(entry);
-    const helper = !entry.parentID
-      ? undefined
-      : state === "working"
-      ? "running"
-      : state === "blocked" && cause !== "failedHelper"
-      ? "needsYou"
-      : awaitingDelivery
-      ? "notReturned"
-      : undefined;
+    const work = inputs.work || operation === "working";
     const evidence: SessionEvidence = {
-      awaitingDelivery,
+      ...(verdict.settlement ? { settlement: verdict.settlement } : {}),
+      ...(inputs.continuation ? { continuation: true as const } : {}),
       ...(helper ? { helper } : {}),
       ...(helper === "needsYou"
         ? { waitingSince: before?.evidence?.waitingSince ?? Date.now() }
@@ -955,7 +1138,15 @@ export class EntityStates {
         },
       }),
       // A received operation in progress is work on its target session.
-      work: inputs.work || operation === "working",
+      work,
+      // Some harnesses publish execution keys without detailed items. Only
+      // identities accounted for by the shell roster are excluded.
+      ...(inputs.work && activity?.work?.fresh &&
+          activity.work.keys.some((key) =>
+            !shells.some((shell) => shell.id === key)
+          )
+        ? { nativeRun: true as const }
+        : {}),
       permissions: inputs.permissions,
       questions: inputs.questions,
       descendants: this.#descendants(entry.id),
@@ -965,19 +1156,14 @@ export class EntityStates {
           ? (activity?.inputs?.keys ?? []).map((id) => ({ id }))
           : [],
       },
-      ...(items.length || helpers.length
+      ...(items.length > shells.length || helpers.length
         ? {
           liveWork: [
-            ...items.map((item) => ({
-              id: item.id,
-              kind: item.kind,
-              label: item.label,
-              title: item.title,
-              ...(item.startedAt === undefined
-                ? {}
-                : { startedAt: item.startedAt }),
-              state,
-            })),
+            ...items.flatMap((item) =>
+              item.kind === "execution"
+                ? [{ ...item, kind: item.kind, state }]
+                : []
+            ),
             ...helpers,
           ],
         }
@@ -990,6 +1176,7 @@ export class EntityStates {
       // Preserve its marker without interpreting that observation as a run outcome.
       ...(entry.attention.error ? { error: true as const } : {}),
     };
+    const dependencies = this.#terminalOwners(entry.id);
     return {
       kind: "session",
       id: entry.id,
@@ -1001,15 +1188,18 @@ export class EntityStates {
         ? before.state
         : before.previous,
       counts,
-      ...(verdict.dependencies
-        ? { dependencies: verdict.dependencies.running }
-        : {}),
+      ...(opened ? { opened: true as const } : {}),
+      ...(dependencies ? { dependencies } : {}),
       ...(verdict.terminal ? { terminal: verdict.terminal } : {}),
+      ...(activity?.runID && verdict.terminal === activity.terminal
+        ? { runID: activity.runID }
+        : {}),
       ...(verdict.outcome ? { outcome: verdict.outcome } : {}),
       ...(verdict.terminalOrigin
         ? { terminalOrigin: verdict.terminalOrigin }
         : {}),
       evidence,
+      shells: shellTransition(shells),
     };
   }
   #set(value: EntityState): boolean {

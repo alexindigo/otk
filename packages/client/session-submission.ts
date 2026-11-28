@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { InboxModel } from "./inbox.ts";
 import type { ClientTabs } from "./tabs.ts";
-import type { IntentGroup, RequestOptions } from "./requests.ts";
+import type { ClientIntent, IntentGroup, RequestOptions } from "./requests.ts";
 import {
   ascendingID,
   type RequestOrigin,
@@ -53,7 +53,7 @@ export function createSessionSubmission({
 }): SessionSubmission {
   const admit = async (
     action: Parameters<SessionSubmission>[0],
-    dispatch: () => void,
+    dispatch: (intent?: ClientIntent) => void,
     messageID: string,
     origin: RequestOrigin,
     activation?: string,
@@ -83,7 +83,7 @@ export function createSessionSubmission({
     };
     const result = await action(send, () => {
       beforeDispatch?.();
-      dispatch();
+      dispatch(send.intent);
       sendDiagnostic("dispatch", trace);
       promote();
     }, messageID);
@@ -109,8 +109,8 @@ export function createSessionSubmission({
       entry,
       messageID,
       capture && {
-        admit(id, check) {
-          settle = capture.take(id, check);
+        admit(id, check, intent) {
+          settle = capture.take(id, check, intent);
           if (!settle) {
             throw new Error("The captured draft is no longer active.");
           }

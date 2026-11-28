@@ -45,6 +45,30 @@ async function http(f: Fixture, index: number) {
   );
 }
 for (const method of ["shell", "command"] as const) {
+  test(`${method} failure attempt: a native event before HTTP settlement keeps its own record`, async () => {
+    const f = await observationFixture();
+    try {
+      await f.submit(method);
+      await native(f, "The native diagnostic", "native-before-http");
+      const original = structuredClone(records(f)[0]);
+      await http(f, 0);
+      const rows = records(f);
+      assertEquals(rows.length, 2);
+      assertEquals(rows[0], original);
+      assertEquals(failure(rows[0]).facts?.status, undefined);
+      assertEquals(failure(rows[1]).facts?.status, 503);
+      const { state } = await f.coherent();
+      assertEquals(
+        state.observations.map((o) => [
+          o.source,
+          o.failure?.facts?.record?.messageID,
+        ]),
+        [["event", rows[0].id], ["http", rows[1].id]],
+      );
+    } finally {
+      await f.stop();
+    }
+  });
   test(`${method} failure attempt: unlinked reports preserve arrival order with equal clocks`, async () => {
     const f = await observationFixture();
     const now = Date.now;
@@ -67,7 +91,7 @@ for (const method of ["shell", "command"] as const) {
       await f.stop();
     }
   });
-  test(`${method} failure attempt: first native report closes admission while HTTP is pending`, async () => {
+  test(`${method} failure attempt: distinct native reports stay independent while HTTP is pending`, async () => {
     const f = await observationFixture();
     try {
       await f.submit(method);
@@ -78,13 +102,11 @@ for (const method of ["shell", "command"] as const) {
       assertEquals(records(f).length, 2);
       assertEquals(records(f).find((row) => row.id === first.id), first);
       await http(f, 0);
-      assertEquals(records(f).length, 2);
-      assertEquals(
-        failure(records(f).find((row) => row.id === first.id)!).facts?.status,
-        503,
-      );
+      assertEquals(records(f).length, 3);
+      assertEquals(records(f).find((row) => row.id === first.id), first);
       assertEquals(failure(records(f)[1]).facts?.status, undefined);
       assertEquals(failure(records(f)[1]).facts?.origin, undefined);
+      assertEquals(failure(records(f)[2]).facts?.status, 503);
     } finally {
       await f.stop();
     }
@@ -99,10 +121,10 @@ for (const method of ["shell", "command"] as const) {
       await f.directPrompt("new-prompt-after-settlement");
       await native(f, "Original native error", "original-event");
       await native(f, "New prompt error", "new-prompt-event");
-      assertEquals(records(f).length, 2);
+      assertEquals(records(f).length, 3);
       assertEquals(records(f).find((row) => row.id === original.id), original);
       assertEquals(
-        (records(f)[1] as ContextMessage).replyTo,
+        (records(f)[2] as ContextMessage).replyTo,
         "new-prompt-after-settlement",
       );
     } finally {
@@ -125,17 +147,19 @@ for (const method of ["shell", "command"] as const) {
       await f.stop();
     }
   });
-  test(`${method} failure attempt: reports after the first native error update one settled record`, async () => {
+  test(`${method} failure attempt: repeated native reports keep their own record after HTTP settlement`, async () => {
     const f = await observationFixture();
     try {
       await f.submit(method);
       await native(f, "Readable native failure", "native-first");
       const id = records(f)[0].id;
       await http(f, 0);
+      const response = structuredClone(records(f)[1]);
       await native(f, "Readable native failure", "native-repeat");
       await native(f, "Cause: Readable native failure", "native-cause");
-      assertEquals(records(f).map((row) => row.id), [id]);
-      assertEquals(failure(records(f)[0]).facts?.status, 503);
+      assertEquals(records(f).map((row) => row.id), [id, response.id]);
+      assertEquals(failure(records(f)[0]).facts?.status, undefined);
+      assertEquals(records(f)[1], response);
       assert(
         failure(records(f)[0]).facts?.reason?.includes(
           "Readable native failure",
@@ -147,8 +171,8 @@ for (const method of ["shell", "command"] as const) {
         "A different attempt's native failure",
         "native-new-attempt",
       );
-      assertEquals(records(f).length, 2);
-      assert(records(f)[1].id !== id);
+      assertEquals(records(f).length, 3);
+      assert(records(f)[2].id !== id);
     } finally {
       await f.stop();
     }

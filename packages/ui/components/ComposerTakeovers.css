@@ -16,22 +16,11 @@
   position: relative;
   --prompt-input-outline: none;
 }
-.otk-composer-dock .otk-composer,
-.otk-composer-surface {
+.otk-composer-dock .otk-composer {
   width: 100%;
   max-width: var(--lane-width);
   margin-inline: auto;
   box-sizing: border-box;
-}
-.otk-composer-surface {
-  height: calc(100dvh * 2 / 3);
-  flex: 0 1 calc(100dvh * 2 / 3);
-  min-height: 0;
-  display: flex;
-  margin-bottom: var(--space-2);
-}
-.otk-composer-surface[hidden] {
-  display: none;
 }
 .otk-composer-dock .otk-composer {
   --prompt-input-outline: none;
@@ -61,17 +50,28 @@
 .otk-composer-activity-line {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   inline-size: 100%;
   min-block-size: calc(var(--control-size) + var(--space-2));
 }
-.otk-composer-target {
-  flex: 0 1 auto;
-  min-inline-size: min(8ch, 100%);
+.otk-composer-route {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  gap: var(--space-3);
+}
+.otk-composer-target {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, max-content);
+  align-items: center;
   gap: var(--space-1);
+}
+.otk-composer-target:has(.otk-composer-task) {
+  grid-template-columns: minmax(0, max-content) max-content minmax(0,
+    max-content);
 }
 .otk-composer-live-slot {
   flex: none;
@@ -81,18 +81,15 @@
   margin-inline-start: auto;
   gap: var(--space-4);
 }
-.otk-composer-task {
-  flex: 0 1 auto;
-  min-inline-size: min(8ch, 100%);
+.otk-composer-live-slot:empty {
+  display: none;
 }
+.otk-composer-task,
 .otk-composer-destination {
-  flex: none;
-  max-inline-size: 100%;
-}
-.otk-composer-chevron {
-  flex: none;
-  inline-size: var(--icon-compact);
-  block-size: var(--icon-compact);
+  /* A short title keeps its own width. Under pressure, the intrinsic
+     tracks share the remaining space and the label never exceeds its track. */
+  min-inline-size: calc-size(min-content, min(size, var(--row-title-min),
+    100%));
 }
 .otk-composer-activity-slot {
   display: grid;
@@ -102,42 +99,21 @@
   container: composer-activity / inline-size;
   flex: none;
 }
-/* These are container widths in metadata ems: keep vocabulary at ordinary
-   widths, compact numbers before retiring decoration, then let flex decide
-   whether the information needs a second line. */
+/* Only the pills wrap. The destination and its activity always share a line. */
 @container composer-activity (inline-size < 33em) {
-  .otk-composer-activity {
-    --live-count-full: none;
-    --live-count-compact: flex;
-  }
-  .otk-composer-destination {
-    flex: 0 1 auto;
-  }
-  .otk-composer-task {
-    flex: 1 1 0;
-  }
-}
-@container composer-activity (inline-size < 16em) {
-  .otk-composer-activity {
-    --live-link-display: none;
-  }
   .otk-composer-activity-line {
     flex-wrap: wrap;
     row-gap: var(--space-1);
   }
+  .otk-composer-route {
+    flex-basis: 100%;
+  }
+}
+@container composer-activity (inline-size < 16em) {
   .otk-composer-live-slot {
     max-inline-size: 100%;
     flex-wrap: wrap;
     row-gap: var(--space-1);
-  }
-  /* A wrapped flex line uses the minimum, not the full title, to decide
-     whether the pills can stay on the line. */
-  .otk-composer-target {
-    flex: 1 1 0;
-  }
-  .otk-composer-target:has(.otk-composer-task) {
-    min-inline-size: min(calc(8ch + var(--icon-compact) + 2 * var(--space-1)),
-      100%);
   }
 }
 .otk-composer-takeover-layer {
@@ -172,8 +148,14 @@
   max-inline-size: var(--lane-width);
   margin-inline: auto;
 }
-.otk-composer-dock[data-read-only="true"] {
-  --composer-bottom-inset: 0px;
-  flex: none;
-  padding-block: 0;
+.otk-composer-reopen:not(:empty) {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  inline-size: 100%;
+  max-inline-size: var(--lane-width);
+  margin-inline: auto;
+  padding-inline: var(--composer-content-inset);
+  padding-block-end: var(--space-2);
 }

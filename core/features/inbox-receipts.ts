@@ -38,7 +38,6 @@ function project(value: unknown): ProjectRecord {
   }
   return {
     directory: text(row, "directory")!,
-    order: number(row.order),
     added: row.added,
     inactive: row.inactive,
     lastVisit: number(row.lastVisit),
@@ -76,3 +75,35 @@ export const visitReceipt = metadataReceipt(
 );
 export const templatesReceipt = metadataReceipt("project-templates", strings);
 export const seenReceipt = metadataReceipt("session-seen", number);
+export const openedReceipt = metadataReceipt("session-opened", (value) => {
+  if (typeof value !== "boolean") throw new TypeError("Invalid open receipt");
+  return value;
+});
+export const acknowledgeReceipt = metadataReceipt(
+  "session-acknowledge",
+  (value) => {
+    const row = object(value);
+    if (!Array.isArray(row.sessions)) {
+      throw new TypeError("Invalid acknowledgement receipt");
+    }
+    return {
+      ...(row.closed === undefined ? {} : {
+        closed: strings(row.closed).map((session) =>
+          sessionID({ sessionID: session })!
+        ),
+      }),
+      sessions: row.sessions.map((value) => {
+        const row = object(value), terminal = number(row.terminal);
+        if (!Number.isSafeInteger(terminal)) {
+          throw new TypeError("Invalid terminal in acknowledgement receipt");
+        }
+        const runID = text(row, "runID", true);
+        return {
+          sessionID: sessionID(row)!,
+          terminal,
+          ...(runID ? { runID } : {}),
+        };
+      }),
+    };
+  },
+);

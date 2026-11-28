@@ -2,6 +2,7 @@
 import { expect, type Page, type WebSocketRoute } from "@playwright/test";
 import type { TestState } from "./test-state.ts";
 import { observeTranscript } from "./transcript-publication.ts";
+import type { ShellLayout } from "@otk/protocol";
 
 export interface Frame {
   t: string;
@@ -75,16 +76,24 @@ export async function wire(
     },
   };
 }
-export async function openSession(state: TestState, page: Page, id: string) {
+export async function openSession(
+  state: TestState,
+  page: Page,
+  id: string,
+  layout?: Pick<ShellLayout, "leftCollapsed" | "rightCollapsed">,
+) {
   await observeTranscript(page.context());
   await state.product("layout.patch", {
     leftCollapsed: false,
     rightCollapsed: false,
     rightView: "sessions",
+    ...layout,
   });
   if (!page.url().startsWith(state.url)) {
     await page.goto(`${state.url}/#/local/${id}`);
   } else {
+    const sessions = page.getByRole("tab", { name: "Sessions", exact: true });
+    await expect(sessions).toHaveAttribute("aria-selected", "true");
     if (!await page.locator(`[data-session="${id}"]`).count()) {
       const session = await state.product("session.get", { sessionID: id });
       await page.locator(

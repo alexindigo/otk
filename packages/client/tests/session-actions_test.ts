@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertMatch, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertMatch, assertRejects } from "@std/assert";
 import * as client from "@otk/client";
 import { entityKey, type PromptPart } from "@otk/protocol";
 import {
@@ -218,6 +218,7 @@ Deno.test("Retry publishes an early refusal once without another native Send", a
     if (outcome.kind !== "failed") {
       throw new Error("Expected a retryable native failure");
     }
+    assert(outcome.retry);
     outcome.retry();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assertEquals(
@@ -568,6 +569,7 @@ Deno.test("session removal aborts a working captured target before delete and re
           counts,
           evidence: {
             work: true,
+            nativeRun: true,
             permissions: 0,
             questions: 0,
             descendants: { ...counts, working: 0 },
@@ -621,6 +623,7 @@ Deno.test("Stop interrupts a run that appears while its submission receipt is pe
           counts,
           evidence: {
             work: true,
+            nativeRun: true,
             permissions: 0,
             questions: 0,
             descendants: { ...counts, working: 0 },

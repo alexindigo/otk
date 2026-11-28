@@ -2,7 +2,9 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { messages } from "../../pages/composer.ts";
+import { send } from "../../pages/primary-action.ts";
 import { nativeIdle } from "../../pages/transcript.ts";
+import { sessionContext } from "../../pages/sessions.ts";
 import type { Page } from "@playwright/test";
 
 const viewport = (page: Page) =>
@@ -346,6 +348,12 @@ for (const theme of ["otk-dark", "otk-light"]) {
           "Running in terminal (1)",
         );
         await page.locator(`[data-tab="${task.id}"]`).click();
+        // D76: stopping retires dependency attention, not the explicit open.
+        await expect(phantom().locator(".otk-status-light")).toHaveAttribute(
+          "data-state",
+          "none",
+        );
+        await sessionContext(page, `[data-tab="${b.id}"]`, "session.close");
         await expect(phantom()).toHaveCount(0);
         await expect(taskLamp()).toHaveAttribute("data-state", "dependencies");
         for (const terminal of shared) {
@@ -407,10 +415,17 @@ test("terminal.shared-selection-is-submitted-to-the-viewer-not-the-owner", {
       "aria-label",
       /^shared-checkout\n/,
     );
-    const canvas = (await viewport(page).boundingBox())!;
-    await page.mouse.move(canvas.x + 7, canvas.y + 12);
+    // Issue 2.118: select painted cells, not a fixed 7px font advance.
+    const { box, cell } = await viewport(page).evaluate((element) => {
+      const canvas = element as HTMLCanvasElement;
+      return {
+        box: canvas.getBoundingClientRect().toJSON(),
+        cell: canvas.getContext("2d")!.measureText("M").width,
+      };
+    });
+    await page.mouse.move(box.x + 4 + 0.5 * cell, box.y + 12);
     await page.mouse.down();
-    await page.mouse.move(canvas.x + 4 + 14.5 * 7, canvas.y + 12, {
+    await page.mouse.move(box.x + 4 + 14.5 * cell, box.y + 12, {
       steps: 15,
     });
     await page.mouse.up();
@@ -422,7 +437,7 @@ test("terminal.shared-selection-is-submitted-to-the-viewer-not-the-owner", {
       exact: true,
     }).click();
     await state.queue(["Shared terminal received."]);
-    await page.locator(".otk-prompt button[type=submit]").click();
+    await send(page).click();
     await expect.poll(async () =>
       (await messages(state, viewer.id)).filter((row) =>
         row.info.role === "user"
