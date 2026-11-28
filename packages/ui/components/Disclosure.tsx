@@ -23,7 +23,8 @@ import { discloseInViewport } from "./viewport.ts";
 import "./Tree.css" with { type: "text" };
 import "./Disclosure.css" with { type: "text" };
 
-const DisclosuresContext = createContext<Disclosures | undefined>(undefined);
+// Solid treats an undefined default as no default, so a missing provider throws.
+const DisclosuresContext = createContext<Disclosures | null>(null);
 const DisclosureFocusContext = createContext<(() => boolean) | null>(null);
 export const DisclosureFocusHome = createContext<(() => void) | null>(null);
 /** Containers can supply placement for the native trigger. */
@@ -45,7 +46,7 @@ export function DisclosuresProvider(
 }
 
 export function useDisclosures(): Disclosures | undefined {
-  return useContext(DisclosuresContext);
+  return useContext(DisclosuresContext) ?? undefined;
 }
 
 function useOwner(): Disclosures {

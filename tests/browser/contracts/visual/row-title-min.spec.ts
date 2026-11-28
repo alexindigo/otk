@@ -46,8 +46,9 @@ const registry = [
   },
   {
     id: "R6",
-    row: ".otk-record-row",
-    title: ".otk-record-row-label",
+    // Tree lanes separated the record disclosure caption from its facts.
+    row: ".otk-revert-group .otk-record-group-heading",
+    title: ".otk-revert-preview",
     meta: ".otk-record-row-status .otk-meta-item:not([hidden])",
   },
   {

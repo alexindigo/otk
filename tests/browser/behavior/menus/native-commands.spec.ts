@@ -157,5 +157,9 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
     ".otk-turn-usage :popover-open .otk-usage-breakdown tbody tr",
   );
   await expect(rows).toHaveCount(1);
-  await expect(rows.locator("td").first()).toHaveText("answered");
+  // WL5 shares the Call and Activity tracks within one presentation cell.
+  await expect(rows.getByRole("rowheader", { name: "1", exact: true }))
+    .toBeVisible();
+  await expect(rows.getByRole("cell", { name: "answered", exact: true }))
+    .toHaveText("answered");
 });

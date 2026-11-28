@@ -113,8 +113,9 @@ async function revertGeometry(group: Locator) {
       el.querySelector(selector)!
         .getBoundingClientRect();
     const row = box(".otk-record-group-heading");
-    const junction = box(".otk-tree-toggle");
-    const label = box(".otk-record-row-label");
+    // Tree lanes put the glyph and caption on one spanning disclosure.
+    const junction = box(".otk-record-group-toggle > .otk-disclosure-icon");
+    const label = box(".otk-record-group-toggle > .otk-disclosure-caption");
     const actions = box(".otk-record-row-actions");
     const center = (rect: DOMRect) => rect.top + rect.height / 2;
     return {

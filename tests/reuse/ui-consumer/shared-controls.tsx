@@ -850,20 +850,37 @@ export function InteractionFailures(
                     id: "part",
                     label: "Extension label must not render",
                   },
-                  {
-                    kind: "tool",
-                    id: "tool",
-                    call: {
-                      tool: "consumer.unregistered",
-                      callID: "tool",
-                      status: "completed",
-                      time: {},
-                      output:
-                        "Common output survives an unregistered extension.",
-                      outputTruncated: "collision",
-                    },
-                  },
                 ],
+              }}
+              prefs={DEFAULT_PREFS}
+              permissions={[]}
+              paneWidth={736}
+              queued={false}
+              onOpenChild={() => {}}
+            />
+            {
+              /* D74: standalone native context keeps its own record fold;
+              * the assistant Work pane is not part of this public consumer. */
+            }
+            <Message
+              sidecarId="probe"
+              message={{
+                id: "tool-record",
+                sessionID: "probe",
+                role: "context",
+                time: { created: 1 },
+                parts: [{
+                  kind: "tool",
+                  id: "tool",
+                  call: {
+                    tool: "consumer.unregistered",
+                    callID: "tool",
+                    status: "completed",
+                    time: {},
+                    output: "Common output survives an unregistered extension.",
+                    outputTruncated: "collision",
+                  },
+                }],
               }}
               prefs={{ ...DEFAULT_PREFS, genericToolOutput: true }}
               permissions={[]}
