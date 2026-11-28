@@ -145,6 +145,8 @@ export interface ProjectIdentityFact {
     present: boolean;
     /** `git` reads the checkout itself; the others recover a removed one. */
     evidence: "git" | "worktree-metadata" | "name" | "none";
+    /** Null proves no usable remote. Omitted on an unknown or failed read. */
+    remote?: { key: string; owner?: string } | null;
   };
   /** Null means unrecorded; an empty native subpath instead proves an exact root. */
   recordedRoot?: string | null;

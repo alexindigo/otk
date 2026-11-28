@@ -2,6 +2,7 @@
 import {
   type ProjectStatus,
   type ProjectSummary,
+  remoteProjectGroup,
   UNKNOWN_REPOSITORY,
 } from "./inbox.ts";
 
@@ -26,9 +27,11 @@ export function projectPlacement(input: {
   // Without a repository there is no live parent: it is never a project row.
   const unknown =
     input.lifecycle?.topology?.canonicalRoot === UNKNOWN_REPOSITORY;
+  const child = input.lifecycle?.topology;
+  const groupedChild = child?.parentDirectory && remoteProjectGroup(child);
   const section = unknown || archived && !live
     ? "archived"
-    : input.inactive && input.status === "none"
+    : input.inactive && !groupedChild && input.status === "none"
     ? "inactive"
     : input.hasSessions || input.status !== "none"
     ? "live"
@@ -48,6 +51,7 @@ export function archiveEntityID(
   if (summary.topology?.canonicalRoot === UNKNOWN_REPOSITORY) {
     return UNKNOWN_REPOSITORY;
   }
-  return summary.topology?.repoID ?? summary.topology?.canonicalRoot ??
+  return remoteProjectGroup(summary.topology) ?? summary.topology?.repoID ??
+    summary.topology?.canonicalRoot ??
     summary.directory;
 }

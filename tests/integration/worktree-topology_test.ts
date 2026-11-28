@@ -93,6 +93,7 @@ test("V1 native worktrees share repo identity and publish separate leaf populati
       );
       assertEquals(values[directory].topology, {
         repoID: sessions[0].projectID,
+        group: `repo:${sessions[0].projectID}`,
         canonicalRoot: oc.directory,
         leafDirectory: directory,
         parentDirectory: oc.directory,

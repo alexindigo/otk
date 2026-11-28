@@ -168,3 +168,118 @@ Deno.test("a separate Git directory's main checkout owns its linked and removed 
     await Deno.remove(base, { recursive: true });
   }
 });
+
+Deno.test("checkout evidence keeps only the chosen effective remote and distinguishes failed reads", async () => {
+  const base = await Deno.makeTempDir();
+  const signal = AbortSignal.timeout(15_000);
+  const Command = Deno.Command;
+  const at = (name: string) => join(base, name);
+  const git = async (directory: string, ...args: string[]) => {
+    const result = await new Deno.Command("git", {
+      args: ["-C", directory, ...args],
+      signal,
+      stdout: "null",
+      stderr: "null",
+    }).output();
+    assertEquals(result.code, 0, args.join(" "));
+  };
+  try {
+    for (const name of ["main", "none", "ambiguous", "unreadable", "rewrite"]) {
+      await git(base, "init", at(name));
+    }
+    await git(
+      at("main"),
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.test",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "seed",
+    );
+    await git(base, "clone", at("main"), at("clone"));
+    await git(at("clone"), "worktree", "add", "--detach", at("linked"));
+    await git(
+      at("main"),
+      "remote",
+      "add",
+      "origin",
+      "ssh://git@unreachable.invalid/Case/Repo.git",
+    );
+    await git(
+      at("main"),
+      "remote",
+      "add",
+      "upstream",
+      "ssh://git@other.invalid/Repo.git",
+    );
+    await git(
+      at("clone"),
+      "remote",
+      "set-url",
+      "origin",
+      "https://unreachable.invalid/Case/Repo",
+    );
+    for (const name of ["one", "two"]) {
+      await git(
+        at("ambiguous"),
+        "remote",
+        "add",
+        name,
+        `ssh://git@other.invalid/${name}.git`,
+      );
+    }
+    await git(
+      at("rewrite"),
+      "config",
+      "url.https://user:ignored@github.com/Org/.insteadOf",
+      "project:",
+    );
+    await git(at("rewrite"), "remote", "add", "single", "project:Repo.git");
+    await Deno.chmod(join(at("unreadable"), ".git", "config"), 0);
+    const paths = [
+      "main",
+      "clone",
+      "linked",
+      "none",
+      "ambiguous",
+      "unreadable",
+      "rewrite",
+    ].map(at);
+    const owner = await CheckoutRepositories.discover(paths);
+    const calls: ConstructorParameters<typeof Deno.Command>[] = [];
+    Deno.Command = new Proxy(Command, {
+      construct(target, args: ConstructorParameters<typeof Deno.Command>) {
+        calls.push(args);
+        return new target(...args);
+      },
+    });
+    const rows = await owner.seeds(
+      paths.map((path) => seed(path, path)),
+      signal,
+    );
+    const shared = { key: "unreachable.invalid/Case/Repo" };
+    assertEquals(rows.map((r) => r.identities?.[0].repository?.remote), [
+      shared,
+      shared,
+      shared,
+      null,
+      null,
+      undefined,
+      { key: "github.com/org/repo", owner: "org" },
+    ]);
+    const cloneCalls = calls.filter((args) =>
+      args[1]?.args?.[1] === at("clone")
+    );
+    assertEquals(cloneCalls.length, 2);
+    for (const args of calls) {
+      assertEquals(args[0], "git");
+      assertEquals(args[1]?.env?.GIT_TERMINAL_PROMPT, "0");
+      assertEquals(args[1]?.env?.GIT_OPTIONAL_LOCKS, "0");
+    }
+  } finally {
+    Deno.Command = Command;
+    await Deno.remove(base, { recursive: true });
+  }
+});
