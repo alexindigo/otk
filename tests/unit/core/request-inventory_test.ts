@@ -9,6 +9,8 @@ import {
   OtkDb,
   Prefs,
   prefsMigrations,
+  programsMigrations,
+  ProgramStore,
   Projects,
   projectsMigrations,
   ProjectTemplates,
@@ -52,6 +54,15 @@ import { cfg, fixture } from "./support.ts";
 import { registerTerminals } from "../../../core/features/terminals.ts";
 import { TerminalHost } from "../../../core/terminals/host.ts";
 
+const programMethods = [
+  "programs.create",
+  "programs.rename",
+  "programs.delete",
+  "programs.move",
+  "programs.assign",
+  "programs.auto",
+] as const;
+
 function navigation(inbox: InboxFeature): NavigationDefault {
   return new NavigationDefault({
     hierarchy: inbox.index.hierarchy,
@@ -65,6 +76,7 @@ function navigation(inbox: InboxFeature): NavigationDefault {
 async function composition() {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
+    programsMigrations,
     tasksMigrations,
     seenMigrations,
     finishesMigrations,
@@ -77,6 +89,7 @@ async function composition() {
   let now = 100;
   const stores = {
     projects: new Projects(db, () => ++now),
+    programs: new ProgramStore(db),
     tasks: new Tasks(db),
     seen: new Seen(db, () => ++now),
     finishes: new Finishes(db),
@@ -134,6 +147,7 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     "projects.move",
     "projects.visit",
     "projects.templates",
+    ...programMethods,
     "prefs.set",
     "layout.patch",
     "layout.location",
@@ -419,6 +433,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "projects.visit",
     "projects.scan",
     "projects.templates",
+    ...programMethods,
     "sessions.seen",
     "sessions.opened",
     "sessions.acknowledge",
@@ -456,7 +471,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     assertEquals(counts, {
       read: 35,
       native: 24,
-      local: 13,
+      local: 19,
       "prepared-local": 8,
       lease: 2,
     });

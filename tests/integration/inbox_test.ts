@@ -10,9 +10,11 @@ import {
 } from "@otk/client";
 import type {
   InboxSnapshot,
+  ProgramsFrame,
   ProjectOrderFrame,
   ServerFrame,
 } from "@otk/protocol";
+import { OtkDb, ProjectOrderStore, projectsMigrations } from "@otk/store";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { cfg, fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
@@ -55,6 +57,119 @@ async function consumer(url: string, directory: string) {
     },
   };
 }
+
+test("existing state upgrades to programs; atomic moves publish before rows and survive restart", async () => {
+  const root = await fixture();
+  const extra = join(root, "second");
+  const config = cfg();
+  // A pre-programs installation has ranked IDs but no programs migration.
+  const old = new OtkDb(join(root, "state"), [projectsMigrations], {
+    busyms: 0,
+  });
+  const order = new ProjectOrderStore(old);
+  const user = config.auth.username.toLowerCase() || "local";
+  const first = order.create(user, root), second = order.create(user, extra);
+  const initialOrder = order.list(user).map(({ id, directories }) => ({
+    id,
+    directories,
+  }));
+  old.close();
+  let app = await coreBackendFixture(root);
+  let a = await consumer(app.url, root), b = await consumer(app.url, root);
+  const last = (frames: ServerFrame[]): ProgramsFrame =>
+    frames.findLast((frame) => frame.t === "programs")!;
+  const value = ({ revision: _revision, ...value }: ProgramsFrame) => value;
+  try {
+    for (const client of [a, b]) {
+      const start = client.frames.findIndex((f) => f.t === "programs");
+      assert(start > client.frames.findIndex((f) => f.t === "welcome"));
+      assert(start < client.frames.findIndex((f) => f.t === "index.snapshot"));
+      assertEquals(value(last(client.frames)), {
+        t: "programs",
+        auto: false,
+        programs: [],
+        members: {},
+      });
+    }
+    app.app.index.projectSeeds([root, extra].map((directory, i) => ({
+      directory,
+      authority: "current" as const,
+      sessionCount: 0,
+      lastActivity: 0,
+      identities: [{
+        source: "native",
+        repoID: i === 0 ? "project" : "second",
+        recordedRoot: directory,
+        canonicalRoot: directory,
+        repository: {
+          checkout: directory,
+          root: directory,
+          evidence: "git" as const,
+          present: true,
+          remote: { key: `github.com/same/project-${i}`, owner: "same" },
+        },
+      }],
+    })));
+    const rpc = a.connection.rpc;
+    const original = await rpc.call("inbox.get", {});
+    await rpc.call("programs.auto", { value: true });
+    await waitFor(
+      () => last(b.frames)?.programs[0]?.owner,
+      (owner) => owner === "same",
+    );
+    const after = await rpc.call("inbox.get", {});
+    const withoutPrograms = ({ entities, ...inbox }: InboxSnapshot) => ({
+      ...inbox,
+      entities: Object.fromEntries(
+        Object.entries(entities ?? {}).filter(([, e]) => e.kind !== "program"),
+      ),
+    });
+    assertEquals(withoutPrograms(after.inbox), withoutPrograms(original.inbox));
+    assertEquals(
+      b.frames.findLast((f) => f.t === "projects.order")?.projects,
+      initialOrder,
+    );
+    const manual = await rpc.call("programs.create", {
+      name: "  Manual ",
+      projects: [first],
+    });
+    await waitFor(
+      () => last(b.frames)?.programs.some((p) => p.id === manual.id),
+      Boolean,
+    );
+    const begin = b.frames.length;
+    await rpc.call("programs.assign", {
+      project: first,
+      program: null,
+      after: second,
+    });
+    await waitFor(
+      () => last(b.frames)?.members[first]?.program === null,
+      Boolean,
+    );
+    const emitted = b.frames.slice(begin).filter((f) =>
+      f.t === "projects.order" || f.t === "programs"
+    );
+    assertEquals(emitted.map((f) => f.t), ["projects.order", "programs"]);
+    assertEquals(
+      emitted[0].t === "projects.order" && emitted[0].projects.map((p) => p.id),
+      [second, first],
+    );
+    const saved = value(last(b.frames));
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+    app = await coreBackendFixture(root);
+    a = await consumer(app.url, root);
+    b = await consumer(app.url, root);
+    assertEquals(value(last(a.frames)), saved);
+    assertEquals(value(last(b.frames)), saved);
+  } finally {
+    await a.stop();
+    await b.stop();
+    await app.app.stop();
+  }
+});
 
 // This test exercises multiple project creation intents. Its backend must honor
 // the directory (the shared core-only fixture deliberately returns one session).

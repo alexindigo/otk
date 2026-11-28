@@ -13,6 +13,12 @@ export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "projects.add": { kind: "mutation", pending: "Creating project session" },
   "projects.inactive": { kind: "mutation", pending: "Saving project" },
   "projects.move": { kind: "mutation", pending: "Saving project order" },
+  "programs.create": { kind: "mutation", pending: "Creating program" },
+  "programs.rename": { kind: "mutation", pending: "Renaming program" },
+  "programs.delete": { kind: "mutation", pending: "Deleting program" },
+  "programs.move": { kind: "mutation", pending: "Saving program order" },
+  "programs.assign": { kind: "mutation", pending: "Moving project" },
+  "programs.auto": { kind: "mutation", pending: "Saving setting" },
   "projects.visit": {
     kind: "mutation",
     pending: "Saving project visit",
@@ -254,6 +260,30 @@ export interface InboxRpcMethods {
     params: import("./project-order.ts").ProjectMove;
     result: { revision: number };
   };
+  "programs.create": {
+    params: import("./programs.ts").ProgramCreate;
+    result: { id: string; revision: number };
+  };
+  "programs.rename": {
+    params: { id: string; name: string };
+    result: { revision: number };
+  };
+  "programs.delete": {
+    params: { id: string };
+    result: { revision: number };
+  };
+  "programs.move": {
+    params: import("./programs.ts").ProgramMove;
+    result: { revision: number };
+  };
+  "programs.assign": {
+    params: import("./programs.ts").ProgramAssign;
+    result: { revision: number; orderRevision: number };
+  };
+  "programs.auto": {
+    params: { value: boolean };
+    result: { revision: number };
+  };
   "projects.visit": {
     params: { directory: string; active?: boolean };
     result: ProjectRecord | null;
@@ -310,6 +340,8 @@ export interface InboxRequestReceipts {
   project: ProjectRecord;
   "project-visit": ProjectRecord | null;
   "project-order-move": true;
+  "program-created": string;
+  "program-changed": true;
   "project-templates": string[];
   "session-seen": number;
   "session-opened": boolean;
