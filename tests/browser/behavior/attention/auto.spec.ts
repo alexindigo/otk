@@ -215,10 +215,7 @@ test(
       "Permission replies will appear here.",
     );
     await expect(rows).toHaveCount(0);
-    // 5b059fcb: only a child with eligible siblings has sibling controls.
     await expect(page.locator(`[data-crumb="${child.id}"]`)).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Subagent siblings" }))
-      .toHaveCount(0);
     await expect(page.getByRole("region", { name: "Transcript", exact: true }))
       .toHaveAttribute("aria-busy", "false");
     await page.locator(`[data-crumb="${root.id}"]`).click();

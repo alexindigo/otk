@@ -31,7 +31,6 @@ function fixture(ensure?: (id: string) => Promise<void>) {
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "a" },
     content: { ...emptyContent(), messages: [prompt("p"), prompt("reply")] },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

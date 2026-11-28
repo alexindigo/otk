@@ -71,7 +71,6 @@ export type SessionState = Pick<
   | "info"
   | "clock"
   | "latestPrompt"
-  | "siblings"
   | "content"
   | "loading"
   | "paging"
@@ -121,7 +120,6 @@ export function createSession(
 ): ClientSession {
   const store = factory<SessionState>({
     content: emptyContent(),
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: false,
@@ -182,14 +180,12 @@ export function createSession(
         draft.clock = undefined;
         draft.latestPrompt = undefined;
         draft.error = undefined;
-        draft.siblings = [];
       } else if (resource) {
         const value = resource.state;
         draft.info = value.info;
         draft.clock = value.clock;
         draft.latestPrompt = value.latestPrompt;
         draft.content = value.content;
-        draft.siblings = value.siblings;
         draft.loading = value.loading;
         draft.paging = value.paging;
         draft.exhausted = value.exhausted;
@@ -200,7 +196,6 @@ export function createSession(
         draft.clock = undefined;
         draft.latestPrompt = undefined;
         draft.content = emptyContent();
-        draft.siblings = [];
         draft.loading = !!selected;
         draft.paging = false;
         draft.exhausted = false;

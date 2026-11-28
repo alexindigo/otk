@@ -1149,7 +1149,6 @@ export default function Shell(
                                     )?.retry}
                                     child={!!target.rootID ||
                                       !!info()?.parentID}
-                                    siblings={session.state.siblings}
                                     onOpenChild={(id) =>
                                       void commands.run("session.child", id)
                                         .catch(

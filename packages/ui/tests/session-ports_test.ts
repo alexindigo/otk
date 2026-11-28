@@ -77,7 +77,6 @@ Deno.test("session ports capture target once while capability and resource gette
     state: {
       selection: target,
       content: emptyContent(),
-      siblings: [],
       loading: false,
       paging: false,
       exhausted: false,

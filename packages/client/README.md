@@ -145,8 +145,7 @@ search and older pages near the projected end, retains last-good rows while
 loading, and acquires necessary ancestor context by key. Same-project
 visible-row lease changes keep readiness and keyed row DOM, including focus and
 retained scroll anchors. Query replacement and reconnect fence retired request
-identities, epochs and revisions. Child navigation follows the same bounded list
-cursor.
+identities, epochs and revisions.
 
 List advancement borrows the current hierarchy/task/stable-order projection from
 ServerResources, including after request settlement. Native activity-page order
@@ -558,12 +557,12 @@ consumers, while the existing full-entry ports remain available for digest
 consumers.
 
 Session pages publish essential session/message data independently of optional
-attention and sibling reads. Optional failures retain last-good data and expose
-diagnostics. Live attention changes replay over their own resource snapshot. The
-selected owner consumes the coordinated `MessagePage` directly; it makes no
-parallel `session.get`. Continuation stays opaque, and exhaustion comes only
-from `older: null`, including exact-multiple and short pages. `latestPrompt()`
-and `state.latestPrompt` supply composer/Undo metadata outside the loaded ten
+attention reads. Optional failures retain last-good data and expose diagnostics.
+Live attention changes replay over their own resource snapshot. The selected
+owner consumes the coordinated `MessagePage` directly; it makes no parallel
+`session.get`. Continuation stays opaque, and exhaustion comes only from
+`older: null`, including exact-multiple and short pages. `latestPrompt()` and
+`state.latestPrompt` supply composer/Undo metadata outside the loaded ten
 messages. `state.clock` identifies accepted page authority. Pending live replay
 is bounded by the connection's injected/welcomed policy. Duplicates are ignored;
 gaps, epoch changes and overflow invalidate the baseline and coalesce a retry.

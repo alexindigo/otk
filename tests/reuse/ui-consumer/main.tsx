@@ -355,7 +355,6 @@ function ChildNavigation(): Element {
           child={false}
           activity={() => ({ unstarted: 0, running: false })}
           permissions={[]}
-          siblings={[]}
           revert={null}
         />
       </SessionProvider>

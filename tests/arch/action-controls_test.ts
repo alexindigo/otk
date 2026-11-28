@@ -103,7 +103,6 @@ const PENDING: Record<string, number> = {
   "packages/ui/components/Settings.tsx": 2,
   "packages/ui/components/Sidebar.tsx": 4,
   "packages/ui/components/SidebarRow.tsx": 2, // Includes the existing project lamp action.
-  "packages/ui/components/SubagentBar.tsx": 2,
   "packages/ui/components/Tabs.tsx": 1,
   "packages/ui/components/TakeoverHeader.tsx": 1,
   "packages/ui/components/ThemePicker.tsx": 3,
