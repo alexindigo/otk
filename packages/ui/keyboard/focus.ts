@@ -142,7 +142,22 @@ export function createFocusOwner(): FocusOwner {
     },
     start(target: Document, hasSession?: () => boolean) {
       doc = target;
-      const pointer = () => modality = "pointer";
+      const window = target.defaultView;
+      let frame: number | undefined, task: number | undefined;
+      let pressed: number | undefined;
+      const cancelRestore = () => {
+        if (frame !== undefined) window?.cancelAnimationFrame(frame);
+        if (task !== undefined) window?.clearTimeout(task);
+        frame = task = undefined;
+      };
+      const pointer = (event: PointerEvent) => {
+        modality = "pointer";
+        pressed = event.pointerId;
+        cancelRestore();
+      };
+      const release = (event: PointerEvent) => {
+        if (event.pointerId === pressed) pressed = undefined;
+      };
       const keyboard = (event: KeyboardEvent) => {
         if (
           !event.isComposing &&
@@ -154,12 +169,13 @@ export function createFocusOwner(): FocusOwner {
           remember(event.target);
         }
       };
-      const window = target.defaultView;
+      const canRestore = () =>
+        pressed === undefined && target.hasFocus() &&
+        target.visibilityState === "visible" && hasSession?.() &&
+        empty(target.activeElement) && !protectedFocus();
       const restore = () => {
-        if (
-          target.visibilityState !== "visible" || !hasSession?.() ||
-          !empty(target.activeElement) || protectedFocus()
-        ) return;
+        task = undefined;
+        if (!canRestore()) return;
         const last = previous?.control.deref();
         if (last && nativeTextField(last) && available(last)) {
           if (
@@ -175,6 +191,21 @@ export function createFocusOwner(): FocusOwner {
         }
         focusComposer();
       };
+      const reactivate = () => {
+        cancelRestore();
+        if (!window || !canRestore()) return;
+        // Visibility can return without focus, and the focus event can precede
+        // the press that activated the window. Yield a rendering opportunity
+        // and a task; a pointer that arrives first owns its native default.
+        frame = window.requestAnimationFrame(() => {
+          frame = undefined;
+          task = window.setTimeout(restore, 0);
+        });
+      };
+      const deactivate = () => {
+        pressed = undefined;
+        cancelRestore();
+      };
       if (
         target.activeElement instanceof HTMLElement &&
         !empty(target.activeElement)
@@ -185,15 +216,22 @@ export function createFocusOwner(): FocusOwner {
       target.addEventListener("keydown", keyboard, true);
       target.addEventListener("focusin", focusin, true);
       if (hasSession) {
-        target.addEventListener("visibilitychange", restore);
-        window?.addEventListener("focus", restore);
+        target.addEventListener("pointerup", release, true);
+        target.addEventListener("pointercancel", release, true);
+        target.addEventListener("visibilitychange", reactivate);
+        window?.addEventListener("focus", reactivate);
+        window?.addEventListener("blur", deactivate);
       }
       return () => {
         target.removeEventListener("pointerdown", pointer, true);
         target.removeEventListener("keydown", keyboard, true);
         target.removeEventListener("focusin", focusin, true);
-        target.removeEventListener("visibilitychange", restore);
-        window?.removeEventListener("focus", restore);
+        target.removeEventListener("pointerup", release, true);
+        target.removeEventListener("pointercancel", release, true);
+        target.removeEventListener("visibilitychange", reactivate);
+        window?.removeEventListener("focus", reactivate);
+        window?.removeEventListener("blur", deactivate);
+        deactivate();
         doc = undefined;
         previous = undefined;
         modality = undefined;
