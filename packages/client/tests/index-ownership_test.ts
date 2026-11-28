@@ -58,7 +58,6 @@ Deno.test("accepted index writes govern captured action eligibility before defer
       selection: target,
       info: shellInfo(target.sessionID),
       content: emptyContent(),
-      siblings: [],
       loading: false,
       paging: false,
       exhausted: true,

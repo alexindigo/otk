@@ -11,7 +11,6 @@ export function revertFixture(
   const state: client.SessionState = {
     selection: { sidecarId: "local", sessionID: "a" },
     content: client.emptyContent(),
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { cssLength } from "../../pages/css-length.ts";
 import { viewByUrl } from "../../pages/sessions.ts";
 
 const root = "tstv1-otk";
@@ -93,34 +92,4 @@ test("sessions.compact-trail-keeps-complete-crumb-frames", {
     .toBeVisible();
   await lane.locator(`[data-crumb="${root}"]`).click();
   await expect(current).toHaveAttribute("data-crumb", root);
-});
-
-test("sessions.subagent-bar-only-navigates-siblings", {
-  tag: "@sessions",
-}, async ({ isolatedState: state, page }) => {
-  await viewByUrl(state, page, helper);
-  const bar = page.locator(".otk-subagent-bar");
-  await expect(bar.getByRole("button", { name: "Prev", exact: true }))
-    .toBeVisible();
-  const controlSize = await cssLength(bar, "--control-size");
-  const geometry = await bar.evaluate((node) => ({
-    height: node.getBoundingClientRect().height,
-    centers: Array.from(node.querySelectorAll("button"), (button) => {
-      const box = button.getBoundingClientRect();
-      return box.top + box.height / 2;
-    }),
-  }));
-  expect.soft(geometry.height).toBeLessThanOrEqual(controlSize + 1);
-  expect.soft(Math.max(...geometry.centers) - Math.min(...geometry.centers))
-    .toBeLessThanOrEqual(1);
-  await expect.soft(bar).not.toContainText(/Subagent:|Parent/);
-  await expect(bar.getByRole("button")).toHaveCount(2);
-  const current = page.locator('.otk-trail [aria-current="page"]');
-  await bar.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(current).not.toHaveAttribute("data-crumb", helper);
-  await bar.getByRole("button", { name: "Prev", exact: true }).click();
-  await expect(current).toHaveAttribute("data-crumb", helper);
-  await viewByUrl(state, page, nested);
-  await expect(current).toHaveAttribute("data-crumb", nested);
-  await expect(bar).toHaveCount(0);
 });

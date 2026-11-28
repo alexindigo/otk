@@ -33,7 +33,6 @@ import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
-import SubagentBar from "./SubagentBar.tsx";
 import RevertGroup, { RevertConfirmation } from "./RevertGroup.tsx";
 import SavedBranches, {
   RevertSendChoice,
@@ -143,8 +142,6 @@ export default function SessionView(props: {
   displayMenu?: Element;
   prefs: Preferences;
   permissions: PermissionRequest[];
-  siblings: import("@otk/protocol").SessionStructure[];
-  onMoveSibling?(delta: number): void | Promise<void>;
   onOpenChild(id: string): void;
   child: boolean;
   revert: RevertInfo | null;
@@ -769,19 +766,6 @@ export default function SessionView(props: {
             aria-busy={transcriptBusy() ? "true" : "false"}
           >
             {props.displayMenu}
-            <Show
-              when={props.info?.parentID &&
-                (props.transcript || props.onMoveSibling)}
-            >
-              <SubagentBar
-                available={props.siblings.length > 1}
-                onMove={async (delta) => {
-                  if (!props.transcript) return props.onMoveSibling?.(delta);
-                  const id = await props.transcript.sibling(delta);
-                  if (id) props.onOpenChild(id);
-                }}
-              />
-            </Show>
             <div class="otk-session-content">
               <div
                 class={["otk-transcript-stage", {

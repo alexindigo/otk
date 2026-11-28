@@ -41,7 +41,6 @@ function fixture(acquireBoundary = false) {
     latestPrompt: { id: "p2" },
     clock: { epoch: "initial", seq: 0 },
     content: { ...emptyContent(), messages: [message("p1"), message("p2")] },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

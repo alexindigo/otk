@@ -44,7 +44,6 @@ Deno.test("confirmation snapshots framework-bound message DTOs without cloning t
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "s" },
     content: { ...emptyContent(), messages: [new Proxy(row("p", 1), {})] },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

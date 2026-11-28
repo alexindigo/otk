@@ -172,14 +172,12 @@ test("sessions.hierarchy-cross-checkout-mandatory-root-and-task-scope", {
   await expect(parentLink).toHaveAttribute("href", `#/local/${root}`);
   await expect(tab(root)).toHaveCount(0);
   await activity(state, child, "hold");
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page).toHaveURL(/tstv1-otk\/tstv1-family-1$/);
+  await page.goto(`${state.url}/#/local/${root}/tstv1-family-1`);
   await orientation(task.id, "tstv1-family-1", "Local sibling");
   await page.reload();
   await orientation(task.id, "tstv1-family-1", "Local sibling");
   await capture("repo", task.id, "tstv1-family-1", "Local sibling");
-  await page.getByRole("button", { name: "Prev", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${root}/${child}$`));
+  await page.goto(`${state.url}/#/local/${root}/${child}`);
   await orientation(task.id, child, "Moved child");
   await parentLink.click();
   await expect(page).toHaveURL(new RegExp(`${root}$`));
