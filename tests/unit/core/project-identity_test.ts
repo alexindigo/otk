@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { ProjectSeed } from "@otk/harness";
+import { Checkouts, checkoutsMigrations, OtkDb } from "@otk/store";
 import { ProjectIdentity } from "../../../core/index/project-identity.ts";
+import { tempDir, test } from "../../support/resources.ts";
 
 type Evidence = NonNullable<
   NonNullable<ProjectSeed["identities"]>[number]["repository"]
@@ -34,6 +36,130 @@ const gone = (
   evidence: Evidence["evidence"],
   root: string | null = null,
 ) => ({ root, present: false, evidence });
+
+const shared = { key: "github.com/org/repo", owner: "org" };
+function remoteFact(
+  directory: string,
+  repo: string,
+  remote?: Evidence["remote"],
+  canonical = directory,
+  root = directory,
+): ProjectSeed {
+  const seed = selfClaim(directory, repo, {
+    root,
+    remote,
+    present: true,
+    evidence: "git",
+  });
+  return {
+    ...seed,
+    identities: seed.identities!.map((fact) => ({
+      ...fact,
+      canonicalRoot: canonical,
+    })),
+  };
+}
+
+test("D84 remote evidence preserves native IDs and retains anchors across missing reads and restarts", async () => {
+  const state = await tempDir("remote-identity-");
+  const db = new OtkDb(state, [checkoutsMigrations], { busyms: 0 });
+  try {
+    const store = new Checkouts(db);
+    const identity = new ProjectIdentity(store);
+    const main = "/longer-primary", clone = "/b", linked = "/b.linked";
+    identity.learn([remoteFact(clone, "clone-id", shared, main)]);
+    assertEquals(identity.topology(clone)?.canonicalRoot, clone);
+    assertEquals(identity.owner(clone), "org");
+    const affected = identity.learn([
+      remoteFact(clone, "clone-id", shared, main),
+      remoteFact(main, "main-id", shared),
+      remoteFact(linked, "clone-id", shared, main, clone),
+      remoteFact(
+        "/different",
+        "main-id",
+        { key: "aur.archlinux.org/repo" },
+        main,
+      ),
+      remoteFact("/no-remote", "main-id", null, main),
+    ]);
+    assertEquals(identity.topology(clone), {
+      repoID: "clone-id",
+      group: shared.key,
+      canonicalRoot: main,
+      leafDirectory: clone,
+      parentDirectory: main,
+    });
+    assertEquals(identity.topology(linked)?.parentDirectory, main);
+    assertEquals(identity.topology(main)?.group, shared.key);
+    assertEquals(identity.topology("/different")?.canonicalRoot, "/different");
+    assertEquals(identity.owner("/different"), undefined);
+    assertEquals(identity.topology("/no-remote")?.canonicalRoot, "/no-remote");
+    assertEquals(
+      [main, clone, linked].every((path) => affected.directories.has(path)),
+      true,
+    );
+    identity.learn([
+      remoteFact(main, "main-id"),
+      remoteFact(clone, "clone-id", undefined, main),
+    ]);
+    assertEquals(identity.topology(clone)?.canonicalRoot, main);
+    assertEquals(
+      new ProjectIdentity(store).topology(clone)?.canonicalRoot,
+      main,
+    );
+    identity.learn([selfClaim(clone, "clone-id", gone("none"))]);
+    assertEquals(identity.archived(clone), true);
+    identity.learn([remoteFact(clone, "clone-id", shared, main)]);
+    identity.learn([selfClaim(main, "main-id", gone("none"))]);
+    assertEquals(identity.archived(main), true);
+    assertEquals(identity.topology(main)?.parentDirectory, clone);
+    assertEquals(identity.topology(linked)?.parentDirectory, clone);
+    const cold = new ProjectIdentity(store);
+    const byLeaf = (identity: ProjectIdentity) =>
+      Object.fromEntries(
+        identity.topologies().map((t) => [t.leafDirectory, t]),
+      );
+    assertEquals(byLeaf(cold), byLeaf(identity));
+    assertEquals(
+      cold.archived(main),
+      false,
+      "absence is not current after restart",
+    );
+  } finally {
+    db.close();
+  }
+});
+
+Deno.test("D84 ties use first_seen, then shortest and lexical path without changing an existing anchor", () => {
+  const old = "/earliest", short = "/z", equal = "/a";
+  const facts = [
+    remoteFact(short, "short", shared, "/unrelated"),
+    remoteFact(equal, "equal", shared, "/unrelated"),
+    remoteFact(old, "old", shared, "/unrelated"),
+  ];
+  const fixture = (firstSeen: number) =>
+    new ProjectIdentity({
+      list: () => [],
+      save: () => {},
+      remotes: () => [
+        { repository: old, remote: shared.key, firstSeen, readAt: firstSeen },
+        ...[short, equal].map((repository) => ({
+          repository,
+          remote: shared.key,
+          firstSeen: 2,
+          readAt: 2,
+        })),
+      ],
+    });
+  const earliest = fixture(1);
+  earliest.learn(facts);
+  assertEquals(earliest.topology(equal)?.canonicalRoot, old);
+  const tied = fixture(2);
+  tied.learn(facts);
+  assertEquals(tied.topology(old)?.canonicalRoot, equal);
+  tied.learn([remoteFact("/preferred", "preferred", shared)]);
+  assertEquals(tied.topology("/preferred")?.canonicalRoot, equal);
+});
 
 Deno.test("a discovered repository survives removal, restart and the native's stale self-claim", () => {
   let rows: import("@otk/store").CheckoutRecord[] = [];
@@ -196,6 +322,7 @@ Deno.test("checkouts of one repository share its topology across native project 
   ]);
   assertEquals(owner.topology("/repo.a"), {
     repoID: "main",
+    group: "repo:main",
     canonicalRoot: "/repo",
     leafDirectory: "/repo.a",
     parentDirectory: "/repo",

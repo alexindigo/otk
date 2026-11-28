@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProjectIdentityFact, ProjectSeed } from "@otk/harness";
-import { type ProjectTopology, UNKNOWN_REPOSITORY } from "@otk/protocol";
-import type { CheckoutAuthority, CheckoutRecord } from "@otk/store";
+import {
+  type ProjectTopology,
+  remoteProjectGroup,
+  UNKNOWN_REPOSITORY,
+} from "@otk/protocol";
+import type {
+  CheckoutAuthority,
+  CheckoutRecord,
+  CheckoutRemote,
+  CheckoutRemoteAnchor,
+} from "@otk/store";
 
 const key = (r: Pick<CheckoutRecord, "source" | "repoID" | "scope">) =>
   JSON.stringify([r.source, r.repoID, r.scope]);
@@ -23,6 +32,13 @@ interface IdentityRecord extends CheckoutRecord {
   /** Live coverage cannot survive restart as authority for absence. */
   inventory: "current" | "unknown";
 }
+type RemoteGroup = {
+  key: string;
+  anchor: string;
+  members: ReadonlySet<string>;
+};
+const pathOrder = (a: string, b: string) =>
+  a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 function availability(
   record: Pick<CheckoutRecord, "leafDirectory" | "kind" | "proven">,
   inventory: ProjectIdentityFact["inventory"],
@@ -45,13 +61,21 @@ export class ProjectIdentity {
   #sources = new Set<string>();
   #current = new Map<string, ReadonlySet<string>>();
   #authoritative = false;
+  #remotes = new Map<string, CheckoutRemote>();
+  #anchors = new Map<string, string>();
+  #groups = new Map<string, RemoteGroup>();
+  #successors = new Map<string, string>();
   constructor(
     readonly history?: {
       list(): CheckoutRecord[];
       authority?(): CheckoutAuthority | undefined;
+      remotes?(): CheckoutRemote[];
+      anchors?(): CheckoutRemoteAnchor[];
       save(
         rows: readonly CheckoutRecord[],
         authority?: CheckoutAuthority,
+        remotes?: readonly CheckoutRemote[],
+        anchors?: readonly CheckoutRemoteAnchor[],
       ): void;
     },
   ) {
@@ -73,6 +97,16 @@ export class ProjectIdentity {
       );
       this.#authoritative = true;
     }
+    this.#remotes = new Map(history?.remotes?.().map((r) => [r.repository, r]));
+    this.#anchors = new Map(
+      history?.anchors?.().map((a) => [a.remote, a.repository]),
+    );
+    this.#groups = this.#remoteGroups(
+      this.#records,
+      this.#sources,
+      this.#current,
+      this.#remotes,
+    ).groups;
     this.#index();
   }
   records(): CheckoutRecord[] {
@@ -270,11 +304,25 @@ export class ProjectIdentity {
         if (JSON.stringify(r) !== JSON.stringify(next)) records.set(k, next);
       }
     }
+    const remotes = new Map(this.#remotes);
+    const now = Date.now();
+    for (const { present, root, remote } of evidence.values()) {
+      if (!present || !root || remote === undefined) continue;
+      const previous = remotes.get(root);
+      remotes.set(root, {
+        repository: root,
+        remote: remote?.key ?? null,
+        ...(remote?.owner ? { owner: remote.owner } : {}),
+        firstSeen: previous?.firstSeen ?? now,
+        readAt: now,
+      });
+    }
     return this.#accept(
       records,
       selected,
       current,
       this.#authoritative || reported.size > 0,
+      remotes,
     );
   }
   #accept(
@@ -282,6 +330,7 @@ export class ProjectIdentity {
     sources: ReadonlySet<string>,
     current: Map<string, ReadonlySet<string>>,
     authoritative: boolean,
+    remotes = this.#remotes,
   ): IdentityChange {
     const repos = new Set<string>(), directories = new Set<string>();
     const changed = [...records].filter(([k, r]) =>
@@ -293,9 +342,56 @@ export class ProjectIdentity {
     );
     const affectedScopes = new Set(scopeChanges.map(([scope]) => scope));
     const affectedRecords = new Set(changed.map(([k]) => k));
+    const remoteUpdates = [...remotes.values()].filter((remote) => {
+      const before = this.#remotes.get(remote.repository);
+      return !before || before.remote !== remote.remote ||
+        before.owner !== remote.owner || before.readAt !== remote.readAt;
+    });
+    if (
+      !changed.length && !scopeChanges.length && !sourceChanged &&
+      authoritative === this.#authoritative && !remoteUpdates.length
+    ) return unchanged();
+    const { groups, anchors } = this.#remoteGroups(
+      records,
+      sources,
+      current,
+      remotes,
+    );
+    const targetChanges = new Set<string>();
+    const successors = new Map(this.#successors);
+    for (const [repository, group] of this.#groups) {
+      const next = groups.get(repository);
+      if (group.anchor === repository) {
+        const successor = anchors.get(group.key);
+        if (successor && successor !== repository) {
+          successors.set(repository, successor);
+        }
+      }
+      if (
+        !next || next.key !== group.key || next.anchor !== group.anchor ||
+        !sameSet(next.members, group.members)
+      ) targetChanges.add(repository);
+    }
+    for (const [repository, group] of groups) {
+      if (!this.#groups.has(repository)) targetChanges.add(repository);
+      if (repository === group.anchor) successors.delete(repository);
+    }
+    for (const remote of remoteUpdates) {
+      const previous = this.#remotes.get(remote.repository);
+      if (
+        previous?.remote !== remote.remote || previous?.owner !== remote.owner
+      ) {
+        targetChanges.add(remote.repository);
+      }
+    }
+    const anchorUpdates = [...anchors].flatMap(([remote, repository]) =>
+      this.#anchors.get(remote) === repository ? [] : [{ remote, repository }]
+    );
+    for (const directory of targetChanges) directories.add(directory);
     for (const r of [...this.#records.values(), ...records.values()]) {
       if (
         !sourceChanged && !affectedRecords.has(key(r)) &&
+        !(r.repository && targetChanges.has(r.repository)) &&
         !affectedScopes.has(JSON.stringify([r.source, r.scope]))
       ) continue;
       repos.add(r.repoID);
@@ -303,10 +399,6 @@ export class ProjectIdentity {
         if (directory) directories.add(directory);
       }
     }
-    if (
-      !changed.length && !scopeChanges.length && !sourceChanged &&
-      authoritative === this.#authoritative
-    ) return unchanged();
     this.history?.save(
       changed.map(([, row]) => row),
       authoritative
@@ -318,11 +410,20 @@ export class ProjectIdentity {
           }),
         }
         : undefined,
+      remoteUpdates,
+      anchorUpdates,
     );
     this.#records = records;
     this.#sources = new Set(sources);
     this.#current = current;
     this.#authoritative = authoritative;
+    this.#remotes = remotes;
+    this.#groups = groups;
+    for (const { remote, repository } of anchorUpdates) {
+      this.#anchors.set(remote, repository);
+    }
+    this.#successors = successors;
+    if (!repos.size && !directories.size) return unchanged();
     this.#revision++;
     this.#index();
     return { repos, directories };
@@ -345,6 +446,59 @@ export class ProjectIdentity {
         map.set(id, rows);
       }
     }
+  }
+  /** Remote equivalence comes only from recorded Git evidence, never native IDs. */
+  #remoteGroups(
+    records: ReadonlyMap<string, IdentityRecord>,
+    sources: ReadonlySet<string>,
+    current: ReadonlyMap<string, ReadonlySet<string>>,
+    remotes: ReadonlyMap<string, CheckoutRemote>,
+  ): { groups: Map<string, RemoteGroup>; anchors: Map<string, string> } {
+    const repositories = new Map<string, Set<string>>();
+    const canonicals = new Set<string>();
+    const presence = new Map<string, boolean>();
+    for (const r of records.values()) {
+      if (!sources.has(r.source)) continue;
+      const owners = current.get(JSON.stringify([r.source, r.scope]));
+      if (owners && !owners.has(r.repoID)) continue;
+      const root = r.repository;
+      const remote = root && remotes.get(root);
+      if (!root || !remote || !remote.remote) continue;
+      const members = repositories.get(remote.remote) ?? new Set();
+      members.add(root);
+      repositories.set(remote.remote, members);
+      if (remotes.get(r.canonicalRoot)?.remote === remote.remote) {
+        canonicals.add(r.canonicalRoot);
+      }
+      if (r.leafDirectory === root) {
+        const removed = r.inventory === "current" &&
+          r.availability === "removed";
+        presence.set(root, (presence.get(root) ?? true) && removed);
+      }
+    }
+    const groups = new Map<string, RemoteGroup>();
+    const anchors = new Map<string, string>();
+    for (const [key, members] of repositories) {
+      const previous = this.#anchors.get(key);
+      if (members.size < 2 && !previous) continue;
+      const ordered = [...members].sort((a, b) =>
+        remotes.get(a)!.firstSeen - remotes.get(b)!.firstSeen || pathOrder(a, b)
+      );
+      const live = ordered.filter((r) => presence.get(r) !== true);
+      const options = live.length ? live : ordered;
+      const anchor = previous && members.has(previous) &&
+          (presence.get(previous) !== true || live.length === 0)
+        ? previous
+        : (!previous
+          ? options.find((root) => canonicals.has(root))
+          : undefined) ?? options[0];
+      anchors.set(key, anchor);
+      if (members.size > 1) {
+        const group = { key, anchor, members };
+        for (const repository of members) groups.set(repository, group);
+      }
+    }
+    return { groups, anchors };
   }
   leaf(directory: string, repoID?: string): string {
     const rows = (this.#scopes.get(directory) ?? []).filter((r) =>
@@ -374,13 +528,17 @@ export class ProjectIdentity {
         : this.#leaves.get(root)?.length
         ? this.#leaves.get(root)!
         : rows;
+      const repoID = owners.map((r) => r.repoID).sort()[0];
+      const group = this.#groups.get(root);
+      const parent = group?.anchor ?? root;
       return {
-        repoID: owners.map((r) => r.repoID).sort()[0],
-        canonicalRoot: root,
+        repoID,
+        group: group?.key ?? `repo:${repoID}`,
+        canonicalRoot: parent,
         leafDirectory: directory,
-        ...(root === directory || root === UNKNOWN_REPOSITORY
+        ...(parent === directory || parent === UNKNOWN_REPOSITORY
           ? {}
-          : { parentDirectory: root }),
+          : { parentDirectory: parent }),
       };
     }
     const owners = new Set(
@@ -391,12 +549,36 @@ export class ProjectIdentity {
     if (!r.canonicalRoot) return;
     return {
       repoID: r.repoID,
+      group: `repo:${r.repoID}`,
       canonicalRoot: r.canonicalRoot,
       leafDirectory: directory,
       ...(directory === r.canonicalRoot
         ? {}
         : { parentDirectory: r.canonicalRoot }),
     };
+  }
+  owner(directory: string): string | undefined {
+    const root = this.topology(directory)?.canonicalRoot ?? directory;
+    return this.#remotes.get(root)?.owner;
+  }
+  /** A persisted remote group may have been learned before its order write. */
+  grouped(directory: string): boolean {
+    return remoteProjectGroup(this.topology(directory)) !== undefined;
+  }
+  successor(directory: string): string | undefined {
+    return this.#successors.get(directory);
+  }
+  /** A standalone root needs positive Git evidence to leave an existing alias. */
+  separates(directory: string, previousRoot: string): boolean {
+    return this.availability(directory) === "present" &&
+      this.#remotes.has(directory) && this.#remotes.has(previousRoot) &&
+      (this.#remotes.get(directory)!.remote === null ||
+        !this.compatibleRemote(directory, previousRoot));
+  }
+  compatibleRemote(directory: string, previousRoot: string): boolean {
+    const current = this.#remotes.get(directory),
+      previous = this.#remotes.get(previousRoot);
+    return !current || !previous || current.remote === previous.remote;
   }
   availability(directory: string): CheckoutRecord["availability"] | undefined {
     const rows = this.#leaves.get(directory);
@@ -423,7 +605,9 @@ export class ProjectIdentity {
     const rows = this.#leaves.get(directory);
     return !!rows?.length &&
       rows.every((r) =>
-        (r.kind === "worktree" || r.repository === UNKNOWN_REPOSITORY) &&
+        (r.kind === "worktree" || r.repository === UNKNOWN_REPOSITORY ||
+          this.topology(directory)?.parentDirectory !== undefined &&
+            this.#groups.has(directory)) &&
         r.inventory === "current" && r.availability === "removed"
       );
   }

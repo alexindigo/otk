@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { InboxProject } from "./inbox.ts";
-import { projectLayoutKey as projectTreeKey } from "@otk/protocol";
+import {
+  projectLayoutKey as projectTreeKey,
+  projectTopologyGroup,
+} from "@otk/protocol";
 export { projectTreeKey };
 
 export interface ProjectBranch<T> {
@@ -53,7 +56,8 @@ export function projectTree<
     let key = parentKey(node.project);
     const candidate = key && nodes.get(key);
     const parent = candidate &&
-        candidate.project.topology?.repoID === node.project.topology?.repoID &&
+        projectTopologyGroup(candidate.project.topology) ===
+          projectTopologyGroup(node.project.topology) &&
         candidate.project.topology?.canonicalRoot ===
           node.project.topology?.canonicalRoot
       ? candidate

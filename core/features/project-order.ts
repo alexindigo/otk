@@ -17,7 +17,14 @@ export class ProjectOrder {
   #stop: () => void;
   constructor(
     readonly store: ProjectOrderStore,
-    readonly identity: Pick<ProjectIdentity, "topology" | "memberships">,
+    readonly identity:
+      & Pick<ProjectIdentity, "topology" | "memberships">
+      & Partial<
+        Pick<
+          ProjectIdentity,
+          "grouped" | "successor" | "separates" | "compatibleRemote"
+        >
+      >,
   ) {
     this.#stop = store.listen(({ user }) => {
       this.#revision++;
@@ -70,7 +77,12 @@ export class ProjectOrder {
     const legacy = this.#seeded.has(user) ? [] : this.store.legacy(user);
     const added = [...new Set(directories)].filter((dir) => !admitted.has(dir))
       .sort();
-    const updates = [...new Set(revised)].filter((dir) =>
+    // Recover a committed identity upgrade even if the process died before
+    // its order transaction. Normal startup does not reconcile former roots.
+    const recovered = this.#seeded.has(user)
+      ? []
+      : [...admitted].filter((d) => this.identity.grouped?.(d));
+    const updates = [...new Set([...recovered, ...revised])].filter((dir) =>
       admitted.has(dir) && this.identity.topology(dir)
     ).sort();
     if (!legacy.length && !added.length && !updates.length) {
@@ -80,14 +92,62 @@ export class ProjectOrder {
     this.store.db.write((tx) => {
       for (const { directory } of legacy) this.#resolve(user, directory, tx);
       if (legacy.length) this.store.dropLegacy(user, tx);
+      // First give an existing ID its new root. A departing former anchor can
+      // then split without moving the surviving group's saved slot.
+      for (const directory of updates) {
+        const root = this.identity.successor?.(directory) ??
+          this.identity.topology(directory)?.canonicalRoot;
+        const id = this.store.alias(user, directory);
+        if (
+          !root || root === directory || root === UNKNOWN_REPOSITORY ||
+          !id || this.store.alias(user, root) !== id
+        ) continue;
+        if (
+          this.store.list(user).find((p) => p.id === id)?.root !== directory
+        ) continue;
+        this.store.reroot(
+          user,
+          id,
+          root,
+          tx,
+          this.identity.topology(root)?.repoID,
+        );
+      }
       for (const directory of updates) {
         const topology = this.identity.topology(directory);
+        const id = this.store.alias(user, directory);
         if (
-          topology?.canonicalRoot === directory &&
-          this.store.alias(user, directory)
+          topology?.canonicalRoot === directory && id
         ) {
-          this.store.rememberRepository(user, directory, topology.repoID, tx);
+          const previous = this.store.list(user).find((p) => p.id === id)!;
+          if (
+            previous.root !== directory &&
+            this.identity.separates?.(directory, previous.root)
+          ) {
+            const newID = this.store.split(
+              user,
+              directory,
+              id,
+              tx,
+              topology.repoID,
+            );
+            for (const alias of previous.directories) {
+              if (
+                alias !== directory &&
+                this.identity.topology(alias)?.canonicalRoot === directory
+              ) {
+                this.store.attach(user, alias, newID, tx);
+              }
+            }
+          } else {
+            this.store.rememberRepository(user, directory, topology.repoID, tx);
+          }
         }
+      }
+      // Move former roots first so their whole alias list moves in saved order.
+      const roots = new Set(this.store.list(user).map((p) => p.root));
+      for (const directory of updates) {
+        if (roots.has(directory)) this.#reparent(user, directory, tx);
       }
       for (const directory of updates) this.#reparent(user, directory, tx);
       for (const directory of added) this.#resolve(user, directory, tx);
@@ -121,6 +181,11 @@ export class ProjectOrder {
     if (repo) {
       const retired = this.store.list(user).filter((candidate) => {
         if (candidate.repo !== repo) return false;
+        if (
+          this.identity.compatibleRemote?.(directory, candidate.root) === false
+        ) {
+          return false;
+        }
         const memberships = this.identity.memberships(candidate.root);
         return memberships.length > 0 &&
           memberships.every((member) =>
@@ -150,6 +215,12 @@ export class ProjectOrder {
         ? before.directories
         : [directory]
     ) {
+      // Positive evidence can redirect a former child elsewhere in the same
+      // revision; only unknown or matching aliases follow the retiring root.
+      const canonical = this.identity.topology(alias)?.canonicalRoot;
+      if (canonical && canonical !== UNKNOWN_REPOSITORY && canonical !== root) {
+        continue;
+      }
       this.store.attach(user, alias, target, tx);
     }
   }

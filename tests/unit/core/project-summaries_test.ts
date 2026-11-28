@@ -366,6 +366,7 @@ Deno.test("topology outlives population-only seeds and inventory removal; empty 
   const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
   const topology = {
     repoID: "p",
+    group: "repo:p",
     canonicalRoot: "/repo",
     leafDirectory: "/tree",
     parentDirectory: "/repo",

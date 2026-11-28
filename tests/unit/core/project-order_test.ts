@@ -1,9 +1,98 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { OtkDb, ProjectOrderStore, projectsMigrations } from "@otk/store";
-import type { ProjectIdentity } from "../../../core/index/project-identity.ts";
+import {
+  Checkouts,
+  checkoutsMigrations,
+  OtkDb,
+  ProjectOrderStore,
+  projectsMigrations,
+} from "@otk/store";
+import type { ProjectSeed } from "@otk/harness";
+import { ProjectIdentity } from "../../../core/index/project-identity.ts";
 import { ProjectOrder } from "../../../core/features/project-order.ts";
 import { tempDir, test } from "../../support/resources.ts";
+
+test("D84 upgrade preserves rank and alias order, then reroots and splits directly after the old slot", async () => {
+  const db = new OtkDb(await tempDir("grouped-order-"), [
+    projectsMigrations,
+    checkoutsMigrations,
+  ], { busyms: 0 });
+  const history = new Checkouts(db);
+  const store = new ProjectOrderStore(db);
+  const identity = new ProjectIdentity(history);
+  const order = new ProjectOrder(store, identity);
+  const main = "/main",
+    clone = "/clone",
+    first = "/clone.z",
+    second = "/clone.a";
+  const key = "github.com/org/repo";
+  const fact = (
+    directory: string,
+    root = directory,
+    remote?: string,
+    present = true,
+  ): ProjectSeed => ({
+    directory,
+    authority: "current",
+    sessionCount: 1,
+    lastActivity: 1,
+    identities: [{
+      source: "native",
+      repoID: root,
+      canonicalRoot: main,
+      recordedRoot: directory,
+      repository: {
+        checkout: directory,
+        root: present ? root : null,
+        present,
+        evidence: present ? "git" : "none",
+        ...(remote === undefined ? {} : { remote: { key: remote } }),
+      },
+    }],
+  });
+  const learn = (...seeds: ProjectSeed[]) =>
+    order.admit("u", [], identity.learn(seeds).directories);
+  const roots = () => store.list("u").map((p) => p.root);
+  try {
+    for (const path of ["/start", main, "/middle", clone, "/end"]) {
+      order.admit("u", [path]);
+    }
+    const primaryID = store.alias("u", main);
+    const cloneID = store.alias("u", clone);
+    learn(fact(main), fact(clone), fact(first, clone), fact(second, clone));
+    order.admit("u", [first]);
+    order.admit("u", [second]);
+    const changes: unknown[] = [];
+    const off = store.listen((change) => changes.push(change));
+    // Simulate interruption after identity persisted, before order receives its revisions.
+    identity.learn([fact(main, main, key), fact(clone, clone, key)]);
+    const restart = new ProjectOrder(store, new ProjectIdentity(history));
+    restart.admit("u", []);
+    restart.close();
+    assertEquals(roots(), ["/start", main, "/middle", "/end"]);
+    assertEquals(changes, [{ user: "u", removed: [cloneID] }]);
+    assertEquals(store.list("u")[1].directories, [main, clone, first, second]);
+    off();
+
+    learn(fact(main, main, undefined, false));
+    assertEquals(roots(), ["/start", clone, "/middle", "/end"]);
+    assertEquals(store.alias("u", clone), primaryID);
+    assertEquals(store.list("u")[1].directories, [clone, main, first, second]);
+    learn(fact(main, main, "github.com/org/other"));
+    assertEquals(roots(), ["/start", clone, main, "/middle", "/end"]);
+    assertEquals(store.list("u")[1].directories, [clone, first, second]);
+    assertEquals(store.alias("u", clone), primaryID);
+    assertEquals(
+      db.connection.prepare(
+        "SELECT rank FROM project_order WHERE user='u' ORDER BY rank",
+      ).all().map((r) => r.rank),
+      [0, 1, 2, 3, 4],
+    );
+  } finally {
+    order.close();
+    db.close();
+  }
+});
 
 test("project order preserves proven checkout continuity without conflating clones", async () => {
   const path = await tempDir("project-order-");

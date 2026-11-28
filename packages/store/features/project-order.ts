@@ -10,12 +10,22 @@ interface ProjectOrderRow {
 }
 
 /** Durable rank and alias writes; admission policy belongs to the server. */
-export class ProjectOrderStore extends MetadataChanges<{ user: string }> {
+type OrderChange = { user: string; removed?: string[] };
+export class ProjectOrderStore extends MetadataChanges<OrderChange> {
   constructor(readonly db: OtkDb) {
     super(db);
   }
-  protected override changeKey(value: { user: string }): string {
+  protected override changeKey(value: OrderChange): string {
     return value.user;
+  }
+  protected override mergeChanges(
+    before: OrderChange,
+    after: OrderChange,
+  ): OrderChange {
+    const removed = [
+      ...new Set([...before.removed ?? [], ...after.removed ?? []]),
+    ];
+    return removed.length ? { user: after.user, removed } : after;
   }
   list(user: string): ProjectOrderRow[] {
     const projects = new Map<string, ProjectOrderRow>();
@@ -83,15 +93,48 @@ export class ProjectOrderStore extends MetadataChanges<{ user: string }> {
       this.db.connection.prepare(
         "INSERT INTO project_order_aliases(user,directory,id,ordinal) SELECT ?,?,?,COALESCE(MAX(ordinal)+1,0) FROM project_order_aliases WHERE user=? AND id=? ON CONFLICT(user,directory) DO UPDATE SET id=excluded.id, ordinal=excluded.ordinal",
       ).run(user, directory, id, user, id);
-      if (
-        previous && this.db.connection.prepare(
+      const removed = previous && this.db.connection.prepare(
           "DELETE FROM project_order WHERE user=? AND id=? AND NOT EXISTS (SELECT 1 FROM project_order_aliases WHERE user=? AND id=?)",
         ).run(user, previous, user, previous).changes
-      ) this.#ranks(user, this.#ids(user));
-      this.changed({ user }, scope);
+        ? previous
+        : undefined;
+      if (removed) this.#ranks(user, this.#ids(user));
+      this.changed({ user, ...(removed ? { removed: [removed] } : {}) }, scope);
     }, tx);
   }
-  reroot(user: string, id: string, root: string, tx?: StoreWrite): void {
+  split(
+    user: string,
+    directory: string,
+    afterID: string,
+    tx: StoreWrite,
+    repo?: string,
+  ): string {
+    return this.db.write((scope) => {
+      const ids = this.#ids(user);
+      const index = ids.indexOf(afterID);
+      if (index < 0 || this.alias(user, directory) !== afterID) {
+        throw new Error("Unknown project member");
+      }
+      const id = crypto.randomUUID();
+      this.db.connection.prepare("INSERT INTO project_order VALUES (?,?,?,?,?)")
+        .run(user, id, ids.length, repo ?? null, directory);
+      this.db.connection.prepare(
+        "UPDATE project_order_aliases SET id=?, ordinal=0 WHERE user=? AND directory=?",
+      )
+        .run(id, user, directory);
+      ids.splice(index + 1, 0, id);
+      this.#ranks(user, ids);
+      this.changed({ user }, scope);
+      return id;
+    }, tx);
+  }
+  reroot(
+    user: string,
+    id: string,
+    root: string,
+    tx?: StoreWrite,
+    repo?: string,
+  ): void {
     this.db.write((scope) => {
       if (this.alias(user, root) !== id) {
         throw new Error("Unknown project root");
@@ -107,8 +150,8 @@ export class ProjectOrderStore extends MetadataChanges<{ user: string }> {
         "UPDATE project_order_aliases SET ordinal=CASE directory WHEN ? THEN 0 ELSE ordinal+1 END WHERE user=? AND id=? AND ordinal<=?",
       ).run(root, user, id, Number(ordinal));
       this.db.connection.prepare(
-        "UPDATE project_order SET root=? WHERE user=? AND id=?",
-      ).run(root, user, id);
+        "UPDATE project_order SET root=?, repo=COALESCE(?,repo) WHERE user=? AND id=?",
+      ).run(root, repo ?? null, user, id);
       this.changed({ user }, scope);
     }, tx);
   }
