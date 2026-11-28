@@ -11,6 +11,7 @@ interface SocketEvent {
 export interface CatalogWatchObservation {
   id: number;
   directory: string;
+  files: boolean;
   acquired: number;
   subscriptions: number;
   releases: number;
@@ -36,8 +37,13 @@ export function observeCatalogWatches(backend: Harness) {
   assert(catalogs);
   const originalWatch = port.watch, originalAcquire = catalogs.acquire;
   let entering: CatalogWatchObservation | undefined;
-  catalogs.acquire = (directory, subscription) => {
-    const lease = originalAcquire.call(catalogs, directory, subscription),
+  catalogs.acquire = (directory, subscription, fileMode) => {
+    const lease = originalAcquire.call(
+        catalogs,
+        directory,
+        subscription,
+        fileMode,
+      ),
       observation = entering;
     if (!observation) return lease;
     assertEquals(directory, observation.directory);
@@ -60,10 +66,11 @@ export function observeCatalogWatches(backend: Harness) {
     };
     return lease;
   };
-  port.watch = (directory, listener, signal) => {
+  port.watch = (directory, listener, signal, files) => {
     const observation: CatalogWatchObservation = {
       id: records.length + 1,
       directory,
+      files: files === true,
       acquired: 0,
       subscriptions: 0,
       releases: 0,
@@ -74,7 +81,13 @@ export function observeCatalogWatches(backend: Harness) {
     records.push(observation);
     entering = observation;
     try {
-      const result = originalWatch.call(port, directory, listener, signal);
+      const result = originalWatch.call(
+        port,
+        directory,
+        listener,
+        signal,
+        files,
+      );
       signal.addEventListener("abort", () => {
         observation.aborted = true;
       }, { once: true });

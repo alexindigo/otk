@@ -34,6 +34,7 @@ const watches = (): CatalogWatchObservation[] =>
   [true, false].map((closed, n) => ({
     id: n + 1,
     directory: "/p",
+    files: false,
     acquired: 1,
     subscriptions: 1,
     releases: closed ? 1 : 0,
