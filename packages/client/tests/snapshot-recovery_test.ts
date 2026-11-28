@@ -343,7 +343,7 @@ Deno.test("a resync-covered initial failure retries the new epoch immediately wi
   }
 });
 
-Deno.test("essential transcript publishes independently of failed or held attention and sibling resources", async () => {
+Deno.test("essential transcript publishes independently of failed or held attention reads", async () => {
   const f = fixture();
   try {
     f.reply("session.messages", fixturePage("s", [message], undefined, info));
@@ -356,13 +356,12 @@ Deno.test("essential transcript publishes independently of failed or held attent
       op: "question.upsert",
       request: { id: "live", sessionID: "s", questions: [] },
     });
-    f.reply("question.list", []);
-    f.reply("session.children", undefined, "siblings offline");
     await f.until(() =>
       !!f.owner.state.error &&
       f.owner.state.error.failure?.reason ===
         "OTK has no further details"
     );
+    f.reply("question.list", []);
     assertEquals(
       f.owner.state.content.questions.map((question) => question.id),
       ["live"],

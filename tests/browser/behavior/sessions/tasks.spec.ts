@@ -11,7 +11,7 @@ import {
 import { send } from "../../pages/primary-action.ts";
 
 test.use({ profile: "sessions-tasks" });
-test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
+test("sessions.real-task-progress-helper-parent-history-and-draft", {
   tag: ["@sessions", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   test.setTimeout(120_000);
@@ -117,7 +117,6 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   const trail = page.getByRole("navigation", { name: "Task sessions" });
   const current = trail.locator('[aria-current="page"]');
   const parent = trail.getByRole("link", { name: "Subagents", exact: true });
-  const siblings = page.getByRole("navigation", { name: "Subagent siblings" });
   const join = page.getByRole("button", {
     name: "Join the conversation",
     exact: true,
@@ -127,11 +126,6 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   // D17: opening or revisiting a child does not reveal its input or parent's draft.
   await expect(join).toBeVisible();
   await expect(page.locator("textarea[name=prompt]")).toBeHidden();
-  await siblings.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${second.id}$`));
-  await expect(current).toContainText("Second inspection");
-  await siblings.getByRole("button", { name: "Prev", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${first.id}$`));
   await parent.click();
   await expect(page).toHaveURL(new RegExp(`#\/local/${root.id}$`));
   await expect(page.locator("textarea[name=prompt]")).toHaveValue(
@@ -175,6 +169,7 @@ test("sessions.real-task-progress-helper-sibling-parent-history-and-draft", {
   await expect(entityCard).toContainText("Session");
   await entityCard.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${second.id}$`));
+  await expect(current).toContainText("Second inspection");
   await expect(page.locator(".otk-messages")).toContainText(
     "Second child completed.",
   );

@@ -199,7 +199,6 @@ export default function NoticeLifetime(props: { structured?: boolean } = {}) {
           connected
           prefs={DEFAULT_PREFS}
           permissions={[]}
-          siblings={[]}
           onOpenChild={() => {}}
           child={false}
           revert={null}

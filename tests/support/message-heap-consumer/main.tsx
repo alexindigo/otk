@@ -331,7 +331,6 @@ function Consumer() {
                   connected
                   prefs={DEFAULT_PREFS}
                   permissions={[]}
-                  siblings={[]}
                   child={false}
                   revert={null}
                   busy={false}

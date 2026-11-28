@@ -25,7 +25,6 @@ function fixture() {
         parts: [],
       }],
     },
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: true,

@@ -78,8 +78,6 @@ test(
     await expect(current).toBeVisible();
     await expect(current).toHaveAttribute("aria-current", "page");
     await expect(current).toHaveAttribute("data-crumb", helper.id);
-    await expect(page.getByRole("navigation", { name: "Subagent siblings" }))
-      .toHaveCount(0);
     await expect(page.locator(".otk-messages")).toContainText(
       "External helper transcript.",
     );

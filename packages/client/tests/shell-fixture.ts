@@ -214,7 +214,6 @@ export function shellFixture(
       selection: { sidecarId: "local", sessionID: ids.selected },
       info: shellInfo(ids.selected),
       content: client.emptyContent(),
-      siblings: [],
       loading: false,
       paging: false,
       exhausted: false,

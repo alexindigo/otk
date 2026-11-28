@@ -115,7 +115,6 @@ export interface TranscriptState {
   clock?: ContentClock;
   version?: TranscriptVersion;
   latestPrompt?: LatestPrompt;
-  siblings: import("@otk/protocol").SessionStructure[];
   content: ContentState;
   loading: boolean;
   paging: boolean;
@@ -168,7 +167,6 @@ export interface TranscriptOwner {
   reconcile(messageIDs: readonly string[]): Promise<void>;
   pin(keys: readonly string[]): () => void;
   refetch(): Promise<void>;
-  sibling(delta: number): Promise<string | undefined>;
   receive(sidecarId: string, frame: ServerFrame): void;
   older(): Promise<void>;
   bridge(key?: string): Promise<void>;
@@ -505,7 +503,6 @@ export function createTranscript(
     pageLoading: false,
     recovering: [],
     content: emptyContent(),
-    siblings: [],
     loading: false,
     paging: false,
     exhausted: false,
@@ -669,8 +666,7 @@ export function createTranscript(
     clock = frame.clock;
     return true;
   };
-  let siblingCursor: string | null = null;
-  const refreshAttention = (siblings = true) => {
+  const refreshAttention = () => {
     if (!selected || state.temperature !== "screen") return;
     attentionController?.abort();
     const abort = attentionController = new AbortController();
@@ -731,24 +727,6 @@ export function createTranscript(
     };
     void optional("permission");
     void optional("question");
-    if (siblings && state.info?.parentID) {
-      void sidecar.rpc.call("session.children", {
-        sessionID: state.info.parentID,
-      }, abort.signal).then((page) => {
-        if (valid()) {
-          siblingCursor = page.older;
-          setState((draft) => {
-            draft.siblings = page.items;
-          });
-        }
-      }).catch((error) => {
-        if (valid()) {
-          setState((draft) => {
-            draft.error = failureValue(error);
-          });
-        }
-      });
-    }
   };
   type NewestCause =
     | "open"
@@ -789,7 +767,6 @@ export function createTranscript(
     initialResync = false;
     setState((draft) => {
       const { deleted } = acquired.head(page, held, { same });
-      if (!info.parentID || draft.temperature !== "screen") draft.siblings = [];
       projection.reconcile(items, page);
       let content: ContentState = attach({
         ...contentMetadata(draft.content),
@@ -879,15 +856,7 @@ export function createTranscript(
       publishGaps(draft);
     });
     try {
-      const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
-      const diagnostic = (error: unknown) => {
-        if (current(id, request)) {
-          setState((draft) => {
-            draft.error = failureValue(error);
-          });
-        }
-      };
-      refreshAttention(false);
+      refreshAttention();
       const page = await readBoundary(
         undefined,
         abort.signal,
@@ -896,7 +865,7 @@ export function createTranscript(
           readStage("reading", progressGeneration);
         },
       );
-      const info = page.session, messages = page.items;
+      const messages = page.items;
       if (boundaryRead) {
         boundaryRead.deliver = undefined;
         boundaryRead.prompt = page.prompt?.id;
@@ -929,20 +898,6 @@ export function createTranscript(
         replay.push(frame);
       }
       reconcileNewest(page, replay, cause);
-      if (info.parentID && state.temperature === "screen") {
-        void rpc.call(
-          "session.children",
-          { sessionID: info.parentID },
-          abort.signal,
-        ).then((page) => {
-          if (current(id, request)) {
-            siblingCursor = page.older;
-            setState((draft) => {
-              draft.siblings = page.items;
-            });
-          }
-        }).catch(diagnostic);
-      }
       recoveryAttempted = false;
       queueMicrotask(reserve);
       deliveryDiagnostics.record({
@@ -1038,7 +993,6 @@ export function createTranscript(
       draft.clock = undefined;
       draft.version = undefined;
       draft.latestPrompt = undefined;
-      draft.siblings = [];
       // Window lifetime changes do not turn projected local sends into native
       // input. Replace only the native window; pending entries survive it.
       projection.reset([]);
@@ -1466,7 +1420,7 @@ export function createTranscript(
       }
       if (view === "deleted") return;
       if (frame.t === "bootstrap.complete") {
-        refreshAttention(false);
+        refreshAttention();
         return;
       }
       if (frame.t === "transcript.invalidated") {
@@ -1509,7 +1463,7 @@ export function createTranscript(
           // Scoped index credit can deliver the request before its asking
           // session's ancestry. Reacquire from the pending owner, rather than
           // discard the only event or guess that the request is unrelated.
-          if (!entry(sidecarId, frame.sessionID)) refreshAttention(false);
+          if (!entry(sidecarId, frame.sessionID)) refreshAttention();
           return;
         }
       } else if (frame.sessionID !== selected.sessionID) return;
@@ -1683,41 +1637,6 @@ export function createTranscript(
         }, cause);
         invalidate();
       }
-    },
-    async sibling(delta) {
-      if (!selected || !state.info?.parentID) return;
-      const target = selected, id = generation, request = load;
-      const find = () =>
-        state.siblings.findIndex((item) => item.id === target.sessionID);
-      while (
-        siblingCursor &&
-        (find() < 0 || delta > 0 && find() === state.siblings.length - 1 ||
-          delta < 0 && find() === 0)
-      ) {
-        const before = siblingCursor;
-        const page = await connection(target.sidecarId).rpc.call(
-          "session.children",
-          {
-            sessionID: state.info.parentID,
-            before,
-          },
-          controller?.signal,
-        );
-        if (!current(id, request)) return;
-        if (page.older === before) {
-          throw new Error("Sibling cursor did not advance");
-        }
-        siblingCursor = page.older;
-        setState((draft) => {
-          const values = new Map(draft.siblings.map((item) => [item.id, item]));
-          for (const item of page.items) values.set(item.id, item);
-          draft.siblings = [...values.values()];
-        });
-      }
-      const at = find(), size = state.siblings.length;
-      return at < 0 || !size
-        ? undefined
-        : state.siblings[(at + delta + size) % size]?.id;
     },
     older(): Promise<void> {
       if (inFlight) return inFlight;
