@@ -34,6 +34,7 @@ export interface CoreOptions {
   index?: IndexStore;
   sources?: readonly FrameSource[];
   projectOrder?: ConnectionRequests["projectOrder"];
+  programs?: ConnectionRequests["programs"];
   diagnostics?: SectionObserver;
   diagnostic?: DiagnosticSink;
   signal?: AbortSignal;
@@ -175,6 +176,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         attachments: cfg.attachments,
         requested: options.requested,
         projectOrder: options.projectOrder,
+        programs: options.programs,
       },
       sources,
       options.diagnostics,

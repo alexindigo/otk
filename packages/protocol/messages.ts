@@ -50,6 +50,7 @@ export type ServerFrame = ServerMessage & { epoch?: number };
 type ServerMessage =
   | RequestEvent
   | import("./project-order.ts").ProjectOrderFrame
+  | import("./programs.ts").ProgramsFrame
   | import("./session-list.ts").LoadChunk
   | { t: "sessions.changed"; directory: string }
   | {

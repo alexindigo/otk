@@ -24,6 +24,7 @@ import { HarnessError } from "@otk/harness";
 import type {
   Checkouts,
   Finishes,
+  ProgramStore,
   Projects,
   ProjectTemplates,
   Seen,
@@ -37,6 +38,7 @@ import { SessionSupervision } from "../index/supervision.ts";
 import { EntityStates } from "../index/entity-states.ts";
 import { ProjectIdentity } from "../index/project-identity.ts";
 import { ProjectOrder } from "./project-order.ts";
+import { ProjectPrograms } from "./programs.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
@@ -77,6 +79,7 @@ export interface InboxStores {
   finishes: Finishes;
   templates: ProjectTemplates;
   checkouts?: Checkouts;
+  programs?: ProgramStore;
 }
 const orderMoveReceipt = metadataReceipt("project-order-move", (value) => {
   if (value !== true) throw new TypeError("Invalid project move receipt");
@@ -777,6 +780,7 @@ export class InboxFeature implements FrameSource {
   readonly states: EntityStates;
   readonly summaries: ProjectSummaries;
   readonly projectOrder: ProjectOrder;
+  readonly programs?: ProjectPrograms;
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
@@ -807,10 +811,18 @@ export class InboxFeature implements FrameSource {
       (id) => !!this.#opened.get(this.user)?.has(id),
     );
     const identityOwner = new ProjectIdentity(stores.checkouts);
-    this.projectOrder = new ProjectOrder(
-      new ProjectOrderStore(stores.projects.db),
-      identityOwner,
-    );
+    const order = new ProjectOrderStore(stores.projects.db);
+    this.projectOrder = new ProjectOrder(order, identityOwner);
+    if (stores.programs) {
+      const programs = this.programs = new ProjectPrograms(
+        stores.programs,
+        order,
+        identityOwner,
+      );
+      this.#stops.push(programs.listen((user) => {
+        if (user === this.#user) this.states.programs(programs.groups(user));
+      }));
+    }
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
     this.#templates = stores.templates.list();
@@ -844,8 +856,10 @@ export class InboxFeature implements FrameSource {
       this.index.hierarchy,
       this.states,
       undefined,
-      (directories, revised) =>
-        this.projectOrder.admit(this.user, directories, revised),
+      (directories, revised) => {
+        this.projectOrder.admit(this.user, directories, revised);
+        if (revised) this.programs?.identityChanged(this.user);
+      },
     );
     this.index.hierarchy.configure(
       this.summaries.identity,
@@ -1107,6 +1121,10 @@ export class InboxFeature implements FrameSource {
     this.#summaryRevision = 0;
     // A new generation re-baselines every client: no transition spans users.
     this.states.reset();
+    if (this.programs) {
+      this.programs.identityChanged(user);
+      this.states.programs(this.programs.groups(user));
+    }
     for (const target of this.#operation?.targets() ?? []) {
       this.#operationInput(target);
     }
@@ -1301,6 +1319,7 @@ export class InboxFeature implements FrameSource {
     this.#closed = true;
     this.#dependencyAbort.abort();
     this.states.close();
+    this.programs?.close();
     this.projectOrder.close();
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
@@ -1553,6 +1572,7 @@ export class InboxFeature implements FrameSource {
       handler: () => s.projects.list(user()),
     });
     const savedOrder = () => ({ revision: this.projectOrder.revision });
+    this.programs?.register(rpc, user, () => this.projectOrder.revision);
     rpc.register("projects.move", {
       execution: localResultExecution(
         (p: ProjectMove) => ({ resource: `project-order:${p.id}` }),
